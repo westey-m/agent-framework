@@ -129,6 +129,7 @@ using Azure.AI.OpenAI;
 using Azure.Identity;
 using OpenAI;
 
+// Replace the <myresource> and gpt-4o-mini with your Azure OpenAI resource name and deployment name.
 var agent = new AzureOpenAIClient(new Uri("https://<myresource>.openai.azure.com"), new AzureCliCredential())
     .GetOpenAIResponseClient("gpt-4o-mini")
     .CreateAIAgent(name: "HaikuBot", instructions: "You are an upbeat assistant that writes beautifully.");

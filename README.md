@@ -121,20 +121,16 @@ if __name__ == "__main__":
 
 ```c#
 // dotnet add package Microsoft.Agents.AI.OpenAI --prerelease
-// dotnet add package Azure.AI.OpenAI
+// dotnet add package Azure.AI.OpenAI --prerelease
 // dotnet add package Azure.Identity
 // Use `az login` to authenticate with Azure CLI
 using System;
 using Azure.AI.OpenAI;
 using Azure.Identity;
-using Microsoft.Agents.AI;
 using OpenAI;
 
-var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!;
-var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME")!;
-
-var agent = new AzureOpenAIClient(new Uri(endpoint), new AzureCliCredential())
-    .GetOpenAIResponseClient(deploymentName)
+var agent = new AzureOpenAIClient(new Uri("https://<myresource>.openai.azure.com"), new AzureCliCredential())
+    .GetOpenAIResponseClient("gpt-4o-mini")
     .CreateAIAgent(name: "HaikuBot", instructions: "You are an upbeat assistant that writes beautifully.");
 
 Console.WriteLine(await agent.RunAsync("Write a haiku about Microsoft Agent Framework."));

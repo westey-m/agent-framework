@@ -119,18 +119,34 @@ if __name__ == "__main__":
 
 ### Basic Agent - .NET
 
+Create a simple Agent, using OpenAI Responses, that writes a haiku about the Microsoft Agent Framework
+
 ```c#
 // dotnet add package Microsoft.Agents.AI.OpenAI --prerelease
-// dotnet add package Azure.AI.OpenAI --prerelease
+using System;
+using OpenAI;
+
+// Replace the <apikey> with your OpenAI API key.
+var agent = new OpenAIClient("<apikey>")
+    .GetOpenAIResponseClient("gpt-4o-mini")
+    .CreateAIAgent(name: "HaikuBot", instructions: "You are an upbeat assistant that writes beautifully.");
+
+Console.WriteLine(await agent.RunAsync("Write a haiku about Microsoft Agent Framework."));
+```
+
+Create a simple Agent, using Azure OpenAI Responses with token based auth, that writes a haiku about the Microsoft Agent Framework
+
+```c#
+// dotnet add package Microsoft.Agents.AI.OpenAI --prerelease
 // dotnet add package Azure.Identity
 // Use `az login` to authenticate with Azure CLI
 using System;
-using Azure.AI.OpenAI;
-using Azure.Identity;
 using OpenAI;
 
-// Replace the <myresource> and gpt-4o-mini with your Azure OpenAI resource name and deployment name.
-var agent = new AzureOpenAIClient(new Uri("https://<myresource>.openai.azure.com"), new AzureCliCredential())
+// Replace <resource> and gpt-4o-mini with your Azure OpenAI resource name and deployment name.
+var agent = new OpenAIClient(
+    new BearerTokenPolicy(new AzureCliCredential(), "https://ai.azure.com/.default"),
+    new OpenAIClientOptions() { Endpoint = new Uri("https://<resource>.openai.azure.com/openai/v1") })
     .GetOpenAIResponseClient("gpt-4o-mini")
     .CreateAIAgent(name: "HaikuBot", instructions: "You are an upbeat assistant that writes beautifully.");
 

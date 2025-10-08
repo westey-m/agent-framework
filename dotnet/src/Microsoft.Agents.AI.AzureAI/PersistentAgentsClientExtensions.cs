@@ -181,7 +181,7 @@ public static class PersistentAgentsClientExtensions
 
         var agentOptions = new ChatClientAgentOptions()
         {
-            Id = options.Id ?? persistentAgentMetadata.Id,
+            Id = persistentAgentMetadata.Id,
             Name = options.Name ?? persistentAgentMetadata.Name,
             Description = options.Description ?? persistentAgentMetadata.Description,
             Instructions = options.Instructions ?? persistentAgentMetadata.Instructions,

@@ -409,12 +409,27 @@ public static class PersistentAgentsClientExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
+        List<ToolDefinition> persistentAgentTools = new();
+        if (options.ChatOptions?.Tools is not null)
+        {
+            foreach (AITool tool in options.ChatOptions.Tools)
+            {
+                switch (tool)
+                {
+                    case HostedCodeInterpreterTool:
+                        var codeInterpreterToolDefinition = new CodeInterpreterToolDefinition();
+                        persistentAgentTools.Add(codeInterpreterToolDefinition);
+                        break;
+                }
+            }
+        }
+
         var createPersistentAgentResponse = persistentAgentsClient.Administration.CreateAgent(
             model: model,
             name: options.Name,
             description: options.Description,
             instructions: options.Instructions,
-            tools: null, // Tools are handled through ChatOptions
+            tools: persistentAgentTools,
             toolResources: null,
             temperature: null,
             topP: null,
@@ -459,12 +474,27 @@ public static class PersistentAgentsClientExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
+        List<ToolDefinition> persistentAgentTools = new();
+        if (options.ChatOptions?.Tools is not null)
+        {
+            foreach (AITool tool in options.ChatOptions.Tools)
+            {
+                switch (tool)
+                {
+                    case HostedCodeInterpreterTool:
+                        var codeInterpreterToolDefinition = new CodeInterpreterToolDefinition();
+                        persistentAgentTools.Add(codeInterpreterToolDefinition);
+                        break;
+                }
+            }
+        }
+
         var createPersistentAgentResponse = await persistentAgentsClient.Administration.CreateAgentAsync(
             model: model,
             name: options.Name,
             description: options.Description,
             instructions: options.Instructions,
-            tools: null, // Tools are handled through ChatOptions
+            tools: persistentAgentTools,
             toolResources: null,
             temperature: null,
             topP: null,

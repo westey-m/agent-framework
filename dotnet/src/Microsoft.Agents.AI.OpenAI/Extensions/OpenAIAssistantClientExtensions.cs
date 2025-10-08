@@ -388,10 +388,10 @@ public static class OpenAIAssistantClientExtensions
             Name = options.Name,
             Description = options.Description,
             Instructions = options.Instructions,
-            ChatOptions = options.ChatOptions?.Tools is null ? null : new ChatOptions()
-            {
-                Tools = options.ChatOptions.Tools,
-            }
+            ChatOptions = options.ChatOptions,
+            AIContextProviderFactory = options.AIContextProviderFactory,
+            ChatMessageStoreFactory = options.ChatMessageStoreFactory,
+            UseProvidedChatClientAsIs = options.UseProvidedChatClientAsIs,
         };
 
         var chatClient = client.AsIChatClient(assistantId);
@@ -499,10 +499,10 @@ public static class OpenAIAssistantClientExtensions
             Name = options.Name,
             Description = options.Description,
             Instructions = options.Instructions,
-            ChatOptions = options.ChatOptions?.Tools is null ? null : new ChatOptions()
-            {
-                Tools = options.ChatOptions.Tools,
-            }
+            ChatOptions = options.ChatOptions,
+            AIContextProviderFactory = options.AIContextProviderFactory,
+            ChatMessageStoreFactory = options.ChatMessageStoreFactory,
+            UseProvidedChatClientAsIs = options.UseProvidedChatClientAsIs
         };
 
         var chatClient = client.AsIChatClient(assistantId);

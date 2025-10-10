@@ -13,7 +13,7 @@ var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
     new AzureCliCredential())
-     .GetChatClient(deploymentName)
+    .GetChatClient(deploymentName)
     .CreateAIAgent(instructions: "You are good at telling jokes.", name: "Joker");
 
 // Invoke the agent with a multi-turn conversation, where the context is preserved in the thread object.

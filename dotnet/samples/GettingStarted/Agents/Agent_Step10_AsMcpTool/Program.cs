@@ -17,9 +17,9 @@ var persistentAgentsClient = new PersistentAgentsClient(endpoint, new AzureCliCr
 // Create a server side persistent agent
 var agentMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
     model: deploymentName,
+    instructions: "You are good at telling jokes, and you always start each joke with 'Aye aye, captain!'.",
     name: "Joker",
-    description: "An agent that tells jokes.",
-    instructions: "You are good at telling jokes, and you always start each joke with 'Aye aye, captain!'.");
+    description: "An agent that tells jokes.");
 
 // Retrieve the server side persistent agent as an AIAgent.
 AIAgent agent = await persistentAgentsClient.GetAIAgentAsync(agentMetadata.Value.Id);

@@ -25,19 +25,19 @@ VectorStore vectorStore = new InMemoryVectorStore();
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
     new AzureCliCredential())
-     .GetChatClient(deploymentName)
-     .CreateAIAgent(new ChatClientAgentOptions
-     {
-         Name = "Joker",
-         Instructions = "You are good at telling jokes.",
-         ChatMessageStoreFactory = ctx =>
-         {
-             // Create a new chat message store for this agent that stores the messages in a vector store.
-             // Each thread must get its own copy of the VectorChatMessageStore, since the store
-             // also contains the id that the thread is stored under.
-             return new VectorChatMessageStore(vectorStore, ctx.SerializedState, ctx.JsonSerializerOptions);
-         }
-     });
+    .GetChatClient(deploymentName)
+    .CreateAIAgent(new ChatClientAgentOptions
+    {
+        Instructions = "You are good at telling jokes.",
+        Name = "Joker",
+        ChatMessageStoreFactory = ctx =>
+        {
+            // Create a new chat message store for this agent that stores the messages in a vector store.
+            // Each thread must get its own copy of the VectorChatMessageStore, since the store
+            // also contains the id that the thread is stored under.
+            return new VectorChatMessageStore(vectorStore, ctx.SerializedState, ctx.JsonSerializerOptions);
+        }
+    });
 
 // Start a new thread for the agent conversation.
 AgentThread thread = agent.GetNewThread();

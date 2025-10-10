@@ -18,13 +18,13 @@ var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
     new AzureCliCredential())
-     .GetChatClient(deploymentName)
-     .CreateAIAgent(new ChatClientAgentOptions
-     {
-         Name = "Joker",
-         Instructions = "You are good at telling jokes.",
-         ChatMessageStoreFactory = ctx => new InMemoryChatMessageStore(new MessageCountingChatReducer(2), ctx.SerializedState, ctx.JsonSerializerOptions)
-     });
+    .GetChatClient(deploymentName)
+    .CreateAIAgent(new ChatClientAgentOptions
+    {
+        Instructions = "You are good at telling jokes.",
+        Name = "Joker",
+        ChatMessageStoreFactory = ctx => new InMemoryChatMessageStore(new MessageCountingChatReducer(2), ctx.SerializedState, ctx.JsonSerializerOptions)
+    });
 
 AgentThread thread = agent.GetNewThread();
 

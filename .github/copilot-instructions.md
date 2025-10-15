@@ -8,11 +8,15 @@ The purpose of the code is to provide a framework for building AI agents.
 
 When contributing to this repository, please follow these guidelines:
 
-## C# Code Standards
+## C# Code Guidelines
+
+Here are some general guidelines that apply to all code.
 
 - All public methods and classes should have XML documentation comments.
 
 ### C# Sample Code Guidelines
+
+Sample code is located in the `dotnet/samples` directory.
 
 When adding a new sample, follow these steps:
 
@@ -34,9 +38,10 @@ The sample code should follow these guidelines:
 - Secrets should not be hardcoded in the code or committed to the repository.
 - The code should be well-documented with comments explaining the purpose of each step.
 - The code should be simple and to the point, avoiding unnecessary complexity.
-- Prefer inline literals over constants for values that are not reused.
+- Prefer inline literals over constants for values that are not reused. For example, use `new ChatClientAgent(chatClient, instructions: "You are a helpful assistant.")` instead of defining a constant for "instructions".
 - Ensure that all private classes are sealed
-- Use the Async suffix on the name of all async methods
+- Use the Async suffix on the name of all async methods that return a Task or ValueTask.
+- Prefer defining variables using types rather than var, to help users understand the types involved.
 - The structure of the sample should be as follows:
   - The top of the program.cs should have a copyright notice: `// Copyright (c) Microsoft. All rights reserved.`
   - Then add the necessary using statements.
@@ -45,11 +50,13 @@ The sample code should follow these guidelines:
 
 ### C# Unit Test Guidelines
 
+Unit tests are located in the `dotnet/tests` directory in projects with a `.UnitTests.csproj` suffix.
+
 Unit tests should follow these guidelines:
 
 - Use `this.` for accessing class members
 - Add Arrange, Act and Assert comments for each test
-- Ensure that all private classes are sealed
+- Ensure that all private classes, that are not subclassed, are sealed
 - Use the Async suffix on the name of all async methods
 - Use the Moq library for mocking objects where possible
 - Validate that each test actually tests the target behavior, e.g. we should not have tests that creates a mock, calls the mock and then verifies that the mock was called, without the target code being involved.

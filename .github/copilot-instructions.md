@@ -27,7 +27,7 @@ When adding a new sample, follow these steps:
 - The README.md file should follow the same format as other samples.
 - The csproj file should match the directory name.
 - The csproj file should be configured in the same way as other samples.
-- The project should preferably contain a single program.cs file that contains all the sample code.
+- The project should preferably contain a single Program.cs file that contains all the sample code.
 - The sample should be added to the solution file in the samples directory.
 - The sample should be tested to ensure it works as expected.
 - A reference to the new samples should be added to the README.md file in the parent directory of the new sample.
@@ -44,7 +44,7 @@ The sample code should follow these guidelines:
 - Use the Async suffix on the name of all async methods that return a Task or ValueTask.
 - Prefer defining variables using types rather than var, to help users understand the types involved.
 - The structure of the sample should be as follows:
-  - The top of the program.cs should have a copyright notice: `// Copyright (c) Microsoft. All rights reserved.`
+  - The top of the Program.cs should have a copyright notice: `// Copyright (c) Microsoft. All rights reserved.`
   - Then add a comment describing what the sample is demonstrating.
   - Then add the necessary using statements.
   - Then add the main code logic.

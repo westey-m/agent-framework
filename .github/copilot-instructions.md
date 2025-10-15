@@ -12,6 +12,7 @@ When contributing to this repository, please follow these guidelines:
 
 Here are some general guidelines that apply to all code.
 
+- The top of all *.cs files should have a copyright notice: `// Copyright (c) Microsoft. All rights reserved.`
 - All public methods and classes should have XML documentation comments.
 
 ### C# Sample Code Guidelines
@@ -44,6 +45,7 @@ The sample code should follow these guidelines:
 - Prefer defining variables using types rather than var, to help users understand the types involved.
 - The structure of the sample should be as follows:
   - The top of the program.cs should have a copyright notice: `// Copyright (c) Microsoft. All rights reserved.`
+  - Then add a comment describing what the sample is demonstrating.
   - Then add the necessary using statements.
   - Then add the main code logic.
   - Finally, add any helper methods or classes at the bottom of the file.

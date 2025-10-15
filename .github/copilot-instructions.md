@@ -20,7 +20,7 @@ Sample code is located in the `dotnet/samples` directory.
 
 When adding a new sample, follow these steps:
 
-- The sample should be a standalone .net project in one of the subdirectories of the samples director.
+- The sample should be a standalone .net project in one of the subdirectories of the samples directory.
 - The directory name should be the same as the project name.
 - The directory should contain a README.md file that explains what the sample does and how to run it.
 - The README.md file should follow the same format as other samples.

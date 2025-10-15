@@ -409,33 +409,26 @@ public static class PersistentAgentsClientExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
-        List<ToolDefinition> persistentAgentTools = new();
-        if (options.ChatOptions?.Tools is not null)
-        {
-            foreach (AITool tool in options.ChatOptions.Tools)
-            {
-                switch (tool)
-                {
-                    case HostedCodeInterpreterTool:
-                        var codeInterpreterToolDefinition = new CodeInterpreterToolDefinition();
-                        persistentAgentTools.Add(codeInterpreterToolDefinition);
-                        break;
-                }
-            }
-        }
+        var toolDefinitionsAndResources = ConvertAIToolsToToolDefinitions(options.ChatOptions?.Tools);
 
         var createPersistentAgentResponse = persistentAgentsClient.Administration.CreateAgent(
             model: model,
             name: options.Name,
             description: options.Description,
             instructions: options.Instructions,
-            tools: persistentAgentTools,
-            toolResources: null,
+            tools: toolDefinitionsAndResources.ToolDefinitions,
+            toolResources: toolDefinitionsAndResources.ToolResources,
             temperature: null,
             topP: null,
             responseFormat: null,
             metadata: null,
             cancellationToken: cancellationToken);
+
+        if (options.ChatOptions?.Tools is { Count: > 0 } && (toolDefinitionsAndResources.FunctionToolsAndOtherTools is null || options.ChatOptions.Tools.Count != toolDefinitionsAndResources.FunctionToolsAndOtherTools.Count))
+        {
+            options = options.Clone();
+            options.ChatOptions!.Tools = toolDefinitionsAndResources.FunctionToolsAndOtherTools;
+        }
 
         // Get a local proxy for the agent to work with.
         return persistentAgentsClient.GetAIAgent(createPersistentAgentResponse.Value.Id, options, clientFactory: clientFactory, cancellationToken: cancellationToken);
@@ -474,35 +467,115 @@ public static class PersistentAgentsClientExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
-        List<ToolDefinition> persistentAgentTools = new();
-        if (options.ChatOptions?.Tools is not null)
-        {
-            foreach (AITool tool in options.ChatOptions.Tools)
-            {
-                switch (tool)
-                {
-                    case HostedCodeInterpreterTool:
-                        var codeInterpreterToolDefinition = new CodeInterpreterToolDefinition();
-                        persistentAgentTools.Add(codeInterpreterToolDefinition);
-                        break;
-                }
-            }
-        }
+        var toolDefinitionsAndResources = ConvertAIToolsToToolDefinitions(options.ChatOptions?.Tools);
 
         var createPersistentAgentResponse = await persistentAgentsClient.Administration.CreateAgentAsync(
             model: model,
             name: options.Name,
             description: options.Description,
             instructions: options.Instructions,
-            tools: persistentAgentTools,
-            toolResources: null,
+            tools: toolDefinitionsAndResources.ToolDefinitions,
+            toolResources: toolDefinitionsAndResources.ToolResources,
             temperature: null,
             topP: null,
             responseFormat: null,
             metadata: null,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (options.ChatOptions?.Tools is { Count: > 0 } && (toolDefinitionsAndResources.FunctionToolsAndOtherTools is null || options.ChatOptions.Tools.Count != toolDefinitionsAndResources.FunctionToolsAndOtherTools.Count))
+        {
+            options = options.Clone();
+            options.ChatOptions!.Tools = toolDefinitionsAndResources.FunctionToolsAndOtherTools;
+        }
+
         // Get a local proxy for the agent to work with.
         return await persistentAgentsClient.GetAIAgentAsync(createPersistentAgentResponse.Value.Id, options, clientFactory: clientFactory, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static (List<ToolDefinition>? ToolDefinitions, ToolResources? ToolResources, List<AITool>? FunctionToolsAndOtherTools) ConvertAIToolsToToolDefinitions(IList<AITool>? tools)
+    {
+        List<ToolDefinition>? toolDefinitions = null;
+        ToolResources? toolResources = null;
+        List<AITool>? functionToolsAndOtherTools = null;
+
+        if (tools is not null)
+        {
+            foreach (AITool tool in tools)
+            {
+                switch (tool)
+                {
+                    case AIFunction aiFunction:
+                        functionToolsAndOtherTools ??= new();
+                        functionToolsAndOtherTools.Add(aiFunction);
+
+                        // Currently it is not possible to register function tools on the agent, and also pass them when running the agent.
+                        // The service considers these duplicates and throws. The ChatClient needs to be updated to deduplicate before invoking.
+                        // The only workaround is to only pass them at runtime.
+                        ////toolDefinitions ??= new();
+                        ////toolDefinitions.Add(new FunctionToolDefinition(
+                        ////    aiFunction.Name,
+                        ////    aiFunction.Description,
+                        ////    BinaryData.FromBytes(JsonSerializer.SerializeToUtf8Bytes(aiFunction.JsonSchema, AgentAbstractionsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonElement))))));
+                        break;
+
+                    case HostedCodeInterpreterTool codeTool:
+
+                        toolDefinitions ??= new();
+                        toolDefinitions.Add(new CodeInterpreterToolDefinition());
+
+                        if (codeTool.Inputs is { Count: > 0 })
+                        {
+                            foreach (var input in codeTool.Inputs)
+                            {
+                                switch (input)
+                                {
+                                    case HostedFileContent hostedFile:
+                                        // If the input is a HostedFileContent, we can use its ID directly.
+                                        toolResources ??= new();
+                                        toolResources.CodeInterpreter ??= new();
+                                        toolResources.CodeInterpreter.FileIds.Add(hostedFile.FileId);
+                                        break;
+                                }
+                            }
+                        }
+                        break;
+
+                    case HostedFileSearchTool fileSearchTool:
+                        toolDefinitions ??= new();
+                        toolDefinitions.Add(new FileSearchToolDefinition
+                        {
+                            FileSearch = new() { MaxNumResults = fileSearchTool.MaximumResultCount }
+                        });
+
+                        if (fileSearchTool.Inputs is { Count: > 0 })
+                        {
+                            foreach (var input in fileSearchTool.Inputs)
+                            {
+                                switch (input)
+                                {
+                                    case HostedVectorStoreContent hostedVectorStore:
+                                        toolResources ??= new();
+                                        toolResources.FileSearch ??= new();
+                                        toolResources.FileSearch.VectorStoreIds.Add(hostedVectorStore.VectorStoreId);
+                                        break;
+                                }
+                            }
+                        }
+                        break;
+
+                    case HostedWebSearchTool webSearch when webSearch.AdditionalProperties?.TryGetValue("connectionId", out object? connectionId) is true:
+                        toolDefinitions ??= new();
+                        toolDefinitions.Add(new BingGroundingToolDefinition(new BingGroundingSearchToolParameters([new BingGroundingSearchConfiguration(connectionId!.ToString())])));
+                        break;
+
+                    default:
+                        functionToolsAndOtherTools ??= new();
+                        functionToolsAndOtherTools.Add(tool);
+                        break;
+                }
+            }
+        }
+
+        return (toolDefinitions, toolResources, functionToolsAndOtherTools);
     }
 }

@@ -9,6 +9,7 @@ using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Assistants;
 using OpenAI.Files;
+using OpenAI.VectorStores;
 using Shared.IntegrationTests;
 
 namespace OpenAIAssistant.IntegrationTests;
@@ -115,6 +116,73 @@ public class OpenAIAssistantClientExtensionsTests
             await this._assistantClient.DeleteAssistantAsync(agent.Id);
             await this._fileClient.DeleteFileAsync(uploadedFileId);
             File.Delete(codeFilePath);
+        }
+    }
+
+    [Theory]
+    [InlineData("CreateWithChatClientAgentOptionsAsync")]
+    [InlineData("CreateWithChatClientAgentOptionsSync")]
+    [InlineData("CreateWithParamsAsync")]
+    public async Task CreateAIAgentAsync_WithHostedFileSearchTool_SearchesFilesAsync(string createMechanism)
+    {
+        // Arrange.
+        const string Instructions = """
+            You are a helpful agent that can help fetch data from files you know about.
+            Use the File Search Tool to look up codes for words.
+            Do not answer a question unless you can find the answer using the File Search Tool.
+            """;
+
+        // Create a local file with deterministic content and upload it.
+        var searchFilePath = Path.GetTempFileName() + "wordcodelookup.txt";
+        File.WriteAllText(
+            path: searchFilePath,
+            contents: "The word 'apple' uses the code 442345, while the word 'banana' uses the code 673457.");
+        var uploadResult = await this._fileClient.UploadFileAsync(searchFilePath, FileUploadPurpose.Assistants);
+        string uploadedFileId = uploadResult.Value.Id;
+
+        // Create a vector store backing the file search (HostedFileSearchTool requires a vector store id).
+        var vectorStoreClient = new OpenAIClient(s_config.ApiKey).GetVectorStoreClient();
+        var vectorStoreCreate = await vectorStoreClient.CreateVectorStoreAsync(options: new VectorStoreCreationOptions()
+        {
+            Name = "WordCodeLookup_VectorStore",
+            FileIds = { uploadedFileId }
+        });
+        string vectorStoreId = vectorStoreCreate.Value.Id;
+
+        var fileSearchTool = new HostedFileSearchTool() { Inputs = [new HostedVectorStoreContent(vectorStoreId)] };
+
+        var agent = createMechanism switch
+        {
+            "CreateWithChatClientAgentOptionsAsync" => await this._assistantClient.CreateAIAgentAsync(
+                model: s_config.ChatModelId!,
+                options: new ChatClientAgentOptions(
+                    instructions: Instructions,
+                    tools: [fileSearchTool])),
+            "CreateWithChatClientAgentOptionsSync" => this._assistantClient.CreateAIAgent(
+                model: s_config.ChatModelId!,
+                options: new ChatClientAgentOptions(
+                    instructions: Instructions,
+                    tools: [fileSearchTool])),
+            "CreateWithParamsAsync" => await this._assistantClient.CreateAIAgentAsync(
+                model: s_config.ChatModelId!,
+                instructions: Instructions,
+                tools: [fileSearchTool]),
+            _ => throw new InvalidOperationException($"Unknown create mechanism: {createMechanism}")
+        };
+
+        try
+        {
+            // Act - ask about banana code which must be retrieved via file search.
+            var response = await agent.RunAsync("Can you give me the documented code for 'banana'?");
+            var text = response.ToString();
+            Assert.Contains("673457", text);
+        }
+        finally
+        {
+            await this._assistantClient.DeleteAssistantAsync(agent.Id);
+            await vectorStoreClient.DeleteVectorStoreAsync(vectorStoreId);
+            await this._fileClient.DeleteFileAsync(uploadedFileId);
+            File.Delete(searchFilePath);
         }
     }
 }

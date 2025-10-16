@@ -359,47 +359,32 @@ public static class OpenAIAssistantClientExtensions
             Instructions = options.Instructions,
         };
 
-        if (options.ChatOptions?.Tools is not null)
+        // Convert AITools to ToolDefinitions and ToolResources
+        var toolDefinitionsAndResources = ConvertAIToolsToToolDefinitions(options.ChatOptions?.Tools);
+        if (toolDefinitionsAndResources.ToolDefinitions is { Count: > 0 })
         {
-            foreach (AITool tool in options.ChatOptions.Tools)
-            {
-                switch (tool)
-                {
-                    // Attempting to set the tools at the agent level throws
-                    // https://github.com/dotnet/extensions/issues/6743
-                    //case AIFunction aiFunction:
-                    //    assistantOptions.Tools.Add(ToOpenAIAssistantsFunctionToolDefinition(aiFunction));
-                    //    break;
-
-                    case HostedCodeInterpreterTool:
-                        var codeInterpreterToolDefinition = new CodeInterpreterToolDefinition();
-                        assistantOptions.Tools.Add(codeInterpreterToolDefinition);
-                        break;
-                }
-            }
+            toolDefinitionsAndResources.ToolDefinitions.ForEach(x => assistantOptions.Tools.Add(x));
         }
 
+        if (toolDefinitionsAndResources.ToolResources is not null)
+        {
+            assistantOptions.ToolResources = toolDefinitionsAndResources.ToolResources;
+        }
+
+        // Create the assistant in the assistant service.
         var assistantCreateResult = client.CreateAssistant(model, assistantOptions);
         var assistantId = assistantCreateResult.Value.Id;
 
-        var agentOptions = new ChatClientAgentOptions()
-        {
-            Id = assistantId,
-            Name = options.Name,
-            Description = options.Description,
-            Instructions = options.Instructions,
-            ChatOptions = options.ChatOptions,
-            AIContextProviderFactory = options.AIContextProviderFactory,
-            ChatMessageStoreFactory = options.ChatMessageStoreFactory,
-            UseProvidedChatClientAsIs = options.UseProvidedChatClientAsIs,
-        };
-
+        // Build the local agent object.
         var chatClient = client.AsIChatClient(assistantId);
-
         if (clientFactory is not null)
         {
             chatClient = clientFactory(chatClient);
         }
+
+        var agentOptions = options.Clone();
+        agentOptions.Id = assistantId;
+        options.ChatOptions!.Tools = toolDefinitionsAndResources.FunctionToolsAndOtherTools;
 
         return new ChatClientAgent(chatClient, agentOptions, loggerFactory);
     }
@@ -470,48 +455,111 @@ public static class OpenAIAssistantClientExtensions
             Instructions = options.Instructions,
         };
 
-        if (options.ChatOptions?.Tools is not null)
+        // Convert AITools to ToolDefinitions and ToolResources
+        var toolDefinitionsAndResources = ConvertAIToolsToToolDefinitions(options.ChatOptions?.Tools);
+        if (toolDefinitionsAndResources.ToolDefinitions is { Count: > 0 } toolDefinitions)
         {
-            foreach (AITool tool in options.ChatOptions.Tools)
-            {
-                switch (tool)
-                {
-                    // Attempting to set the tools at the agent level throws
-                    // https://github.com/dotnet/extensions/issues/6743
-                    //case AIFunction aiFunction:
-                    //    assistantOptions.Tools.Add(ToOpenAIAssistantsFunctionToolDefinition(aiFunction));
-                    //    break;
-
-                    case HostedCodeInterpreterTool:
-                        var codeInterpreterToolDefinition = new CodeInterpreterToolDefinition();
-                        assistantOptions.Tools.Add(codeInterpreterToolDefinition);
-                        break;
-                }
-            }
+            toolDefinitions.ForEach(x => assistantOptions.Tools.Add(x));
+        }
+        if (toolDefinitionsAndResources.ToolResources is not null)
+        {
+            assistantOptions.ToolResources = toolDefinitionsAndResources.ToolResources;
         }
 
+        // Create the assistant in the assistant service.
         var assistantCreateResult = await client.CreateAssistantAsync(model, assistantOptions).ConfigureAwait(false);
         var assistantId = assistantCreateResult.Value.Id;
 
-        var agentOptions = new ChatClientAgentOptions()
-        {
-            Id = assistantId,
-            Name = options.Name,
-            Description = options.Description,
-            Instructions = options.Instructions,
-            ChatOptions = options.ChatOptions,
-            AIContextProviderFactory = options.AIContextProviderFactory,
-            ChatMessageStoreFactory = options.ChatMessageStoreFactory,
-            UseProvidedChatClientAsIs = options.UseProvidedChatClientAsIs
-        };
-
+        // Build the local agent object.
         var chatClient = client.AsIChatClient(assistantId);
-
         if (clientFactory is not null)
         {
             chatClient = clientFactory(chatClient);
         }
 
+        var agentOptions = options.Clone();
+        agentOptions.Id = assistantId;
+        options.ChatOptions!.Tools = toolDefinitionsAndResources.FunctionToolsAndOtherTools;
+
         return new ChatClientAgent(chatClient, agentOptions, loggerFactory);
+    }
+
+    private static (List<ToolDefinition>? ToolDefinitions, ToolResources? ToolResources, List<AITool>? FunctionToolsAndOtherTools) ConvertAIToolsToToolDefinitions(IList<AITool>? tools)
+    {
+        List<ToolDefinition>? toolDefinitions = null;
+        ToolResources? toolResources = null;
+        List<AITool>? functionToolsAndOtherTools = null;
+
+        if (tools is not null)
+        {
+            foreach (AITool tool in tools)
+            {
+                switch (tool)
+                {
+                    case AIFunction aiFunction:
+                        functionToolsAndOtherTools ??= new();
+                        functionToolsAndOtherTools.Add(aiFunction);
+
+                        // Attempting to set the tools at the agent level throws
+                        // https://github.com/dotnet/extensions/issues/6743
+                        //case AIFunction aiFunction:
+                        //    toolDefinitions.Add(ToOpenAIAssistantsFunctionToolDefinition(aiFunction));
+                        //    break;
+                        break;
+
+                    case HostedCodeInterpreterTool codeTool:
+
+                        toolDefinitions ??= new();
+                        toolDefinitions.Add(new CodeInterpreterToolDefinition());
+
+                        if (codeTool.Inputs is { Count: > 0 })
+                        {
+                            foreach (var input in codeTool.Inputs)
+                            {
+                                switch (input)
+                                {
+                                    case HostedFileContent hostedFile:
+                                        // If the input is a HostedFileContent, we can use its ID directly.
+                                        toolResources ??= new();
+                                        toolResources.CodeInterpreter ??= new();
+                                        toolResources.CodeInterpreter.FileIds.Add(hostedFile.FileId);
+                                        break;
+                                }
+                            }
+                        }
+                        break;
+
+                    case HostedFileSearchTool fileSearchTool:
+                        toolDefinitions ??= new();
+                        toolDefinitions.Add(new FileSearchToolDefinition
+                        {
+                            MaxResults = fileSearchTool.MaximumResultCount,
+                        });
+
+                        if (fileSearchTool.Inputs is { Count: > 0 })
+                        {
+                            foreach (var input in fileSearchTool.Inputs)
+                            {
+                                switch (input)
+                                {
+                                    case HostedVectorStoreContent hostedVectorStore:
+                                        toolResources ??= new();
+                                        toolResources.FileSearch ??= new();
+                                        toolResources.FileSearch.VectorStoreIds.Add(hostedVectorStore.VectorStoreId);
+                                        break;
+                                }
+                            }
+                        }
+                        break;
+
+                    default:
+                        functionToolsAndOtherTools ??= new();
+                        functionToolsAndOtherTools.Add(tool);
+                        break;
+                }
+            }
+        }
+
+        return (toolDefinitions, toolResources, functionToolsAndOtherTools);
     }
 }

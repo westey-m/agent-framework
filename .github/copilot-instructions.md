@@ -43,6 +43,7 @@ The sample code should follow these guidelines:
 - Ensure that all private classes are sealed
 - Use the Async suffix on the name of all async methods that return a Task or ValueTask.
 - Prefer defining variables using types rather than var, to help users understand the types involved.
+- Follow the patterns in the samples in the same directories where new samples are being added.
 - The structure of the sample should be as follows:
   - The top of the Program.cs should have a copyright notice: `// Copyright (c) Microsoft. All rights reserved.`
   - Then add a comment describing what the sample is demonstrating.
@@ -61,4 +62,6 @@ Unit tests should follow these guidelines:
 - Ensure that all private classes, that are not subclassed, are sealed
 - Use the Async suffix on the name of all async methods
 - Use the Moq library for mocking objects where possible
-- Validate that each test actually tests the target behavior, e.g. we should not have tests that creates a mock, calls the mock and then verifies that the mock was called, without the target code being involved.
+- Validate that each test actually tests the target behavior, e.g. we should not have tests that creates a mock, calls the mock and then verifies that the mock was called, without the target code being involved. We also shouldn't have tests that test language features, e.g. something that the compiler would catch anyway.
+- Avoid adding excessive comments to tests. Instead favour clear easy to understand code.
+- Follow the patterns in the unit tests in the same project or classes to which new tests are being added

@@ -384,6 +384,7 @@ public static class OpenAIAssistantClientExtensions
 
         var agentOptions = options.Clone();
         agentOptions.Id = assistantId;
+        options.ChatOptions ??= new ChatOptions();
         options.ChatOptions!.Tools = toolDefinitionsAndResources.FunctionToolsAndOtherTools;
 
         return new ChatClientAgent(chatClient, agentOptions, loggerFactory);
@@ -479,6 +480,7 @@ public static class OpenAIAssistantClientExtensions
 
         var agentOptions = options.Clone();
         agentOptions.Id = assistantId;
+        options.ChatOptions ??= new ChatOptions();
         options.ChatOptions!.Tools = toolDefinitionsAndResources.FunctionToolsAndOtherTools;
 
         return new ChatClientAgent(chatClient, agentOptions, loggerFactory);

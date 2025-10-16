@@ -27,8 +27,10 @@ public class OpenAIAssistantClientExtensionsTests
     public async Task CreateAIAgentAsync_WithAIFunctionTool_InvokesFunctionAsync(string createMechanism)
     {
         // Arrange
-        static string Echo(string text) => $"ECHO:{text}";
-        var echoFunc = AIFunctionFactory.Create(Echo, name: "Echo");
+        const string AgentInstructions = "You are a helpful weather assistant. Always call the GetWeather function to answer questions about weather.";
+
+        static string GetWeather(string location) => $"The weather in {location} is sunny with a high of 23C.";
+        var weatherFunction = AIFunctionFactory.Create(GetWeather, nameof(GetWeather));
 
         // Act
         var agent = createMechanism switch
@@ -36,28 +38,30 @@ public class OpenAIAssistantClientExtensionsTests
             "CreateWithChatClientAgentOptionsAsync" => await this._assistantClient.CreateAIAgentAsync(
                 model: s_config.ChatModelId!,
                 options: new ChatClientAgentOptions(
-                    instructions: "Always call the Echo function and return its result.",
-                    tools: [echoFunc])),
+                    instructions: AgentInstructions,
+                    tools: [weatherFunction])),
             "CreateWithChatClientAgentOptionsSync" => this._assistantClient.CreateAIAgent(
                 model: s_config.ChatModelId!,
                 options: new ChatClientAgentOptions(
-                    instructions: "Always call the Echo function and return its result.",
-                    tools: [echoFunc])),
+                    instructions: AgentInstructions,
+                    tools: [weatherFunction])),
             "CreateWithParamsAsync" => await this._assistantClient.CreateAIAgentAsync(
                 model: s_config.ChatModelId!,
-                instructions: "Always call the Echo function and return its result.",
-                tools: [echoFunc]),
+                instructions: AgentInstructions,
+                tools: [weatherFunction]),
             _ => throw new InvalidOperationException($"Unknown create mechanism: {createMechanism}")
         };
 
         try
         {
             // Trigger function call.
-            var response = await agent.RunAsync("Hello world");
-            var text = response.ToString();
+            var response = await agent.RunAsync("What is the weather like in Amsterdam?");
+            var text = response.Text;
 
             // Assert
-            Assert.Contains("ECHO:Hello world", text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Amsterdam", text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("sunny", text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("23", text, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

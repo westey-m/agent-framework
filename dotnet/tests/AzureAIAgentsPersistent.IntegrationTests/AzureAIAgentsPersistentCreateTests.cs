@@ -226,7 +226,6 @@ public class AzureAIAgentsPersistentCreateTests
         const string AgentInstructions = "You are a helpful weather assistant. Always call the GetWeather function to answer questions about weather.";
 
         static string GetWeather(string location) => $"The weather in {location} is sunny with a high of 23C.";
-
         var weatherFunction = AIFunctionFactory.Create(GetWeather);
 
         ChatClientAgent agent = createMechanism switch
@@ -247,10 +246,10 @@ public class AzureAIAgentsPersistentCreateTests
         try
         {
             // Act.
-            var result = await agent.RunAsync("What is the weather like in Amsterdam?");
+            var response = await agent.RunAsync("What is the weather like in Amsterdam?");
 
             // Assert - ensure function was invoked and its output surfaced.
-            var text = result.ToString();
+            var text = response.Text;
             Assert.Contains("Amsterdam", text, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("sunny", text, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("23", text, StringComparison.OrdinalIgnoreCase);

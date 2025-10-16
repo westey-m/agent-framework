@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.ClientModel;
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -496,17 +497,6 @@ public static class OpenAIAssistantClientExtensions
             {
                 switch (tool)
                 {
-                    case AIFunction aiFunction:
-                        functionToolsAndOtherTools ??= new();
-                        functionToolsAndOtherTools.Add(aiFunction);
-
-                        // Attempting to set the tools at the agent level throws
-                        // https://github.com/dotnet/extensions/issues/6743
-                        //case AIFunction aiFunction:
-                        //    toolDefinitions.Add(ToOpenAIAssistantsFunctionToolDefinition(aiFunction));
-                        //    break;
-                        break;
-
                     case HostedCodeInterpreterTool codeTool:
 
                         toolDefinitions ??= new();

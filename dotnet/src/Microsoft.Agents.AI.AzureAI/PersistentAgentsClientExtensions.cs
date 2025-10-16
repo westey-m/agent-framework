@@ -504,20 +504,6 @@ public static class PersistentAgentsClientExtensions
             {
                 switch (tool)
                 {
-                    case AIFunction aiFunction:
-                        functionToolsAndOtherTools ??= new();
-                        functionToolsAndOtherTools.Add(aiFunction);
-
-                        // Currently it is not possible to register function tools on the agent, and also pass them when running the agent.
-                        // The service considers these duplicates and throws. The ChatClient needs to be updated to deduplicate before invoking.
-                        // The only workaround is to only pass them at runtime.
-                        ////toolDefinitions ??= new();
-                        ////toolDefinitions.Add(new FunctionToolDefinition(
-                        ////    aiFunction.Name,
-                        ////    aiFunction.Description,
-                        ////    BinaryData.FromBytes(JsonSerializer.SerializeToUtf8Bytes(aiFunction.JsonSchema, AgentAbstractionsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonElement))))));
-                        break;
-
                     case HostedCodeInterpreterTool codeTool:
 
                         toolDefinitions ??= new();

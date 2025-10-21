@@ -15,12 +15,11 @@ namespace Microsoft.Agents.AI.IntegrationTests;
 /// <summary>
 /// Integration tests for <see cref="Mem0Provider"/> against a configured Mem0 service.
 /// </summary>
-public class Mem0ProviderTests : IDisposable
+public sealed class Mem0ProviderTests : IDisposable
 {
     private const string SkipReason = "Requires a Mem0 service configured"; // Set to null to enable.
 
     private readonly HttpClient _httpClient;
-    private bool _disposed;
 
     public Mem0ProviderTests()
     {
@@ -136,21 +135,8 @@ public class Mem0ProviderTests : IDisposable
         return ctx!;
     }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!this._disposed)
-        {
-            if (disposing)
-            {
-                this._httpClient.Dispose();
-            }
-            this._disposed = true;
-        }
-    }
-
     public void Dispose()
     {
-        this.Dispose(true);
-        GC.SuppressFinalize(this);
+        this._httpClient.Dispose();
     }
 }

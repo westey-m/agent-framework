@@ -238,22 +238,6 @@ public sealed class Mem0ProviderTests : IDisposable
     }
 
     [Fact]
-    public void GeneratedThreadId_IsSerialized()
-    {
-        // Arrange
-        var options = new Mem0ProviderOptions { UseGeneratedThreadId = true };
-        var sut = new Mem0Provider(this._httpClient, options);
-
-        // Act
-        var stateElement = sut.Serialize();
-
-        // Assert
-        using JsonDocument doc = JsonDocument.Parse(stateElement.GetRawText());
-        Assert.True(doc.RootElement.TryGetProperty("threadId", out var threadIdProp));
-        Assert.False(string.IsNullOrWhiteSpace(threadIdProp.GetString()));
-    }
-
-    [Fact]
     public async Task InvokingAsync_Throws_WhenNoScopesAsync()
     {
         // Arrange

@@ -17,7 +17,7 @@ namespace Microsoft.Agents.AI.IntegrationTests;
 /// </summary>
 public class Mem0ProviderTests : IDisposable
 {
-    private const string SkipReason = null; //"Requires a Mem0 service configured"; // Set to null to enable.
+    private const string SkipReason = "Requires a Mem0 service configured"; // Set to null to enable.
 
     private readonly HttpClient _httpClient;
     private bool _disposed;

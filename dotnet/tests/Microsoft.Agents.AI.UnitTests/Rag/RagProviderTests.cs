@@ -116,7 +116,7 @@ public sealed class RagProviderTests
                 l => l.Log(
                     LogLevel.Trace,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("RAGProvider Input:Sample user question?\nAdditional part\nContext Instructions:") || v.ToString()!.Contains("RAGProvider Input:Sample user question?\nAdditional part\nContext Instructions")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("RAGProvider Input:Sample user question?\nAdditional part\nContext Instructions")),
                     It.IsAny<Exception?>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.AtLeastOnce);

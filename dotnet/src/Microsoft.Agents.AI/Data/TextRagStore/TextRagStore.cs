@@ -33,12 +33,12 @@ public sealed partial class TextRagStore<TKey> : IDisposable
     [GeneratedRegex(@"\p{L}+", RegexOptions.IgnoreCase, "en-US")]
     private static partial Regex AnyLanguageWordRegex();
 
-    private static readonly Func<string, ICollection<string>> s_defaultWordSegementer = text => AnyLanguageWordRegex().Matches(text).Select(x => x.Value).ToList();
+    private static readonly Func<string, ICollection<string>> s_defaultWordSegmenter = text => AnyLanguageWordRegex().Matches(text).Select(x => x.Value).ToList();
 #else
     private static readonly Regex s_anyLanguageWordRegex = new(@"\p{L}+", RegexOptions.Compiled);
     private static Regex AnyLanguageWordRegex() => s_anyLanguageWordRegex;
 
-    private static readonly Func<string, ICollection<string>> s_defaultWordSegementer = text =>
+    private static readonly Func<string, ICollection<string>> s_defaultWordSegmenter = text =>
     {
         List<string> words = new();
         foreach (Match word in AnyLanguageWordRegex().Matches(text))
@@ -90,7 +90,7 @@ public sealed partial class TextRagStore<TKey> : IDisposable
         // Assign
         this._vectorStore = vectorStore;
         this._options = options ?? new TextRagStoreOptions();
-        this._wordSegmenter = this._options.WordSegementer ?? s_defaultWordSegementer;
+        this._wordSegmenter = this._options.WordSegmenter ?? s_defaultWordSegmenter;
 
         // Create a definition so that we can use the dimensions provided at runtime.
         VectorStoreCollectionDefinition ragDocumentDefinition = new()

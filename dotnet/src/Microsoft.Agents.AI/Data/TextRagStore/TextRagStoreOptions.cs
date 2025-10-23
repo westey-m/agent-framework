@@ -51,7 +51,7 @@ public sealed class TextRagStoreOptions
     /// <remarks>
     /// Defaults to a simple text-character-based segmenter that splits the text by any character that is not a text character.
     /// </remarks>
-    public Func<string, ICollection<string>>? WordSegementer { get; init; }
+    public Func<string, ICollection<string>>? WordSegmenter { get; init; }
 
     /// <summary>
     /// Gets or sets an optional callback to load the source text using the source id or source link

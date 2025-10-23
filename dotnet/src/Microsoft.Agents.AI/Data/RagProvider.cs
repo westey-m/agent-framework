@@ -11,7 +11,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Shared.Diagnostics;
 
-namespace Microsoft.Agents.AI.Rag;
+namespace Microsoft.Agents.AI.Data;
 
 /// <summary>
 /// A Retrieval Augmented Generation (RAG) context provider that performs a search over external knowledge

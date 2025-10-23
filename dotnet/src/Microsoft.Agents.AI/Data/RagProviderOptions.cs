@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.AI;
 
-namespace Microsoft.Agents.AI.Rag;
+namespace Microsoft.Agents.AI.Data;
 
 /// <summary>
 /// Options controlling the behavior of <see cref="RagProvider"/>.

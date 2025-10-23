@@ -6,12 +6,12 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Agents.AI.Rag;
+using Microsoft.Agents.AI.Data;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace Microsoft.Agents.AI.UnitTests.Rag;
+namespace Microsoft.Agents.AI.UnitTests.Data;
 
 /// <summary>
 /// Contains unit tests for <see cref="RagProvider"/>.

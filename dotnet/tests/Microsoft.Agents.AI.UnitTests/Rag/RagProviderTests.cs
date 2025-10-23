@@ -56,7 +56,7 @@ public sealed class RagProviderTests
         {
             SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
             ContextPrompt = overrideContextPrompt,
-            IncludeCitationsPrompt = overrideCitationsPrompt
+            CitationsPrompt = overrideCitationsPrompt
         };
         var provider = new RagProvider(SearchDelegateAsync, options, withLogging ? this._loggerFactoryMock.Object : null);
 
@@ -132,8 +132,8 @@ public sealed class RagProviderTests
         var options = new RagProviderOptions
         {
             SearchTime = RagProviderOptions.RagBehavior.OnDemandFunctionCalling,
-            PluginFunctionName = overrideName,
-            PluginFunctionDescription = overrideDescription
+            FunctionToolName = overrideName,
+            FunctionToolDescription = overrideDescription
         };
         var provider = new RagProvider(this.NoResultSearchAsync, options);
         var invokingContext = new AIContextProvider.InvokingContext(new[] { new ChatMessage(ChatRole.User, "Q?") });
@@ -170,7 +170,7 @@ public sealed class RagProviderTests
         var options = new RagProviderOptions
         {
             ContextPrompt = overrideContextPrompt,
-            IncludeCitationsPrompt = overrideCitationsPrompt
+            CitationsPrompt = overrideCitationsPrompt
         };
         var provider = new RagProvider(SearchDelegateAsync, options);
 

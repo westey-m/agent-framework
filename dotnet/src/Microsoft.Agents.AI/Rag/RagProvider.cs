@@ -37,7 +37,7 @@ public sealed class RagProvider : AIContextProvider
     private const string DefaultPluginSearchFunctionName = "Search";
     private const string DefaultPluginSearchFunctionDescription = "Allows searching for additional information to help answer the user question.";
     private const string DefaultContextPrompt = "## Additional Context\nConsider the following information from source documents when responding to the user:";
-    private const string DefaultIncludeCitationsPrompt = "Include citations to the source document with document name and link if document name and link is available.";
+    private const string DefaultCitationsPrompt = "Include citations to the source document with document name and link if document name and link is available.";
 
     private readonly Func<string, CancellationToken, Task<IEnumerable<RagSearchResult>>> _searchAsync;
     private readonly ILogger<RagProvider>? _logger;
@@ -65,8 +65,8 @@ public sealed class RagProvider : AIContextProvider
         [
             AIFunctionFactory.Create(
                 this.SearchAsync,
-                name: this._options.PluginFunctionName ?? DefaultPluginSearchFunctionName,
-                description: this._options.PluginFunctionDescription ?? DefaultPluginSearchFunctionDescription)
+                name: this._options.FunctionToolName ?? DefaultPluginSearchFunctionName,
+                description: this._options.FunctionToolDescription ?? DefaultPluginSearchFunctionDescription)
         ];
     }
 
@@ -107,8 +107,8 @@ public sealed class RagProvider : AIContextProvider
         [
             AIFunctionFactory.Create(
                 this.SearchAsync,
-                name: this._options.PluginFunctionName ?? DefaultPluginSearchFunctionName,
-                description: this._options.PluginFunctionDescription ?? DefaultPluginSearchFunctionDescription)
+                name: this._options.FunctionToolName ?? DefaultPluginSearchFunctionName,
+                description: this._options.FunctionToolDescription ?? DefaultPluginSearchFunctionDescription)
         ];
     }
 
@@ -267,7 +267,7 @@ public sealed class RagProvider : AIContextProvider
             sb.AppendLine($"Contents: {result.Value}");
             sb.AppendLine("----");
         }
-        sb.AppendLine(this._options.IncludeCitationsPrompt ?? DefaultIncludeCitationsPrompt);
+        sb.AppendLine(this._options.CitationsPrompt ?? DefaultCitationsPrompt);
         sb.AppendLine();
         return sb.ToString();
     }

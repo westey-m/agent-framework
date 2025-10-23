@@ -21,13 +21,13 @@ public sealed class RagProviderOptions
     /// Gets or sets the name of the exposed search tool when operating in on-demand mode.
     /// </summary>
     /// <value>Defaults to "Search".</value>
-    public string? PluginFunctionName { get; set; }
+    public string? FunctionToolName { get; set; }
 
     /// <summary>
     /// Gets or sets the description of the exposed search tool when operating in on-demand mode.
     /// </summary>
     /// <value>Defaults to "Allows searching for additional information to help answer the user question.".</value>
-    public string? PluginFunctionDescription { get; set; }
+    public string? FunctionToolDescription { get; set; }
 
     /// <summary>
     /// Gets or sets the context prompt prefixed to automatically injected results.
@@ -37,13 +37,13 @@ public sealed class RagProviderOptions
     /// <summary>
     /// Gets or sets the instruction appended after automatically injected results to request citations.
     /// </summary>
-    public string? IncludeCitationsPrompt { get; set; }
+    public string? CitationsPrompt { get; set; }
 
     /// <summary>
     /// Optional delegate to fully customize formatting of the result list.
     /// </summary>
     /// <remarks>
-    /// If provided, <see cref="ContextPrompt"/> and <see cref="IncludeCitationsPrompt"/> are ignored.
+    /// If provided, <see cref="ContextPrompt"/> and <see cref="CitationsPrompt"/> are ignored.
     /// </remarks>
     public Func<IList<RagProvider.RagSearchResult>, string>? ContextFormatter { get; set; }
 

@@ -7,11 +7,10 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Agents.AI.Memory.Mem0;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
-namespace Microsoft.Agents.AI.UnitTests.Memory.Mem0;
+namespace Microsoft.Agents.AI.Mem0.UnitTests;
 
 /// <summary>
 /// Tests for <see cref="Mem0Provider"/>.
@@ -59,7 +58,7 @@ public sealed class Mem0ProviderTests : IDisposable
     public void DeserializingConstructor_Defaults_Scopes()
     {
         // Arrange & Act
-        var jsonElement = JsonSerializer.SerializeToElement(new object(), AgentJsonUtilities.DefaultOptions);
+        var jsonElement = JsonSerializer.SerializeToElement(new object(), Mem0JsonUtilities.DefaultOptions);
         var sut = new Mem0Provider(this._httpClient, jsonElement);
 
         // Assert

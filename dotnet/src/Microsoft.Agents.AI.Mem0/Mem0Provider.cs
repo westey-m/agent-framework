@@ -11,7 +11,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Shared.Diagnostics;
 
-namespace Microsoft.Agents.AI.Memory.Mem0;
+namespace Microsoft.Agents.AI.Mem0;
 
 /// <summary>
 /// Provides a Mem0 backed <see cref="AIContextProvider"/> that persists conversation messages as memories
@@ -69,6 +69,7 @@ public sealed class Mem0Provider : AIContextProvider
     /// </summary>
     /// <param name="httpClient">Configured <see cref="HttpClient"/> (base address + auth).</param>
     /// <param name="serializedState">A <see cref="JsonElement"/> representing the serialized state of the store.</param>
+    /// <param name="jsonSerializerOptions">Optional settings for customizing the JSON deserialization process.</param>
     /// <param name="loggerFactory">Optional logger factory.</param>
     /// <exception cref="ArgumentException"></exception>
     /// <remarks>
@@ -81,14 +82,15 @@ public sealed class Mem0Provider : AIContextProvider
     /// new Mem0AIContextProvider(httpClient, state);
     /// </code>
     /// </remarks>
-    public Mem0Provider(HttpClient httpClient, JsonElement serializedState, ILoggerFactory? loggerFactory = null)
+    public Mem0Provider(HttpClient httpClient, JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, ILoggerFactory? loggerFactory = null)
     {
         if (string.IsNullOrWhiteSpace(httpClient.BaseAddress?.AbsoluteUri))
         {
             throw new ArgumentException("The HttpClient BaseAddress must be set for Mem0 operations.", nameof(httpClient));
         }
 
-        var state = serializedState.Deserialize(AgentJsonUtilities.DefaultOptions.GetTypeInfo(typeof(Mem0State))) as Mem0State;
+        var jso = jsonSerializerOptions ?? Mem0JsonUtilities.DefaultOptions;
+        var state = serializedState.Deserialize(jso.GetTypeInfo(typeof(Mem0State))) as Mem0State;
 
         this.ApplicationId = state?.ApplicationId;
         this.AgentId = state?.AgentId;
@@ -192,7 +194,8 @@ public sealed class Mem0Provider : AIContextProvider
             ContextPrompt = this._contextPrompt == DefaultContextPrompt ? null : this._contextPrompt
         };
 
-        return JsonSerializer.SerializeToElement(state, AgentJsonUtilities.DefaultOptions.GetTypeInfo(typeof(Mem0State)));
+        var jso = jsonSerializerOptions ?? Mem0JsonUtilities.DefaultOptions;
+        return JsonSerializer.SerializeToElement(state, jso.GetTypeInfo(typeof(Mem0State)));
     }
 
     private async Task PersistMessagesAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken)

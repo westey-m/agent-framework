@@ -1,6 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-namespace Microsoft.Agents.AI.Memory.Mem0;
+namespace Microsoft.Agents.AI.Mem0;
 
 /// <summary>
 /// Options for configuring the <see cref="Mem0Provider"/>.

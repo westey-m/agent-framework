@@ -11,7 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Shared.Diagnostics;
 
-namespace Microsoft.Agents.AI.Memory.Mem0;
+namespace Microsoft.Agents.AI.Mem0;
 
 /// <summary>
 /// Client for the Mem0 memory service.

@@ -5,12 +5,11 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Agents.AI.Memory.Mem0;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Shared.IntegrationTests;
 
-namespace Microsoft.Agents.AI.IntegrationTests;
+namespace Microsoft.Agents.AI.Mem0.IntegrationTests;
 
 /// <summary>
 /// Integration tests for <see cref="Mem0Provider"/> against a configured Mem0 service.

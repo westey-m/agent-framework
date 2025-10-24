@@ -280,17 +280,27 @@ public sealed class RagProvider : AIContextProvider
         /// <summary>
         /// Gets or sets the display name of the source document (optional).
         /// </summary>
-        public string? Name { get; init; }
+        public string? Name { get; set; }
 
         /// <summary>
         /// Gets or sets a link/URL to the source document (optional).
         /// </summary>
-        public string? Link { get; init; }
+        public string? Link { get; set; }
 
         /// <summary>
         /// Gets or sets the textual content of the retrieved chunk.
         /// </summary>
-        public string Value { get; init; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the raw representation of the search result from the data source.
+        /// </summary>
+        /// <remarks>
+        /// If a <see cref="RagSearchResult"/> is created to represent some underlying object from another object
+        /// model, this property can be used to store that original object. This can be useful for debugging or
+        /// for enabling the <see cref="RagProviderOptions.ContextFormatter"/> to access the underlying object model if needed.
+        /// </remarks>
+        public object? RawRepresentation { get; set; }
     }
 
     internal sealed class RagProviderState

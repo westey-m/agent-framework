@@ -237,6 +237,40 @@ public sealed class RagProviderTests
     }
 
     [Fact]
+    public async Task InvokingAsync_WithRawRepresentations_ContextFormatterCanAccessAsync()
+    {
+        // Arrange
+        var payload1 = new RawPayload { Id = "R1" };
+        var payload2 = new RawPayload { Id = "R2" };
+        List<RagProvider.RagSearchResult> results =
+        [
+            new() { Name = "Doc1", Value = "Content 1", RawRepresentation = payload1 },
+            new() { Name = "Doc2", Value = "Content 2", RawRepresentation = payload2 }
+        ];
+
+        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        {
+            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>(results);
+        }
+
+        var options = new RagProviderOptions
+        {
+            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            ContextFormatter = r => string.Join(",", r.Select(x => ((RawPayload)x.RawRepresentation!).Id))
+        };
+        var provider = new RagProvider(SearchDelegateAsync, options);
+        var invokingContext = new AIContextProvider.InvokingContext(new[] { new ChatMessage(ChatRole.User, "Q?") });
+
+        // Act
+        var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(aiContext.Messages);
+        Assert.Single(aiContext.Messages!);
+        Assert.Equal("R1,R2", aiContext.Messages![0].Text);
+    }
+
+    [Fact]
     public async Task InvokingAsync_WithNoResults_ShouldReturnEmptyContextAsync()
     {
         // Arrange
@@ -499,5 +533,10 @@ public sealed class RagProviderTests
     private Task<IEnumerable<RagProvider.RagSearchResult>> NoResultSearchAsync(string input, CancellationToken ct)
     {
         return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]);
+    }
+
+    private sealed class RawPayload
+    {
+        public string Id { get; set; } = string.Empty;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 // This sample shows how to use TextSearchProvider to add retrieval augmented generation (RAG)
 // capabilities to an AI agent. The provider runs a search against an external knowledge base

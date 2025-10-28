@@ -20,7 +20,7 @@ var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT
 // In this case we allow the tool to always be called without approval.
 var mcpTool = new HostedMcpServerTool(
     serverName: "microsoft_learn",
-    url: "https://learn.microsoft.com/api/mcp")
+    serverAddress: "https://learn.microsoft.com/api/mcp")
 {
     AllowedTools = ["microsoft_docs_search"],
     ApprovalMode = HostedMcpServerToolApprovalMode.NeverRequire
@@ -47,7 +47,7 @@ Console.WriteLine(await agent.RunAsync("Please summarize the Azure AI Agent docu
 // In this case we require approval before the tool can be called.
 var mcpToolWithApproval = new HostedMcpServerTool(
     serverName: "microsoft_learn",
-    url: "https://learn.microsoft.com/api/mcp")
+    serverAddress: "https://learn.microsoft.com/api/mcp")
 {
     AllowedTools = ["microsoft_docs_search"],
     ApprovalMode = HostedMcpServerToolApprovalMode.AlwaysRequire

@@ -63,7 +63,7 @@ internal static partial class AgentJsonUtilities
 
     // Agent abstraction types
     [JsonSerializable(typeof(ChatClientAgentThread.ThreadState))]
-    [JsonSerializable(typeof(RagProvider.RagProviderState))]
+    [JsonSerializable(typeof(TextSearchProvider.TextSearchProviderState))]
 
     [ExcludeFromCodeCoverage]
     internal sealed partial class JsonContext : JsonSerializerContext;

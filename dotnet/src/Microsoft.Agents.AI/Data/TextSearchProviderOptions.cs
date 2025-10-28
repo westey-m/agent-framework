@@ -7,15 +7,15 @@ using Microsoft.Extensions.AI;
 namespace Microsoft.Agents.AI.Data;
 
 /// <summary>
-/// Options controlling the behavior of <see cref="RagProvider"/>.
+/// Options controlling the behavior of <see cref="TextSearchProvider"/>.
 /// </summary>
-public sealed class RagProviderOptions
+public sealed class TextSearchProviderOptions
 {
     /// <summary>
     /// Gets or sets a value indicating when the search should be executed.
     /// </summary>
-    /// <value><see cref="RagBehavior.BeforeAIInvoke"/> by default.</value>
-    public RagBehavior SearchTime { get; set; } = RagBehavior.BeforeAIInvoke;
+    /// <value><see cref="TextSearchBehavior.BeforeAIInvoke"/> by default.</value>
+    public TextSearchBehavior SearchTime { get; set; } = TextSearchBehavior.BeforeAIInvoke;
 
     /// <summary>
     /// Gets or sets the name of the exposed search tool when operating in on-demand mode.
@@ -45,11 +45,11 @@ public sealed class RagProviderOptions
     /// <remarks>
     /// If provided, <see cref="ContextPrompt"/> and <see cref="CitationsPrompt"/> are ignored.
     /// </remarks>
-    public Func<IList<RagProvider.RagSearchResult>, string>? ContextFormatter { get; set; }
+    public Func<IList<TextSearchProvider.TextSearchSearchResult>, string>? ContextFormatter { get; set; }
 
     /// <summary>
     /// Gets or sets the number of recent conversation messages (both user and assistant) to keep in memory
-    /// and include when constructing the search input for <see cref="RagBehavior.BeforeAIInvoke"/> searches.
+    /// and include when constructing the search input for <see cref="TextSearchBehavior.BeforeAIInvoke"/> searches.
     /// </summary>
     /// <value>
     /// The maximum number of most recent messages to retain. A value of <c>0</c> (default) disables memory and
@@ -62,7 +62,7 @@ public sealed class RagProviderOptions
     /// <summary>
     /// Behavior choices for the provider.
     /// </summary>
-    public enum RagBehavior
+    public enum TextSearchBehavior
     {
         /// <summary>
         /// Execute search prior to each invocation and inject results as instructions.

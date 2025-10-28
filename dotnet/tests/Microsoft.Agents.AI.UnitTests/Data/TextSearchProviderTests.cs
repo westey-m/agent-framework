@@ -14,14 +14,14 @@ using Moq;
 namespace Microsoft.Agents.AI.UnitTests.Data;
 
 /// <summary>
-/// Contains unit tests for <see cref="RagProvider"/>.
+/// Contains unit tests for <see cref="TextSearchProvider"/>.
 /// </summary>
-public sealed class RagProviderTests
+public sealed class TextSearchProviderTests
 {
-    private readonly Mock<ILogger<RagProvider>> _loggerMock;
+    private readonly Mock<ILogger<TextSearchProvider>> _loggerMock;
     private readonly Mock<ILoggerFactory> _loggerFactoryMock;
 
-    public RagProviderTests()
+    public TextSearchProviderTests()
     {
         this._loggerMock = new();
         this._loggerFactoryMock = new();
@@ -29,7 +29,7 @@ public sealed class RagProviderTests
             .Setup(f => f.CreateLogger(It.IsAny<string>()))
             .Returns(this._loggerMock.Object);
         this._loggerFactoryMock
-            .Setup(f => f.CreateLogger(typeof(RagProvider).FullName!))
+            .Setup(f => f.CreateLogger(typeof(TextSearchProvider).FullName!))
             .Returns(this._loggerMock.Object);
     }
 
@@ -39,26 +39,26 @@ public sealed class RagProviderTests
     public async Task InvokingAsync_ShouldInjectFormattedResultsAsync(string? overrideContextPrompt, string? overrideCitationsPrompt, bool withLogging)
     {
         // Arrange
-        List<RagProvider.RagSearchResult> results =
+        List<TextSearchProvider.TextSearchSearchResult> results =
         [
             new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
             new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
         ];
 
         string? capturedInput = null;
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>(results);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>(results);
         }
 
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             ContextPrompt = overrideContextPrompt,
             CitationsPrompt = overrideCitationsPrompt
         };
-        var provider = new RagProvider(SearchDelegateAsync, options, withLogging ? this._loggerFactoryMock.Object : null);
+        var provider = new TextSearchProvider(SearchDelegateAsync, options, withLogging ? this._loggerFactoryMock.Object : null);
 
         var invokingContext = new AIContextProvider.InvokingContext(new[]
         {
@@ -71,7 +71,7 @@ public sealed class RagProviderTests
 
         // Assert
         Assert.Equal("Sample user question?\nAdditional part", capturedInput);
-        Assert.Null(aiContext.Instructions); // RagProvider uses a user message for context injection.
+        Assert.Null(aiContext.Instructions); // TextSearchProvider uses a user message for context injection.
         Assert.NotNull(aiContext.Messages);
         Assert.Single(aiContext.Messages!);
         var message = aiContext.Messages!.Single();
@@ -108,7 +108,7 @@ public sealed class RagProviderTests
                 l => l.Log(
                     LogLevel.Information,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("RAGProvider: Retrieved 2 search results.")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("TextSearchProvider: Retrieved 2 search results.")),
                     It.IsAny<Exception?>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.AtLeastOnce);
@@ -116,7 +116,7 @@ public sealed class RagProviderTests
                 l => l.Log(
                     LogLevel.Trace,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("RAGProvider Input:Sample user question?\nAdditional part\nContext Instructions")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("TextSearchProvider Input:Sample user question?\nAdditional part\nContext Instructions")),
                     It.IsAny<Exception?>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.AtLeastOnce);
@@ -129,13 +129,13 @@ public sealed class RagProviderTests
     public async Task InvokingAsync_OnDemand_ShouldExposeSearchToolAsync(string? overrideName, string? overrideDescription, string expectedName, string expectedDescription)
     {
         // Arrange
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.OnDemandFunctionCalling,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.OnDemandFunctionCalling,
             FunctionToolName = overrideName,
             FunctionToolDescription = overrideDescription
         };
-        var provider = new RagProvider(this.NoResultSearchAsync, options);
+        var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var invokingContext = new AIContextProvider.InvokingContext(new[] { new ChatMessage(ChatRole.User, "Q?") });
 
         // Act
@@ -156,23 +156,23 @@ public sealed class RagProviderTests
     public async Task SearchAsync_ShouldReturnFormattedResultsAsync(string? overrideContextPrompt, string? overrideCitationsPrompt)
     {
         // Arrange
-        List<RagProvider.RagSearchResult> results =
+        List<TextSearchProvider.TextSearchSearchResult> results =
         [
             new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
             new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
         ];
 
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>(results);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>(results);
         }
 
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
             ContextPrompt = overrideContextPrompt,
             CitationsPrompt = overrideCitationsPrompt
         };
-        var provider = new RagProvider(SearchDelegateAsync, options);
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
 
         // Act
         var formatted = await provider.SearchAsync("Sample user question?", CancellationToken.None);
@@ -208,23 +208,23 @@ public sealed class RagProviderTests
     public async Task InvokingAsync_ShouldUseContextFormatterWhenProvidedAsync()
     {
         // Arrange
-        List<RagProvider.RagSearchResult> results =
+        List<TextSearchProvider.TextSearchSearchResult> results =
         [
             new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
             new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
         ];
 
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>(results);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>(results);
         }
 
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             ContextFormatter = r => $"Custom formatted context with {r.Count} results."
         };
-        var provider = new RagProvider(SearchDelegateAsync, options);
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
         var invokingContext = new AIContextProvider.InvokingContext(new[] { new ChatMessage(ChatRole.User, "Q?") });
 
         // Act
@@ -242,23 +242,23 @@ public sealed class RagProviderTests
         // Arrange
         var payload1 = new RawPayload { Id = "R1" };
         var payload2 = new RawPayload { Id = "R2" };
-        List<RagProvider.RagSearchResult> results =
+        List<TextSearchProvider.TextSearchSearchResult> results =
         [
             new() { Name = "Doc1", Value = "Content 1", RawRepresentation = payload1 },
             new() { Name = "Doc2", Value = "Content 2", RawRepresentation = payload2 }
         ];
 
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>(results);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>(results);
         }
 
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             ContextFormatter = r => string.Join(",", r.Select(x => ((RawPayload)x.RawRepresentation!).Id))
         };
-        var provider = new RagProvider(SearchDelegateAsync, options);
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
         var invokingContext = new AIContextProvider.InvokingContext(new[] { new ChatMessage(ChatRole.User, "Q?") });
 
         // Act
@@ -274,8 +274,8 @@ public sealed class RagProviderTests
     public async Task InvokingAsync_WithNoResults_ShouldReturnEmptyContextAsync()
     {
         // Arrange
-        var options = new RagProviderOptions { SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke };
-        var provider = new RagProvider(this.NoResultSearchAsync, options);
+        var options = new TextSearchProviderOptions { SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke };
+        var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var invokingContext = new AIContextProvider.InvokingContext(new[] { new ChatMessage(ChatRole.User, "Q?") });
 
         // Act
@@ -293,18 +293,18 @@ public sealed class RagProviderTests
     public async Task InvokingAsync_WithRecentMessageMemory_ShouldIncludeStoredMessagesInSearchInputAsync()
     {
         // Arrange
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 3
         };
         string? capturedInput = null;
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]); // No results needed.
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]); // No results needed.
         }
-        var provider = new RagProvider(SearchDelegateAsync, options);
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
 
         // Populate memory with more messages than the limit (A,B,C,D) -> should retain B,C,D
         var initialMessages = new[]
@@ -332,18 +332,18 @@ public sealed class RagProviderTests
     public async Task InvokingAsync_WithAccumulatedMemoryAcrossInvocations_ShouldIncludeAllUpToLimitAsync()
     {
         // Arrange
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 5
         };
         string? capturedInput = null;
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]);
         }
-        var provider = new RagProvider(SearchDelegateAsync, options);
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
 
         // First memory update (A,B)
         await provider.InvokedAsync(new(new[]
@@ -377,12 +377,12 @@ public sealed class RagProviderTests
     public void Serialize_WithNoRecentMessages_ShouldReturnEmptyState()
     {
         // Arrange
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 3
         };
-        var provider = new RagProvider(this.NoResultSearchAsync, options);
+        var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
 
         // Act
         var state = provider.Serialize();
@@ -396,12 +396,12 @@ public sealed class RagProviderTests
     public async Task Serialize_WithRecentMessages_ShouldPersistMessagesUpToLimitAsync()
     {
         // Arrange
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 3
         };
-        var provider = new RagProvider(this.NoResultSearchAsync, options);
+        var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var messages = new[]
         {
             new ChatMessage(ChatRole.User, "M1"),
@@ -425,12 +425,12 @@ public sealed class RagProviderTests
     public async Task SerializeAndDeserialize_RoundtripRestoresMessagesAsync()
     {
         // Arrange
-        var options = new RagProviderOptions
+        var options = new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 4
         };
-        var provider = new RagProvider(this.NoResultSearchAsync, options);
+        var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var messages = new[]
         {
             new ChatMessage(ChatRole.User, "A"),
@@ -443,14 +443,14 @@ public sealed class RagProviderTests
         // Act
         var state = provider.Serialize();
         string? capturedInput = null;
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegate2Async(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegate2Async(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]);
         }
-        var roundTrippedProvider = new RagProvider(SearchDelegate2Async, state, options: new RagProviderOptions
+        var roundTrippedProvider = new TextSearchProvider(SearchDelegate2Async, state, options: new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 4
         });
         var emptyMessages = Array.Empty<ChatMessage>();
@@ -465,9 +465,9 @@ public sealed class RagProviderTests
     public async Task Deserialize_WithChangedLowerLimit_ShouldTruncateToNewLimitAsync()
     {
         // Arrange
-        var initialProvider = new RagProvider(this.NoResultSearchAsync, new RagProviderOptions
+        var initialProvider = new TextSearchProvider(this.NoResultSearchAsync, new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 5
         });
         var messages = new[]
@@ -482,16 +482,16 @@ public sealed class RagProviderTests
         var state = initialProvider.Serialize();
 
         string? capturedInput = null;
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegate2Async(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegate2Async(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]);
         }
 
         // Act
-        var restoredProvider = new RagProvider(SearchDelegate2Async, state, options: new RagProviderOptions
+        var restoredProvider = new TextSearchProvider(SearchDelegate2Async, state, options: new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 3 // Lower limit
         });
         await restoredProvider.InvokingAsync(new(Array.Empty<ChatMessage>()), CancellationToken.None);
@@ -508,16 +508,16 @@ public sealed class RagProviderTests
         var emptyState = JsonSerializer.Deserialize("{}", TestJsonSerializerContext.Default.JsonElement);
 
         string? capturedInput = null;
-        Task<IEnumerable<RagProvider.RagSearchResult>> SearchDelegate2Async(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegate2Async(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]);
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]);
         }
 
         // Act
-        var provider = new RagProvider(SearchDelegate2Async, emptyState, options: new RagProviderOptions
+        var provider = new TextSearchProvider(SearchDelegate2Async, emptyState, options: new TextSearchProviderOptions
         {
-            SearchTime = RagProviderOptions.RagBehavior.BeforeAIInvoke,
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 3
         });
         var emptyMessages = Array.Empty<ChatMessage>();
@@ -530,9 +530,9 @@ public sealed class RagProviderTests
 
     #endregion
 
-    private Task<IEnumerable<RagProvider.RagSearchResult>> NoResultSearchAsync(string input, CancellationToken ct)
+    private Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> NoResultSearchAsync(string input, CancellationToken ct)
     {
-        return Task.FromResult<IEnumerable<RagProvider.RagSearchResult>>([]);
+        return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]);
     }
 
     private sealed class RawPayload

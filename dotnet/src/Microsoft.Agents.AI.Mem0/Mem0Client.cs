@@ -65,9 +65,11 @@ internal sealed class Mem0Client
         using var responseMessage = await this._httpClient.PostAsync(s_searchUri, content, cancellationToken).ConfigureAwait(false);
         responseMessage.EnsureSuccessStatusCode();
 
-#pragma warning disable CA2016 // ReadAsStringAsync has no overload with token in current target; token already applied to request
+#if NET
+        var response = await responseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
         var response = await responseMessage.Content.ReadAsStringAsync().ConfigureAwait(false);
-#pragma warning restore CA2016
+#endif
         var searchResponseItems = JsonSerializer.Deserialize(response, Mem0SourceGenerationContext.Default.SearchResponseItemArray);
         return searchResponseItems?.Select(item => item.Memory) ?? Array.Empty<string>();
     }
@@ -172,6 +174,4 @@ internal sealed class Mem0Client
 [JsonSerializable(typeof(Mem0Client.CreateMemoryRequest))]
 [JsonSerializable(typeof(Mem0Client.SearchRequest))]
 [JsonSerializable(typeof(Mem0Client.SearchResponseItem[]))]
-internal partial class Mem0SourceGenerationContext : JsonSerializerContext
-{
-}
+internal partial class Mem0SourceGenerationContext : JsonSerializerContext;

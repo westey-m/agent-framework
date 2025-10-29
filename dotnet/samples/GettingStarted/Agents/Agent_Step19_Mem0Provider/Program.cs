@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 // This sample shows how to use the Mem0Provider to persist and recall memories for an agent.
 // The sample stores conversation messages in a Mem0 service and retrieves relevant memories

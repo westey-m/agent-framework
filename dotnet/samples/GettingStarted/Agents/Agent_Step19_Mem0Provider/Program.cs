@@ -55,8 +55,8 @@ await Task.Delay(TimeSpan.FromSeconds(2));
 Console.WriteLine(await agent.RunAsync("What do you already know about my upcoming trip?", thread));
 
 Console.WriteLine("\n>> Serialize and deserialize the thread to demonstrate persisted state\n");
-var serializedThread = thread.Serialize();
-var restoredThread = agent.DeserializeThread(serializedThread);
+JsonElement serializedThread = thread.Serialize();
+AgentThread restoredThread = agent.DeserializeThread(serializedThread);
 Console.WriteLine(await agent.RunAsync("Can you recap the personal details you remember?", restoredThread));
 
 Console.WriteLine("\n>> Start a new thread that shares the same Mem0 scope\n");

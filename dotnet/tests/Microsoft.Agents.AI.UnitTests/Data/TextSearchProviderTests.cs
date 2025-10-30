@@ -296,7 +296,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 3
+            RecentMessageMemoryLimit = 3,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         string? capturedInput = null;
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -335,7 +336,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 5
+            RecentMessageMemoryLimit = 5,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         string? capturedInput = null;
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -369,6 +371,46 @@ public sealed class TextSearchProviderTests
         Assert.Equal("A\nB\nC\nD\nE\nF", capturedInput); // All retained (limit 5) + current request message.
     }
 
+    [Fact]
+    public async Task InvokingAsync_WithRecentMessageRolesIncluded_ShouldFilterRolesAsync()
+    {
+        // Arrange
+        var options = new TextSearchProviderOptions
+        {
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
+            RecentMessageMemoryLimit = 4,
+            RecentMessageRolesIncluded = new List<ChatRole> { ChatRole.Assistant } // Only retain assistant messages.
+        };
+        string? capturedInput = null;
+        Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        {
+            capturedInput = input;
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchResult>>([]); // No results needed for this test.
+        }
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
+
+        // Populate memory with mixed roles; only Assistant messages (A1,A2) should be retained.
+        var initialMessages = new[]
+        {
+            new ChatMessage(ChatRole.User, "U1"),
+            new ChatMessage(ChatRole.Assistant, "A1"),
+            new ChatMessage(ChatRole.User, "U2"),
+            new ChatMessage(ChatRole.Assistant, "A2"),
+        };
+        await provider.InvokedAsync(new(initialMessages));
+
+        var invokingContext = new AIContextProvider.InvokingContext(new[]
+        {
+            new ChatMessage(ChatRole.User, "Question?") // Current request message always appended.
+        });
+
+        // Act
+        await provider.InvokingAsync(invokingContext, CancellationToken.None);
+
+        // Assert
+        Assert.Equal("A1\nA2\nQuestion?", capturedInput); // Only assistant messages from memory + current request.
+    }
+
     #endregion
 
     #region Serialization Tests
@@ -399,7 +441,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 3
+            RecentMessageMemoryLimit = 3,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var messages = new[]
@@ -428,7 +471,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 4
+            RecentMessageMemoryLimit = 4,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var messages = new[]
@@ -468,7 +512,8 @@ public sealed class TextSearchProviderTests
         var initialProvider = new TextSearchProvider(this.NoResultSearchAsync, new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 5
+            RecentMessageMemoryLimit = 5,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         });
         var messages = new[]
         {

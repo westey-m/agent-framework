@@ -299,10 +299,10 @@ public sealed class TextSearchProviderTests
             RecentMessageMemoryLimit = 3
         };
         string? capturedInput = null;
-        Task<IEnumerable<TextSearchProvider.TextSearchSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
         {
             capturedInput = input;
-            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchSearchResult>>([]); // No results needed.
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchResult>>([]); // No results needed.
         }
         var provider = new TextSearchProvider(SearchDelegateAsync, options);
 

@@ -10,7 +10,6 @@ using Microsoft.Agents.AI.Data;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit.Sdk;
 
 namespace Microsoft.Agents.AI.UnitTests.Data;
 
@@ -291,7 +290,7 @@ public sealed class TextSearchProviderTests
     #region Recent Message Memory Tests
 
     [Fact]
-    public async Task InvokingAsync_WithPreviousFailedRequest_ShouldNotIncludeFialedRequestInputInSearchInputAsync()
+    public async Task InvokingAsync_WithPreviousFailedRequest_ShouldNotIncludeFailedRequestInputInSearchInputAsync()
     {
         // Arrange
         var options = new TextSearchProviderOptions

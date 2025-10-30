@@ -8,7 +8,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
-using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
 using Moq;
 
 namespace Microsoft.Agents.AI.UnitTests;
@@ -2033,7 +2032,6 @@ public partial class ChatClientAgentTests
     {
         // Arrange
         ChatMessage[] requestMessages = [new(ChatRole.User, "user message")];
-        ChatMessage[] responseMessages = [new(ChatRole.Assistant, "response")];
         ChatMessage[] aiContextProviderMessages = [new(ChatRole.System, "context provider message")];
         Mock<IChatClient> mockService = new();
         mockService

@@ -436,7 +436,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "U2"),
             new ChatMessage(ChatRole.Assistant, "A2"),
         };
-        await provider.InvokedAsync(new(initialMessages));
+        await provider.InvokedAsync(new(initialMessages, null));
 
         var invokingContext = new AIContextProvider.InvokingContext(new[]
         {

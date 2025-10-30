@@ -1,17 +1,11 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.VectorData;
-using Microsoft.Shared.Diagnostics;
 
-namespace Microsoft.Agents.AI.Data;
+namespace Microsoft.Agents.AI.Samples;
 
 /// <summary>
 /// A class that allows for easy storage and retrieval of documents in a Vector Store for Retrieval Augmented Generation (RAG).
@@ -22,11 +16,14 @@ namespace Microsoft.Agents.AI.Data;
 /// where you want to store text + embedding, or a reference to an external document + embedding without needing to customize the schema.
 /// If you want to control the schema yourself, use an implementation of <see cref="VectorStoreCollection{TKey, TRecord}"/> directly instead.
 /// </para>
+/// <para>
+/// This class and its related types are currently provided as a sample implementation, but may be promoted to a first-class supported API in future releases.
+/// </para>
 /// </remarks>
 /// <typeparam name="TKey">The key type to use with the vector store. Choose a key type supported by your chosen vector store type. Currently this class only supports string or Guid.</typeparam>
 [RequiresDynamicCode("This API is not compatible with NativeAOT.")]
 [RequiresUnreferencedCode("This API is not compatible with trimming.")]
-public sealed partial class TextRagStore<TKey> : IDisposable
+public sealed partial class TextSearchStore<TKey> : IDisposable
     where TKey : notnull
 {
 #if NET
@@ -50,7 +47,7 @@ public sealed partial class TextRagStore<TKey> : IDisposable
 #endif
 
     private readonly VectorStore _vectorStore;
-    private readonly TextRagStoreOptions _options;
+    private readonly TextSearchStoreOptions _options;
     private readonly Func<string, ICollection<string>> _wordSegmenter;
 
     private readonly VectorStoreCollection<TKey, TextRagStorageDocument<TKey>> _vectorStoreRecordCollection;
@@ -59,23 +56,34 @@ public sealed partial class TextRagStore<TKey> : IDisposable
     private bool _disposedValue;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TextRagStore{TKey}"/> class.
+    /// Initializes a new instance of the <see cref="TextSearchStore{TKey}"/> class.
     /// </summary>
     /// <param name="vectorStore">The vector store to store and read the memories from.</param>
     /// <param name="collectionName">The name of the collection in the vector store to store and read the memories from.</param>
     /// <param name="vectorDimensions">The number of dimensions to use for the memory embeddings.</param>
     /// <param name="options">Options to configure the behavior of this class.</param>
     /// <exception cref="NotSupportedException">Thrown if the key type provided is not supported.</exception>
-    public TextRagStore(
+    public TextSearchStore(
         VectorStore vectorStore,
         string collectionName,
         int vectorDimensions,
-        TextRagStoreOptions? options = default)
+        TextSearchStoreOptions? options = default)
     {
         // Verify
-        Throw.IfNull(vectorStore);
-        Throw.IfNullOrWhitespace(collectionName);
-        Throw.IfLessThan(vectorDimensions, 1);
+        if (vectorStore is null)
+        {
+            throw new ArgumentNullException(nameof(vectorStore));
+        }
+
+        if (string.IsNullOrWhiteSpace(collectionName))
+        {
+            throw new ArgumentException("Collection name cannot be null or whitespace.", nameof(collectionName));
+        }
+
+        if (vectorDimensions < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(vectorDimensions), "Vector dimensions must be greater than zero.");
+        }
 
         if (typeof(TKey) != typeof(string) && typeof(TKey) != typeof(Guid))
         {
@@ -84,12 +92,12 @@ public sealed partial class TextRagStore<TKey> : IDisposable
 
         if (typeof(TKey) != typeof(string) && options?.UseSourceIdAsPrimaryKey is true)
         {
-            throw new NotSupportedException($"The {nameof(TextRagStoreOptions.UseSourceIdAsPrimaryKey)} option can only be used when the key type is 'string'.");
+            throw new NotSupportedException($"The {nameof(TextSearchStoreOptions.UseSourceIdAsPrimaryKey)} option can only be used when the key type is 'string'.");
         }
 
         // Assign
         this._vectorStore = vectorStore;
-        this._options = options ?? new TextRagStoreOptions();
+        this._options = options ?? new TextSearchStoreOptions();
         this._wordSegmenter = this._options.WordSegmenter ?? s_defaultWordSegmenter;
 
         // Create a definition so that we can use the dimensions provided at runtime.
@@ -118,7 +126,10 @@ public sealed partial class TextRagStore<TKey> : IDisposable
     /// <returns>A task that completes when the documents have been upserted.</returns>
     public async Task UpsertTextAsync(IEnumerable<string> textChunks, CancellationToken cancellationToken = default)
     {
-        Throw.IfNull(textChunks);
+        if (textChunks == null)
+        {
+            throw new ArgumentNullException(nameof(textChunks));
+        }
 
         var vectorStoreRecordCollection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
 
@@ -148,9 +159,12 @@ public sealed partial class TextRagStore<TKey> : IDisposable
     /// <param name="options">Optional options to control the upsert behavior.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task that completes when the documents have been upserted.</returns>
-    public async Task UpsertDocumentsAsync(IEnumerable<TextRagDocument> documents, TextRagStoreUpsertOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task UpsertDocumentsAsync(IEnumerable<TextSearchDocument> documents, TextSearchStoreUpsertOptions? options = null, CancellationToken cancellationToken = default)
     {
-        Throw.IfNull(documents);
+        if (documents is null)
+        {
+            throw new ArgumentNullException(nameof(documents));
+        }
 
         var vectorStoreRecordCollection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
 
@@ -164,13 +178,13 @@ public sealed partial class TextRagStore<TKey> : IDisposable
             // Without text we cannot generate a vector.
             if (string.IsNullOrWhiteSpace(document.Text))
             {
-                throw new ArgumentException($"The {nameof(TextRagDocument.Text)} property must be set.", nameof(document));
+                throw new ArgumentException($"The {nameof(TextSearchDocument.Text)} property must be set.", nameof(document));
             }
 
             // If we aren't persisting the text, we need a source id or link to refer back to the original document.
             if (options?.DoNotPersistSourceText is true && string.IsNullOrWhiteSpace(document.SourceId) && string.IsNullOrWhiteSpace(document.SourceLink))
             {
-                throw new ArgumentException($"Either the {nameof(TextRagDocument.SourceId)} or {nameof(TextRagDocument.SourceLink)} properties must be set when the {nameof(TextRagStoreUpsertOptions.DoNotPersistSourceText)} setting is true.", nameof(document));
+                throw new ArgumentException($"Either the {nameof(TextSearchDocument.SourceId)} or {nameof(TextSearchDocument.SourceLink)} properties must be set when the {nameof(TextSearchStoreUpsertOptions.DoNotPersistSourceText)} setting is true.", nameof(document));
             }
 
             var key = GenerateUniqueKey<TKey>(this._options.UseSourceIdAsPrimaryKey ?? false ? document.SourceId : null);
@@ -197,11 +211,11 @@ public sealed partial class TextRagStore<TKey> : IDisposable
     /// <param name="top">The maximum number of results to return.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>The search results.</returns>
-    public async Task<IEnumerable<TextRagDocument>> SearchAsync(string query, int top, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<TextSearchDocument>> SearchAsync(string query, int top, CancellationToken cancellationToken = default)
     {
         var searchResult = await this.SearchCoreAsync(query, top, cancellationToken).ConfigureAwait(false);
 
-        return searchResult.Select(x => new TextRagDocument()
+        return searchResult.Select(x => new TextSearchDocument()
         {
             Namespaces = x.Namespaces,
             Text = x.Text,
@@ -266,7 +280,7 @@ public sealed partial class TextRagStore<TKey> : IDisposable
         // Find any source ids and links for which the text needs to be retrieved.
         var sourceIdsToRetrieve = searchResponseDocs
             .Where(x => string.IsNullOrWhiteSpace(x.Text))
-            .Select(x => new TextRagStoreOptions.SourceRetrievalRequest(x.SourceId, x.SourceLink))
+            .Select(x => new TextSearchStoreOptions.SourceRetrievalRequest(x.SourceId, x.SourceLink))
             .ToList();
 
         // If we have none, we can return early.
@@ -277,7 +291,7 @@ public sealed partial class TextRagStore<TKey> : IDisposable
 
         if (this._options.SourceRetrievalCallback is null)
         {
-            throw new InvalidOperationException($"The {nameof(TextRagStoreOptions.SourceRetrievalCallback)} option must be set if retrieving documents without stored text.");
+            throw new InvalidOperationException($"The {nameof(TextSearchStoreOptions.SourceRetrievalCallback)} option must be set if retrieving documents without stored text.");
         }
 
         // Retrieve the source text for the documents that need it.
@@ -285,7 +299,7 @@ public sealed partial class TextRagStore<TKey> : IDisposable
 
         if (retrievalResponses is null)
         {
-            throw new InvalidOperationException($"The {nameof(TextRagStoreOptions.SourceRetrievalCallback)} must return a non-null value.");
+            throw new InvalidOperationException($"The {nameof(TextSearchStoreOptions.SourceRetrievalCallback)} must return a non-null value.");
         }
 
         // Update the retrieved documents with the retrieved text.

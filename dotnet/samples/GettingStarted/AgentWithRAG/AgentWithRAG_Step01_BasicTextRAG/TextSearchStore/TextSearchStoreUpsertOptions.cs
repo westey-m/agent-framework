@@ -1,14 +1,11 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System.Collections.Generic;
-using System.Threading;
-
-namespace Microsoft.Agents.AI.Data;
+namespace Microsoft.Agents.AI.Samples;
 
 /// <summary>
-/// Contains options for <see cref="TextRagStore{TKey}.UpsertDocumentsAsync(IEnumerable{TextRagDocument}, TextRagStoreUpsertOptions?, CancellationToken)"/>.
+/// Contains options for <see cref="TextSearchStore{TKey}.UpsertDocumentsAsync(IEnumerable{TextSearchDocument}, TextSearchStoreUpsertOptions?, CancellationToken)"/>.
 /// </summary>
-public sealed class TextRagStoreUpsertOptions
+public sealed class TextSearchStoreUpsertOptions
 {
     /// <summary>
     /// Gets or sets a value indicating whether the source text should be persisted in the database.

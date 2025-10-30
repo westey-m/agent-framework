@@ -1,16 +1,11 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.Shared.Diagnostics;
-
-namespace Microsoft.Agents.AI.Data;
+namespace Microsoft.Agents.AI.Samples;
 
 /// <summary>
-/// Contains options for the <see cref="TextRagStore{TKey}"/>.
+/// Contains options for the <see cref="TextSearchStore{TKey}"/>.
 /// </summary>
-public sealed class TextRagStoreOptions
+public sealed class TextSearchStoreOptions
 {
     /// <summary>
     /// Gets or sets an optional namespace to pre-filter the possible
@@ -102,8 +97,15 @@ public sealed class TextRagStoreOptions
         /// <param name="text">The source text that was retrieved.</param>
         public SourceRetrievalResponse(SourceRetrievalRequest request, string text)
         {
-            Throw.IfNull(request);
-            Throw.IfNull(text);
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (text == null)
+            {
+                throw new ArgumentNullException(nameof(text));
+            }
 
             this.SourceId = request.SourceId;
             this.SourceLink = request.SourceLink;

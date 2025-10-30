@@ -1,13 +1,11 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System.Collections.Generic;
-
-namespace Microsoft.Agents.AI.Data;
+namespace Microsoft.Agents.AI.Samples;
 
 /// <summary>
 /// Represents a document that can be used for Retrieval Augmented Generation (RAG) that stores textual data.
 /// </summary>
-public sealed class TextRagDocument
+public sealed class TextSearchDocument
 {
     /// <summary>
     /// Gets or sets an optional list of namespaces that the document should belong to.

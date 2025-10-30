@@ -41,8 +41,8 @@ public sealed class TextSearchProviderTests
         // Arrange
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
-            new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
+            new() { SourceName = "Doc1", SourceLink = "http://example.com/doc1", Text = "Content of Doc1" },
+            new() { SourceName = "Doc2", SourceLink = "http://example.com/doc2", Text = "Content of Doc2" }
         ];
 
         string? capturedInput = null;
@@ -158,8 +158,8 @@ public sealed class TextSearchProviderTests
         // Arrange
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
-            new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
+            new() { SourceName = "Doc1", SourceLink = "http://example.com/doc1", Text = "Content of Doc1" },
+            new() { SourceName = "Doc2", SourceLink = "http://example.com/doc2", Text = "Content of Doc2" }
         ];
 
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -210,8 +210,8 @@ public sealed class TextSearchProviderTests
         // Arrange
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
-            new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
+            new() { SourceName = "Doc1", SourceLink = "http://example.com/doc1", Text = "Content of Doc1" },
+            new() { SourceName = "Doc2", SourceLink = "http://example.com/doc2", Text = "Content of Doc2" }
         ];
 
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -244,8 +244,8 @@ public sealed class TextSearchProviderTests
         var payload2 = new RawPayload { Id = "R2" };
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Value = "Content 1", RawRepresentation = payload1 },
-            new() { Name = "Doc2", Value = "Content 2", RawRepresentation = payload2 }
+            new() { SourceName = "Doc1", Text = "Content 1", RawRepresentation = payload1 },
+            new() { SourceName = "Doc2", Text = "Content 2", RawRepresentation = payload2 }
         ];
 
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)

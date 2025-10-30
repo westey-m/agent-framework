@@ -179,6 +179,11 @@ public sealed class TextSearchProvider : AIContextProvider
             return default; // Memory disabled.
         }
 
+        if (context.InvokeException is not null)
+        {
+            return default; // Do not update memory on failed invocations.
+        }
+
         var messagesText = context.RequestMessages
             .Concat(context.ResponseMessages ?? [])
             .Where(m =>

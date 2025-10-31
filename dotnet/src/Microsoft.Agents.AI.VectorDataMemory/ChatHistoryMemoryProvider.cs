@@ -112,8 +112,8 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
                     new VectorStoreDataProperty("UserId", typeof(string)) { IsIndexed = true },
                     new VectorStoreDataProperty("ThreadId", typeof(string)) { IsIndexed = true },
                     new VectorStoreDataProperty("Content", typeof(string)) { IsFullTextIndexed = true },
-                    new VectorStoreDataProperty("Timestamp", typeof(string)) { IsIndexed = true },
-                    new VectorStoreVectorProperty("TextEmbedding", typeof(string), Throw.IfLessThan(vectorDimensions, 1))
+                    new VectorStoreDataProperty("CreatedAt", typeof(string)) { IsIndexed = true },
+                    new VectorStoreVectorProperty("ContentEmbedding", typeof(string), Throw.IfLessThan(vectorDimensions, 1))
                 }
         };
 
@@ -444,7 +444,6 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         /// <summary>
         /// Gets or sets the text embedding for vector search.
         /// </summary>
-        [VectorStoreData]
         public string? ContentEmbedding => this.Content;
     }
 }

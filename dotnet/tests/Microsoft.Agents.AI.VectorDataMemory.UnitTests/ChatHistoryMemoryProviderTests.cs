@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -286,7 +287,7 @@ public class ChatHistoryMemoryProviderTests
             })
             .Returns(ToAsyncEnumerableAsync(new List<VectorSearchResult<ChatHistoryMemoryProvider.ChatHistoryItem>>()));
 
-        var provider = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1, options: providerOptions, searchScope: searchScope);
+        var provider = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1, options: providerOptions, storageScope: searchScope, searchScope: searchScope);
 
         var requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
         var invokingContext = new AIContextProvider.InvokingContext([requestMsg]);
@@ -302,6 +303,56 @@ public class ChatHistoryMemoryProviderTests
                 It.IsAny<VectorSearchOptions<ChatHistoryMemoryProvider.ChatHistoryItem>>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    #endregion
+
+    #region Serialization Tests
+
+    [Fact]
+    public void Serialize_Deserialize_RoundtripsScopes()
+    {
+        // Arrange
+        var storageScope = new ChatHistoryMemoryProviderScope
+        {
+            ApplicationId = "app",
+            AgentId = "agent",
+            ThreadId = "thread",
+            UserId = "user"
+        };
+
+        var searchScope = new ChatHistoryMemoryProviderScope
+        {
+            ApplicationId = "app2",
+            AgentId = "agent2",
+            ThreadId = "thread2",
+            UserId = "user2"
+        };
+
+        var provider = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1, storageScope: storageScope, searchScope: searchScope);
+
+        // Act
+        var stateElement = provider.Serialize();
+
+        using JsonDocument doc = JsonDocument.Parse(stateElement.GetRawText());
+        var storage = doc.RootElement.GetProperty("storageScope");
+        Assert.Equal("app", storage.GetProperty("applicationId").GetString());
+        Assert.Equal("agent", storage.GetProperty("agentId").GetString());
+        Assert.Equal("thread", storage.GetProperty("threadId").GetString());
+        Assert.Equal("user", storage.GetProperty("userId").GetString());
+
+        var search = doc.RootElement.GetProperty("searchScope");
+        Assert.Equal("app2", search.GetProperty("applicationId").GetString());
+        Assert.Equal("agent2", search.GetProperty("agentId").GetString());
+        Assert.Equal("thread2", search.GetProperty("threadId").GetString());
+        Assert.Equal("user2", search.GetProperty("userId").GetString());
+
+        // Act - deserialize and serialize again
+        var provider2 = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1, serializedState: stateElement);
+        var stateElement2 = provider2.Serialize();
+
+        // Assert - roundtrip the state
+        Assert.Equal(stateElement.GetRawText(), stateElement2.GetRawText());
     }
 
     #endregion

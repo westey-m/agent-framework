@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -74,8 +75,57 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         VectorStore vectorStore,
         string collectionName,
         int vectorDimensions,
-        ChatHistoryMemoryProviderScope? storageScope = null,
+        ChatHistoryMemoryProviderScope storageScope,
         ChatHistoryMemoryProviderScope? searchScope = null,
+        ChatHistoryMemoryProviderOptions? options = null,
+        ILoggerFactory? loggerFactory = null)
+        : this(
+            vectorStore,
+            collectionName,
+            vectorDimensions,
+            storageScope is null && searchScope is null ? null : new ChatHistoryMemoryProviderState
+            {
+                StorageScope = storageScope,
+                SearchScope = searchScope,
+            },
+            options,
+            loggerFactory)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ChatHistoryMemoryProvider"/> class from previously serialized state.
+    /// </summary>
+    /// <param name="vectorStore">The vector store to use for storing and retrieving chat history.</param>
+    /// <param name="collectionName">The name of the collection for storing chat history in the vector store.</param>
+    /// <param name="vectorDimensions">The number of dimensions to use for the chat history vector store embeddings.</param>
+    /// <param name="serializedState">A <see cref="JsonElement"/> representing the serialized state of the provider.</param>
+    /// <param name="jsonSerializerOptions">Optional settings for customizing the JSON deserialization process.</param>
+    /// <param name="options">Optional configuration options.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    public ChatHistoryMemoryProvider(
+        VectorStore vectorStore,
+        string collectionName,
+        int vectorDimensions,
+        JsonElement serializedState,
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        ChatHistoryMemoryProviderOptions? options = null,
+        ILoggerFactory? loggerFactory = null)
+        : this(
+            vectorStore,
+            collectionName,
+            vectorDimensions,
+            DeserializeState(serializedState, jsonSerializerOptions),
+            options,
+            loggerFactory)
+    {
+    }
+
+    internal ChatHistoryMemoryProvider(
+        VectorStore vectorStore,
+        string collectionName,
+        int vectorDimensions,
+        ChatHistoryMemoryProviderState? state = null,
         ChatHistoryMemoryProviderOptions? options = null,
         ILoggerFactory? loggerFactory = null)
     {
@@ -86,8 +136,8 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         this._searchTime = options.SearchTime;
         this._logger = loggerFactory?.CreateLogger<ChatHistoryMemoryProvider>();
 
-        this._storageScope = storageScope is null ? null : new ChatHistoryMemoryProviderScope(storageScope);
-        this._searchScope = searchScope is null ? this._storageScope : new ChatHistoryMemoryProviderScope(searchScope);
+        this._storageScope = state?.StorageScope is null ? null : new ChatHistoryMemoryProviderScope(state.StorageScope);
+        this._searchScope = state?.SearchScope is null ? this._storageScope : new ChatHistoryMemoryProviderScope(state.SearchScope);
 
         // Create on-demand search tool (only used when behavior is OnDemandFunctionCalling)
         this._tools =
@@ -377,6 +427,34 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     }
 
     /// <summary>
+    /// Serializes the current provider state to a <see cref="JsonElement"/> including storage and search scopes.
+    /// </summary>
+    /// <param name="jsonSerializerOptions">Optional serializer options.</param>
+    /// <returns>Serialized provider state.</returns>
+    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        var state = new ChatHistoryMemoryProviderState
+        {
+            StorageScope = this._storageScope,
+            SearchScope = this._searchScope,
+        };
+
+        var jso = jsonSerializerOptions ?? VectorDataMemoryJsonUtilities.DefaultOptions;
+        return JsonSerializer.SerializeToElement(state, jso.GetTypeInfo(typeof(ChatHistoryMemoryProviderState)));
+    }
+
+    private static ChatHistoryMemoryProviderState? DeserializeState(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions)
+    {
+        if (serializedState.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var jso = jsonSerializerOptions ?? VectorDataMemoryJsonUtilities.DefaultOptions;
+        return serializedState.Deserialize(jso.GetTypeInfo(typeof(ChatHistoryMemoryProviderState))) as ChatHistoryMemoryProviderState;
+    }
+
+    /// <summary>
     /// Represents a chat history item stored in the vector store.
     /// </summary>
     internal sealed class ChatHistoryItem
@@ -445,5 +523,11 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         /// Gets or sets the text embedding for vector search.
         /// </summary>
         public string? ContentEmbedding => this.Content;
+    }
+
+    internal sealed class ChatHistoryMemoryProviderState
+    {
+        public ChatHistoryMemoryProviderScope? StorageScope { get; set; }
+        public ChatHistoryMemoryProviderScope? SearchScope { get; set; }
     }
 }

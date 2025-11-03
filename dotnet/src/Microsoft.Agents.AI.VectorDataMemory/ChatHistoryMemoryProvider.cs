@@ -17,7 +17,7 @@ namespace Microsoft.Agents.AI.VectorDataMemory;
 
 /// <summary>
 /// A context provider that stores all chat history in a vector store and is able to
-/// retrieve related chat history later to augment the current convesation.
+/// retrieve related chat history later to augment the current conversation.
 /// </summary>
 /// <remarks>
 /// <para>

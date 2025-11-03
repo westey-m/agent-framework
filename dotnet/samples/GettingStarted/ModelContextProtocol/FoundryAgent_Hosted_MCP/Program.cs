@@ -10,7 +10,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_FOUNDRY_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_FOUNDRY_PROJECT_ENDPOINT is not set.");
-var model = Environment.GetEnvironmentVariable("AZURE_FOUNDRY_PROJECT_MODEL_ID") ?? "gpt-4.1-mini";
+var model = Environment.GetEnvironmentVariable("AZURE_FOUNDRY_PROJECT_DEPLOYMENT_NAME") ?? "gpt-4.1-mini";
 
 // Get a client to create/retrieve server side agents with.
 var persistentAgentsClient = new PersistentAgentsClient(endpoint, new AzureCliCredential());

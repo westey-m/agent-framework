@@ -185,9 +185,6 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 
         try
         {
-            // Ensure the collection is initialized
-            var collection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
-
             // Get the text from the current request messages
             var requestText = string.Join("\n", context.RequestMessages
                 .Where(m => m != null && !string.IsNullOrWhiteSpace(m.Text))

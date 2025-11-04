@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json;
@@ -36,8 +35,6 @@ namespace Microsoft.Agents.AI.VectorDataMemory;
 /// injecting them automatically on each invocation.
 /// </para>
 /// </remarks>
-[RequiresDynamicCode("This API is not compatible with NativeAOT. For dynamic mapping via Dictionary<string, object?>, use GetCollectionDynamic() instead.")]
-[RequiresUnreferencedCode("This API is not compatible with trimming. For dynamic mapping via Dictionary<string, object?>, use GetCollectionDynamic() instead.")]
 public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 {
     private const string DefaultContextPrompt = "## Memories\nConsider the following memories when answering user questions:";
@@ -46,7 +43,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     private const string DefaultFunctionToolDescription = "Allows searching for related previous chat history to help answer the user question.";
 
     private readonly VectorStore _vectorStore;
-    private readonly VectorStoreCollection<Guid, ChatHistoryItem> _collection;
+    private readonly VectorStoreCollection<object, Dictionary<string, object?>> _collection;
     private readonly int _maxResults;
     private readonly string _contextPrompt;
     private readonly ChatHistoryMemoryProviderOptions.SearchBehavior _searchTime;
@@ -152,24 +149,22 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         var definition = new VectorStoreCollectionDefinition
         {
             Properties = new List<VectorStoreProperty>
-                {
-                    new VectorStoreKeyProperty("Key", typeof(Guid)),
-                    new VectorStoreDataProperty("Role", typeof(string)) { IsIndexed = true },
-                    new VectorStoreDataProperty("MessageId", typeof(string)) { IsIndexed = true },
-                    new VectorStoreDataProperty("AuthorName", typeof(string)),
-                    new VectorStoreDataProperty("ApplicationId", typeof(string)) { IsIndexed = true },
-                    new VectorStoreDataProperty("AgentId", typeof(string)) { IsIndexed = true },
-                    new VectorStoreDataProperty("UserId", typeof(string)) { IsIndexed = true },
-                    new VectorStoreDataProperty("ThreadId", typeof(string)) { IsIndexed = true },
-                    new VectorStoreDataProperty("Content", typeof(string)) { IsFullTextIndexed = true },
-                    new VectorStoreDataProperty("CreatedAt", typeof(string)) { IsIndexed = true },
-                    new VectorStoreVectorProperty("ContentEmbedding", typeof(string), Throw.IfLessThan(vectorDimensions, 1))
-                }
+            {
+                new VectorStoreKeyProperty("Key", typeof(Guid)),
+                new VectorStoreDataProperty("Role", typeof(string)) { IsIndexed = true },
+                new VectorStoreDataProperty("MessageId", typeof(string)) { IsIndexed = true },
+                new VectorStoreDataProperty("AuthorName", typeof(string)),
+                new VectorStoreDataProperty("ApplicationId", typeof(string)) { IsIndexed = true },
+                new VectorStoreDataProperty("AgentId", typeof(string)) { IsIndexed = true },
+                new VectorStoreDataProperty("UserId", typeof(string)) { IsIndexed = true },
+                new VectorStoreDataProperty("ThreadId", typeof(string)) { IsIndexed = true },
+                new VectorStoreDataProperty("Content", typeof(string)) { IsFullTextIndexed = true },
+                new VectorStoreDataProperty("CreatedAt", typeof(string)) { IsIndexed = true },
+                new VectorStoreVectorProperty("ContentEmbedding", typeof(string), Throw.IfLessThan(vectorDimensions, 1))
+            }
         };
 
-        this._collection = this._vectorStore.GetCollection<Guid, ChatHistoryItem>(
-            Throw.IfNullOrWhitespace(collectionName),
-            definition);
+        this._collection = this._vectorStore.GetDynamicCollection(Throw.IfNullOrWhitespace(collectionName), definition);
     }
 
     /// <inheritdoc />
@@ -231,20 +226,21 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             // Ensure the collection is initialized
             var collection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
 
-            List<ChatHistoryItem> itemsToStore = context.RequestMessages
+            List<Dictionary<string, object?>> itemsToStore = context.RequestMessages
                 .Concat(context.ResponseMessages ?? [])
-                .Select(message => new ChatHistoryItem
+                .Select(message => new Dictionary<string, object?>
                 {
-                    Key = Guid.NewGuid(),
-                    Role = message.Role.ToString(),
-                    MessageId = message.MessageId,
-                    AuthorName = message.AuthorName,
-                    ApplicationId = this._storageScope?.ApplicationId,
-                    AgentId = this._storageScope?.AgentId,
-                    UserId = this._storageScope?.UserId,
-                    ThreadId = this._storageScope?.ThreadId,
-                    Content = message.Text,
-                    CreatedAt = message.CreatedAt?.ToString("O") ?? DateTimeOffset.UtcNow.ToString("O"),
+                    ["Key"] = Guid.NewGuid(),
+                    ["Role"] = message.Role.ToString(),
+                    ["MessageId"] = message.MessageId,
+                    ["AuthorName"] = message.AuthorName,
+                    ["ApplicationId"] = this._storageScope?.ApplicationId,
+                    ["AgentId"] = this._storageScope?.AgentId,
+                    ["UserId"] = this._storageScope?.UserId,
+                    ["ThreadId"] = this._storageScope?.ThreadId,
+                    ["Content"] = message.Text,
+                    ["CreatedAt"] = message.CreatedAt?.ToString("O") ?? DateTimeOffset.UtcNow.ToString("O"),
+                    ["ContentEmbedding"] = message.Text,
                 })
                 .ToList();
 
@@ -279,7 +275,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         }
 
         // Format the results as a single context message
-        var outputResultsText = string.Join("\n", results.Select(x => x.Content).Where(c => !string.IsNullOrWhiteSpace(c)));
+        var outputResultsText = string.Join("\n", results.Select(x => (string?)x["Content"]).Where(c => !string.IsNullOrWhiteSpace(c)));
         if (string.IsNullOrWhiteSpace(outputResultsText))
         {
             return string.Empty;
@@ -298,14 +294,14 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     /// <param name="top">The maximum number of results to return.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of relevant chat history items.</returns>
-    private async Task<IEnumerable<ChatHistoryItem>> SearchChatHistoryAsync(
+    private async Task<IEnumerable<Dictionary<string, object?>>> SearchChatHistoryAsync(
         string queryText,
         int top,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(queryText))
         {
-            return Enumerable.Empty<ChatHistoryItem>();
+            return [];
         }
 
         var collection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
@@ -315,34 +311,32 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         string? userId = this._searchScope?.UserId;
         string? threadId = this._searchScope?.ThreadId;
 
-        Expression<Func<ChatHistoryItem, bool>> applicationIdFilter = x => x.ApplicationId == applicationId;
-        Expression<Func<ChatHistoryItem, bool>> agentIdFilter = x => x.AgentId == agentId;
-        Expression<Func<ChatHistoryItem, bool>> userIdFilter = x => x.UserId == userId;
-        Expression<Func<ChatHistoryItem, bool>> threadIdFilter = x => x.ThreadId == threadId;
-
-        Expression<Func<ChatHistoryItem, bool>>? filter = null;
+        Expression<Func<Dictionary<string, object?>, bool>>? filter = null;
         if (applicationId != null)
         {
-            filter = applicationIdFilter;
+            filter = x => (string?)x["ApplicationId"] == applicationId;
         }
 
         if (agentId != null)
         {
-            filter = filter == null ? agentIdFilter : Expression.Lambda<Func<ChatHistoryItem, bool>>(
+            Expression<Func<Dictionary<string, object?>, bool>> agentIdFilter = x => (string?)x["AgentId"] == agentId;
+            filter = filter == null ? agentIdFilter : Expression.Lambda<Func<Dictionary<string, object?>, bool>>(
                 Expression.AndAlso(filter.Body, agentIdFilter.Body),
                 filter.Parameters);
         }
 
         if (userId != null)
         {
-            filter = filter == null ? userIdFilter : Expression.Lambda<Func<ChatHistoryItem, bool>>(
+            Expression<Func<Dictionary<string, object?>, bool>> userIdFilter = x => (string?)x["UserId"] == userId;
+            filter = filter == null ? userIdFilter : Expression.Lambda<Func<Dictionary<string, object?>, bool>>(
                 Expression.AndAlso(filter.Body, userIdFilter.Body),
                 filter.Parameters);
         }
 
         if (threadId != null)
         {
-            filter = filter == null ? threadIdFilter : Expression.Lambda<Func<ChatHistoryItem, bool>>(
+            Expression<Func<Dictionary<string, object?>, bool>> threadIdFilter = x => (string?)x["ThreadId"] == threadId;
+            filter = filter == null ? threadIdFilter : Expression.Lambda<Func<Dictionary<string, object?>, bool>>(
                 Expression.AndAlso(filter.Body, threadIdFilter.Body),
                 filter.Parameters);
         }
@@ -357,7 +351,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             },
             cancellationToken: cancellationToken);
 
-        var results = new List<ChatHistoryItem>();
+        var results = new List<Dictionary<string, object?>>();
         await foreach (var result in searchResults.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             results.Add(result.Record);
@@ -373,7 +367,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The vector store collection.</returns>
-    private async Task<VectorStoreCollection<Guid, ChatHistoryItem>> EnsureCollectionExistsAsync(
+    private async Task<VectorStoreCollection<object, Dictionary<string, object?>>> EnsureCollectionExistsAsync(
         CancellationToken cancellationToken = default)
     {
         if (this._collectionInitialized)
@@ -449,77 +443,6 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 
         var jso = jsonSerializerOptions ?? VectorDataMemoryJsonUtilities.DefaultOptions;
         return serializedState.Deserialize(jso.GetTypeInfo(typeof(ChatHistoryMemoryProviderState))) as ChatHistoryMemoryProviderState;
-    }
-
-    /// <summary>
-    /// Represents a chat history item stored in the vector store.
-    /// </summary>
-    internal sealed class ChatHistoryItem
-    {
-        /// <summary>
-        /// Gets or sets the unique identifier for the chat history item.
-        /// </summary>
-        [VectorStoreKey]
-        public Guid Key { get; set; }
-
-        /// <summary>
-        /// Gets or sets the role of the message author (e.g., "user", "assistant", "system").
-        /// </summary>
-        [VectorStoreData]
-        public string Role { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Gets or sets the message ID.
-        /// </summary>
-        [VectorStoreData]
-        public string? MessageId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the message author name.
-        /// </summary>
-        [VectorStoreData]
-        public string? AuthorName { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional id for the application to scope memories to.
-        /// </summary>
-        [VectorStoreData]
-        public string? ApplicationId { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional id for the agent to scope memories to.
-        /// </summary>
-        [VectorStoreData]
-        public string? AgentId { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional id for the user to scope memories to.
-        /// </summary>
-        [VectorStoreData]
-        public string? UserId { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional id for the thread to scope memories to.
-        /// </summary>
-        [VectorStoreData]
-        public string? ThreadId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the content of the chat message.
-        /// </summary>
-        [VectorStoreData]
-        public string Content { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Gets or sets the timestamp when the message was stored.
-        /// </summary>
-        [VectorStoreData]
-        public string? CreatedAt { get; set; }
-
-        /// <summary>
-        /// Gets or sets the text embedding for vector search.
-        /// </summary>
-        public string? ContentEmbedding => this.Content;
     }
 
     internal sealed class ChatHistoryMemoryProviderState

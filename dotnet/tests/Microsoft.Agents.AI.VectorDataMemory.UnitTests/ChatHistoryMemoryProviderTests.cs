@@ -21,7 +21,7 @@ public class ChatHistoryMemoryProviderTests
     private readonly Mock<ILoggerFactory> _loggerFactoryMock;
 
     private readonly Mock<VectorStore> _vectorStoreMock;
-    private readonly Mock<VectorStoreCollection<Guid, ChatHistoryMemoryProvider.ChatHistoryItem>> _vectorStoreCollectionMock;
+    private readonly Mock<VectorStoreCollection<object, Dictionary<string, object?>>> _vectorStoreCollectionMock;
     private const string TestCollectionName = "testcollection";
 
     public ChatHistoryMemoryProviderTests()
@@ -35,15 +35,15 @@ public class ChatHistoryMemoryProviderTests
             .Setup(f => f.CreateLogger(typeof(ChatHistoryMemoryProvider).FullName!))
             .Returns(this._loggerMock.Object);
 
-        this._vectorStoreCollectionMock = new Mock<VectorStoreCollection<Guid, ChatHistoryMemoryProvider.ChatHistoryItem>>(MockBehavior.Strict);
-        this._vectorStoreMock = new Mock<VectorStore>(MockBehavior.Strict);
+        this._vectorStoreCollectionMock = new(MockBehavior.Strict);
+        this._vectorStoreMock = new(MockBehavior.Strict);
 
         this._vectorStoreCollectionMock
             .Setup(c => c.EnsureCollectionExistsAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         this._vectorStoreMock
-            .Setup(vs => vs.GetCollection<Guid, ChatHistoryMemoryProvider.ChatHistoryItem>(
+            .Setup(vs => vs.GetDynamicCollection(
                 It.IsAny<string>(),
                 It.IsAny<VectorStoreCollectionDefinition>()))
             .Returns(this._vectorStoreCollectionMock.Object);
@@ -70,11 +70,11 @@ public class ChatHistoryMemoryProviderTests
     public async Task InvokedAsync_UpsertsMessages_ToCollectionAsync()
     {
         // Arrange
-        var stored = new List<ChatHistoryMemoryProvider.ChatHistoryItem>();
+        var stored = new List<Dictionary<string, object?>>();
 
         this._vectorStoreCollectionMock
-            .Setup(c => c.UpsertAsync(It.IsAny<IEnumerable<ChatHistoryMemoryProvider.ChatHistoryItem>>(), It.IsAny<CancellationToken>()))
-            .Callback<IEnumerable<ChatHistoryMemoryProvider.ChatHistoryItem>, CancellationToken>((items, ct) =>
+            .Setup(c => c.UpsertAsync(It.IsAny<IEnumerable<Dictionary<string, object?>>>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<Dictionary<string, object?>>, CancellationToken>((items, ct) =>
             {
                 if (items != null)
                 {
@@ -112,33 +112,33 @@ public class ChatHistoryMemoryProviderTests
 
         Assert.Equal(3, stored.Count);
 
-        Assert.Equal("req-1", stored[0].MessageId);
-        Assert.Equal("request text", stored[0].Content);
-        Assert.Equal("user1", stored[0].AuthorName);
-        Assert.Equal(ChatRole.User.ToString(), stored[0].Role);
-        Assert.Equal("2000-01-01T00:00:00.0000000+00:00", stored[0].CreatedAt);
-        Assert.Equal("app1", stored[0].ApplicationId);
-        Assert.Equal("agent1", stored[0].AgentId);
-        Assert.Equal("thread1", stored[0].ThreadId);
-        Assert.Equal("user1", stored[0].UserId);
+        Assert.Equal("req-1", stored[0]["MessageId"]);
+        Assert.Equal("request text", stored[0]["Content"]);
+        Assert.Equal("user1", stored[0]["AuthorName"]);
+        Assert.Equal(ChatRole.User.ToString(), stored[0]["Role"]);
+        Assert.Equal("2000-01-01T00:00:00.0000000+00:00", stored[0]["CreatedAt"]);
+        Assert.Equal("app1", stored[0]["ApplicationId"]);
+        Assert.Equal("agent1", stored[0]["AgentId"]);
+        Assert.Equal("thread1", stored[0]["ThreadId"]);
+        Assert.Equal("user1", stored[0]["UserId"]);
 
-        Assert.Null(stored[1].MessageId);
-        Assert.Equal("request text nulls", stored[1].Content);
-        Assert.Null(stored[1].AuthorName);
-        Assert.Equal(ChatRole.User.ToString(), stored[1].Role);
-        Assert.Equal("app1", stored[1].ApplicationId);
-        Assert.Equal("agent1", stored[1].AgentId);
-        Assert.Equal("thread1", stored[1].ThreadId);
-        Assert.Equal("user1", stored[1].UserId);
+        Assert.Null(stored[1]["MessageId"]);
+        Assert.Equal("request text nulls", stored[1]["Content"]);
+        Assert.Null(stored[1]["AuthorName"]);
+        Assert.Equal(ChatRole.User.ToString(), stored[1]["Role"]);
+        Assert.Equal("app1", stored[1]["ApplicationId"]);
+        Assert.Equal("agent1", stored[1]["AgentId"]);
+        Assert.Equal("thread1", stored[1]["ThreadId"]);
+        Assert.Equal("user1", stored[1]["UserId"]);
 
-        Assert.Equal("resp-1", stored[2].MessageId);
-        Assert.Equal("response text", stored[2].Content);
-        Assert.Equal("assistant", stored[2].AuthorName);
-        Assert.Equal(ChatRole.Assistant.ToString(), stored[2].Role);
-        Assert.Equal("app1", stored[2].ApplicationId);
-        Assert.Equal("agent1", stored[2].AgentId);
-        Assert.Equal("thread1", stored[2].ThreadId);
-        Assert.Equal("user1", stored[2].UserId);
+        Assert.Equal("resp-1", stored[2]["MessageId"]);
+        Assert.Equal("response text", stored[2]["Content"]);
+        Assert.Equal("assistant", stored[2]["AuthorName"]);
+        Assert.Equal(ChatRole.Assistant.ToString(), stored[2]["Role"]);
+        Assert.Equal("app1", stored[2]["ApplicationId"]);
+        Assert.Equal("agent1", stored[2]["AgentId"]);
+        Assert.Equal("thread1", stored[2]["ThreadId"]);
+        Assert.Equal("user1", stored[2]["UserId"]);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class ChatHistoryMemoryProviderTests
     {
         // Arrange
         this._vectorStoreCollectionMock
-            .Setup(c => c.UpsertAsync(It.IsAny<IEnumerable<ChatHistoryMemoryProvider.ChatHistoryItem>>(), It.IsAny<CancellationToken>()))
+            .Setup(c => c.UpsertAsync(It.IsAny<IEnumerable<Dictionary<string, object?>>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         var provider = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1);
@@ -161,7 +161,7 @@ public class ChatHistoryMemoryProviderTests
 
         // Assert
         this._vectorStoreCollectionMock.Verify(
-            c => c.UpsertAsync(It.IsAny<IEnumerable<ChatHistoryMemoryProvider.ChatHistoryItem>>(), It.IsAny<CancellationToken>()),
+            c => c.UpsertAsync(It.IsAny<IEnumerable<Dictionary<string, object?>>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -170,7 +170,7 @@ public class ChatHistoryMemoryProviderTests
     {
         // Arrange
         this._vectorStoreCollectionMock
-            .Setup(c => c.UpsertAsync(It.IsAny<IEnumerable<ChatHistoryMemoryProvider.ChatHistoryItem>>(), It.IsAny<CancellationToken>()))
+            .Setup(c => c.UpsertAsync(It.IsAny<IEnumerable<Dictionary<string, object?>>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Upsert failed"));
 
         var provider = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1, loggerFactory: this._loggerFactoryMock.Object);
@@ -206,24 +206,24 @@ public class ChatHistoryMemoryProviderTests
             ContextPrompt = "Here is the relevant chat history:\n"
         };
 
-        var storedItems = new List<VectorSearchResult<ChatHistoryMemoryProvider.ChatHistoryItem>>
+        var storedItems = new List<VectorSearchResult<Dictionary<string, object?>>>
         {
             new(
-                new ChatHistoryMemoryProvider.ChatHistoryItem
+                new Dictionary<string, object?>
                 {
-                    MessageId = "msg-1",
-                    Content = "First stored message",
-                    Role = ChatRole.User.ToString(),
-                    CreatedAt = "2023-01-01T00:00:00.0000000+00:00"
+                    ["MessageId"] = "msg-1",
+                    ["Content"] = "First stored message",
+                    ["Role"] = ChatRole.User.ToString(),
+                    ["CreatedAt"] = "2023-01-01T00:00:00.0000000+00:00"
                 },
                 0.9f),
             new(
-                new ChatHistoryMemoryProvider.ChatHistoryItem
+                new Dictionary<string, object?>
                 {
-                    MessageId = "msg-2",
-                    Content = "Second stored message",
-                    Role = ChatRole.User.ToString(),
-                    CreatedAt = "2023-01-02T00:00:00.0000000+00:00"
+                    ["MessageId"] = "msg-2",
+                    ["Content"] = "Second stored message",
+                    ["Role"] = ChatRole.User.ToString(),
+                    ["CreatedAt"] = "2023-01-02T00:00:00.0000000+00:00"
                 },
                 0.8f)
         };
@@ -232,7 +232,7 @@ public class ChatHistoryMemoryProviderTests
             .Setup(c => c.SearchAsync(
                 It.IsAny<string>(),
                 It.IsAny<int>(),
-                It.IsAny<VectorSearchOptions<ChatHistoryMemoryProvider.ChatHistoryItem>>(),
+                It.IsAny<VectorSearchOptions<Dictionary<string, object?>>>(),
                 It.IsAny<CancellationToken>()))
             .Returns(ToAsyncEnumerableAsync(storedItems));
 
@@ -249,7 +249,7 @@ public class ChatHistoryMemoryProviderTests
             c => c.SearchAsync(
                 It.Is<string>(s => s == "requesting relevant history"),
                 2,
-                It.Is<VectorSearchOptions<ChatHistoryMemoryProvider.ChatHistoryItem>>(x => x.Filter == null),
+                It.Is<VectorSearchOptions<Dictionary<string, object?>>>(x => x.Filter == null),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -277,15 +277,15 @@ public class ChatHistoryMemoryProviderTests
             .Setup(c => c.SearchAsync(
                 It.IsAny<string>(),
                 It.IsAny<int>(),
-                It.IsAny<VectorSearchOptions<ChatHistoryMemoryProvider.ChatHistoryItem>>(),
+                It.IsAny<VectorSearchOptions<Dictionary<string, object?>>>(),
                 It.IsAny<CancellationToken>()))
-            .Callback((string query, int maxResults, VectorSearchOptions<ChatHistoryMemoryProvider.ChatHistoryItem> options, CancellationToken ct) =>
+            .Callback((string query, int maxResults, VectorSearchOptions<Dictionary<string, object?>> options, CancellationToken ct) =>
             {
                 // Verify that the filter was created correctly
                 const string ExpectedFilter = "x => ((((x.ApplicationId == value(Microsoft.Agents.AI.VectorDataMemory.ChatHistoryMemoryProvider+<>c__DisplayClass20_0).applicationId) AndAlso (x.AgentId == value(Microsoft.Agents.AI.VectorDataMemory.ChatHistoryMemoryProvider+<>c__DisplayClass20_0).agentId)) AndAlso (x.UserId == value(Microsoft.Agents.AI.VectorDataMemory.ChatHistoryMemoryProvider+<>c__DisplayClass20_0).userId)) AndAlso (x.ThreadId == value(Microsoft.Agents.AI.VectorDataMemory.ChatHistoryMemoryProvider+<>c__DisplayClass20_0).threadId))";
                 Assert.Equal(ExpectedFilter, options.Filter!.ToString());
             })
-            .Returns(ToAsyncEnumerableAsync(new List<VectorSearchResult<ChatHistoryMemoryProvider.ChatHistoryItem>>()));
+            .Returns(ToAsyncEnumerableAsync(new List<VectorSearchResult<Dictionary<string, object?>>>()));
 
         var provider = new ChatHistoryMemoryProvider(this._vectorStoreMock.Object, TestCollectionName, 1, options: providerOptions, storageScope: searchScope, searchScope: searchScope);
 
@@ -300,7 +300,7 @@ public class ChatHistoryMemoryProviderTests
             c => c.SearchAsync(
                 It.Is<string>(s => s == "requesting relevant history"),
                 2,
-                It.IsAny<VectorSearchOptions<ChatHistoryMemoryProvider.ChatHistoryItem>>(),
+                It.IsAny<VectorSearchOptions<Dictionary<string, object?>>>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }

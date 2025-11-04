@@ -147,10 +147,23 @@ public sealed class Mem0Provider : AIContextProvider
 
             if (this._logger is not null)
             {
-                this._logger.LogInformation("Mem0AIContextProvider: Retrieved {Count} memories.", memories.Count);
+                this._logger.LogInformation(
+                    "Mem0AIContextProvider: Retrieved {Count} memories. ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'",
+                    memories.Count,
+                    this.ApplicationId,
+                    this.AgentId,
+                    this.ThreadId,
+                    this.UserId);
                 if (outputMessageText is not null)
                 {
-                    this._logger.LogTrace("Mem0AIContextProvider: Search Results\nInput:{Input}\nOutput:{MessageText}", queryText, outputMessageText);
+                    this._logger.LogTrace(
+                        "Mem0AIContextProvider: Search Results\nInput:{Input}\nOutput:{MessageText}\nApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'",
+                        queryText,
+                        outputMessageText,
+                        this.ApplicationId,
+                        this.AgentId,
+                        this.ThreadId,
+                        this.UserId);
                 }
             }
 
@@ -165,7 +178,13 @@ public sealed class Mem0Provider : AIContextProvider
         }
         catch (Exception ex)
         {
-            this._logger?.LogError(ex, "Mem0AIContextProvider: Failed to search Mem0 for memories due to error");
+            this._logger?.LogError(
+                ex,
+                "Mem0AIContextProvider: Failed to search Mem0 for memories due to error. ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'",
+                this.ApplicationId,
+                this.AgentId,
+                this.ThreadId,
+                this.UserId);
             return new AIContext();
         }
     }
@@ -185,7 +204,13 @@ public sealed class Mem0Provider : AIContextProvider
         }
         catch (Exception ex)
         {
-            this._logger?.LogError(ex, "Mem0AIContextProvider: Failed to send messages to Mem0 due to error");
+            this._logger?.LogError(
+                ex,
+                "Mem0AIContextProvider: Failed to send messages to Mem0 due to error. ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'",
+                this.ApplicationId,
+                this.AgentId,
+                this.ThreadId,
+                this.UserId);
         }
     }
 

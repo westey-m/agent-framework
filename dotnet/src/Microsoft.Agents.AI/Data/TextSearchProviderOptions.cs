@@ -60,6 +60,26 @@ public sealed class TextSearchProviderOptions
     public int RecentMessageMemoryLimit { get; set; }
 
     /// <summary>
+    /// Gets or sets the list of <see cref="ChatRole"/> types to filter recent messages to
+    /// when deciding which recent messages to include when constructing the search input.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Depending on your scenario, you may want to use only user messages, only assistant messages,
+    /// or both. For example, if the assistant may often provide clarifying questions or if the conversation
+    /// is expected to be particularly chatty, you may want to include assistant messages in the search context as well.
+    /// </para>
+    /// <para>
+    /// Be careful when including assistant messages though, as they may skew the search results towards
+    /// information that has already been provided by the assistant, rather than focusing on the user's current needs.
+    /// </para>
+    /// </remarks>
+    /// <value>
+    /// When not specified, defaults to only <see cref="ChatRole.User"/>.
+    /// </value>
+    public List<ChatRole>? RecentMessageRolesIncluded { get; set; }
+
+    /// <summary>
     /// Behavior choices for the provider.
     /// </summary>
     public enum TextSearchBehavior

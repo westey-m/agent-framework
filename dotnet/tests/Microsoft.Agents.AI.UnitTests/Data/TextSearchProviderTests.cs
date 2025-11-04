@@ -41,8 +41,8 @@ public sealed class TextSearchProviderTests
         // Arrange
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
-            new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
+            new() { SourceName = "Doc1", SourceLink = "http://example.com/doc1", Text = "Content of Doc1" },
+            new() { SourceName = "Doc2", SourceLink = "http://example.com/doc2", Text = "Content of Doc2" }
         ];
 
         string? capturedInput = null;
@@ -181,8 +181,8 @@ public sealed class TextSearchProviderTests
         // Arrange
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
-            new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
+            new() { SourceName = "Doc1", SourceLink = "http://example.com/doc1", Text = "Content of Doc1" },
+            new() { SourceName = "Doc2", SourceLink = "http://example.com/doc2", Text = "Content of Doc2" }
         ];
 
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -233,8 +233,8 @@ public sealed class TextSearchProviderTests
         // Arrange
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Link = "http://example.com/doc1", Value = "Content of Doc1" },
-            new() { Name = "Doc2", Link = "http://example.com/doc2", Value = "Content of Doc2" }
+            new() { SourceName = "Doc1", SourceLink = "http://example.com/doc1", Text = "Content of Doc1" },
+            new() { SourceName = "Doc2", SourceLink = "http://example.com/doc2", Text = "Content of Doc2" }
         ];
 
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -267,8 +267,8 @@ public sealed class TextSearchProviderTests
         var payload2 = new RawPayload { Id = "R2" };
         List<TextSearchProvider.TextSearchResult> results =
         [
-            new() { Name = "Doc1", Value = "Content 1", RawRepresentation = payload1 },
-            new() { Name = "Doc2", Value = "Content 2", RawRepresentation = payload2 }
+            new() { SourceName = "Doc1", Text = "Content 1", RawRepresentation = payload1 },
+            new() { SourceName = "Doc2", Text = "Content 2", RawRepresentation = payload2 }
         ];
 
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -358,7 +358,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 3
+            RecentMessageMemoryLimit = 3,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         string? capturedInput = null;
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -397,7 +398,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 5
+            RecentMessageMemoryLimit = 5,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         string? capturedInput = null;
         Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
@@ -431,6 +433,46 @@ public sealed class TextSearchProviderTests
         Assert.Equal("A\nB\nC\nD\nE\nF", capturedInput); // All retained (limit 5) + current request message.
     }
 
+    [Fact]
+    public async Task InvokingAsync_WithRecentMessageRolesIncluded_ShouldFilterRolesAsync()
+    {
+        // Arrange
+        var options = new TextSearchProviderOptions
+        {
+            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
+            RecentMessageMemoryLimit = 4,
+            RecentMessageRolesIncluded = new List<ChatRole> { ChatRole.Assistant } // Only retain assistant messages.
+        };
+        string? capturedInput = null;
+        Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchDelegateAsync(string input, CancellationToken ct)
+        {
+            capturedInput = input;
+            return Task.FromResult<IEnumerable<TextSearchProvider.TextSearchResult>>([]); // No results needed for this test.
+        }
+        var provider = new TextSearchProvider(SearchDelegateAsync, options);
+
+        // Populate memory with mixed roles; only Assistant messages (A1,A2) should be retained.
+        var initialMessages = new[]
+        {
+            new ChatMessage(ChatRole.User, "U1"),
+            new ChatMessage(ChatRole.Assistant, "A1"),
+            new ChatMessage(ChatRole.User, "U2"),
+            new ChatMessage(ChatRole.Assistant, "A2"),
+        };
+        await provider.InvokedAsync(new(initialMessages, null));
+
+        var invokingContext = new AIContextProvider.InvokingContext(new[]
+        {
+            new ChatMessage(ChatRole.User, "Question?") // Current request message always appended.
+        });
+
+        // Act
+        await provider.InvokingAsync(invokingContext, CancellationToken.None);
+
+        // Assert
+        Assert.Equal("A1\nA2\nQuestion?", capturedInput); // Only assistant messages from memory + current request.
+    }
+
     #endregion
 
     #region Serialization Tests
@@ -461,7 +503,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 3
+            RecentMessageMemoryLimit = 3,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var messages = new[]
@@ -490,7 +533,8 @@ public sealed class TextSearchProviderTests
         var options = new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 4
+            RecentMessageMemoryLimit = 4,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         };
         var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
         var messages = new[]
@@ -530,7 +574,8 @@ public sealed class TextSearchProviderTests
         var initialProvider = new TextSearchProvider(this.NoResultSearchAsync, new TextSearchProviderOptions
         {
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 5
+            RecentMessageMemoryLimit = 5,
+            RecentMessageRolesIncluded = [ChatRole.User, ChatRole.Assistant]
         });
         var messages = new[]
         {

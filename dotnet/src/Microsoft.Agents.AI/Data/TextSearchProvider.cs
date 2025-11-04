@@ -100,9 +100,9 @@ public sealed class TextSearchProvider : AIContextProvider
         this._tools =
         [
             AIFunctionFactory.Create(
-            this.SearchAsync,
-            name: options?.FunctionToolName ?? DefaultPluginSearchFunctionName,
-            description: options?.FunctionToolDescription ?? DefaultPluginSearchFunctionDescription)
+                this.SearchAsync,
+                name: options?.FunctionToolName ?? DefaultPluginSearchFunctionName,
+                description: options?.FunctionToolDescription ?? DefaultPluginSearchFunctionDescription)
         ];
     }
 

@@ -5,7 +5,7 @@ namespace Microsoft.Agents.AI.VectorDataMemory;
 /// <summary>
 /// Options controlling the behavior of <see cref="ChatHistoryMemoryProvider"/>.
 /// </summary>
-public class ChatHistoryMemoryProviderOptions
+public sealed class ChatHistoryMemoryProviderOptions
 {
     /// <summary>
     /// Gets or sets a value indicating when the search should be executed.

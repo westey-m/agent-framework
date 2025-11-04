@@ -7,7 +7,7 @@ namespace Microsoft.Agents.AI.VectorDataMemory;
 /// <summary>
 /// Allows scoping of chat history for the <see cref="ChatHistoryMemoryProvider"/>.
 /// </summary>
-public class ChatHistoryMemoryProviderScope
+public sealed class ChatHistoryMemoryProviderScope
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ChatHistoryMemoryProviderScope"/> class.

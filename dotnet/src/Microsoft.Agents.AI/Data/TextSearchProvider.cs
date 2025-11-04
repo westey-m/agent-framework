@@ -165,7 +165,7 @@ public sealed class TextSearchProvider : AIContextProvider
         {
             this._logger?.LogError(ex, "TextSearchProvider: Failed to search for data due to error");
             return new AIContext();
-        };
+        }
     }
 
     /// <inheritdoc />

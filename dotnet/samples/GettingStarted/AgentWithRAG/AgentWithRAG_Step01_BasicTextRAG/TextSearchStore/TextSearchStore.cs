@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.VectorData;
@@ -20,11 +19,7 @@ namespace Microsoft.Agents.AI.Samples;
 /// This class and its related types are currently provided as a sample implementation, but may be promoted to a first-class supported API in future releases.
 /// </para>
 /// </remarks>
-/// <typeparam name="TKey">The key type to use with the vector store. Choose a key type supported by your chosen vector store type. Currently this class only supports string or Guid.</typeparam>
-[RequiresDynamicCode("This API is not compatible with NativeAOT.")]
-[RequiresUnreferencedCode("This API is not compatible with trimming.")]
-public sealed partial class TextSearchStore<TKey> : IDisposable
-    where TKey : notnull
+public sealed partial class TextSearchStore : IDisposable
 {
 #if NET
     [GeneratedRegex(@"\p{L}+", RegexOptions.IgnoreCase, "en-US")]
@@ -50,13 +45,13 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
     private readonly TextSearchStoreOptions _options;
     private readonly Func<string, ICollection<string>> _wordSegmenter;
 
-    private readonly VectorStoreCollection<TKey, TextRagStorageDocument<TKey>> _vectorStoreRecordCollection;
+    private readonly VectorStoreCollection<object, Dictionary<string, object?>> _vectorStoreRecordCollection;
     private readonly SemaphoreSlim _collectionInitializationLock = new(1, 1);
     private bool _collectionInitialized;
     private bool _disposedValue;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TextSearchStore{TKey}"/> class.
+    /// Initializes a new instance of the <see cref="TextSearchStore"/> class.
     /// </summary>
     /// <param name="vectorStore">The vector store to store and read the memories from.</param>
     /// <param name="collectionName">The name of the collection in the vector store to store and read the memories from.</param>
@@ -85,12 +80,12 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
             throw new ArgumentOutOfRangeException(nameof(vectorDimensions), "Vector dimensions must be greater than zero.");
         }
 
-        if (typeof(TKey) != typeof(string) && typeof(TKey) != typeof(Guid))
+        if (options?.KeyType is not null && options.KeyType != typeof(string) && options.KeyType != typeof(Guid))
         {
-            throw new NotSupportedException($"Unsupported key of type '{typeof(TKey).Name}'");
+            throw new NotSupportedException($"Unsupported key of type '{options.KeyType.Name}'");
         }
 
-        if (typeof(TKey) != typeof(string) && options?.UseSourceIdAsPrimaryKey is true)
+        if (options?.KeyType is not null && options.KeyType != typeof(string) && options?.UseSourceIdAsPrimaryKey is true)
         {
             throw new NotSupportedException($"The {nameof(TextSearchStoreOptions.UseSourceIdAsPrimaryKey)} option can only be used when the key type is 'string'.");
         }
@@ -105,7 +100,7 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
         {
             Properties = new List<VectorStoreProperty>()
             {
-                new VectorStoreKeyProperty("Key", typeof(TKey)),
+                new VectorStoreKeyProperty("Key", this._options.KeyType ?? typeof(string)),
                 new VectorStoreDataProperty("Namespaces", typeof(List<string>)) { IsIndexed = true },
                 new VectorStoreDataProperty("SourceId", typeof(string)) { IsIndexed = true },
                 new VectorStoreDataProperty("Text", typeof(string)) { IsFullTextIndexed = true },
@@ -115,7 +110,7 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
             }
         };
 
-        this._vectorStoreRecordCollection = this._vectorStore.GetCollection<TKey, TextRagStorageDocument<TKey>>(collectionName, ragDocumentDefinition);
+        this._vectorStoreRecordCollection = this._vectorStore.GetDynamicCollection(collectionName, ragDocumentDefinition);
     }
 
     /// <summary>
@@ -141,11 +136,12 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
                 throw new ArgumentException("One of the provided text chunks is null.", nameof(textChunks));
             }
 
-            return new TextRagStorageDocument<TKey>
+            return new Dictionary<string, object?>
             {
-                Key = GenerateUniqueKey<TKey>(null),
-                Text = textChunk,
-                TextEmbedding = textChunk,
+                { "Key", this.GenerateUniqueKey(null) },
+                { "Namespaces", new List<string>() },
+                { "Text", textChunk },
+                { "TextEmbedding", textChunk },
             };
         });
 
@@ -187,17 +183,17 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
                 throw new ArgumentException($"Either the {nameof(TextSearchDocument.SourceId)} or {nameof(TextSearchDocument.SourceLink)} properties must be set when the {nameof(TextSearchStoreUpsertOptions.DoNotPersistSourceText)} setting is true.", nameof(document));
             }
 
-            var key = GenerateUniqueKey<TKey>(this._options.UseSourceIdAsPrimaryKey ?? false ? document.SourceId : null);
+            var key = this.GenerateUniqueKey(this._options.UseSourceIdAsPrimaryKey ?? false ? document.SourceId : null);
 
-            return new TextRagStorageDocument<TKey>
+            return new Dictionary<string, object?>()
             {
-                Key = key,
-                Namespaces = document.Namespaces.ToList(),
-                SourceId = document.SourceId,
-                Text = options?.DoNotPersistSourceText is true ? null : document.Text,
-                SourceName = document.SourceName,
-                SourceLink = document.SourceLink,
-                TextEmbedding = document.Text,
+                { "Key", key },
+                { "Namespaces", document.Namespaces.ToList() },
+                { "SourceId", document.SourceId },
+                { "Text", options?.DoNotPersistSourceText is true ? null : document.Text },
+                { "SourceName", document.SourceName },
+                { "SourceLink", document.SourceLink },
+                { "TextEmbedding", document.Text },
             };
         });
 
@@ -217,11 +213,11 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
 
         return searchResult.Select(x => new TextSearchDocument()
         {
-            Namespaces = x.Namespaces,
-            Text = x.Text,
-            SourceId = x.SourceId,
-            SourceName = x.SourceName,
-            SourceLink = x.SourceLink,
+            Namespaces = (List<string>)x["Namespaces"]!,
+            Text = (string?)x["Text"],
+            SourceId = (string?)x["SourceId"],
+            SourceName = (string?)x["SourceName"],
+            SourceLink = (string?)x["SourceLink"],
         });
     }
 
@@ -232,23 +228,23 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
     /// <param name="top">The maximum number of results to return.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>The search results.</returns>
-    private async Task<IEnumerable<TextRagStorageDocument<TKey>>> SearchCoreAsync(string query, int top, CancellationToken cancellationToken = default)
+    private async Task<IEnumerable<Dictionary<string, object?>>> SearchCoreAsync(string query, int top, CancellationToken cancellationToken = default)
     {
         // Short circuit if the query is empty.
         if (string.IsNullOrWhiteSpace(query))
         {
-            return Enumerable.Empty<TextRagStorageDocument<TKey>>();
+            return [];
         }
 
         var vectorStoreRecordCollection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
 
         // If the user has not opted out of hybrid search, check if the vector store supports it.
         var hybridSearchCollection = this._options.UseHybridSearch ?? true ?
-            vectorStoreRecordCollection.GetService(typeof(IKeywordHybridSearchable<TextRagStorageDocument<TKey>>)) as IKeywordHybridSearchable<TextRagStorageDocument<TKey>> :
+            vectorStoreRecordCollection.GetService(typeof(IKeywordHybridSearchable<Dictionary<string, object?>>)) as IKeywordHybridSearchable<Dictionary<string, object?>> :
             null;
 
         // Optional filter to limit the search to a specific namespace.
-        Expression<Func<TextRagStorageDocument<TKey>, bool>>? filter = string.IsNullOrWhiteSpace(this._options.SearchNamespace) ? null : x => x.Namespaces.Contains(this._options.SearchNamespace);
+        Expression<Func<Dictionary<string, object?>, bool>>? filter = string.IsNullOrWhiteSpace(this._options.SearchNamespace) ? null : x => ((List<string>)x["Namespaces"]!).Contains(this._options.SearchNamespace);
 
         // Execute a hybrid search if possible, otherwise perform a regular vector search.
         var searchResult = hybridSearchCollection is null
@@ -271,7 +267,7 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
                 cancellationToken: cancellationToken);
 
         // Retrieve the documents from the search results.
-        List<TextRagStorageDocument<TKey>> searchResponseDocs = new();
+        List<Dictionary<string, object?>> searchResponseDocs = new();
         await foreach (var searchResponseDoc in searchResult.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             searchResponseDocs.Add(searchResponseDoc.Record);
@@ -279,8 +275,8 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
 
         // Find any source ids and links for which the text needs to be retrieved.
         var sourceIdsToRetrieve = searchResponseDocs
-            .Where(x => string.IsNullOrWhiteSpace(x.Text))
-            .Select(x => new TextSearchStoreOptions.SourceRetrievalRequest(x.SourceId, x.SourceLink))
+            .Where(x => string.IsNullOrWhiteSpace((string?)x["Text"]))
+            .Select(x => new TextSearchStoreOptions.SourceRetrievalRequest((string?)x["SourceId"], (string?)x["SourceLink"]))
             .ToList();
 
         // If we have none, we can return early.
@@ -305,14 +301,14 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
         // Update the retrieved documents with the retrieved text.
         return searchResponseDocs.GroupJoin(
             retrievalResponses,
-            searchResponseDoc => (searchResponseDoc.SourceId, searchResponseDoc.SourceLink),
+            searchResponseDoc => (searchResponseDoc["SourceId"], searchResponseDoc["SourceLink"]),
             retrievalResponse => (retrievalResponse.SourceId, retrievalResponse.SourceLink),
             (searchResponseDoc, textRetrievalResponse) => (searchResponseDoc, textRetrievalResponse))
             .SelectMany(
                 joinedSet => joinedSet.textRetrievalResponse.DefaultIfEmpty(),
                 (combined, textRetrievalResponse) =>
                 {
-                    combined.searchResponseDoc.Text = textRetrievalResponse?.Text ?? combined.searchResponseDoc.Text;
+                    combined.searchResponseDoc["Text"] = textRetrievalResponse?.Text ?? combined.searchResponseDoc["Text"];
                     return combined.searchResponseDoc;
                 });
     }
@@ -322,7 +318,7 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
     /// </summary>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>The created collection.</returns>
-    private async Task<VectorStoreCollection<TKey, TextRagStorageDocument<TKey>>> EnsureCollectionExistsAsync(CancellationToken cancellationToken)
+    private async Task<VectorStoreCollection<object, Dictionary<string, object?>>> EnsureCollectionExistsAsync(CancellationToken cancellationToken)
     {
         // Return immediately if the collection is already created, no need to do any locking in this case.
         if (this._collectionInitialized)
@@ -359,17 +355,16 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
     /// Generates a unique key for the RAG document.
     /// </summary>
     /// <param name="sourceId">Source id of the source document for this RAG document.</param>
-    /// <typeparam name="TDocumentKey">The type of the key to use, since different databases require/support different keys.</typeparam>
     /// <returns>A new unique key.</returns>
     /// <exception cref="NotSupportedException">Thrown if the requested key type is not supported.</exception>
-    private static TDocumentKey GenerateUniqueKey<TDocumentKey>(string? sourceId)
-        => typeof(TDocumentKey) switch
+    private object GenerateUniqueKey(string? sourceId)
+        => this._options.KeyType switch
         {
-            _ when typeof(TDocumentKey) == typeof(string) && !string.IsNullOrWhiteSpace(sourceId) => (TDocumentKey)(object)sourceId!,
-            _ when typeof(TDocumentKey) == typeof(string) => (TDocumentKey)(object)Guid.NewGuid().ToString(),
-            _ when typeof(TDocumentKey) == typeof(Guid) => (TDocumentKey)(object)Guid.NewGuid(),
+            _ when (this._options.KeyType == null || this._options.KeyType == typeof(string)) && !string.IsNullOrWhiteSpace(sourceId) => sourceId!,
+            _ when this._options.KeyType == null || this._options.KeyType == typeof(string) => Guid.NewGuid().ToString(),
+            _ when this._options.KeyType == typeof(Guid) => Guid.NewGuid(),
 
-            _ => throw new NotSupportedException($"Unsupported key of type '{typeof(TDocumentKey).Name}'")
+            _ => throw new NotSupportedException($"Unsupported key of type '{this._options.KeyType.Name}'")
         };
 
     /// <inheritdoc/>
@@ -393,64 +388,5 @@ public sealed partial class TextSearchStore<TKey> : IDisposable
         // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
         this.Dispose(disposing: true);
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// The data model to use for storing RAG documents in the vector store.
-    /// </summary>
-    /// <typeparam name="TDocumentKey">The type of the key to use, since different databases require/support different keys.</typeparam>
-    internal sealed class TextRagStorageDocument<TDocumentKey>
-    {
-        /// <summary>
-        /// Gets or sets a unique identifier for the memory document.
-        /// </summary>
-        public TDocumentKey Key { get; set; } = default!;
-
-        /// <summary>
-        /// Gets or sets an optional list of namespaces that the document should belong to.
-        /// </summary>
-        /// <remarks>
-        /// A namespace is a logical grouping of documents, e.g. may include a group id to scope the document to a specific group of users.
-        /// </remarks>
-        public List<string> Namespaces { get; set; } = [];
-
-        /// <summary>
-        /// Gets or sets the content as text.
-        /// </summary>
-        public string? Text { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional source ID for the document.
-        /// </summary>
-        /// <remarks>
-        /// This ID should be unique within the collection that the document is stored in, and can
-        /// be used to map back to the source artifact for this document.
-        /// If updates need to be made later or the source document was deleted and this document
-        /// also needs to be deleted, this id can be used to find the document again.
-        /// </remarks>
-        public string? SourceId { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional name for the source document.
-        /// </summary>
-        /// <remarks>
-        /// This can be used to provide display names for citation links when the document is referenced as
-        /// part of a response to a query.
-        /// </remarks>
-        public string? SourceName { get; set; }
-
-        /// <summary>
-        /// Gets or sets an optional link back to the source of the document.
-        /// </summary>
-        /// <remarks>
-        /// This can be used to provide citation links when the document is referenced as
-        /// part of a response to a query.
-        /// </remarks>
-        public string? SourceLink { get; set; }
-
-        /// <summary>
-        /// Gets or sets the text that will be used to generate the embedding for the document.
-        /// </summary>
-        public string? TextEmbedding { get; set; }
     }
 }

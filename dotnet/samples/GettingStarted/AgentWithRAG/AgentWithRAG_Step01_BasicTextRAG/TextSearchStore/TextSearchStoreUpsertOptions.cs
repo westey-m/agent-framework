@@ -3,7 +3,7 @@
 namespace Microsoft.Agents.AI.Samples;
 
 /// <summary>
-/// Contains options for <see cref="TextSearchStore{TKey}.UpsertDocumentsAsync(IEnumerable{TextSearchDocument}, TextSearchStoreUpsertOptions?, CancellationToken)"/>.
+/// Contains options for <see cref="TextSearchStore.UpsertDocumentsAsync(IEnumerable{TextSearchDocument}, TextSearchStoreUpsertOptions?, CancellationToken)"/>.
 /// </summary>
 public sealed class TextSearchStoreUpsertOptions
 {

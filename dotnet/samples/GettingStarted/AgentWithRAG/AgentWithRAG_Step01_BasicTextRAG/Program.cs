@@ -30,7 +30,7 @@ VectorStore vectorStore = new InMemoryVectorStore(new()
 });
 
 // Create a store that defines a storage schema, and uses the vector store to store and retrieve documents.
-TextSearchStore<string> textSearchStore = new(vectorStore, "product-and-policy-info", 3072);
+TextSearchStore textSearchStore = new(vectorStore, "product-and-policy-info", 3072);
 
 // Upload sample documents into the store.
 await textSearchStore.UpsertDocumentsAsync(GetSampleDocuments());

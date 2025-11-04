@@ -3,7 +3,7 @@
 namespace Microsoft.Agents.AI.Samples;
 
 /// <summary>
-/// Contains options for the <see cref="TextSearchStore{TKey}"/>.
+/// Contains options for the <see cref="TextSearchStore"/>.
 /// </summary>
 public sealed class TextSearchStoreOptions
 {
@@ -47,6 +47,16 @@ public sealed class TextSearchStoreOptions
     /// Defaults to a simple text-character-based segmenter that splits the text by any character that is not a text character.
     /// </remarks>
     public Func<string, ICollection<string>>? WordSegmenter { get; init; }
+
+    /// <summary>
+    /// Gets or sets the type of key to use for records in the text search store.
+    /// </summary>
+    /// <remarks>
+    /// Make sure to pick a key type that is supported by the underlying vector store.
+    /// Note that you have to choose <see cref="string"/> when using <see cref="UseSourceIdAsPrimaryKey"/>.
+    /// </remarks>
+    /// <value>Defaults to <see cref="string"/> if not set. Only <see cref="string"/> and <see cref="Guid"/> is currently supported.</value>
+    public Type? KeyType { get; init; }
 
     /// <summary>
     /// Gets or sets an optional callback to load the source text using the source id or source link

@@ -69,6 +69,7 @@
     <!-- Vector Stores -->
     <PackageVersion Include="Microsoft.SemanticKernel" Version="1.66.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.InMemory" Version="1.66.0-preview" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Qdrant" Version="1.66.0-preview" />
     <PackageVersion Include="Microsoft.SemanticKernel.Agents.Core" Version="1.66.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Agents.OpenAI" Version="1.66.0-preview" />
     <PackageVersion Include="Microsoft.SemanticKernel.Agents.AzureAI" Version="1.66.0-preview" />

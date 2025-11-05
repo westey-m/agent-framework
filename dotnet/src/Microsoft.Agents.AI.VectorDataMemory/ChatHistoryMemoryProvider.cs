@@ -50,8 +50,8 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     private readonly AITool[] _tools;
     private readonly ILogger<ChatHistoryMemoryProvider>? _logger;
 
-    private readonly ChatHistoryMemoryProviderScope? _storageScope;
-    private readonly ChatHistoryMemoryProviderScope? _searchScope;
+    private readonly ChatHistoryMemoryProviderScope _storageScope;
+    private readonly ChatHistoryMemoryProviderScope _searchScope;
 
     private bool _collectionInitialized;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
@@ -80,10 +80,10 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             vectorStore,
             collectionName,
             vectorDimensions,
-            storageScope is null && searchScope is null ? null : new ChatHistoryMemoryProviderState
+            new ChatHistoryMemoryProviderState
             {
-                StorageScope = storageScope,
-                SearchScope = searchScope,
+                StorageScope = new(Throw.IfNull(storageScope)),
+                SearchScope = searchScope ?? new(storageScope),
             },
             options,
             loggerFactory)
@@ -118,7 +118,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     {
     }
 
-    internal ChatHistoryMemoryProvider(
+    private ChatHistoryMemoryProvider(
         VectorStore vectorStore,
         string collectionName,
         int vectorDimensions,
@@ -133,8 +133,13 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         this._searchTime = options.SearchTime;
         this._logger = loggerFactory?.CreateLogger<ChatHistoryMemoryProvider>();
 
-        this._storageScope = state?.StorageScope is null ? null : new ChatHistoryMemoryProviderScope(state.StorageScope);
-        this._searchScope = state?.SearchScope is null ? this._storageScope : new ChatHistoryMemoryProviderScope(state.SearchScope);
+        if (state == null || state.StorageScope == null || state.SearchScope == null)
+        {
+            throw new InvalidOperationException($"The {nameof(ChatHistoryMemoryProvider)} state did not contain the required scope properties.");
+        }
+
+        this._storageScope = state.StorageScope;
+        this._searchScope = state.SearchScope;
 
         // Create on-demand search tool (only used when behavior is OnDemandFunctionCalling)
         this._tools =
@@ -205,7 +210,13 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         }
         catch (Exception ex)
         {
-            this._logger?.LogError(ex, "ChatHistoryMemoryProvider: Failed to search for chat history due to error");
+            this._logger?.LogError(
+                ex,
+                "ChatHistoryMemoryProvider: Failed to search for chat history due to error. ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'.",
+                this._searchScope.ApplicationId,
+                this._searchScope.AgentId,
+                this._searchScope.ThreadId,
+                this._searchScope.UserId);
             return new AIContext();
         }
     }
@@ -251,7 +262,13 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         }
         catch (Exception ex)
         {
-            this._logger?.LogError(ex, "ChatHistoryMemoryProvider: Failed to add messages to chat history vector store due to error");
+            this._logger?.LogError(
+                ex,
+                "ChatHistoryMemoryProvider: Failed to add messages to chat history vector store due to error. ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'.",
+                this._searchScope.ApplicationId,
+                this._searchScope.AgentId,
+                this._searchScope.ThreadId,
+                this._searchScope.UserId);
         }
     }
 
@@ -283,7 +300,14 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 
         var formatted = $"{this._contextPrompt}\n{outputResultsText}";
 
-        this._logger?.LogTrace("ChatHistoryMemoryProvider: Search Results\nInput:{Input}\nOutput:{MessageText}", userQuestion, formatted);
+        this._logger?.LogTrace(
+            "ChatHistoryMemoryProvider: Search Results\nInput:{Input}\nOutput:{MessageText}\n ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'.",
+            userQuestion,
+            formatted,
+            this._searchScope.ApplicationId,
+            this._searchScope.AgentId,
+            this._searchScope.ThreadId,
+            this._searchScope.UserId);
         return formatted;
     }
 
@@ -306,10 +330,10 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 
         var collection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
 
-        string? applicationId = this._searchScope?.ApplicationId;
-        string? agentId = this._searchScope?.AgentId;
-        string? userId = this._searchScope?.UserId;
-        string? threadId = this._searchScope?.ThreadId;
+        string? applicationId = this._searchScope.ApplicationId;
+        string? agentId = this._searchScope.AgentId;
+        string? userId = this._searchScope.UserId;
+        string? threadId = this._searchScope.ThreadId;
 
         Expression<Func<Dictionary<string, object?>, bool>>? filter = null;
         if (applicationId != null)
@@ -357,7 +381,13 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             results.Add(result.Record);
         }
 
-        this._logger?.LogInformation("ChatHistoryMemoryProvider: Retrieved {Count} search results.", results.Count);
+        this._logger?.LogInformation(
+            "ChatHistoryMemoryProvider: Retrieved {Count} search results. ApplicationId: '{ApplicationId}', AgentId: '{AgentId}', ThreadId: '{ThreadId}', UserId: '{UserId}'.",
+            results.Count,
+            this._searchScope.ApplicationId,
+            this._searchScope.AgentId,
+            this._searchScope.ThreadId,
+            this._searchScope.UserId);
 
         return results;
     }

@@ -16,13 +16,12 @@ var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT
 
 // Load the OpenAPI Spec from a file.
 string fileName = "OpenAPISpec.json";
-using FileStream schemaStream = File.OpenRead(fileName);
-var plugin = await OpenApiKernelPluginFactory.CreateFromOpenApiAsync("github", schemaStream);
+KernelPlugin plugin = await OpenApiKernelPluginFactory.CreateFromOpenApiAsync("github", fileName);
 
 // Convert the Semantic Kernel plugin to Agent Framework function tools.
-// This requires a dummy Kernel instance.
-var kernel = new Kernel();
-var tools = plugin.Select(x => x.WithKernel(kernel)).Cast<AITool>().ToList();
+// This requires a dummy Kernel instance, since KernelFunctions cannot execute without one.
+Kernel kernel = new();
+List<AITool> tools = plugin.Select(x => x.WithKernel(kernel)).Cast<AITool>().ToList();
 
 // Create the chat client and agent, and provide the OpenAPI function tools to the agent.
 AIAgent agent = new AzureOpenAIClient(

@@ -15,8 +15,7 @@ var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? th
 var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-4o-mini";
 
 // Load the OpenAPI Spec from a file.
-string fileName = "OpenAPISpec.json";
-KernelPlugin plugin = await OpenApiKernelPluginFactory.CreateFromOpenApiAsync("github", fileName);
+KernelPlugin plugin = await OpenApiKernelPluginFactory.CreateFromOpenApiAsync("github", "OpenAPISpec.json");
 
 // Convert the Semantic Kernel plugin to Agent Framework function tools.
 // This requires a dummy Kernel instance, since KernelFunctions cannot execute without one.

@@ -2,7 +2,7 @@
 
 using Microsoft.Shared.Diagnostics;
 
-namespace Microsoft.Agents.AI.VectorDataMemory;
+namespace Microsoft.Agents.AI;
 
 /// <summary>
 /// Allows scoping of chat history for the <see cref="ChatHistoryMemoryProvider"/>.

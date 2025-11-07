@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.VectorData;
 using Microsoft.Shared.Diagnostics;
 
-namespace Microsoft.Agents.AI.VectorDataMemory;
+namespace Microsoft.Agents.AI;
 
 /// <summary>
 /// A context provider that stores all chat history in a vector store and is able to
@@ -460,7 +460,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             SearchScope = this._searchScope,
         };
 
-        var jso = jsonSerializerOptions ?? VectorDataMemoryJsonUtilities.DefaultOptions;
+        var jso = jsonSerializerOptions ?? AgentJsonUtilities.DefaultOptions;
         return JsonSerializer.SerializeToElement(state, jso.GetTypeInfo(typeof(ChatHistoryMemoryProviderState)));
     }
 
@@ -471,7 +471,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             return null;
         }
 
-        var jso = jsonSerializerOptions ?? VectorDataMemoryJsonUtilities.DefaultOptions;
+        var jso = jsonSerializerOptions ?? AgentJsonUtilities.DefaultOptions;
         return serializedState.Deserialize(jso.GetTypeInfo(typeof(ChatHistoryMemoryProviderState))) as ChatHistoryMemoryProviderState;
     }
 

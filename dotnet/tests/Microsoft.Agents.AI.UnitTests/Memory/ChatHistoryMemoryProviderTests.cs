@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.VectorData;
 using Moq;
 
-namespace Microsoft.Agents.AI.VectorDataMemory.UnitTests;
+namespace Microsoft.Agents.AI.Memory.UnitTests;
 
 /// <summary>
 /// Contains unit tests for the <see cref="ChatHistoryMemoryProvider"/> class.

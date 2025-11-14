@@ -182,27 +182,17 @@ internal static class AspNetExtensions
                     JwtSecurityToken token = new(parts[1]);
                     string issuer = token.Claims.FirstOrDefault(claim => claim.Type == AuthenticationConstants.IssuerClaim)?.Value!;
 
-                    if (validationOptions.AzureBotServiceTokenHandling && AuthenticationConstants.BotFrameworkTokenIssuer.Equals(issuer, StringComparison.Ordinal))
+                    string openIdMetadataUrl = (validationOptions.AzureBotServiceTokenHandling && AuthenticationConstants.BotFrameworkTokenIssuer.Equals(issuer, StringComparison.Ordinal))
+                        ? validationOptions.AzureBotServiceOpenIdMetadataUrl
+                        : validationOptions.OpenIdMetadataUrl;
+
+                    context.Options.TokenValidationParameters.ConfigurationManager = s_openIdMetadataCache.GetOrAdd(openIdMetadataUrl, key =>
                     {
-                        // Use the Azure Bot authority for this configuration manager
-                        context.Options.TokenValidationParameters.ConfigurationManager = s_openIdMetadataCache.GetOrAdd(validationOptions.AzureBotServiceOpenIdMetadataUrl, key =>
+                        return new ConfigurationManager<OpenIdConnectConfiguration>(openIdMetadataUrl, new OpenIdConnectConfigurationRetriever(), new HttpClient())
                         {
-                            return new ConfigurationManager<OpenIdConnectConfiguration>(validationOptions.AzureBotServiceOpenIdMetadataUrl, new OpenIdConnectConfigurationRetriever(), new HttpClient())
-                            {
-                                AutomaticRefreshInterval = openIdMetadataRefresh
-                            };
-                        });
-                    }
-                    else
-                    {
-                        context.Options.TokenValidationParameters.ConfigurationManager = s_openIdMetadataCache.GetOrAdd(validationOptions.OpenIdMetadataUrl, key =>
-                        {
-                            return new ConfigurationManager<OpenIdConnectConfiguration>(validationOptions.OpenIdMetadataUrl, new OpenIdConnectConfigurationRetriever(), new HttpClient())
-                            {
-                                AutomaticRefreshInterval = openIdMetadataRefresh
-                            };
-                        });
-                    }
+                            AutomaticRefreshInterval = openIdMetadataRefresh
+                        };
+                    });
 
                     await Task.CompletedTask.ConfigureAwait(false);
                 },

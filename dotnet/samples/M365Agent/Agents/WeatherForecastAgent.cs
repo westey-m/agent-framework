@@ -62,7 +62,7 @@ public class WeatherForecastAgent : DelegatingAIAgent
                 // If the response contains weather information, create an adaptive card.
                 if (structuredOutput.ContentType == WeatherForecastAgentResponseContentType.WeatherForecastAgentResponse)
                 {
-                    var card = CreateWeatherCard(structuredOutput.Location, structuredOutput.MeteorologicalCondition, structuredOutput.TemperatureInCelcius);
+                    var card = CreateWeatherCard(structuredOutput.Location, structuredOutput.MeteorologicalCondition, structuredOutput.TemperatureInCelsius);
                     textContentMessage.Contents.Add(new AdaptiveCardAIContent(card));
                 }
 

@@ -35,8 +35,8 @@ internal sealed class WeatherForecastAgentResponse
     /// The temperature in Celsius for the given location.
     /// </summary>
     [Description("If the answer is a weather forecast, contains the temperature in Celsius.")]
-    [JsonPropertyName("temperatureInCelcius")]
-    public string? TemperatureInCelcius { get; set; }
+    [JsonPropertyName("temperatureInCelsius")]
+    public string? TemperatureInCelsius { get; set; }
 
     /// <summary>
     /// The meteorological condition for the given location.

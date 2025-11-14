@@ -2,7 +2,7 @@
 
 This is a sample of a simple Weather Forecast Agent that is hosted on an Asp.net core web service and is exposed via the M365 Agent SDK.  This Agent is configured to accept a request asking for information about a weather forecast and respond to the caller with an Adaptive Card.  This agent will handle multiple "turns" to get the required information from the user.
 
-This Agent Sample is intended to introduce you the basics of integrating Agent Framework with the Microsoft 365 Agents SDK in order to use Agent Framework agents in various M365 services and applications. It can also be used as a the base for a custom Agent that you choose to develop.
+This Agent Sample is intended to introduce you the basics of integrating Agent Framework with the Microsoft 365 Agents SDK in order to use Agent Framework agents in various M365 services and applications. It can also be used as the base for a custom Agent that you choose to develop.
 
 ***Note:*** This sample requires JSON structured output from the model which works best from newer versions of the model such as gpt-4o-mini.
 
@@ -31,7 +31,7 @@ This Agent Sample is intended to introduce you the basics of integrating Agent F
   }
   ```
 
-## QuicktStart using Agent Toolkit
+## QuickStart using Agent Toolkit
 1. If you haven't done so already, install the Agents Playground
  
    ```
@@ -115,4 +115,5 @@ This Agent Sample is intended to introduce you the basics of integrating Agent F
    ```
 
 ## Further reading
-To learn more about building Agents, see [Microsoft 365 Agents SDK](https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/).
+
+To learn more about using the M365 Agent SDK, see [Microsoft 365 Agents SDK](https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/).

@@ -86,7 +86,7 @@ public class WeatherForecastAgent : DelegatingAIAgent
         => $"The weather in {location} is cloudy with a high of 15°C.";
 
     /// <summary>
-    /// Creae an adaptive card to display weather information.
+    /// Create an adaptive card to display weather information.
     /// </summary>
     private static AdaptiveCard CreateWeatherCard(string? location, string? condition, string? temperature)
     {

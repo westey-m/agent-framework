@@ -39,7 +39,7 @@ This Agent Sample is intended to introduce you the basics of integrating Agent F
    ```
 1. Start the sample application.
 1. Start Agents Playground.  At a command prompt: `agentsplayground`
-   - The tool will open a web browser showing the Microsoft 365 Agents Playgroun, ready to send messages to your agent. 
+   - The tool will open a web browser showing the Microsoft 365 Agents Playground, ready to send messages to your agent. 
 1. Interact with the Agent via the browser
 
 ## QuickStart using WebChat or Teams

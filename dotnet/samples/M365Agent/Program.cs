@@ -1,7 +1,14 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+// Sample that shows how to create an Agent Framework agent that is hosted using the M365 Agent SDK.
+// The agent can then be consumed from various M365 channels.
+// See the README.md for more information.
+
 using Azure.AI.OpenAI;
 using Azure.Identity;
+using M365Agent;
+using M365Agent.Agents;
+using Microsoft.Agents.AI;
 using Microsoft.Agents.Builder;
 using Microsoft.Agents.Hosting.AspNetCore;
 using Microsoft.Agents.Storage;
@@ -11,10 +18,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using M365Agent;
 using OpenAI;
-using M365Agent.Agents;
-using Microsoft.Agents.AI;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 

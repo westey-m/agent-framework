@@ -2,8 +2,8 @@
 
 using System.Text.Json.Serialization;
 using AdaptiveCards;
-using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 namespace M365Agent.Agents;
 

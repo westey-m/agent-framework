@@ -26,8 +26,8 @@ internal static class AspNetExtensions
     /// <summary>
     /// Adds AspNet token validation typical for ABS/SMBA and agent-to-agent using settings in configuration.
     /// </summary>
-    /// <param name="services"></param>
-    /// <param name="configuration"></param>
+    /// <param name="services">The service collection to resolve dependencies.</param>
+    /// <param name="configuration">Used to read configuration settings.</param>
     /// <param name="tokenValidationSectionName">Name of the config section to read.</param>
     /// <remarks>
     /// <para>This extension reads <see cref="TokenValidationOptions"/> settings from configuration.  If configuration is missing JWT token

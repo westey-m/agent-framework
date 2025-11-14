@@ -18,10 +18,10 @@ internal sealed class WeatherForecastAgentResponse
     public WeatherForecastAgentResponseContentType ContentType { get; set; }
 
     /// <summary>
-    /// If the agent could not provide a weather forecast this should contains a textual response.
+    /// If the agent could not provide a weather forecast this should contain a textual response.
     /// </summary>
     [Description("If the answer is other agent response, contains the textual agent response.")]
-    [JsonPropertyName("otherReponse")]
+    [JsonPropertyName("otherResponse")]
     public string? OtherResponse { get; set; }
 
     /// <summary>

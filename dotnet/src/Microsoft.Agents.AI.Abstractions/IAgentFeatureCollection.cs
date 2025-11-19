@@ -9,7 +9,7 @@ namespace Microsoft.Agents.AI;
 #pragma warning disable CA1716 // Identifiers should not match keywords
 
 /// <summary>
-/// Represents a collection of Agent features to use per run.
+/// Represents a collection of Agent features.
 /// </summary>
 public interface IAgentFeatureCollection : IEnumerable<KeyValuePair<Type, object>>
 {

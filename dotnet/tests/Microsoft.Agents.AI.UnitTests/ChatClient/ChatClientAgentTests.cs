@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
 namespace Microsoft.Agents.AI.UnitTests;
@@ -426,10 +427,10 @@ public partial class ChatClientAgentTests
     }
 
     /// <summary>
-    /// Verify that RunAsync uses the ChatMessageStore factory when the chat client returns no conversation id.
+    /// Verify that RunAsync uses the default InMemoryChatMessageStore when the chat client returns no conversation id.
     /// </summary>
     [Fact]
-    public async Task RunAsyncUsesChatMessageStoreWhenNoConversationIdReturnedByChatClientAsync()
+    public async Task RunAsyncUsesDefaultInMemoryChatMessageStoreWhenNoConversationIdReturnedByChatClientAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -438,12 +439,9 @@ public partial class ChatClientAgentTests
                 It.IsAny<IEnumerable<ChatMessage>>(),
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
-        Mock<Func<ChatClientAgentOptions.ChatMessageStoreFactoryContext, ChatMessageStore>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<ChatClientAgentOptions.ChatMessageStoreFactoryContext>())).Returns(new InMemoryChatMessageStore());
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             Instructions = "test instructions",
-            ChatMessageStoreFactory = mockFactory.Object
         });
 
         // Act
@@ -455,7 +453,110 @@ public partial class ChatClientAgentTests
         Assert.Equal(2, messageStore.Count);
         Assert.Equal("test", messageStore[0].Text);
         Assert.Equal("response", messageStore[1].Text);
+    }
+
+    /// <summary>
+    /// Verify that RunAsync uses the ChatMessageStore factory when the chat client returns no conversation id.
+    /// </summary>
+    [Fact]
+    public async Task RunAsyncUsesChatMessageStoreFactoryWhenProvidedAndNoConversationIdReturnedByChatClientAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatMessageStore> mockChatMessageStore = new();
+
+        Mock<Func<ChatClientAgentOptions.ChatMessageStoreFactoryContext, ChatMessageStore>> mockFactory = new();
+        mockFactory.Setup(f => f(It.IsAny<ChatClientAgentOptions.ChatMessageStoreFactoryContext>())).Returns(mockChatMessageStore.Object);
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            Instructions = "test instructions",
+            ChatMessageStoreFactory = mockFactory.Object
+        });
+
+        // Act
+        ChatClientAgentThread? thread = agent.GetNewThread() as ChatClientAgentThread;
+        await agent.RunAsync([new(ChatRole.User, "test")], thread);
+
+        // Assert
+        Assert.IsType<ChatMessageStore>(thread!.MessageStore, exactMatch: false);
+        mockChatMessageStore.Verify(s => s.AddMessagesAsync(It.Is<IEnumerable<ChatMessage>>(x => x.Count() == 2), It.IsAny<CancellationToken>()), Times.Once);
         mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatMessageStoreFactoryContext>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verify that RunAsync uses the ChatMessageStore provided via run params when the chat client returns no conversation id.
+    /// </summary>
+    [Fact]
+    public async Task RunAsyncUsesChatMessageStoreWhenProvidedAndNoConversationIdReturnedByChatClientAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatMessageStore> mockChatMessageStore = new();
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            Instructions = "test instructions",
+        });
+
+        ServiceCollection collection = new();
+        collection.AddSingleton(mockChatMessageStore.Object);
+        ServiceProvider sp = collection.BuildServiceProvider();
+
+        // Act
+        ChatClientAgentThread? thread = agent.GetNewThread() as ChatClientAgentThread;
+        await agent.RunAsync([new(ChatRole.User, "test")], thread, options: new AgentRunOptions() { OverrideServiceProvider = sp });
+
+        // Assert
+        Assert.IsType<ChatMessageStore>(thread!.MessageStore, exactMatch: false);
+        mockChatMessageStore.Verify(s => s.GetMessagesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        mockChatMessageStore.Verify(s => s.AddMessagesAsync(It.Is<IEnumerable<ChatMessage>>(x => x.Count() == 2), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verify that RunAsync uses the ChatMessageStore provided via run params when the chat client returns no conversation id.
+    /// </summary>
+    [Fact]
+    public async Task RunAsyncUsesChatMessageStoreWhenProvidedViaFeaturesAndNoConversationIdReturnedByChatClientAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatMessageStore> mockChatMessageStore = new();
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            Instructions = "test instructions",
+        });
+
+        AgentRunFeatureCollection features = new();
+        features.Set(mockChatMessageStore.Object);
+
+        // Act
+        ChatClientAgentThread? thread = agent.GetNewThread() as ChatClientAgentThread;
+        await agent.RunAsync([new(ChatRole.User, "test")], thread, options: new AgentRunOptions() { Features = features });
+
+        // Assert
+        Assert.IsType<ChatMessageStore>(thread!.MessageStore, exactMatch: false);
+        mockChatMessageStore.Verify(s => s.GetMessagesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        mockChatMessageStore.Verify(s => s.AddMessagesAsync(It.Is<IEnumerable<ChatMessage>>(x => x.Count() == 2), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>

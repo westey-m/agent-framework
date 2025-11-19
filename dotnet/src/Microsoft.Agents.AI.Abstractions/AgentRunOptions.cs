@@ -34,6 +34,8 @@ public class AgentRunOptions
         this.ContinuationToken = options.ContinuationToken;
         this.AllowBackgroundResponses = options.AllowBackgroundResponses;
         this.AdditionalProperties = options.AdditionalProperties?.Clone();
+        this.OverrideServiceProvider = options.OverrideServiceProvider;
+        this.Features = options.Features;
     }
 
     /// <summary>
@@ -90,4 +92,14 @@ public class AgentRunOptions
     /// preserving implementation-specific details or extending the options with custom data.
     /// </remarks>
     public AdditionalPropertiesDictionary? AdditionalProperties { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional service provider to override the default services available to the agent during its run.
+    /// </summary>
+    public IServiceProvider? OverrideServiceProvider { get; set; }
+
+    /// <summary>
+    /// Gets or sets the collection of agent run features provided by the caller and middleware available on this run.
+    /// </summary>
+    public AgentRunFeatureCollection? Features { get; set; }
 }

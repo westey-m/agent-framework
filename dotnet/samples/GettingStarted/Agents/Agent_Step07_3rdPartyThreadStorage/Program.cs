@@ -9,6 +9,7 @@ using Azure.AI.OpenAI;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel.Connectors.InMemory;
 using OpenAI;
@@ -25,6 +26,7 @@ VectorStore vectorStore = new InMemoryVectorStore();
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
     new AzureCliCredential())
+    // Use a service that doesn't require storage of chat history in the service itself.
     .GetChatClient(deploymentName)
     .CreateAIAgent(new ChatClientAgentOptions
     {
@@ -63,8 +65,52 @@ AgentThread resumedThread = agent.DeserializeThread(serializedThread);
 Console.WriteLine(await agent.RunAsync("Now tell the same joke in the voice of a pirate, and add some emojis to the joke.", resumedThread));
 
 // We can access the VectorChatMessageStore via the thread's GetService method if we need to read the key under which threads are stored.
-var messageStore = resumedThread.GetService<VectorChatMessageStore>()!;
-Console.WriteLine($"\nThread is stored in vector store under key: {messageStore.ThreadDbKey}");
+var messageStoreFromFactory = resumedThread.GetService<VectorChatMessageStore>()!;
+Console.WriteLine($"\nThread is stored in vector store under key: {messageStoreFromFactory.ThreadDbKey}");
+
+// Let's store the threadDbKey for later use.
+var threadDbKey = messageStoreFromFactory.ThreadDbKey!;
+
+// We can also create an agent without a factory that provides a ChatMessageStore.
+AIAgent agentWithDefaultMessageStore = new AzureOpenAIClient(
+    new Uri(endpoint),
+    new AzureCliCredential())
+    // Use a service that doesn't require storage of chat history in the service itself.
+    .GetChatClient(deploymentName)
+    .CreateAIAgent(new ChatClientAgentOptions
+    {
+        Instructions = "You are good at telling jokes.",
+        Name = "Joker"
+    });
+
+// Start a new thread for the agent conversation.
+thread = agent.GetNewThread();
+
+// Instead of using a factory on the agent to create the ChatMessageStore, we can
+// create a VectorChatMessageStore ourselves and register it in a service provider.
+// We can also pass it the same id as before, so that it continues the same conversation.
+var perRunMessageStore = new VectorChatMessageStore(vectorStore, threadDbKey);
+ServiceCollection collection = new();
+collection.AddSingleton<ChatMessageStore>(perRunMessageStore);
+ServiceProvider sp = collection.BuildServiceProvider();
+
+// We can then pass our custom message store to the agent when running it by using the OverrideServiceProvider option.
+// The message store would only be used for the run that it's passed to.
+Console.WriteLine(await agent.RunAsync("Tell the joke again, but this time in the voice of a robot.", thread, options: new AgentRunOptions() { OverrideServiceProvider = sp }));
+
+// We can then pass our custom message store to the agent when running it by using the Features option.
+// The message store would only be used for the run that it's passed to.
+AgentRunFeatureCollection features = new();
+features.Set<ChatMessageStore>(perRunMessageStore);
+Console.WriteLine(await agent.RunAsync("Tell the joke again, but this time in the voice of a cat.", thread, options: new AgentRunOptions() { Features = features }));
+
+// When serializing this thread, we'll see that it has no message store state, since the message store was not attached to the thread,
+// but just provided for the single run. Note that, depending on the circumstances, the thread may still contain other state, e.g. Memories,
+// if an AIContextProvider is attached which adds memory to an agent.
+serializedThread = thread.Serialize();
+
+Console.WriteLine("\n--- Serialized thread ---\n");
+Console.WriteLine(JsonSerializer.Serialize(serializedThread, new JsonSerializerOptions { WriteIndented = true }));
 
 namespace SampleApp
 {
@@ -74,6 +120,12 @@ namespace SampleApp
     internal sealed class VectorChatMessageStore : ChatMessageStore
     {
         private readonly VectorStore _vectorStore;
+
+        public VectorChatMessageStore(VectorStore vectorStore, string threadDbKey)
+        {
+            this._vectorStore = vectorStore ?? throw new ArgumentNullException(nameof(vectorStore));
+            this.ThreadDbKey = threadDbKey ?? throw new ArgumentNullException(nameof(threadDbKey));
+        }
 
         public VectorChatMessageStore(VectorStore vectorStore, JsonElement serializedStoreState, JsonSerializerOptions? jsonSerializerOptions = null)
         {
@@ -97,7 +149,7 @@ namespace SampleApp
 
             await collection.UpsertAsync(messages.Select(x => new ChatHistoryItem()
             {
-                Key = this.ThreadDbKey + x.MessageId,
+                Key = this.ThreadDbKey + (string.IsNullOrWhiteSpace(x.MessageId) ? Guid.NewGuid().ToString("N") : x.MessageId),
                 Timestamp = DateTimeOffset.UtcNow,
                 ThreadId = this.ThreadDbKey,
                 SerializedMessage = JsonSerializer.Serialize(x),

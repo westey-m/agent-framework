@@ -425,7 +425,7 @@ public sealed class AGUIEndpointRouteBuilderExtensionsTests
 
         public override string? Description => "Agent that produces multiple text chunks";
 
-        public override AgentThread GetNewThread() => new TestInMemoryAgentThread();
+        public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new TestInMemoryAgentThread();
 
         public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null) =>
             new TestInMemoryAgentThread(serializedThread, jsonSerializerOptions);
@@ -514,7 +514,7 @@ public sealed class AGUIEndpointRouteBuilderExtensionsTests
 
         public override string? Description => "Test agent";
 
-        public override AgentThread GetNewThread() => new TestInMemoryAgentThread();
+        public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new TestInMemoryAgentThread();
 
         public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null) =>
             new TestInMemoryAgentThread(serializedThread, jsonSerializerOptions);

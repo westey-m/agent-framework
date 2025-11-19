@@ -146,7 +146,7 @@ public class InProcessExecutionTests
 
         public override string Name => this._name;
 
-        public override AgentThread GetNewThread() => new SimpleTestAgentThread();
+        public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new SimpleTestAgentThread();
 
         public override AgentThread DeserializeThread(System.Text.Json.JsonElement serializedThread,
             System.Text.Json.JsonSerializerOptions? jsonSerializerOptions = null) => new SimpleTestAgentThread();

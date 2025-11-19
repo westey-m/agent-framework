@@ -324,7 +324,7 @@ public class AgentExtensionsTests
             this._exceptionToThrow = exceptionToThrow;
         }
 
-        public override AgentThread GetNewThread()
+        public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
             => throw new NotImplementedException();
 
         public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)

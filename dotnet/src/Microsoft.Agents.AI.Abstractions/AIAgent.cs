@@ -108,6 +108,7 @@ public abstract class AIAgent
     /// <summary>
     /// Creates a new conversation thread that is compatible with this agent.
     /// </summary>
+    /// <param name="featureCollection">An optional feature collection to override or provide additional context or capabilities to the thread where the thread supports these features.</param>
     /// <returns>A new <see cref="AgentThread"/> instance ready for use with this agent.</returns>
     /// <remarks>
     /// <para>
@@ -121,7 +122,7 @@ public abstract class AIAgent
     /// may be deferred until first use to optimize performance.
     /// </para>
     /// </remarks>
-    public abstract AgentThread GetNewThread();
+    public abstract AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null);
 
     /// <summary>
     /// Deserializes an agent thread from its JSON serialized representation.

@@ -34,7 +34,7 @@ public class DelegatingAIAgentTests
         this._innerAgentMock.Setup(x => x.Id).Returns("test-agent-id");
         this._innerAgentMock.Setup(x => x.Name).Returns("Test Agent");
         this._innerAgentMock.Setup(x => x.Description).Returns("Test Description");
-        this._innerAgentMock.Setup(x => x.GetNewThread()).Returns(this._testThread);
+        this._innerAgentMock.Setup(x => x.GetNewThread(It.IsAny<IAgentFeatureCollection?>())).Returns(this._testThread);
 
         this._innerAgentMock
             .Setup(x => x.RunAsync(
@@ -139,7 +139,7 @@ public class DelegatingAIAgentTests
 
         // Assert
         Assert.Same(this._testThread, thread);
-        this._innerAgentMock.Verify(x => x.GetNewThread(), Times.Once);
+        this._innerAgentMock.Verify(x => x.GetNewThread(It.IsAny<IAgentFeatureCollection?>()), Times.Once);
     }
 
     /// <summary>

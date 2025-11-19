@@ -417,7 +417,7 @@ internal sealed class FakeStateAgent : AIAgent
         await Task.CompletedTask;
     }
 
-    public override AgentThread GetNewThread() => new FakeInMemoryAgentThread();
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new FakeInMemoryAgentThread();
 
     public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
     {

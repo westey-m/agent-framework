@@ -21,7 +21,7 @@ internal class TestEchoAgent(string? id = null, string? name = null, string? pre
         return JsonSerializer.Deserialize<EchoAgentThread>(serializedThread, jsonSerializerOptions) ?? this.GetNewThread();
     }
 
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
         return new EchoAgentThread();
     }

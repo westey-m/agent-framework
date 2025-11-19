@@ -135,7 +135,7 @@ public class AgentWorkflowBuilderTests
     {
         public override string Name => name;
 
-        public override AgentThread GetNewThread()
+        public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
             => new DoubleEchoAgentThread();
 
         public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)

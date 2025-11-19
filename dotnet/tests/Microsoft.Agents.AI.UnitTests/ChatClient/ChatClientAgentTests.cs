@@ -560,10 +560,10 @@ public partial class ChatClientAgentTests
     }
 
     /// <summary>
-    /// Verify that RunAsync doesn't use the ChatMessageStore factory when the chat client returns a conversation id.
+    /// Verify that RunAsync throws when a ChatMessageStore Factory is provided but when the chat client returns a conversation id.
     /// </summary>
     [Fact]
-    public async Task RunAsyncIgnoresChatMessageStoreWhenConversationIdReturnedByChatClientAsync()
+    public async Task RunAsyncThrowsWhenChatMessageStoreFactoryProvidedAndConversationIdReturnedByChatClientAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -580,13 +580,10 @@ public partial class ChatClientAgentTests
             ChatMessageStoreFactory = mockFactory.Object
         });
 
-        // Act
+        // Act & Assert
         ChatClientAgentThread? thread = agent.GetNewThread() as ChatClientAgentThread;
-        await agent.RunAsync([new(ChatRole.User, "test")], thread);
-
-        // Assert
-        Assert.Equal("ConvId", thread!.ConversationId);
-        mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatMessageStoreFactoryContext>()), Times.Never);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync([new(ChatRole.User, "test")], thread));
+        Assert.Equal("Only the ConversationId or MessageStore may be set, but not both and switching from one to another is not supported.", exception.Message);
     }
 
     /// <summary>
@@ -2015,10 +2012,10 @@ public partial class ChatClientAgentTests
     }
 
     /// <summary>
-    /// Verify that RunStreamingAsync doesn't use the ChatMessageStore factory when the chat client returns a conversation id.
+    /// Verify that RunStreamingAsync throws when a ChatMessageStore factory is provided and the chat client returns a conversation id.
     /// </summary>
     [Fact]
-    public async Task RunStreamingAsyncIgnoresChatMessageStoreWhenConversationIdReturnedByChatClientAsync()
+    public async Task RunStreamingAsyncThrowsWhenChatMessageStoreFactoryProvidedAndConversationIdReturnedByChatClientAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -2040,13 +2037,10 @@ public partial class ChatClientAgentTests
             ChatMessageStoreFactory = mockFactory.Object
         });
 
-        // Act
+        // Act & Assert
         ChatClientAgentThread? thread = agent.GetNewThread() as ChatClientAgentThread;
-        await agent.RunStreamingAsync([new(ChatRole.User, "test")], thread).ToListAsync();
-
-        // Assert
-        Assert.Equal("ConvId", thread!.ConversationId);
-        mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatMessageStoreFactoryContext>()), Times.Never);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await agent.RunStreamingAsync([new(ChatRole.User, "test")], thread).ToListAsync());
+        Assert.Equal("Only the ConversationId or MessageStore may be set, but not both and switching from one to another is not supported.", exception.Message);
     }
 
     /// <summary>
@@ -2171,37 +2165,6 @@ public partial class ChatClientAgentTests
             x.AIContextProviderMessages == aiContextProviderMessages &&
             x.ResponseMessages == null &&
             x.InvokeException is InvalidOperationException), It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    #endregion
-
-    #region GetNewThread Tests
-
-    [Fact]
-    public void GetNewThreadUsesAIContextProviderFactoryIfProvided()
-    {
-        // Arrange
-        var mockChatClient = new Mock<IChatClient>();
-        var mockContextProvider = new Mock<AIContextProvider>();
-        var factoryCalled = false;
-        var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
-        {
-            Instructions = "Test instructions",
-            AIContextProviderFactory = _ =>
-            {
-                factoryCalled = true;
-                return mockContextProvider.Object;
-            }
-        });
-
-        // Act
-        var thread = agent.GetNewThread();
-
-        // Assert
-        Assert.True(factoryCalled, "AIContextProviderFactory was not called.");
-        Assert.IsType<ChatClientAgentThread>(thread);
-        var typedThread = (ChatClientAgentThread)thread;
-        Assert.Same(mockContextProvider.Object, typedThread.AIContextProvider);
     }
 
     #endregion

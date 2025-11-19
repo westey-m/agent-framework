@@ -344,7 +344,7 @@ public class AIAgentTests
 
     private sealed class MockAgent : AIAgent
     {
-        public override AgentThread GetNewThread()
+        public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
             => throw new NotImplementedException();
 
         public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)

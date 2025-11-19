@@ -60,7 +60,7 @@ internal sealed class HelloAgent(string id = nameof(HelloAgent)) : AIAgent
     public override string Id => id;
     public override string? Name => id;
 
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
         => new HelloAgentThread();
 
     public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)

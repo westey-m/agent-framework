@@ -33,7 +33,7 @@ public sealed class DurableAIAgent : AIAgent
     /// Creates a new agent thread for this agent using a random session ID.
     /// </summary>
     /// <returns>A new agent thread.</returns>
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
         AgentSessionId sessionId = this._context.NewAgentSessionId(this._agentName);
         return new DurableAgentThread(sessionId);

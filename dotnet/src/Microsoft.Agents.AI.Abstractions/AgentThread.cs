@@ -26,7 +26,7 @@ namespace Microsoft.Agents.AI;
 /// <item><description>Chat history reduction, e.g. where messages needs to be summarized or truncated to reduce the size.</description></item>
 /// </list>
 /// An <see cref="AgentThread"/> is always constructed by an <see cref="AIAgent"/> so that the <see cref="AIAgent"/>
-/// can attach any necessary behaviors to the <see cref="AgentThread"/>. See the <see cref="AIAgent.GetNewThread()"/>
+/// can attach any necessary behaviors to the <see cref="AgentThread"/>. See the <see cref="AIAgent.GetNewThread(Microsoft.Agents.AI.IAgentFeatureCollection?)"/>
 /// and <see cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?)"/> methods for more information.
 /// </para>
 /// <para>
@@ -42,7 +42,7 @@ namespace Microsoft.Agents.AI;
 /// </para>
 /// </remarks>
 /// <seealso cref="AIAgent"/>
-/// <seealso cref="AIAgent.GetNewThread()"/>
+/// <seealso cref="AIAgent.GetNewThread(Microsoft.Agents.AI.IAgentFeatureCollection?)"/>
 /// <seealso cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?)"/>
 public abstract class AgentThread
 {

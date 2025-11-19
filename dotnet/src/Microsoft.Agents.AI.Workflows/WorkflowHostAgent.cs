@@ -61,7 +61,7 @@ internal sealed class WorkflowHostAgent : AIAgent
         protocol.ThrowIfNotChatProtocol();
     }
 
-    public override AgentThread GetNewThread() => new WorkflowThread(this._workflow, this.GenerateNewId(), this._executionEnvironment, this._checkpointManager);
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new WorkflowThread(this._workflow, this.GenerateNewId(), this._executionEnvironment, this._checkpointManager);
 
     public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
         => new WorkflowThread(this._workflow, serializedThread, this._executionEnvironment, this._checkpointManager, jsonSerializerOptions);

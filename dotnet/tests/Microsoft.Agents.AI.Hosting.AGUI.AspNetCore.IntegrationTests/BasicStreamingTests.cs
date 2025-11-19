@@ -289,7 +289,7 @@ internal sealed class FakeChatClientAgent : AIAgent
 
     public override string? Description => this._description;
 
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread();
     }
@@ -366,7 +366,7 @@ internal sealed class FakeMultiMessageAgent : AIAgent
 
     public override string? Description => this._description;
 
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread();
     }

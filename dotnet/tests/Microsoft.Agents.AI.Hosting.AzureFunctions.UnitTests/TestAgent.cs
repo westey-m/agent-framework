@@ -11,7 +11,7 @@ internal sealed class TestAgent(string name, string description) : AIAgent
 
     public override string? Description => description;
 
-    public override AgentThread GetNewThread() => new DummyAgentThread();
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new DummyAgentThread();
 
     public override AgentThread DeserializeThread(
         JsonElement serializedThread,

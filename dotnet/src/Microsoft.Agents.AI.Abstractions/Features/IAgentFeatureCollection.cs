@@ -11,7 +11,7 @@ namespace Microsoft.Agents.AI;
 /// <summary>
 /// Represents a collection of Agent features to use per run.
 /// </summary>
-public interface IAgentRunFeatureCollection : IEnumerable<KeyValuePair<Type, object>>
+public interface IAgentFeatureCollection : IEnumerable<KeyValuePair<Type, object>>
 {
     /// <summary>
     /// Indicates if the collection can be modified.

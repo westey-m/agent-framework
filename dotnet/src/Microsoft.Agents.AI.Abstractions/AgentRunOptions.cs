@@ -101,5 +101,5 @@ public class AgentRunOptions
     /// <summary>
     /// Gets or sets the collection of agent run features provided by the caller and middleware available on this run.
     /// </summary>
-    public AgentRunFeatureCollection? Features { get; set; }
+    public AgentFeatureCollection? Features { get; set; }
 }

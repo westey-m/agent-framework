@@ -12,31 +12,31 @@ namespace Microsoft.Agents.AI;
 #pragma warning disable CA1043 // Use Integral Or String Argument For Indexers
 
 /// <summary>
-/// Default implementation for <see cref="IAgentRunFeatureCollection"/>.
+/// Default implementation for <see cref="IAgentFeatureCollection"/>.
 /// </summary>
 [DebuggerDisplay("Count = {GetCount()}")]
 [DebuggerTypeProxy(typeof(FeatureCollectionDebugView))]
-public class AgentRunFeatureCollection : IAgentRunFeatureCollection
+public class AgentFeatureCollection : IAgentFeatureCollection
 {
     private static readonly KeyComparer s_featureKeyComparer = new();
-    private readonly IAgentRunFeatureCollection? _defaults;
+    private readonly IAgentFeatureCollection? _defaults;
     private readonly int _initialCapacity;
     private Dictionary<Type, object>? _features;
     private volatile int _containerRevision;
 
     /// <summary>
-    /// Initializes a new instance of <see cref="AgentRunFeatureCollection"/>.
+    /// Initializes a new instance of <see cref="AgentFeatureCollection"/>.
     /// </summary>
-    public AgentRunFeatureCollection()
+    public AgentFeatureCollection()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of <see cref="AgentRunFeatureCollection"/> with the specified initial capacity.
+    /// Initializes a new instance of <see cref="AgentFeatureCollection"/> with the specified initial capacity.
     /// </summary>
     /// <param name="initialCapacity">The initial number of elements that the collection can contain.</param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="initialCapacity"/> is less than 0</exception>
-    public AgentRunFeatureCollection(int initialCapacity)
+    public AgentFeatureCollection(int initialCapacity)
     {
         Throw.IfLessThan(initialCapacity, 0);
 
@@ -44,10 +44,10 @@ public class AgentRunFeatureCollection : IAgentRunFeatureCollection
     }
 
     /// <summary>
-    /// Initializes a new instance of <see cref="AgentRunFeatureCollection"/> with the specified defaults.
+    /// Initializes a new instance of <see cref="AgentFeatureCollection"/> with the specified defaults.
     /// </summary>
     /// <param name="defaults">The feature defaults.</param>
-    public AgentRunFeatureCollection(IAgentRunFeatureCollection defaults)
+    public AgentFeatureCollection(IAgentFeatureCollection defaults)
     {
         this._defaults = defaults;
     }
@@ -157,9 +157,9 @@ public class AgentRunFeatureCollection : IAgentRunFeatureCollection
         }
     }
 
-    private sealed class FeatureCollectionDebugView(AgentRunFeatureCollection features)
+    private sealed class FeatureCollectionDebugView(AgentFeatureCollection features)
     {
-        private readonly AgentRunFeatureCollection _features = features;
+        private readonly AgentFeatureCollection _features = features;
 
         [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
         public DictionaryItemDebugView<Type, object>[] Items => this._features.Select(pair => new DictionaryItemDebugView<Type, object>(pair)).ToArray();

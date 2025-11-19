@@ -100,7 +100,7 @@ Console.WriteLine(await agent.RunAsync("Tell the joke again, but this time in th
 
 // We can then pass our custom message store to the agent when running it by using the Features option.
 // The message store would only be used for the run that it's passed to.
-AgentRunFeatureCollection features = new();
+AgentFeatureCollection features = new();
 features.Set<ChatMessageStore>(perRunMessageStore);
 Console.WriteLine(await agent.RunAsync("Tell the joke again, but this time in the voice of a cat.", thread, options: new AgentRunOptions() { Features = features }));
 

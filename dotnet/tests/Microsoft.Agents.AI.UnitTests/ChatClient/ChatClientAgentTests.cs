@@ -546,7 +546,7 @@ public partial class ChatClientAgentTests
             Instructions = "test instructions",
         });
 
-        AgentRunFeatureCollection features = new();
+        AgentFeatureCollection features = new();
         features.Set(mockChatMessageStore.Object);
 
         // Act

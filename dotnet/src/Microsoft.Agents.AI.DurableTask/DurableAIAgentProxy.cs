@@ -13,7 +13,8 @@ internal class DurableAIAgentProxy(string name, IDurableAgentClient agentClient)
 
     public override AgentThread DeserializeThread(
         JsonElement serializedThread,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        IAgentFeatureCollection? featureCollection = null)
     {
         return DurableAgentThread.Deserialize(serializedThread, jsonSerializerOptions);
     }

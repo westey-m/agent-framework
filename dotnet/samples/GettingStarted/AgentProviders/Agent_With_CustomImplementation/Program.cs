@@ -31,7 +31,7 @@ namespace SampleApp
         public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
             => new CustomAgentThread();
 
-        public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+        public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
             => new CustomAgentThread(serializedThread, jsonSerializerOptions);
 
         public override async Task<AgentRunResponse> RunAsync(IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)

@@ -30,9 +30,9 @@ internal class PurviewAgent : AIAgent, IDisposable
     }
 
     /// <inheritdoc/>
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
     {
-        return this._innerAgent.DeserializeThread(serializedThread, jsonSerializerOptions);
+        return this._innerAgent.DeserializeThread(serializedThread, jsonSerializerOptions, featureCollection);
     }
 
     /// <inheritdoc/>

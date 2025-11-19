@@ -419,7 +419,7 @@ internal sealed class FakeStateAgent : AIAgent
 
     public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null) => new FakeInMemoryAgentThread();
 
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread(serializedThread, jsonSerializerOptions);
     }

@@ -39,15 +39,11 @@ public sealed class DurableAIAgent : AIAgent
         return new DurableAgentThread(sessionId);
     }
 
-    /// <summary>
-    /// Deserializes an agent thread from JSON.
-    /// </summary>
-    /// <param name="serializedThread">The serialized thread data.</param>
-    /// <param name="jsonSerializerOptions">Optional JSON serializer options.</param>
-    /// <returns>The deserialized agent thread.</returns>
+    /// <inheritdoc/>
     public override AgentThread DeserializeThread(
         JsonElement serializedThread,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        IAgentFeatureCollection? featureCollection = null)
     {
         return DurableAgentThread.Deserialize(serializedThread, jsonSerializerOptions);
     }

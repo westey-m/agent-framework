@@ -27,7 +27,7 @@ namespace Microsoft.Agents.AI;
 /// </list>
 /// An <see cref="AgentThread"/> is always constructed by an <see cref="AIAgent"/> so that the <see cref="AIAgent"/>
 /// can attach any necessary behaviors to the <see cref="AgentThread"/>. See the <see cref="AIAgent.GetNewThread(Microsoft.Agents.AI.IAgentFeatureCollection?)"/>
-/// and <see cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?)"/> methods for more information.
+/// and <see cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?, Microsoft.Agents.AI.IAgentFeatureCollection?)"/> methods for more information.
 /// </para>
 /// <para>
 /// Because of these behaviors, an <see cref="AgentThread"/> may not be reusable across different agents, since each agent
@@ -37,13 +37,13 @@ namespace Microsoft.Agents.AI;
 /// To support conversations that may need to survive application restarts or separate service requests, an <see cref="AgentThread"/> can be serialized
 /// and deserialized, so that it can be saved in a persistent store.
 /// The <see cref="AgentThread"/> provides the <see cref="Serialize(JsonSerializerOptions?)"/> method to serialize the thread to a
-/// <see cref="JsonElement"/> and the <see cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?)"/> method
+/// <see cref="JsonElement"/> and the <see cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?, Microsoft.Agents.AI.IAgentFeatureCollection?)"/> method
 /// can be used to deserialize the thread.
 /// </para>
 /// </remarks>
 /// <seealso cref="AIAgent"/>
 /// <seealso cref="AIAgent.GetNewThread(Microsoft.Agents.AI.IAgentFeatureCollection?)"/>
-/// <seealso cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?)"/>
+/// <seealso cref="AIAgent.DeserializeThread(JsonElement, JsonSerializerOptions?, Microsoft.Agents.AI.IAgentFeatureCollection?)"/>
 public abstract class AgentThread
 {
     /// <summary>

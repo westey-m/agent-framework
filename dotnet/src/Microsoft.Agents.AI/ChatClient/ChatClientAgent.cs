@@ -292,10 +292,10 @@ public sealed partial class ChatClientAgent : AIAgent
             ConversationId = featureCollection?.Get<string>(),
             MessageStore =
                 featureCollection?.Get<ChatMessageStore>()
-                ?? this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null }),
+                ?? this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, Features = featureCollection, JsonSerializerOptions = null }),
             AIContextProvider =
                 featureCollection?.Get<AIContextProvider>()
-                ?? this._agentOptions?.AIContextProviderFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null })
+                ?? this._agentOptions?.AIContextProviderFactory?.Invoke(new() { SerializedState = default, Features = featureCollection, JsonSerializerOptions = null })
         };
 
     /// <summary>
@@ -351,15 +351,23 @@ public sealed partial class ChatClientAgent : AIAgent
         };
 
     /// <inheritdoc/>
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
     {
-        Func<JsonElement, JsonSerializerOptions?, ChatMessageStore>? chatMessageStoreFactory = this._agentOptions?.ChatMessageStoreFactory is null ?
-            null :
-            (jse, jso) => this._agentOptions.ChatMessageStoreFactory.Invoke(new() { SerializedState = jse, JsonSerializerOptions = jso });
+        var chatMessageStoreFeature = featureCollection?.Get<ChatMessageStore>();
+        Func<JsonElement, JsonSerializerOptions?, ChatMessageStore>? chatMessageStoreFactory =
+            chatMessageStoreFeature is not null
+                ? (jse, jso) => chatMessageStoreFeature
+                : this._agentOptions?.ChatMessageStoreFactory is not null
+                    ? (jse, jso) => this._agentOptions.ChatMessageStoreFactory.Invoke(new() { SerializedState = jse, Features = featureCollection, JsonSerializerOptions = jso })
+                    : null;
 
-        Func<JsonElement, JsonSerializerOptions?, AIContextProvider>? aiContextProviderFactory = this._agentOptions?.AIContextProviderFactory is null ?
-            null :
-            (jse, jso) => this._agentOptions.AIContextProviderFactory.Invoke(new() { SerializedState = jse, JsonSerializerOptions = jso });
+        var aiContextProviderFeature = featureCollection?.Get<AIContextProvider>();
+        Func<JsonElement, JsonSerializerOptions?, AIContextProvider>? aiContextProviderFactory =
+            aiContextProviderFeature is not null
+                ? (jse, jso) => aiContextProviderFeature
+                : this._agentOptions?.AIContextProviderFactory is not null
+                    ? (jse, jso) => this._agentOptions.AIContextProviderFactory.Invoke(new() { SerializedState = jse, Features = featureCollection, JsonSerializerOptions = jso })
+                    : null;
 
         return new ChatClientAgentThread(
             serializedThread,

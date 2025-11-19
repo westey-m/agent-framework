@@ -66,7 +66,7 @@ internal sealed class A2AAgent : AIAgent
         => new A2AAgentThread() { ContextId = contextId };
 
     /// <inheritdoc/>
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
         => new A2AAgentThread(serializedThread, jsonSerializerOptions);
 
     /// <inheritdoc/>

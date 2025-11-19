@@ -99,7 +99,7 @@ public class AgentRunOptions
     public IServiceProvider? OverrideServiceProvider { get; set; }
 
     /// <summary>
-    /// Gets or sets the collection of agent run features provided by the caller and middleware available on this run.
+    /// Gets or sets the collection of features provided by the caller and middleware for this run.
     /// </summary>
     public IAgentFeatureCollection? Features { get; set; }
 }

@@ -138,6 +138,25 @@ public class ChatClientAgent_GetNewThreadTests
     }
 
     [Fact]
+    public void GetNewThread_UsesAIContextProvider_FromFeatureOverload()
+    {
+        // Arrange
+        var mockChatClient = new Mock<IChatClient>();
+        var mockContextProvider = new Mock<AIContextProvider>();
+        var agent = new ChatClientAgent(mockChatClient.Object);
+
+        // Act
+        var agentFeatures = new AgentFeatureCollection();
+        agentFeatures.Set(mockContextProvider.Object);
+        var thread = agent.GetNewThread(agentFeatures);
+
+        // Assert
+        Assert.IsType<ChatClientAgentThread>(thread);
+        var typedThread = (ChatClientAgentThread)thread;
+        Assert.Same(mockContextProvider.Object, typedThread.AIContextProvider);
+    }
+
+    [Fact]
     public void GetNewThread_Throws_IfBothConversationIdAndMessageStoreAreSet()
     {
         // Arrange

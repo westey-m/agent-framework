@@ -36,8 +36,8 @@ ClientResult<VectorStore> vectorStoreCreate = await vectorStoreClient.CreateVect
 
 var fileSearchTool = new HostedFileSearchTool() { Inputs = [new HostedVectorStoreContent(vectorStoreCreate.Value.Id)] };
 
-AIAgent agent = aiProjectClient
-    .CreateAIAgent(
+AIAgent agent = await aiProjectClient
+    .CreateAIAgentAsync(
         model: deploymentName,
         name: "AskContoso",
         instructions: "You are a helpful support specialist for Contoso Outdoors. Answer questions using the provided context and cite the source document when available.",

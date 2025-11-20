@@ -38,7 +38,7 @@ internal class PurviewAgent : AIAgent, IDisposable
     /// <inheritdoc/>
     public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
-        return this._innerAgent.GetNewThread();
+        return this._innerAgent.GetNewThread(featureCollection);
     }
 
     /// <inheritdoc/>

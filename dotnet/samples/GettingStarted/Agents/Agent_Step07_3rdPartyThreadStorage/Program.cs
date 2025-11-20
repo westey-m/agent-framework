@@ -153,7 +153,7 @@ async Task CustomChatMessageStore_PerThread_Async()
     features.Set<ChatMessageStore>(perThreadMessageStore);
     AgentThread thread = agent.GetNewThread(features);
 
-    Console.WriteLine(await agent.RunAsync("Tell me a joke about a pirate.", thread, options: new AgentRunOptions() { Features = features }));
+    Console.WriteLine(await agent.RunAsync("Tell me a joke about a pirate.", thread));
 
     // When serializing this thread, we'll see that it has the id from the message store stored in its state.
     JsonElement serializedThread = thread.Serialize();

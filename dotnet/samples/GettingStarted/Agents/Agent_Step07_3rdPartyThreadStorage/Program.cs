@@ -9,7 +9,6 @@ using Azure.AI.OpenAI;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel.Connectors.InMemory;
 using OpenAI;
@@ -87,21 +86,14 @@ AIAgent agentWithDefaultMessageStore = new AzureOpenAIClient(
 thread = agent.GetNewThread();
 
 // Instead of using a factory on the agent to create the ChatMessageStore, we can
-// create a VectorChatMessageStore ourselves and register it in a service provider.
-// We can also pass it the same id as before, so that it continues the same conversation.
+// create a VectorChatMessageStore ourselves and register it in a feature collection.
+// We can then pass the feature collection to the agent when running it by using the Features option.
+// The message store would only be used for the run that it's passed to.
+// If the agent doesn't support a message store, it would be ignored.
 var perRunMessageStore = new VectorChatMessageStore(vectorStore, threadDbKey);
-ServiceCollection collection = new();
-collection.AddSingleton<ChatMessageStore>(perRunMessageStore);
-ServiceProvider sp = collection.BuildServiceProvider();
-
-// We can then pass our custom message store to the agent when running it by using the OverrideServiceProvider option.
-// The message store would only be used for the run that it's passed to.
-Console.WriteLine(await agent.RunAsync("Tell the joke again, but this time in the voice of a robot.", thread, options: new AgentRunOptions() { OverrideServiceProvider = sp }));
-
-// We can then pass our custom message store to the agent when running it by using the Features option.
-// The message store would only be used for the run that it's passed to.
 AgentFeatureCollection features = new();
 features.Set<ChatMessageStore>(perRunMessageStore);
+
 Console.WriteLine(await agent.RunAsync("Tell the joke again, but this time in the voice of a cat.", thread, options: new AgentRunOptions() { Features = features }));
 
 // When serializing this thread, we'll see that it has no message store state, since the message store was not attached to the thread,

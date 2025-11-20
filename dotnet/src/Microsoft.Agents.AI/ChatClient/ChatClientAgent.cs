@@ -644,13 +644,6 @@ public sealed partial class ChatClientAgent : AIAgent
 
             // If the caller provided an override message store via run options, we should use that instead of the message store
             // on the thread.
-            if (runOptions?.OverrideServiceProvider?.GetService(typeof(ChatMessageStore)) is ChatMessageStore overrideChatMessageStore)
-            {
-                messageStore = overrideChatMessageStore;
-            }
-
-            // If the caller provided an override message store via run options, we should use that instead of the message store
-            // on the thread.
             if (runOptions?.Features?.Get<ChatMessageStore>() is ChatMessageStore chatMessageStoreFeature)
             {
                 messageStore = chatMessageStoreFeature;
@@ -749,13 +742,6 @@ public sealed partial class ChatClientAgent : AIAgent
     private static Task NotifyMessageStoreOfNewMessagesAsync(ChatClientAgentThread thread, IEnumerable<ChatMessage> newMessages, AgentRunOptions? runOptions, CancellationToken cancellationToken)
     {
         var messageStore = thread.MessageStore;
-
-        // If the caller provided an override message store via run options, we should use that instead of the message store
-        // on the thread.
-        if (runOptions?.OverrideServiceProvider?.GetService(typeof(ChatMessageStore)) is ChatMessageStore overrideChatMessageStore)
-        {
-            messageStore = overrideChatMessageStore;
-        }
 
         // If the caller provided an override message store via run options, we should use that instead of the message store
         // on the thread.

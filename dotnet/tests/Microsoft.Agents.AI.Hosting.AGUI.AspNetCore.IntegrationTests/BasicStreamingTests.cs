@@ -289,12 +289,12 @@ internal sealed class FakeChatClientAgent : AIAgent
 
     public override string? Description => this._description;
 
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread();
     }
 
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread(serializedThread, jsonSerializerOptions);
     }
@@ -366,12 +366,12 @@ internal sealed class FakeMultiMessageAgent : AIAgent
 
     public override string? Description => this._description;
 
-    public override AgentThread GetNewThread()
+    public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread();
     }
 
-    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
+    public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, IAgentFeatureCollection? featureCollection = null)
     {
         return new FakeInMemoryAgentThread(serializedThread, jsonSerializerOptions);
     }

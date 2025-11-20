@@ -289,7 +289,7 @@ public sealed partial class ChatClientAgent : AIAgent
     public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
         => new ChatClientAgentThread
         {
-            ConversationId = featureCollection?.Get<string>(),
+            ConversationId = featureCollection?.Get<ConversationIdAgentFeature>()?.ConversationId,
             MessageStore =
                 featureCollection?.Get<ChatMessageStore>()
                 ?? this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, Features = featureCollection, JsonSerializerOptions = null }),

@@ -77,18 +77,18 @@ public sealed class A2AAgentTests : IDisposable
     public void GetNewThread_WithStringFeature_UsesItForContextId()
     {
         // Arrange
-        const string FeatureContextId = "feature-context-id";
+        var contextIdFeature = new ConversationIdAgentFeature("feature-context-id");
         var agentWithFeature = new A2AAgent(this._a2aClient);
 
         // Act
         var features = new AgentFeatureCollection();
-        features.Set(FeatureContextId);
+        features.Set(contextIdFeature);
         var thread = agentWithFeature.GetNewThread(features);
 
         // Assert
         Assert.IsType<A2AAgentThread>(thread);
         var a2aThread = (A2AAgentThread)thread;
-        Assert.Equal(FeatureContextId, a2aThread.ContextId);
+        Assert.Equal(contextIdFeature.ConversationId, a2aThread.ContextId);
     }
 
     [Fact]

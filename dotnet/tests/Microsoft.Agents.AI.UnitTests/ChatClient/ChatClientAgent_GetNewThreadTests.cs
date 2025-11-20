@@ -104,18 +104,18 @@ public class ChatClientAgent_GetNewThreadTests
     {
         // Arrange
         var mockChatClient = new Mock<IChatClient>();
-        const string TestConversationId = "test_conversation_id";
+        var testConversationId = new ConversationIdAgentFeature("test_conversation_id");
         var agent = new ChatClientAgent(mockChatClient.Object);
 
         // Act
         var agentFeatures = new AgentFeatureCollection();
-        agentFeatures.Set(TestConversationId);
+        agentFeatures.Set(testConversationId);
         var thread = agent.GetNewThread(agentFeatures);
 
         // Assert
         Assert.IsType<ChatClientAgentThread>(thread);
         var typedThread = (ChatClientAgentThread)thread;
-        Assert.Equal(TestConversationId, typedThread.ConversationId);
+        Assert.Equal(testConversationId.ConversationId, typedThread.ConversationId);
     }
 
     [Fact]
@@ -162,13 +162,13 @@ public class ChatClientAgent_GetNewThreadTests
         // Arrange
         var mockChatClient = new Mock<IChatClient>();
         var mockMessageStore = new Mock<ChatMessageStore>();
-        const string TestConversationId = "test_conversation_id";
+        var testConversationId = new ConversationIdAgentFeature("test_conversation_id");
         var agent = new ChatClientAgent(mockChatClient.Object);
 
         // Act & Assert
         var agentFeatures = new AgentFeatureCollection();
         agentFeatures.Set(mockMessageStore.Object);
-        agentFeatures.Set(TestConversationId);
+        agentFeatures.Set(testConversationId);
 
         var exception = Assert.Throws<InvalidOperationException>(() => agent.GetNewThread(agentFeatures));
         Assert.Equal("Only the ConversationId or MessageStore may be set, but not both and switching from one to another is not supported.", exception.Message);

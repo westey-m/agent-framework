@@ -37,8 +37,8 @@ public class DelegatingAIAgentTests
         this._innerAgentMock.Setup(x => x.Description).Returns("Test Description");
         this._innerAgentMock.Setup(x => x.GetNewThread(It.IsAny<IAgentFeatureCollection?>())).Returns(this._testThread);
         this._innerAgentMock.Setup(x => x.DeserializeThread(
-            It.IsAny<System.Text.Json.JsonElement>(),
-            It.IsAny<System.Text.Json.JsonSerializerOptions?>(),
+            It.IsAny<JsonElement>(),
+            It.IsAny<JsonSerializerOptions?>(),
             It.IsAny<IAgentFeatureCollection?>()))
             .Returns(this._testThread);
 

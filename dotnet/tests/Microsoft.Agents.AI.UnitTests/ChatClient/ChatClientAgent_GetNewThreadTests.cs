@@ -96,7 +96,7 @@ public class ChatClientAgent_GetNewThreadTests
         // Assert
         Assert.IsType<ChatClientAgentThread>(thread);
         var typedThread = (ChatClientAgentThread)thread;
-        Assert.Same(TestConversationId, typedThread.ConversationId);
+        Assert.Equal(TestConversationId, typedThread.ConversationId);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class ChatClientAgent_GetNewThreadTests
         // Assert
         Assert.IsType<ChatClientAgentThread>(thread);
         var typedThread = (ChatClientAgentThread)thread;
-        Assert.Same(TestConversationId, typedThread.ConversationId);
+        Assert.Equal(TestConversationId, typedThread.ConversationId);
     }
 
     [Fact]

@@ -15,7 +15,7 @@ public static class AgentFeatureCollectionExtensions
     /// <param name="feature">The feature to add to the collection.</param>
     /// <returns>The updated collection.</returns>
     public static IAgentFeatureCollection WithFeature<TFeature>(this IAgentFeatureCollection features, TFeature feature)
-        where TFeature : class
+        where TFeature : notnull
     {
         features.Set(feature);
         return features;

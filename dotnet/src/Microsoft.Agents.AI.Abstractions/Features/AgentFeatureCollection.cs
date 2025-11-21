@@ -62,7 +62,7 @@ public class AgentFeatureCollection : IAgentFeatureCollection
     }
 
     /// <inheritdoc />
-    public virtual int Revision
+    public int Revision
     {
         get { return this._containerRevision + (this._innerCollection?.Revision ?? 0); }
     }

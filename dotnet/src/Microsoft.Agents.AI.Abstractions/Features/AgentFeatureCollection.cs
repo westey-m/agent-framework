@@ -115,7 +115,7 @@ public class AgentFeatureCollection : IAgentFeatureCollection
 
     /// <inheritdoc />
     public bool TryGet<TFeature>([MaybeNullWhen(false)] out TFeature feature)
-        where TFeature : class
+        where TFeature : notnull
     {
         if (this._features?.TryGetValue(typeof(TFeature), out var obj) is true)
         {
@@ -135,7 +135,7 @@ public class AgentFeatureCollection : IAgentFeatureCollection
 
     /// <inheritdoc />
     public void Set<TFeature>(TFeature instance)
-        where TFeature : class
+        where TFeature : notnull
     {
         Throw.IfNull(instance);
 
@@ -146,7 +146,7 @@ public class AgentFeatureCollection : IAgentFeatureCollection
 
     /// <inheritdoc />
     public void Remove<TFeature>()
-        where TFeature : class
+        where TFeature : notnull
     {
         if (this._features?.Remove(typeof(TFeature)) is true)
         {

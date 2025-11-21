@@ -35,14 +35,14 @@ public interface IAgentFeatureCollection : IEnumerable<KeyValuePair<Type, object
     /// otherwise, <see langword="false"/>.
     /// </returns>
     bool TryGet<TFeature>([MaybeNullWhen(false)] out TFeature feature)
-        where TFeature : class;
+        where TFeature : notnull;
 
     /// <summary>
     /// Remove a feature from the collection.
     /// </summary>
     /// <typeparam name="TFeature">The feature key.</typeparam>
     void Remove<TFeature>()
-        where TFeature : class;
+        where TFeature : notnull;
 
     /// <summary>
     /// Sets the given feature in the collection.
@@ -50,5 +50,5 @@ public interface IAgentFeatureCollection : IEnumerable<KeyValuePair<Type, object
     /// <typeparam name="TFeature">The feature key.</typeparam>
     /// <param name="instance">The feature value.</param>
     void Set<TFeature>(TFeature instance)
-        where TFeature : class;
+        where TFeature : notnull;
 }

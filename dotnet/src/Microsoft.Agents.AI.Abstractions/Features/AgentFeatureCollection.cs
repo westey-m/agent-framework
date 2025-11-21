@@ -106,12 +106,9 @@ public class AgentFeatureCollection : IAgentFeatureCollection
                 yield return entry;
             }
 
-            foreach (var entry in this._innerCollection)
+            foreach (var entry in this._innerCollection.Where(x => !set.Contains(x.Key)))
             {
-                if (!set.Contains(entry.Key))
-                {
-                    yield return entry;
-                }
+                yield return entry;
             }
         }
     }
@@ -143,7 +140,7 @@ public class AgentFeatureCollection : IAgentFeatureCollection
         Throw.IfNull(instance);
 
         this._features ??= new();
-        this._features.Add(typeof(TFeature), instance);
+        this._features[typeof(TFeature)] = instance;
         this._containerRevision++;
     }
 

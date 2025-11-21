@@ -148,7 +148,7 @@ async Task CustomChatMessageStore_PerThread_Async()
     // We can then pass the feature collection when creating a new thread.
     // We also have the opportunity here to pass any id that we want for storing the chat history in the vector store.
     VectorChatMessageStore perThreadMessageStore = new(vectorStore, "chat-history-1");
-    AgentThread thread = agent.GetNewThread(new AgentFeatureCollection().WithFeature(perThreadMessageStore));
+    AgentThread thread = agent.GetNewThread(new AgentFeatureCollection().WithFeature<ChatMessageStore>(perThreadMessageStore));
 
     Console.WriteLine(await agent.RunAsync("Tell me a joke about a pirate.", thread));
 
@@ -193,7 +193,7 @@ async Task CustomChatMessageStore_PerRun_Async()
         thread,
         options: new AgentRunOptions()
         {
-            Features = new AgentFeatureCollection().WithFeature(perRunMessageStore)
+            Features = new AgentFeatureCollection().WithFeature<ChatMessageStore>(perRunMessageStore)
         }));
 
     // When serializing this thread, we'll see that it has no messagestore state, since the messagestore was not attached to the thread,

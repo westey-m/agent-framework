@@ -289,7 +289,9 @@ public sealed partial class ChatClientAgent : AIAgent
     public override AgentThread GetNewThread(IAgentFeatureCollection? featureCollection = null)
         => new ChatClientAgentThread
         {
-            ConversationId = featureCollection?.TryGet<ConversationIdAgentFeature>(out var conversationIdAgentFeature) is true ? conversationIdAgentFeature.ConversationId : null,
+            ConversationId = featureCollection?.TryGet<ConversationIdAgentFeature>(out var conversationIdAgentFeature) is true
+                ? conversationIdAgentFeature.ConversationId
+                : null,
             MessageStore =
                 featureCollection?.TryGet<ChatMessageStore>(out var chatMessageStoreFeature) is true
                 ? chatMessageStoreFeature

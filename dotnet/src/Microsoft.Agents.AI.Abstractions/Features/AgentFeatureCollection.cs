@@ -21,6 +21,7 @@ public class AgentFeatureCollection : IAgentFeatureCollection
 {
     private readonly IAgentFeatureCollection? _innerCollection;
     private Dictionary<Type, object>? _features;
+    private volatile int _containerRevision;
 
     /// <summary>
     /// Initializes a new instance of <see cref="AgentFeatureCollection"/>.
@@ -58,6 +59,12 @@ public class AgentFeatureCollection : IAgentFeatureCollection
     public AgentFeatureCollection(IAgentFeatureCollection innerCollection)
     {
         this._innerCollection = Throw.IfNull(innerCollection);
+    }
+
+    /// <inheritdoc />
+    public virtual int Revision
+    {
+        get { return this._containerRevision + (this._innerCollection?.Revision ?? 0); }
     }
 
     /// <inheritdoc />
@@ -140,7 +147,10 @@ public class AgentFeatureCollection : IAgentFeatureCollection
     public void Remove<TFeature>()
         where TFeature : notnull
     {
-        this._features?.Remove(typeof(TFeature));
+        if (this._features?.Remove(typeof(TFeature)) is true)
+        {
+            this._containerRevision++;
+        }
     }
 
     // Used by the debugger. Count over enumerable is required to get the correct value.

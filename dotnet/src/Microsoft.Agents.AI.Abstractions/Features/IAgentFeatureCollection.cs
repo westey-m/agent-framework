@@ -20,11 +20,6 @@ public interface IAgentFeatureCollection : IEnumerable<KeyValuePair<Type, object
     bool IsReadOnly { get; }
 
     /// <summary>
-    /// Incremented for each modification and can be used to verify cached results.
-    /// </summary>
-    int Revision { get; }
-
-    /// <summary>
     /// Attempts to retrieve a feature of the specified type.
     /// </summary>
     /// <typeparam name="TFeature">The type of the feature to retrieve.</typeparam>

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Linq;
 
 namespace Microsoft.Agents.AI.Abstractions.UnitTests;
 
@@ -10,98 +11,168 @@ namespace Microsoft.Agents.AI.Abstractions.UnitTests;
 public class AgentFeatureCollectionTests
 {
     [Fact]
-    public void AddedInterfaceIsReturned()
+    public void Feature_RoundTrips()
     {
+        // Arrange.
         var interfaces = new AgentFeatureCollection();
         var thing = new Thing();
 
-        interfaces[typeof(IThing)] = thing;
+        // Act.
+        interfaces.Set<IThing>(thing);
+        Assert.True(interfaces.TryGet<IThing>(out var actualThing));
 
-        var thing2 = interfaces[typeof(IThing)];
-        Assert.Equal(thing2, thing);
+        // Assert.
+        Assert.Same(actualThing, thing);
+        Assert.Equal(1, interfaces.Revision);
     }
 
     [Fact]
-    public void IndexerAlsoAddsItems()
+    public void RemoveOfT_Removes()
     {
+        // Arrange.
         var interfaces = new AgentFeatureCollection();
         var thing = new Thing();
 
-        interfaces[typeof(IThing)] = thing;
+        interfaces.Set<IThing>(thing);
+        Assert.True(interfaces.TryGet<IThing>(out _));
 
-        Assert.Equal(interfaces[typeof(IThing)], thing);
+        // Act.
+        interfaces.Remove<IThing>();
+
+        // Assert.
+        Assert.False(interfaces.TryGet<IThing>(out _));
+        Assert.Equal(2, interfaces.Revision);
     }
 
     [Fact]
-    public void SetNullValueRemoves()
+    public void Remove_Removes()
     {
+        // Arrange.
         var interfaces = new AgentFeatureCollection();
         var thing = new Thing();
 
-        interfaces[typeof(IThing)] = thing;
-        Assert.Equal(interfaces[typeof(IThing)], thing);
+        interfaces.Set<IThing>(thing);
+        Assert.True(interfaces.TryGet<IThing>(out _));
 
-        interfaces[typeof(IThing)] = null;
+        // Act.
+        interfaces.Remove(typeof(IThing));
 
-        var thing2 = interfaces[typeof(IThing)];
-        Assert.Null(thing2);
+        // Assert.
+        Assert.False(interfaces.TryGet<IThing>(out _));
+        Assert.Equal(2, interfaces.Revision);
     }
 
     [Fact]
-    public void GetMissingStructFeatureThrows()
+    public void TryGetMissingFeature_ReturnsFalse()
     {
+        // Arrange.
         var interfaces = new AgentFeatureCollection();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => interfaces.Get<int>());
-        Assert.Equal("System.Int32 does not exist in the feature collection and because it is a struct the method can't return null. Use 'AgentFeatureCollection[typeof(System.Int32)] is not null' to check if the feature exists.", ex.Message);
+        // Act & Assert.
+        Assert.False(interfaces.TryGet<Thing>(out var actualThing));
+        Assert.Null(actualThing);
     }
 
     [Fact]
-    public void GetMissingFeatureReturnsNull()
+    public void Set_Null_Throws()
     {
+        // Arrange.
         var interfaces = new AgentFeatureCollection();
 
-        Assert.Null(interfaces.Get<Thing>());
+        // Act & Assert.
+        Assert.Throws<ArgumentNullException>(() => interfaces.Set<IThing>(null!));
     }
 
     [Fact]
-    public void GetStructFeature()
+    public void IsReadOnly_DefaultsToFalse()
     {
+        // Arrange.
         var interfaces = new AgentFeatureCollection();
-        const int Value = 20;
-        interfaces.Set(Value);
 
-        Assert.Equal(Value, interfaces.Get<int>());
+        // Act & Assert.
+        Assert.False(interfaces.IsReadOnly);
     }
 
     [Fact]
-    public void GetNullableStructFeatureWhenSetWithNonNullableStruct()
+    public void TryGetOfT_FallsBackToInnerCollection()
     {
-        var interfaces = new AgentFeatureCollection();
-        const int Value = 20;
-        interfaces.Set(Value);
-
-        Assert.Null(interfaces.Get<int?>());
-    }
-
-    [Fact]
-    public void GetNullableStructFeatureWhenSetWithNullableStruct()
-    {
-        var interfaces = new AgentFeatureCollection();
-        const int Value = 20;
-        interfaces.Set<int?>(Value);
-
-        Assert.Equal(Value, interfaces.Get<int?>());
-    }
-
-    [Fact]
-    public void GetFeature()
-    {
-        var interfaces = new AgentFeatureCollection();
+        // Arrange.
+        var inner = new AgentFeatureCollection();
         var thing = new Thing();
-        interfaces.Set(thing);
+        inner.Set<IThing>(thing);
+        var outer = new AgentFeatureCollection(inner);
 
-        Assert.Equal(thing, interfaces.Get<Thing>());
+        // Act & Assert.
+        Assert.True(outer.TryGet<IThing>(out var actualThing));
+        Assert.Same(actualThing, thing);
+    }
+
+    [Fact]
+    public void TryGetOfT_OverridesInnerWithOuterCollection()
+    {
+        // Arrange.
+        var inner = new AgentFeatureCollection();
+        var innerThing = new Thing();
+        inner.Set<IThing>(innerThing);
+
+        var outer = new AgentFeatureCollection(inner);
+        var outerThing = new Thing();
+        outer.Set<IThing>(outerThing);
+
+        // Act & Assert.
+        Assert.True(outer.TryGet<IThing>(out var actualThing));
+        Assert.Same(outerThing, actualThing);
+    }
+
+    [Fact]
+    public void TryGet_FallsBackToInnerCollection()
+    {
+        // Arrange.
+        var inner = new AgentFeatureCollection();
+        var thing = new Thing();
+        inner.Set<IThing>(thing);
+        var outer = new AgentFeatureCollection(inner);
+
+        // Act & Assert.
+        Assert.True(outer.TryGet(typeof(IThing), out var actualThing));
+        Assert.Same(actualThing, thing);
+    }
+
+    [Fact]
+    public void TryGet_OverridesInnerWithOuterCollection()
+    {
+        // Arrange.
+        var inner = new AgentFeatureCollection();
+        var innerThing = new Thing();
+        inner.Set<IThing>(innerThing);
+
+        var outer = new AgentFeatureCollection(inner);
+        var outerThing = new Thing();
+        outer.Set<IThing>(outerThing);
+
+        // Act & Assert.
+        Assert.True(outer.TryGet(typeof(IThing), out var actualThing));
+        Assert.Same(outerThing, actualThing);
+    }
+
+    [Fact]
+    public void Enumerate_OverridesInnerWithOuterCollection()
+    {
+        // Arrange.
+        var inner = new AgentFeatureCollection();
+        var innerThing = new Thing();
+        inner.Set<IThing>(innerThing);
+
+        var outer = new AgentFeatureCollection(inner);
+        var outerThing = new Thing();
+        outer.Set<IThing>(outerThing);
+
+        // Act.
+        var items = outer.ToList();
+
+        // Assert.
+        Assert.Single(items);
+        Assert.Same(outerThing, items.First().Value as IThing);
     }
 
     private interface IThing

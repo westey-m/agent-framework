@@ -523,7 +523,7 @@ public partial class ChatClientAgentTests
     }
 
     /// <summary>
-    /// Verify that RunAsync throws when a ChatMessageStore Factory is provided but when the chat client returns a conversation id.
+    /// Verify that RunAsync throws when a ChatMessageStore Factory is provided and the chat client returns a conversation id.
     /// </summary>
     [Fact]
     public async Task RunAsyncThrowsWhenChatMessageStoreFactoryProvidedAndConversationIdReturnedByChatClientAsync()

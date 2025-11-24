@@ -320,7 +320,7 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <summary>
     /// Creates a new agent thread instance using an existing <see cref="ChatMessageStore"/> to continue a conversation.
     /// </summary>
-    /// <param name="chatMessageStore">The chat history of the existing conversation to continue.</param>
+    /// <param name="chatMessageStore">The <see cref="ChatMessageStore"/> instance to use for managing the conversation's message history.</param>
     /// <returns>
     /// A new <see cref="AgentThread"/> instance configured to work with the provided <paramref name="chatMessageStore"/>.
     /// </returns>

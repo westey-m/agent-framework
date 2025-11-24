@@ -117,13 +117,26 @@ public class AgentFeatureCollection : IAgentFeatureCollection
     public bool TryGet<TFeature>([MaybeNullWhen(false)] out TFeature feature)
         where TFeature : notnull
     {
-        if (this._features?.TryGetValue(typeof(TFeature), out var obj) is true)
+        if (this.TryGet(typeof(TFeature), out var obj))
         {
             feature = (TFeature)obj;
             return true;
         }
 
-        if (this._innerCollection?.TryGet<TFeature>(out var defaultFeature) is true)
+        feature = default;
+        return false;
+    }
+
+    /// <inheritdoc />
+    public bool TryGet(Type type, [MaybeNullWhen(false)] out object feature)
+    {
+        if (this._features?.TryGetValue(type, out var obj) is true)
+        {
+            feature = obj;
+            return true;
+        }
+
+        if (this._innerCollection?.TryGet(type, out var defaultFeature) is true)
         {
             feature = defaultFeature;
             return true;
@@ -141,13 +154,18 @@ public class AgentFeatureCollection : IAgentFeatureCollection
 
         this._features ??= new();
         this._features[typeof(TFeature)] = instance;
+        this._containerRevision++;
     }
 
     /// <inheritdoc />
     public void Remove<TFeature>()
         where TFeature : notnull
+        => this.Remove(typeof(TFeature));
+
+    /// <inheritdoc />
+    public void Remove(Type type)
     {
-        if (this._features?.Remove(typeof(TFeature)) is true)
+        if (this._features?.Remove(type) is true)
         {
             this._containerRevision++;
         }

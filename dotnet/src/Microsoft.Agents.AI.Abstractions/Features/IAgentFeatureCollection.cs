@@ -38,11 +38,29 @@ public interface IAgentFeatureCollection : IEnumerable<KeyValuePair<Type, object
         where TFeature : notnull;
 
     /// <summary>
+    /// Attempts to retrieve a feature of the specified type.
+    /// </summary>
+    /// <param name="type">The type of the feature to get.</param>
+    /// <param name="feature">When this method returns, contains the feature of type <paramref name="type"/> if found; otherwise, the
+    /// default value for the type.</param>
+    /// <returns>
+    /// <see langword="true"/> if the feature of type <paramref name="type"/> was successfully retrieved;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    bool TryGet(Type type, [MaybeNullWhen(false)] out object feature);
+
+    /// <summary>
     /// Remove a feature from the collection.
     /// </summary>
     /// <typeparam name="TFeature">The feature key.</typeparam>
     void Remove<TFeature>()
         where TFeature : notnull;
+
+    /// <summary>
+    /// Remove a feature from the collection.
+    /// </summary>
+    /// <param name="type">The type of the feature to remove.</param>
+    void Remove(Type type);
 
     /// <summary>
     /// Sets the given feature in the collection.

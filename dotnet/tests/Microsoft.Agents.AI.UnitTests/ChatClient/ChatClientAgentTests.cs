@@ -524,7 +524,7 @@ public partial class ChatClientAgentTests
     }
 
     /// <summary>
-    /// Verify that RunAsync throws when a ChatMessageStore Factory is provided but when the chat client returns a conversation id.
+    /// Verify that RunAsync throws when a ChatMessageStore Factory is provided and the chat client returns a conversation id.
     /// </summary>
     [Fact]
     public async Task RunAsyncThrowsWhenChatMessageStoreFactoryProvidedAndConversationIdReturnedByChatClientAsync()
@@ -2141,7 +2141,7 @@ public partial class ChatClientAgentTests
     public async Task RunAsyncPropagatesBackgroundResponsesPropertiesToChatClientAsync(bool providePropsViaChatOptions)
     {
         // Arrange
-        object continuationToken = new();
+        var continuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
         ChatOptions? capturedChatOptions = null;
         Mock<IChatClient> mockChatClient = new();
         mockChatClient
@@ -2190,8 +2190,8 @@ public partial class ChatClientAgentTests
     public async Task RunAsyncPrioritizesBackgroundResponsesPropertiesFromAgentRunOptionsOverOnesFromChatOptionsAsync()
     {
         // Arrange
-        object continuationToken1 = new();
-        object continuationToken2 = new();
+        var continuationToken1 = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
+        var continuationToken2 = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
         ChatOptions? capturedChatOptions = null;
         Mock<IChatClient> mockChatClient = new();
         mockChatClient
@@ -2237,7 +2237,7 @@ public partial class ChatClientAgentTests
             new ChatResponseUpdate(role: ChatRole.Assistant, content: "at?"),
         ];
 
-        object continuationToken = new();
+        var continuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
         ChatOptions? capturedChatOptions = null;
         Mock<IChatClient> mockChatClient = new();
         mockChatClient
@@ -2294,8 +2294,8 @@ public partial class ChatClientAgentTests
             new ChatResponseUpdate(role: ChatRole.Assistant, content: "wh"),
         ];
 
-        object continuationToken1 = new();
-        object continuationToken2 = new();
+        var continuationToken1 = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
+        var continuationToken2 = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
         ChatOptions? capturedChatOptions = null;
         Mock<IChatClient> mockChatClient = new();
         mockChatClient
@@ -2335,7 +2335,7 @@ public partial class ChatClientAgentTests
     public async Task RunAsyncPropagatesContinuationTokenFromChatResponseToAgentRunResponseAsync()
     {
         // Arrange
-        object continuationToken = new();
+        var continuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
         Mock<IChatClient> mockChatClient = new();
         mockChatClient
             .Setup(c => c.GetResponseAsync(
@@ -2360,7 +2360,7 @@ public partial class ChatClientAgentTests
     public async Task RunStreamingAsyncPropagatesContinuationTokensFromUpdatesAsync()
     {
         // Arrange
-        object token1 = new();
+        var token1 = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 });
         ChatResponseUpdate[] expectedUpdates =
         [
             new ChatResponseUpdate(ChatRole.Assistant, "pa") { ContinuationToken = token1 },
@@ -2400,7 +2400,7 @@ public partial class ChatClientAgentTests
 
         ChatClientAgent agent = new(mockChatClient.Object);
 
-        AgentRunOptions runOptions = new() { ContinuationToken = new() };
+        AgentRunOptions runOptions = new() { ContinuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 }) };
 
         IEnumerable<ChatMessage> inputMessages = [new ChatMessage(ChatRole.User, "test message")];
 
@@ -2424,7 +2424,7 @@ public partial class ChatClientAgentTests
 
         ChatClientAgent agent = new(mockChatClient.Object);
 
-        AgentRunOptions runOptions = new() { ContinuationToken = new() };
+        AgentRunOptions runOptions = new() { ContinuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 }) };
 
         IEnumerable<ChatMessage> inputMessages = [new ChatMessage(ChatRole.User, "test message")];
 
@@ -2487,7 +2487,7 @@ public partial class ChatClientAgentTests
             AIContextProvider = mockContextProvider.Object
         };
 
-        AgentRunOptions runOptions = new() { ContinuationToken = new() };
+        AgentRunOptions runOptions = new() { ContinuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 }) };
 
         // Act
         await agent.RunAsync([], thread, options: runOptions);
@@ -2549,7 +2549,7 @@ public partial class ChatClientAgentTests
             AIContextProvider = mockContextProvider.Object
         };
 
-        AgentRunOptions runOptions = new() { ContinuationToken = new() };
+        AgentRunOptions runOptions = new() { ContinuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 }) };
 
         // Act
         await agent.RunStreamingAsync([], thread, options: runOptions).ToListAsync();

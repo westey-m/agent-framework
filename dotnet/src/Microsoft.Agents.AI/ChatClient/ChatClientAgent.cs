@@ -329,7 +329,7 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <summary>
     /// Creates a new agent thread instance using an existing <see cref="ChatMessageStore"/> to continue a conversation.
     /// </summary>
-    /// <param name="chatMessageStore">The chat history of the existing conversation to continue.</param>
+    /// <param name="chatMessageStore">The <see cref="ChatMessageStore"/> instance to use for managing the conversation's message history.</param>
     /// <returns>
     /// A new <see cref="AgentThread"/> instance configured to work with the provided <paramref name="chatMessageStore"/>.
     /// </returns>
@@ -350,7 +350,7 @@ public sealed partial class ChatClientAgent : AIAgent
     public AgentThread GetNewThread(ChatMessageStore chatMessageStore)
         => new ChatClientAgentThread()
         {
-            MessageStore = chatMessageStore,
+            MessageStore = Throw.IfNull(chatMessageStore),
             AIContextProvider = this._agentOptions?.AIContextProviderFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null })
         };
 
@@ -735,8 +735,8 @@ public sealed partial class ChatClientAgent : AIAgent
         else
         {
             // If the service doesn't use service side thread storage (i.e. we got no id back from invocation), and
-            // the thread has no MessageStore yet, and we have a custom messages store, we should update the thread
-            // with the custom MessageStore so that it has somewhere to store the chat history.
+            // the thread has no MessageStore yet, we should update the thread with the custom MessageStore or
+            // default InMemoryMessageStore so that it has somewhere to store the chat history.
             thread.MessageStore ??= this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null }) ?? new InMemoryChatMessageStore();
         }
     }

@@ -341,7 +341,7 @@ public sealed partial class ChatClientAgent : AIAgent
     public AgentThread GetNewThread(ChatMessageStore chatMessageStore)
         => new ChatClientAgentThread()
         {
-            MessageStore = chatMessageStore,
+            MessageStore = Throw.IfNull(chatMessageStore),
             AIContextProvider = this._agentOptions?.AIContextProviderFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null })
         };
 

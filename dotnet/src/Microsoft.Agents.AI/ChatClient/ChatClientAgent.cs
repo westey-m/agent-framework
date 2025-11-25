@@ -270,7 +270,7 @@ public sealed partial class ChatClientAgent : AIAgent
         this.UpdateThreadWithTypeAndConversationId(safeThread, chatResponse.ConversationId);
 
         // To avoid inconsistent state we only notify the thread of the input messages if no error occurs after the initial request.
-        await NotifyThreadOfNewMessagesAsync(safeThread, inputMessages.Concat(aiContextProviderMessages ?? []).Concat(chatResponse.Messages), cancellationToken).ConfigureAwait(false);
+        await NotifyMessageStoreOfNewMessagesAsync(safeThread, inputMessages.Concat(aiContextProviderMessages ?? []).Concat(chatResponse.Messages), cancellationToken).ConfigureAwait(false);
 
         // Notify the AIContextProvider of all new messages.
         await NotifyAIContextProviderOfSuccessAsync(safeThread, inputMessages, aiContextProviderMessages, chatResponse.Messages, cancellationToken).ConfigureAwait(false);
@@ -384,7 +384,7 @@ public sealed partial class ChatClientAgent : AIAgent
         }
 
         // Only notify the thread of new messages if the chatResponse was successful to avoid inconsistent message state in the thread.
-        await NotifyThreadOfNewMessagesAsync(safeThread, inputMessages.Concat(aiContextProviderMessages ?? []).Concat(chatResponse.Messages), cancellationToken).ConfigureAwait(false);
+        await NotifyMessageStoreOfNewMessagesAsync(safeThread, inputMessages.Concat(aiContextProviderMessages ?? []).Concat(chatResponse.Messages), cancellationToken).ConfigureAwait(false);
 
         // Notify the AIContextProvider of all new messages.
         await NotifyAIContextProviderOfSuccessAsync(safeThread, inputMessages, aiContextProviderMessages, chatResponse.Messages, cancellationToken).ConfigureAwait(false);
@@ -686,6 +686,20 @@ public sealed partial class ChatClientAgent : AIAgent
             // with the custom MessageStore so that it has somewhere to store the chat history.
             thread.MessageStore ??= this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null });
         }
+    }
+
+    private static Task NotifyMessageStoreOfNewMessagesAsync(ChatClientAgentThread thread, IEnumerable<ChatMessage> newMessages, CancellationToken cancellationToken)
+    {
+        var messageStore = thread.MessageStore;
+
+        // Only notify the message store if we have one.
+        // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
+        if (messageStore is not null)
+        {
+            return messageStore.AddMessagesAsync(newMessages, cancellationToken);
+        }
+
+        return Task.CompletedTask;
     }
 
     private string GetLoggingAgentName() => this.Name ?? "UnnamedAgent";

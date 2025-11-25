@@ -711,8 +711,8 @@ public sealed partial class ChatClientAgent : AIAgent
         else
         {
             // If the service doesn't use service side thread storage (i.e. we got no id back from invocation), and
-            // the thread has no MessageStore yet, and we have a custom messages store, we should update the thread
-            // with the custom MessageStore or default InMemoryMessageStore so that it has somewhere to store the chat history.
+            // the thread has no MessageStore yet, we should update the thread with the custom MessageStore or
+            // default InMemoryMessageStore so that it has somewhere to store the chat history.
             thread.MessageStore ??= this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null }) ?? new InMemoryChatMessageStore();
         }
     }

@@ -50,9 +50,9 @@ If we choose the feature collection option, we need to decide on the design of t
 
 ### Feature Collections extension points
 
-We need to decide the set of actions that feature collections would be supported for. Here are the suggested list of actions:
+We need to decide the set of actions that feature collections would be supported for. Here is the suggested list of actions:
 
-MAAI.AIAgent:
+**MAAI.AIAgent:**
 
 1. GetNewThread
     1. E.g. this would allow passing an already existing storage id for the thread to use, or an initialized custom chat message store to use.
@@ -61,7 +61,7 @@ MAAI.AIAgent:
 1. Run / RunStreaming
     1. E.g. this would allow passing an override chat message store just for that run, or a desired schema for a structured output middleware component.
 
-MEAI.ChatClient:
+**MEAI.ChatClient:**
 
 1. GetResponse / GetStreamingResponse
 

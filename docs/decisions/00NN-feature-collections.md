@@ -90,10 +90,10 @@ Introducing layering adds some challenges:
 1. No layering - only a single feature collection is supported per action (the caller can still create a layered collection if desired, but the callee does not do any layering automatically).
 1. Simple layering - only support layering at the artifact level (Artifact -> Action).
     1. Only apply applicable artifact level features when calling into that artifact.
-    1. Apply upstream artfact features when calling into downstream artifacts, e.g. Feature hierarchy in ChatClientAgent would be `Agent -> Run` and in ChatClient would be `ChatClient -> Agent -> Run` or `Agent -> ChatClient -> Run`
+    1. Apply upstream artifact features when calling into downstream artifacts, e.g. Feature hierarchy in ChatClientAgent would be `Agent -> Run` and in ChatClient would be `ChatClient -> Agent -> Run` or `Agent -> ChatClient -> Run`
 1. Full layering - support layering at all levels (Application -> Artifact -> Action).
     1. Only apply applicable artifact level features when calling into that artifact.
-    1. Apply upstream artfact features when calling into downstream artifacts, e.g. Feature hierarchy in ChatClientAgent would be `Application -> Agent -> Run` and in ChatClient would be `Application -> ChatClient -> Agent -> Run` or `Application -> Agent -> ChatClient -> Run`
+    1. Apply upstream artifact features when calling into downstream artifacts, e.g. Feature hierarchy in ChatClientAgent would be `Application -> Agent -> Run` and in ChatClient would be `Application -> ChatClient -> Agent -> Run` or `Application -> Agent -> ChatClient -> Run`
 
 #### Accessing application level features Options
 

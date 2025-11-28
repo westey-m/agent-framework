@@ -25,7 +25,7 @@ Having a feature collection though, would be an alternative way of passing such 
 All agents that support the functionality would be able to check for the configuration and use it, simplifying the user code.
 If the agent does not support the capability, that configuration would be ignored.
 
-### Sample Scenario 1 - Per Run ChatMessageStore Overide for hosting Libraries
+### Sample Scenario 1 - Per Run ChatMessageStore Override for hosting Libraries
 
 We are building an agent hosting library, that can host any agent built using the agent framework.
 Where an agent is not built on a service that uses in-service chat history storage, the hosting library wants to force the agent to use
@@ -148,7 +148,7 @@ public class StructuredOutputAgent : DelegatingAIAgent
             responseFormatFeature.ChatResponse = await this._chatClient.GetResponseAsync(
                 messages: new[]
                 {
-                    new ChatMessage(ChatRole.System, "You are a json expect and when provided with any text, will convert it to the requested json format."),
+                    new ChatMessage(ChatRole.System, "You are a json expert and when provided with any text, will convert it to the requested json format."),
                     new ChatMessage(ChatRole.User, response.Text)
                 },
                 options: chatOptions,

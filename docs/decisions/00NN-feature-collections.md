@@ -25,7 +25,7 @@ Having a feature collection though, would be an alternative way of passing such 
 All agents that support the functionality would be able to check for the configuration and use it, simplifying the user code.
 If the agent does not support the capability, that configuration would be ignored.
 
-### Sample Scenario 1
+### Sample Scenario 1 - Per Run ChatMessageStore Overide for hosting Libraries
 
 We are building an agent hosting library, that can host any agent built using the agent framework.
 Where an agent is not built on a service that uses in-service chat history storage, the hosting library wants to force the agent to use
@@ -86,6 +86,124 @@ public async Task<(string responseMessage, string responseId)> HandleResponseIdB
     await this._threadStore.SaveThreadAsync(newResponseId, thread);
     return (response.Text, newResponseId);
 }
+```
+
+### Sample Scenario 2 - Structured output
+
+Currently our base abstraction does not support structured output, since the capability is not supported by all agents.
+For those agents that don't support structured output, we could add an agent decorator that takes the response from the underlying agent, and applies structured output parsing on top of it via an additional LLM call.
+
+If we add structured output configuration as a feature, then any agent that supports structured output could retrieve the configuration from the feature collection and apply it, and where it is not supported, the configuration would simply be ignored.
+
+We could add a simple StructuredOutputAgentFeature that can be added to the list of features and also be used to return the generated structured output.
+
+```csharp
+internal class StructuredOutputAgentFeature
+{
+    public Type? OutputType { get; set; }
+
+    public JsonSerializerOptions? SerializerOptions { get; set; }
+
+    public bool? UseJsonSchemaResponseFormat { get; set; }
+
+    // Contains the result of the structured output parsing request.
+    public ChatResponse? ChatResponse { get; set; }
+}
+```
+
+We can add a simple decorator class that does the chat client invocation.
+
+```csharp
+public class StructuredOutputAgent : DelegatingAIAgent
+{
+    private readonly IChatClient _chatClient;
+    public StructuredOutputAgent(AIAgent innerAgent, IChatClient chatClient)
+        : base(innerAgent)
+    {
+        this._chatClient = Throw.IfNull(chatClient);
+    }
+
+    public override async Task<AgentRunResponse> RunAsync(
+        IEnumerable<ChatMessage> messages,
+        AgentThread? thread = null,
+        AgentRunOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Run the inner agent first, to get back the text response we want to convert.
+        var response = await base.RunAsync(messages, thread, options, cancellationToken).ConfigureAwait(false);
+
+        if (options?.Features?.TryGet<StructuredOutputAgentFeature>(out var responseFormatFeature) is true
+            && responseFormatFeature.OutputType is not null)
+        {
+            // Create the chat options to request structured output.
+            ChatOptions chatOptions = new()
+            {
+                ResponseFormat = ChatResponseFormat.ForJsonSchema(responseFormatFeature.OutputType, responseFormatFeature.SerializerOptions)
+            };
+
+            // Invoke the chat client to transform the text output into structured data.
+            // The feature is updated with the result.
+            // The code can be simplified by adding a non-generic structured output GetResponseAsync
+            // overload that takes Type as input.
+            responseFormatFeature.ChatResponse = await this._chatClient.GetResponseAsync(
+                messages: new[]
+                {
+                    new ChatMessage(ChatRole.System, "You are a json expect and when provided with any text, will convert it to the requested json format."),
+                    new ChatMessage(ChatRole.User, response.Text)
+                },
+                options: chatOptions,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        return response;
+    }
+}
+```
+
+Finally, we can add an extension method on `AIAgent` that can add the feature to the run options and check the feature for the structured output result and add the deserialized result to the response.
+
+```csharp
+public static async Task<AgentRunResponse<T>> RunAsync<T>(
+    this AIAgent agent,
+    IEnumerable<ChatMessage> messages,
+    AgentThread? thread = null,
+    JsonSerializerOptions? serializerOptions = null,
+    AgentRunOptions? options = null,
+    bool? useJsonSchemaResponseFormat = null,
+    CancellationToken cancellationToken = default)
+{
+    // Create the structured output feature.
+    var structuredOutputFeature = new StructuredOutputAgentFeature();
+    structuredOutputFeature.OutputType = typeof(T);
+    structuredOutputFeature.UseJsonSchemaResponseFormat = useJsonSchemaResponseFormat;
+
+    // Run the agent.
+    options ??= new AgentRunOptions();
+    options.Features ??= new AgentFeatureCollection();
+    options.Features.Set(structuredOutputFeature);
+
+    var response = await agent.RunAsync(messages, thread, options, cancellationToken).ConfigureAwait(false);
+
+    // Deserialize the JSON output.
+    if (structuredOutputFeature.ChatResponse is not null)
+    {
+        var typed = new ChatResponse<T>(structuredOutputFeature.ChatResponse, serializerOptions ?? AgentJsonUtilities.DefaultOptions);
+        return new AgentRunResponse<T>(response, typed.Result);
+    }
+
+    throw new InvalidOperationException("No structured output response was generated by the agent.");
+}
+```
+
+We can then use the extension method with any agent that supports structured output or that has
+been decorated with the `StructuredOutputAgent` decorator.
+
+```csharp
+agent = new StructuredOutputAgent(agent, chatClient);
+
+AgentRunResponse<PersonInfo> response = await agent.RunAsync<PersonInfo>([new ChatMessage(
+    ChatRole.User,
+    "Please provide information about John Smith, who is a 35-year-old software engineer.")]);
 ```
 
 ## Implementation Options

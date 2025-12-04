@@ -603,7 +603,14 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <param name="runOptions">Optional parameters for agent invocation.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A tuple containing the thread, chat options, and thread messages.</returns>
-    private async Task<(ChatClientAgentThread AgentThread, ChatOptions? ChatOptions, List<ChatMessage> InputMessagesForChatClient, IList<ChatMessage>? AIContextProviderMessages, IList<ChatMessage>? ChatMessageStoreMessages)> PrepareThreadAndMessagesAsync(
+    private async Task<
+        (
+            ChatClientAgentThread AgentThread,
+            ChatOptions? ChatOptions,
+            List<ChatMessage> InputMessagesForChatClient,
+            IList<ChatMessage>? AIContextProviderMessages,
+            IList<ChatMessage>? ChatMessageStoreMessages
+        )> PrepareThreadAndMessagesAsync(
         AgentThread? thread,
         IEnumerable<ChatMessage> inputMessages,
         AgentRunOptions? runOptions,

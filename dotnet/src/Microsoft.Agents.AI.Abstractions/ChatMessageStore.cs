@@ -134,7 +134,7 @@ public abstract class ChatMessageStore
     /// including the new messages that will be used. Stores can use this information to determine what
     /// messages should be retrieved for the invocation.
     /// </remarks>
-    public class InvokingContext
+    public sealed class InvokingContext
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="InvokingContext"/> class with the specified request messages.
@@ -163,7 +163,7 @@ public abstract class ChatMessageStore
     /// request messages that were used and the response messages that were generated. It also indicates
     /// whether the invocation succeeded or failed.
     /// </remarks>
-    public class InvokedContext
+    public sealed class InvokedContext
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="InvokedContext"/> class with the specified request messages.

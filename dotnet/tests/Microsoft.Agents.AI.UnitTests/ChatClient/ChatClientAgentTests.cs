@@ -610,12 +610,12 @@ public partial class ChatClientAgentTests
         Assert.Contains(capturedTools, t => t.Name == "base function");
         Assert.Contains(capturedTools, t => t.Name == "context provider function");
 
-        // Verify that the thread was updated with the input and response messages
-        // Note: AIContextProvider messages are not persisted to the message store, they're ephemeral context
+        // Verify that the thread was updated with the ai context provider, input and response messages
         var messageStore = Assert.IsType<InMemoryChatMessageStore>(thread!.MessageStore);
-        Assert.Equal(2, messageStore.Count);
-        Assert.Equal("user message", messageStore[0].Text);
-        Assert.Equal("response", messageStore[1].Text);
+        Assert.Equal(3, messageStore.Count);
+        Assert.Equal("context provider message", messageStore[0].Text);
+        Assert.Equal("user message", messageStore[1].Text);
+        Assert.Equal("response", messageStore[2].Text);
 
         mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
         mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>
@@ -2068,11 +2068,11 @@ public partial class ChatClientAgentTests
         Assert.Contains(capturedTools, t => t.Name == "context provider function");
 
         // Verify that the thread was updated with the input and response messages
-        // Note: AIContextProvider messages are not persisted to the message store, they're ephemeral context
         var messageStore = Assert.IsType<InMemoryChatMessageStore>(thread!.MessageStore);
-        Assert.Equal(2, messageStore.Count);
-        Assert.Equal("user message", messageStore[0].Text);
-        Assert.Equal("response", messageStore[1].Text);
+        Assert.Equal(3, messageStore.Count);
+        Assert.Equal("context provider message", messageStore[0].Text);
+        Assert.Equal("user message", messageStore[1].Text);
+        Assert.Equal("response", messageStore[2].Text);
 
         mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
         mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>

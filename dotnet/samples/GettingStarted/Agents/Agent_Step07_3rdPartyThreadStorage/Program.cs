@@ -108,7 +108,8 @@ namespace SampleApp
 
         public override async ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
         {
-            if (context.ResponseMessages is null)
+            // Don't store messages if the request failed.
+            if (context.InvokeException is not null)
             {
                 return;
             }
@@ -119,7 +120,8 @@ namespace SampleApp
             await collection.EnsureCollectionExistsAsync(cancellationToken);
 
             // Add both request and response messages to the store
-            var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages);
+            // Optionally messages produced by the AIContextProvider can also be persisted (not shown).
+            var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
 
             await collection.UpsertAsync(allNewMessages.Select(x => new ChatHistoryItem()
             {

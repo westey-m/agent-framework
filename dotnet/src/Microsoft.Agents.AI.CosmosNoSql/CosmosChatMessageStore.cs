@@ -364,7 +364,7 @@ public sealed class CosmosChatMessageStore : ChatMessageStore, IDisposable
         }
 #pragma warning restore CA1513
 
-        var messageList = (context.AIContextProviderMessages ?? []).Concat(context.RequestMessages).ToList();
+        var messageList = (context.AIContextProviderMessages ?? []).Concat(context.RequestMessages).Concat(context.ResponseMessages ?? []).ToList();
         if (messageList.Count == 0)
         {
             return;

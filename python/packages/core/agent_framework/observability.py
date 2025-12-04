@@ -1626,7 +1626,7 @@ def create_processing_span(
                         links.append(trace.Link(span_context))
 
     return workflow_tracer().start_as_current_span(
-        OtelAttr.EXECUTOR_PROCESS_SPAN,
+        f"{OtelAttr.EXECUTOR_PROCESS_SPAN} {executor_id}",
         kind=trace.SpanKind.INTERNAL,
         attributes={
             OtelAttr.EXECUTOR_ID: executor_id,
@@ -1699,7 +1699,7 @@ def create_edge_group_processing_span(
                 pass
 
     return workflow_tracer().start_as_current_span(
-        OtelAttr.EDGE_GROUP_PROCESS_SPAN,
+        f"{OtelAttr.EDGE_GROUP_PROCESS_SPAN} {edge_group_type}",
         kind=trace.SpanKind.INTERNAL,
         attributes=attributes,
         links=links,

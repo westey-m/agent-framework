@@ -268,9 +268,9 @@ def _get_otlp_exporters(endpoints: list[str]) -> list["LogRecordExporter | SpanE
     exporters: list["LogRecordExporter | SpanExporter | MetricExporter"] = []
 
     for endpoint in endpoints:
-        exporters.append(OTLPLogExporter(endpoint=endpoint))
-        exporters.append(OTLPSpanExporter(endpoint=endpoint))
-        exporters.append(OTLPMetricExporter(endpoint=endpoint))
+        exporters.append(OTLPLogExporter(endpoint=endpoint))  # type: ignore[arg-type]
+        exporters.append(OTLPSpanExporter(endpoint=endpoint))  # type: ignore[arg-type]
+        exporters.append(OTLPMetricExporter(endpoint=endpoint))  # type: ignore[arg-type]
     return exporters
 
 

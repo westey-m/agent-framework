@@ -77,8 +77,8 @@ public class InMemoryChatMessageStoreTests
 
         Assert.Equal(4, store.Count);
         Assert.Equal("original instructions", store[0].Text);
-        Assert.Equal("additional context", store[1].Text);
-        Assert.Equal("Hello", store[2].Text);
+        Assert.Equal("Hello", store[1].Text);
+        Assert.Equal("additional context", store[2].Text);
         Assert.Equal("Hi there!", store[3].Text);
     }
 

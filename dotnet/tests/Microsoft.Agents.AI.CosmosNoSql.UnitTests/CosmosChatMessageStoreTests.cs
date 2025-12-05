@@ -277,16 +277,25 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         this.SkipIfEmulatorNotAvailable();
         var conversationId = Guid.NewGuid().ToString();
         using var store = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, TestContainerId, conversationId);
-        var messages = new[]
+        var requestMessages = new[]
         {
             new ChatMessage(ChatRole.User, "First message"),
             new ChatMessage(ChatRole.Assistant, "Second message"),
             new ChatMessage(ChatRole.User, "Third message")
         };
-
-        var context = new ChatMessageStore.InvokedContext(messages, [])
+        var aiContextProviderMessages = new[]
         {
-            ResponseMessages = []
+            new ChatMessage(ChatRole.System, "System context message")
+        };
+        var responseMessages = new[]
+        {
+            new ChatMessage(ChatRole.Assistant, "Response message")
+        };
+
+        var context = new ChatMessageStore.InvokedContext(requestMessages, [])
+        {
+            AIContextProviderMessages = aiContextProviderMessages,
+            ResponseMessages = responseMessages
         };
 
         // Act
@@ -296,10 +305,12 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         var invokingContext = new ChatMessageStore.InvokingContext([]);
         var retrievedMessages = await store.InvokingAsync(invokingContext);
         var messageList = retrievedMessages.ToList();
-        Assert.Equal(3, messageList.Count);
+        Assert.Equal(5, messageList.Count);
         Assert.Equal("First message", messageList[0].Text);
         Assert.Equal("Second message", messageList[1].Text);
         Assert.Equal("Third message", messageList[2].Text);
+        Assert.Equal("System context message", messageList[3].Text);
+        Assert.Equal("Response message", messageList[4].Text);
     }
 
     #endregion

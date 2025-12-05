@@ -121,7 +121,7 @@ namespace SampleApp
 
             // Add both request and response messages to the store
             // Optionally messages produced by the AIContextProvider can also be persisted (not shown).
-            var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
+            var allNewMessages = context.RequestMessages.Concat(context.AIContextProviderMessages ?? []).Concat(context.ResponseMessages ?? []);
 
             await collection.UpsertAsync(allNewMessages.Select(x => new ChatHistoryItem()
             {

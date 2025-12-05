@@ -613,8 +613,8 @@ public partial class ChatClientAgentTests
         // Verify that the thread was updated with the ai context provider, input and response messages
         var messageStore = Assert.IsType<InMemoryChatMessageStore>(thread!.MessageStore);
         Assert.Equal(3, messageStore.Count);
-        Assert.Equal("context provider message", messageStore[0].Text);
-        Assert.Equal("user message", messageStore[1].Text);
+        Assert.Equal("user message", messageStore[0].Text);
+        Assert.Equal("context provider message", messageStore[1].Text);
         Assert.Equal("response", messageStore[2].Text);
 
         mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -2070,8 +2070,8 @@ public partial class ChatClientAgentTests
         // Verify that the thread was updated with the input and response messages
         var messageStore = Assert.IsType<InMemoryChatMessageStore>(thread!.MessageStore);
         Assert.Equal(3, messageStore.Count);
-        Assert.Equal("context provider message", messageStore[0].Text);
-        Assert.Equal("user message", messageStore[1].Text);
+        Assert.Equal("user message", messageStore[0].Text);
+        Assert.Equal("context provider message", messageStore[1].Text);
         Assert.Equal("response", messageStore[2].Text);
 
         mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);

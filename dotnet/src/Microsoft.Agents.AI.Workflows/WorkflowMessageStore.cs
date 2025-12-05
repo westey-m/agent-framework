@@ -56,8 +56,7 @@ internal sealed class WorkflowMessageStore : ChatMessageStore
             return default;
         }
 
-        // Add both request and response messages to the store
-        var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
+        var allNewMessages = context.RequestMessages.Concat(context.AIContextProviderMessages ?? []).Concat(context.ResponseMessages ?? []);
         this._chatMessages.AddRange(allNewMessages);
 
         return default;

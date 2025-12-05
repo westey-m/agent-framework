@@ -750,8 +750,9 @@ public sealed partial class ChatClientAgent : AIAgent
         // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
         if (messageStore is not null)
         {
-            var invokedContext = new ChatMessageStore.InvokedContext(requestMessages, chatMessageStoreMessages!, aiContextProviderMessages)
+            var invokedContext = new ChatMessageStore.InvokedContext(requestMessages, chatMessageStoreMessages!)
             {
+                AIContextProviderMessages = aiContextProviderMessages,
                 ResponseMessages = responseMessages
             };
             return messageStore.InvokedAsync(invokedContext, cancellationToken).AsTask();

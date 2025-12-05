@@ -213,7 +213,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         using var store = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, TestContainerId, conversationId);
         var message = new ChatMessage(ChatRole.User, "Hello, world!");
 
-        var context = new ChatMessageStore.InvokedContext([message], [], null)
+        var context = new ChatMessageStore.InvokedContext([message], [])
         {
             ResponseMessages = []
         };
@@ -284,7 +284,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
             new ChatMessage(ChatRole.User, "Third message")
         };
 
-        var context = new ChatMessageStore.InvokedContext(messages, [], null)
+        var context = new ChatMessageStore.InvokedContext(messages, [])
         {
             ResponseMessages = []
         };
@@ -334,8 +334,8 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         using var store1 = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, TestContainerId, conversation1);
         using var store2 = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, TestContainerId, conversation2);
 
-        var context1 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message for conversation 1")], [], null);
-        var context2 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message for conversation 2")], [], null);
+        var context1 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message for conversation 1")], []);
+        var context2 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message for conversation 2")], []);
 
         await store1.InvokedAsync(context1);
         await store2.InvokedAsync(context2);
@@ -379,7 +379,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         };
 
         // Act 1: Add messages
-        var invokedContext = new ChatMessageStore.InvokedContext(messages, [], null);
+        var invokedContext = new ChatMessageStore.InvokedContext(messages, []);
         await originalStore.InvokedAsync(invokedContext);
 
         // Act 2: Verify messages were added
@@ -533,7 +533,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         using var store = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId, TenantId, UserId, SessionId);
         var message = new ChatMessage(ChatRole.User, "Hello from hierarchical partitioning!");
 
-        var context = new ChatMessageStore.InvokedContext([message], [], null);
+        var context = new ChatMessageStore.InvokedContext([message], []);
 
         // Act
         await store.InvokedAsync(context);
@@ -590,7 +590,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
             new ChatMessage(ChatRole.User, "Third hierarchical message")
         };
 
-        var context = new ChatMessageStore.InvokedContext(messages, [], null);
+        var context = new ChatMessageStore.InvokedContext(messages, []);
 
         // Act
         await store.InvokedAsync(context);
@@ -625,8 +625,8 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         using var store2 = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId, TenantId, UserId2, SessionId);
 
         // Add messages to both stores
-        var context1 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message from user 1")], [], null);
-        var context2 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message from user 2")], [], null);
+        var context1 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message from user 1")], []);
+        var context2 = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Message from user 2")], []);
 
         await store1.InvokedAsync(context1);
         await store2.InvokedAsync(context2);
@@ -663,7 +663,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
 
         using var originalStore = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId, TenantId, UserId, SessionId);
 
-        var context = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Test serialization message")], [], null);
+        var context = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Test serialization message")], []);
         await originalStore.InvokedAsync(context);
 
         // Act - Serialize the store state
@@ -705,8 +705,8 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
         using var hierarchicalStore = new CosmosChatMessageStore(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId, "tenant-coexist", "user-coexist", SessionId);
 
         // Add messages to both
-        var simpleContext = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Simple partitioning message")], [], null);
-        var hierarchicalContext = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Hierarchical partitioning message")], [], null);
+        var simpleContext = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Simple partitioning message")], []);
+        var hierarchicalContext = new ChatMessageStore.InvokedContext([new ChatMessage(ChatRole.User, "Hierarchical partitioning message")], []);
 
         await simpleStore.InvokedAsync(simpleContext);
         await hierarchicalStore.InvokedAsync(hierarchicalContext);
@@ -748,7 +748,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
             await Task.Delay(10); // Small delay to ensure different timestamps
         }
 
-        var context = new ChatMessageStore.InvokedContext(messages, [], null);
+        var context = new ChatMessageStore.InvokedContext(messages, []);
         await store.InvokedAsync(context);
 
         // Wait for eventual consistency
@@ -786,7 +786,7 @@ public sealed class CosmosChatMessageStoreTests : IAsyncLifetime, IDisposable
             messages.Add(new ChatMessage(ChatRole.User, $"Message {i}"));
         }
 
-        var context = new ChatMessageStore.InvokedContext(messages, [], null);
+        var context = new ChatMessageStore.InvokedContext(messages, []);
         await store.InvokedAsync(context);
 
         // Wait for eventual consistency

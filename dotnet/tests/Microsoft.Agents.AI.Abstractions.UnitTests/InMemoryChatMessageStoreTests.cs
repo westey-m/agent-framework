@@ -49,7 +49,6 @@ public class InMemoryChatMessageStoreTests
     [Fact]
     public async Task InvokedAsyncAddsMessagesAsync()
     {
-        var store = new InMemoryChatMessageStore();
         var requestMessages = new List<ChatMessage>
         {
             new(ChatRole.User, "Hello")
@@ -58,16 +57,29 @@ public class InMemoryChatMessageStoreTests
         {
             new(ChatRole.Assistant, "Hi there!")
         };
-
-        var context = new ChatMessageStore.InvokedContext(requestMessages, [], null)
+        var messageStoreMessages = new List<ChatMessage>()
         {
+            new(ChatRole.System, "original instructions")
+        };
+        var aiContextProviderMessages = new List<ChatMessage>()
+        {
+            new(ChatRole.System, "additional context")
+        };
+
+        var store = new InMemoryChatMessageStore();
+        store.Add(messageStoreMessages[0]);
+        var context = new ChatMessageStore.InvokedContext(requestMessages, messageStoreMessages)
+        {
+            AIContextProviderMessages = aiContextProviderMessages,
             ResponseMessages = responseMessages
         };
         await store.InvokedAsync(context, CancellationToken.None);
 
-        Assert.Equal(2, store.Count);
-        Assert.Equal("Hello", store[0].Text);
-        Assert.Equal("Hi there!", store[1].Text);
+        Assert.Equal(4, store.Count);
+        Assert.Equal("original instructions", store[0].Text);
+        Assert.Equal("additional context", store[1].Text);
+        Assert.Equal("Hello", store[2].Text);
+        Assert.Equal("Hi there!", store[3].Text);
     }
 
     [Fact]
@@ -75,10 +87,7 @@ public class InMemoryChatMessageStoreTests
     {
         var store = new InMemoryChatMessageStore();
 
-        var context = new ChatMessageStore.InvokedContext([], [], null)
-        {
-            ResponseMessages = null
-        };
+        var context = new ChatMessageStore.InvokedContext([], []);
         await store.InvokedAsync(context, CancellationToken.None);
 
         Assert.Empty(store);
@@ -174,10 +183,7 @@ public class InMemoryChatMessageStoreTests
         var store = new InMemoryChatMessageStore();
         var messages = new List<ChatMessage>();
 
-        var context = new ChatMessageStore.InvokedContext(messages, [], null)
-        {
-            ResponseMessages = null
-        };
+        var context = new ChatMessageStore.InvokedContext(messages, []);
         await store.InvokedAsync(context, CancellationToken.None);
 
         Assert.Empty(store);
@@ -514,10 +520,7 @@ public class InMemoryChatMessageStoreTests
         var store = new InMemoryChatMessageStore(reducerMock.Object, InMemoryChatMessageStore.ChatReducerTriggerEvent.AfterMessageAdded);
 
         // Act
-        var context = new ChatMessageStore.InvokedContext(originalMessages, [], null)
-        {
-            ResponseMessages = Array.Empty<ChatMessage>()
-        };
+        var context = new ChatMessageStore.InvokedContext(originalMessages, []);
         await store.InvokedAsync(context, CancellationToken.None);
 
         // Assert
@@ -576,10 +579,7 @@ public class InMemoryChatMessageStoreTests
         var store = new InMemoryChatMessageStore(reducerMock.Object, InMemoryChatMessageStore.ChatReducerTriggerEvent.BeforeMessagesRetrieval);
 
         // Act
-        var context = new ChatMessageStore.InvokedContext(originalMessages, [], null)
-        {
-            ResponseMessages = Array.Empty<ChatMessage>()
-        };
+        var context = new ChatMessageStore.InvokedContext(originalMessages, []);
         await store.InvokedAsync(context, CancellationToken.None);
 
         // Assert

@@ -52,7 +52,7 @@ namespace SampleApp
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.DisplayName).ToList();
 
             // Notify the thread of the input and output messages.
-            var invokedContext = new ChatMessageStore.InvokedContext(messages, storeMessages, null)
+            var invokedContext = new ChatMessageStore.InvokedContext(messages, storeMessages)
             {
                 ResponseMessages = responseMessages
             };
@@ -84,7 +84,7 @@ namespace SampleApp
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.DisplayName).ToList();
 
             // Notify the thread of the input and output messages.
-            var invokedContext = new ChatMessageStore.InvokedContext(messages, storeMessages, null)
+            var invokedContext = new ChatMessageStore.InvokedContext(messages, storeMessages)
             {
                 ResponseMessages = responseMessages
             };

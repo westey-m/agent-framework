@@ -170,13 +170,11 @@ public abstract class ChatMessageStore
         /// </summary>
         /// <param name="requestMessages">The caller provided messages that were used by the agent for this invocation.</param>
         /// <param name="chatMessageStoreMessages">The messages retrieved from the <see cref="ChatMessageStore"/> for this invocation.</param>
-        /// <param name="aiContextProviderMessages">The messages provided by the <see cref="AIContextProvider"/> for this invocation, if any.</param>
         /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
-        public InvokedContext(IEnumerable<ChatMessage> requestMessages, IEnumerable<ChatMessage> chatMessageStoreMessages, IEnumerable<ChatMessage>? aiContextProviderMessages)
+        public InvokedContext(IEnumerable<ChatMessage> requestMessages, IEnumerable<ChatMessage> chatMessageStoreMessages)
         {
             this.RequestMessages = Throw.IfNull(requestMessages);
             this.ChatMessageStoreMessages = chatMessageStoreMessages;
-            this.AIContextProviderMessages = aiContextProviderMessages;
         }
 
         /// <summary>
@@ -198,13 +196,13 @@ public abstract class ChatMessageStore
         public IEnumerable<ChatMessage> ChatMessageStoreMessages { get; }
 
         /// <summary>
-        /// Gets the messages provided by the <see cref="AIContextProvider"/> for this invocation, if any.
+        /// Gets or sets the messages provided by the <see cref="AIContextProvider"/> for this invocation, if any.
         /// </summary>
         /// <value>
         /// A collection of <see cref="ChatMessage"/> instances that were provided by the <see cref="AIContextProvider"/>,
         /// and were used by the agent as part of the invocation.
         /// </value>
-        public IEnumerable<ChatMessage>? AIContextProviderMessages { get; }
+        public IEnumerable<ChatMessage>? AIContextProviderMessages { get; set; }
 
         /// <summary>
         /// Gets the collection of response messages generated during this invocation if the invocation succeeded.

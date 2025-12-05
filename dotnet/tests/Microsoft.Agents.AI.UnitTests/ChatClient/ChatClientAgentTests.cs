@@ -2067,7 +2067,7 @@ public partial class ChatClientAgentTests
         Assert.Contains(capturedTools, t => t.Name == "base function");
         Assert.Contains(capturedTools, t => t.Name == "context provider function");
 
-        // Verify that the thread was updated with the input and response messages
+        // Verify that the thread was updated with the input, ai context provider, and response messages
         var messageStore = Assert.IsType<InMemoryChatMessageStore>(thread!.MessageStore);
         Assert.Equal(3, messageStore.Count);
         Assert.Equal("user message", messageStore[0].Text);

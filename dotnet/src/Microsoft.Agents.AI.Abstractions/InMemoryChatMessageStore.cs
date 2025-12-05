@@ -156,7 +156,7 @@ public sealed class InMemoryChatMessageStore : ChatMessageStore, IList<ChatMessa
             return;
         }
 
-        // Add ai context provider, request and response messages to the store
+        // Add request, AI context provider, and response messages to the store
         var allNewMessages = context.RequestMessages.Concat(context.AIContextProviderMessages ?? []).Concat(context.ResponseMessages ?? []);
         this._messages.AddRange(allNewMessages);
 

@@ -12,7 +12,7 @@ namespace Microsoft.Agents.AI;
 public static class ChatMessageStoreExtensions
 {
     /// <summary>
-    /// Adds message filering to an existing store, so that messages passed to the store and messages produced by the store
+    /// Adds message filtering to an existing store, so that messages passed to the store and messages produced by the store
     /// can be filtered, updated or replaced.
     /// </summary>
     /// <param name="store">The store to add the message filter to.</param>

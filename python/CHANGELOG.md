@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **agent-framework-azurefunctions**: Durable Agents: platforms should use consistent entity method names (#2234)
+
 ## [1.0.0b251216] - 2025-12-16
 
 ### Added

@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
+using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
 
@@ -36,7 +37,13 @@ public sealed class ChatMessageStoreMessageFilter : ChatMessageStore
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? invokingMessagesFilter = null,
         Func<InvokedContext, InvokedContext>? invokedMessagesFilter = null)
     {
-        this._innerChatMessageStore = innerChatMessageStore ?? throw new ArgumentNullException(nameof(innerChatMessageStore));
+        this._innerChatMessageStore = Throw.IfNull(innerChatMessageStore);
+
+        if (invokingMessagesFilter == null && invokedMessagesFilter == null)
+        {
+            throw new ArgumentException("At least one filter function, invokingMessagesFilter or invokedMessagesFilter, must be provided.");
+        }
+
         this._invokingMessagesFilter = invokingMessagesFilter;
         this._invokedMessagesFilter = invokedMessagesFilter;
     }

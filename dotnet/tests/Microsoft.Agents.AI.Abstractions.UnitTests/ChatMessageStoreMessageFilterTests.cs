@@ -24,16 +24,13 @@ public sealed class ChatMessageStoreMessageFilterTests
     }
 
     [Fact]
-    public void Constructor_WithOnlyInnerStore_CreatesInstance()
+    public void Constructor_WithOnlyInnerStore_Throws()
     {
         // Arrange
         var innerStoreMock = new Mock<ChatMessageStore>();
 
-        // Act
-        var filter = new ChatMessageStoreMessageFilter(innerStoreMock.Object);
-
-        // Assert
-        Assert.NotNull(filter);
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => new ChatMessageStoreMessageFilter(innerStoreMock.Object));
     }
 
     [Fact]
@@ -53,7 +50,7 @@ public sealed class ChatMessageStoreMessageFilterTests
     }
 
     [Fact]
-    public async Task InvokingAsync_WithNoFilters_ReturnsInnerStoreMessagesAsync()
+    public async Task InvokingAsync_WithNoOpFilters_ReturnsInnerStoreMessagesAsync()
     {
         // Arrange
         var innerStoreMock = new Mock<ChatMessageStore>();
@@ -68,7 +65,7 @@ public sealed class ChatMessageStoreMessageFilterTests
             .Setup(s => s.InvokingAsync(context, It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedMessages);
 
-        var filter = new ChatMessageStoreMessageFilter(innerStoreMock.Object);
+        var filter = new ChatMessageStoreMessageFilter(innerStoreMock.Object, x => x, x => x);
 
         // Act
         var result = (await filter.InvokingAsync(context, CancellationToken.None)).ToList();
@@ -143,28 +140,6 @@ public sealed class ChatMessageStoreMessageFilterTests
     }
 
     [Fact]
-    public async Task InvokedAsync_WithNoFilters_CallsInnerStoreAsync()
-    {
-        // Arrange
-        var innerStoreMock = new Mock<ChatMessageStore>();
-        var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
-        var chatMessageStoreMessages = new List<ChatMessage> { new(ChatRole.System, "System") };
-        var context = new ChatMessageStore.InvokedContext(requestMessages, chatMessageStoreMessages);
-
-        innerStoreMock
-            .Setup(s => s.InvokedAsync(It.IsAny<ChatMessageStore.InvokedContext>(), It.IsAny<CancellationToken>()))
-            .Returns(default(ValueTask));
-
-        var filter = new ChatMessageStoreMessageFilter(innerStoreMock.Object);
-
-        // Act
-        await filter.InvokedAsync(context, CancellationToken.None);
-
-        // Assert
-        innerStoreMock.Verify(s => s.InvokedAsync(context, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
     public async Task InvokedAsync_WithInvokedFilter_AppliesFilterAsync()
     {
         // Arrange
@@ -218,7 +193,7 @@ public sealed class ChatMessageStoreMessageFilterTests
             .Setup(s => s.Serialize(It.IsAny<JsonSerializerOptions>()))
             .Returns(expectedJson);
 
-        var filter = new ChatMessageStoreMessageFilter(innerStoreMock.Object);
+        var filter = new ChatMessageStoreMessageFilter(innerStoreMock.Object, x => x, x => x);
 
         // Act
         var result = filter.Serialize();

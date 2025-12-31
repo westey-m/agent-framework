@@ -225,6 +225,7 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
+            await NotifyMessageStoreOfFailureAsync(safeThread, ex, inputMessages, chatMessageStoreMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
             await NotifyAIContextProviderOfFailureAsync(safeThread, ex, inputMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -239,6 +240,7 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
+            await NotifyMessageStoreOfFailureAsync(safeThread, ex, inputMessages, chatMessageStoreMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
             await NotifyAIContextProviderOfFailureAsync(safeThread, ex, inputMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -260,6 +262,7 @@ public sealed partial class ChatClientAgent : AIAgent
             }
             catch (Exception ex)
             {
+                await NotifyMessageStoreOfFailureAsync(safeThread, ex, inputMessages, chatMessageStoreMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
                 await NotifyAIContextProviderOfFailureAsync(safeThread, ex, inputMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
                 throw;
             }
@@ -398,6 +401,7 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
+            await NotifyMessageStoreOfFailureAsync(safeThread, ex, inputMessages, chatMessageStoreMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
             await NotifyAIContextProviderOfFailureAsync(safeThread, ex, inputMessages, aiContextProviderMessages, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -734,6 +738,32 @@ public sealed partial class ChatClientAgent : AIAgent
             // default InMemoryMessageStore so that it has somewhere to store the chat history.
             thread.MessageStore ??= this._agentOptions?.ChatMessageStoreFactory?.Invoke(new() { SerializedState = default, JsonSerializerOptions = null }) ?? new InMemoryChatMessageStore();
         }
+    }
+
+    private static Task NotifyMessageStoreOfFailureAsync(
+        ChatClientAgentThread thread,
+        Exception ex,
+        IEnumerable<ChatMessage> requestMessages,
+        IEnumerable<ChatMessage>? chatMessageStoreMessages,
+        IEnumerable<ChatMessage>? aiContextProviderMessages,
+        CancellationToken cancellationToken)
+    {
+        var messageStore = thread.MessageStore;
+
+        // Only notify the message store if we have one.
+        // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
+        if (messageStore is not null)
+        {
+            var invokedContext = new ChatMessageStore.InvokedContext(requestMessages, chatMessageStoreMessages!)
+            {
+                AIContextProviderMessages = aiContextProviderMessages,
+                InvokeException = ex
+            };
+
+            return messageStore.InvokedAsync(invokedContext, cancellationToken).AsTask();
+        }
+
+        return Task.CompletedTask;
     }
 
     private static Task NotifyMessageStoreOfNewMessagesAsync(

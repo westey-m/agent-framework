@@ -16,9 +16,9 @@ public static class ChatMessageStoreExtensions
     /// can be filtered, updated or replaced.
     /// </summary>
     /// <param name="store">The store to add the message filter to.</param>
-    /// <param name="invokingMessagesFilter">An optional filter function to apply to messages before they are invoked. If null, no filter is applied at this
+    /// <param name="invokingMessagesFilter">An optional filter function to apply to messages produced by the store. If null, no filter is applied at this
     /// stage.</param>
-    /// <param name="invokedMessagesFilter">An optional filter function to apply to the invocation context after messages have been invoked. If null, no
+    /// <param name="invokedMessagesFilter">An optional filter function to apply to the invocation context messages before they passed to the store. If null, no
     /// filter is applied at this stage.</param>
     /// <returns>The <see cref="ChatMessageStore"/> with filtering applied.</returns>
     public static ChatMessageStore WithMessageFilters(

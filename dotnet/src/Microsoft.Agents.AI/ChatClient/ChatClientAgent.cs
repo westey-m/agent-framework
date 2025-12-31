@@ -121,7 +121,7 @@ public sealed partial class ChatClientAgent : AIAgent
     public IChatClient ChatClient { get; }
 
     /// <inheritdoc/>
-    public override string Id => this._agentOptions?.Id ?? base.Id;
+    protected override string? IdCore => this._agentOptions?.Id;
 
     /// <inheritdoc/>
     public override string? Name => this._agentOptions?.Name;
@@ -149,7 +149,7 @@ public sealed partial class ChatClientAgent : AIAgent
     internal ChatOptions? ChatOptions => this._agentOptions?.ChatOptions;
 
     /// <inheritdoc/>
-    public override Task<AgentRunResponse> RunAsync(
+    protected override Task<AgentRunResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,
@@ -193,7 +193,7 @@ public sealed partial class ChatClientAgent : AIAgent
     }
 
     /// <inheritdoc/>
-    public override async IAsyncEnumerable<AgentRunResponseUpdate> RunStreamingAsync(
+    protected override async IAsyncEnumerable<AgentRunResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,

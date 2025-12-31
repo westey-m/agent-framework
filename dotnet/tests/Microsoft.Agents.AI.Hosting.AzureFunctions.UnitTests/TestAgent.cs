@@ -18,13 +18,13 @@ internal sealed class TestAgent(string name, string description) : AIAgent
         JsonSerializerOptions? jsonSerializerOptions = null,
         IAgentFeatureCollection? featureCollection = null) => new DummyAgentThread();
 
-    public override Task<AgentRunResponse> RunAsync(
+    protected override Task<AgentRunResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default) => Task.FromResult(new AgentRunResponse([.. messages]));
 
-    public override IAsyncEnumerable<AgentRunResponseUpdate> RunStreamingAsync(
+    protected override IAsyncEnumerable<AgentRunResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,

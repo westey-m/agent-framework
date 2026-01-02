@@ -31,7 +31,7 @@ When deserializing the AgentThread, we need to make sure that the ChatMessageSto
 ## Decision Drivers
 
 - A. Ability to continue to support custom behaviors.
-- B. Ability to serialize and deserialize AgentThreads via standard serialization mechanisms, e.g. JsonSerialize.Serialize and JsonSerialize.Deserialize.
+- B. Ability to serialize and deserialize AgentThreads via standard serialization mechanisms, e.g. JsonSerializer.Serialize and JsonSerializer.Deserialize.
 - C. Ability for the caller to access custom behaviors.
 
 ## Considered Options

@@ -22,7 +22,7 @@ This approach has some drawbacks:
 1. It is not possible to serialize and deserialize lists of AgentThreads, since each need to be handled individually.
 1. Users may not realise that they need to call these specific methods to serialize/deserialize AgentThreads.
 
-The reason why this approach was chosen initially is that AgentTreads may have behaviors that are attached to them and only the agent knows what behaviors to attach.
+The reason why this approach was chosen initially is that AgentThreads may have behaviors that are attached to them and only the agent knows what behaviors to attach.
 These behaviors also have their own state that are attached to the AgentThread.
 The behaviors may have references to SDKs or other resources that cannot be created via standard deserialization mechanisms.
 E.g. an AgentThread may have a custom ChatMessageStore that knows how to store chat history in a specific storage backend and has a reference to the SDK client for that backend.
@@ -36,7 +36,11 @@ When deserializing the AgentThread, we need to make sure that the ChatMessageSto
 
 ## Considered Options
 
-### Option 1: Separate state from behavior, serialize behavior only and re-attach behavior on first usage
+- Option 1: Separate state from behavior, serialize state only and re-attach behavior on first usage
+- Option 2: Separate state from behavior, and only have state on AgentThread
+- Option 3: Keep the current approach of custom Serialize/Deserialize methods
+
+### Option 1: Separate state from behavior, serialize state only and re-attach behavior on first usage
 
 Decision Drivers satisified: A, B and C (C only partially)
 
@@ -121,6 +125,8 @@ However, we could potentially introduce a method on the Agent to get the behavio
 ### Option 3: Keep the current approach of custom Serialize/Deserialize methods
 
 Decision Drivers satisified: A and C
+
+This option keeps the current approach of having custom Serialize/Deserialize methods on the AgentThread and AIAgent.
 
 ## Decision Outcome
 

@@ -30,12 +30,15 @@ When deserializing the AgentThread, we need to make sure that the ChatMessageSto
 
 ## Decision Drivers
 
-- Continue to support custom behaviors attached to AgentThreads.
-- Serialize and deserialize AgentThreads via standard serialization mechanisms, e.g. JsonSerialize.Serialize and JsonSerialize.Deserialize.
+- A. Ability to continue to support custom behaviors.
+- B. Ability to serialize and deserialize AgentThreads via standard serialization mechanisms, e.g. JsonSerialize.Serialize and JsonSerialize.Deserialize.
+- C. Ability for the caller to access custom behaviors.
 
 ## Considered Options
 
 ### Option 1: Separate state from behavior, serialize behavior only and re-attach behavior on first usage
+
+Decision Drivers satisified: A, B and C (C only partially)
 
 Have separate properties on the AgentThread for state and behavior and mark the behavior property with [JsonIgnore].
 After deserializing the AgentThread, the behavior is null and when the AgentThread is first used by the Agent, the behavior is created and attached to the AgentThread.
@@ -106,6 +109,8 @@ The run behavior of the ChatClientAgent would be as follows:
 
 ### Option 2: Separate state from behavior, and only have state on AgentThread
 
+Decision Drivers satisified: A, B and C (C if we introduce an agent based GetBehavior method).
+
 This is similar to Option 1 but instead of having a behavior property on the AgentThread, we only have state properties on the AgentThread.
 Each time the AgentThread is used by the Agent, the behavior is created based on the stored state properties.
 
@@ -114,6 +119,8 @@ This means that users are unable to access the behavior from the AgentThread, e.
 However, we could potentially introduce a method on the Agent to get the behavior via the Agent, e.g. `AIAgent.GetBehavior<TBehavior>(AgentThread thread)`. This would require multiple copies of a behavior to be able to operate on a single behavior state, since it would not be possible to avoid having two behavior instances for the same behavior at the same time.
 
 ### Option 3: Keep the current approach of custom Serialize/Deserialize methods
+
+Decision Drivers satisified: A and C
 
 ## Decision Outcome
 

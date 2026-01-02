@@ -216,8 +216,8 @@ public class AgentRunResponseTests
 
 #if NETFRAMEWORK
     /// <summary>
-    /// Since Json Seriallization using reflection is disabled in .net core builds, and we are using a custom type here that wouldn't
-    /// be registered with the default source gnerated serializer, this test will only pass in .net framework builds where reflection-based
+    /// Since Json Serialization using reflection is disabled in .net core builds, and we are using a custom type here that wouldn't
+    /// be registered with the default source generated serializer, this test will only pass in .net framework builds where reflection-based
     /// serialization is available.
     /// </summary>
     [Fact]
@@ -288,8 +288,8 @@ public class AgentRunResponseTests
 
 #if NETFRAMEWORK
     /// <summary>
-    /// Since Json Seriallization using reflection is disabled in .net core builds, and we are using a custom type here that wouldn't
-    /// be registered with the default source gnerated serializer, this test will only pass in .net framework builds where reflection-based
+    /// Since Json Serialization using reflection is disabled in .net core builds, and we are using a custom type here that wouldn't
+    /// be registered with the default source generated serializer, this test will only pass in .net framework builds where reflection-based
     /// serialization is available.
     /// </summary>
     [Fact]

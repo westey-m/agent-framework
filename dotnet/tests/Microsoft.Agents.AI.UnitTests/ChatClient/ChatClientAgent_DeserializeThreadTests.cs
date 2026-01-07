@@ -20,7 +20,7 @@ public class ChatClientAgent_DeserializeThreadTests
         var factoryCalled = false;
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
-            Instructions = "Test instructions",
+            ChatOptions = new() { Instructions = "Test instructions" },
             AIContextProviderFactory = _ =>
             {
                 factoryCalled = true;
@@ -53,7 +53,7 @@ public class ChatClientAgent_DeserializeThreadTests
         var factoryCalled = false;
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
-            Instructions = "Test instructions",
+            ChatOptions = new() { Instructions = "Test instructions" },
             ChatMessageStoreFactory = _ =>
             {
                 factoryCalled = true;
@@ -85,7 +85,7 @@ public class ChatClientAgent_DeserializeThreadTests
         var mockMessageStore = new Mock<ChatMessageStore>();
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
-            Instructions = "Test instructions",
+            ChatOptions = new ChatOptions { Instructions = "Test instructions" },
             ChatMessageStoreFactory = _ =>
             {
                 Assert.Fail("ChatMessageStoreFactory should not have been called.");
@@ -117,7 +117,7 @@ public class ChatClientAgent_DeserializeThreadTests
         var mockContextProvider = new Mock<AIContextProvider>();
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
-            Instructions = "Test instructions",
+            ChatOptions = new ChatOptions { Instructions = "Test instructions" },
             AIContextProviderFactory = _ =>
             {
                 Assert.Fail("AIContextProviderFactory should not have been called.");

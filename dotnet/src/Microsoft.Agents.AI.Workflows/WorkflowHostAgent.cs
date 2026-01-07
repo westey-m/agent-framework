@@ -39,7 +39,7 @@ internal sealed class WorkflowHostAgent : AIAgent
         this._describeTask = this._workflow.DescribeProtocolAsync().AsTask();
     }
 
-    public override string Id => this._id ?? base.Id;
+    protected override string? IdCore => this._id;
     public override string? Name { get; }
     public override string? Description { get; }
 
@@ -79,8 +79,8 @@ internal sealed class WorkflowHostAgent : AIAgent
         return workflowThread;
     }
 
-    public override async
-    Task<AgentRunResponse> RunAsync(
+    protected override async
+    Task<AgentRunResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,
@@ -101,8 +101,8 @@ internal sealed class WorkflowHostAgent : AIAgent
         return merger.ComputeMerged(workflowThread.LastResponseId!, this.Id, this.Name);
     }
 
-    public override async
-    IAsyncEnumerable<AgentRunResponseUpdate> RunStreamingAsync(
+    protected override async
+    IAsyncEnumerable<AgentRunResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
         AgentThread? thread = null,
         AgentRunOptions? options = null,

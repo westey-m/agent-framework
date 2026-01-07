@@ -20,7 +20,7 @@ public class ChatClientAgent_GetNewThreadTests
         var factoryCalled = false;
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
-            Instructions = "Test instructions",
+            ChatOptions = new() { Instructions = "Test instructions" },
             AIContextProviderFactory = _ =>
             {
                 factoryCalled = true;
@@ -47,7 +47,7 @@ public class ChatClientAgent_GetNewThreadTests
         var factoryCalled = false;
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
-            Instructions = "Test instructions",
+            ChatOptions = new() { Instructions = "Test instructions" },
             ChatMessageStoreFactory = _ =>
             {
                 factoryCalled = true;

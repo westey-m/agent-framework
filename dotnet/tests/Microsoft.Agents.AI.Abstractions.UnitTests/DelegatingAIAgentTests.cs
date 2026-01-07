@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Moq;
+using Moq.Protected;
 
 namespace Microsoft.Agents.AI.Abstractions.UnitTests;
 
@@ -32,7 +33,7 @@ public class DelegatingAIAgentTests
         this._testThread = new TestAgentThread();
 
         // Setup inner agent mock
-        this._innerAgentMock.Setup(x => x.Id).Returns("test-agent-id");
+        this._innerAgentMock.Protected().SetupGet<string>("IdCore").Returns("test-agent-id");
         this._innerAgentMock.Setup(x => x.Name).Returns("Test Agent");
         this._innerAgentMock.Setup(x => x.Description).Returns("Test Description");
         this._innerAgentMock.Setup(x => x.GetNewThread(It.IsAny<IAgentFeatureCollection?>())).Returns(this._testThread);
@@ -43,19 +44,21 @@ public class DelegatingAIAgentTests
             .Returns(this._testThread);
 
         this._innerAgentMock
-            .Setup(x => x.RunAsync(
-                It.IsAny<IReadOnlyCollection<ChatMessage>>(),
-                It.IsAny<AgentThread?>(),
-                It.IsAny<AgentRunOptions?>(),
-                It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<Task<AgentRunResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentThread?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(this._testResponse);
 
         this._innerAgentMock
-            .Setup(x => x.RunStreamingAsync(
-                It.IsAny<IReadOnlyCollection<ChatMessage>>(),
-                It.IsAny<AgentThread?>(),
-                It.IsAny<AgentRunOptions?>(),
-                It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<IAsyncEnumerable<AgentRunResponseUpdate>>("RunCoreStreamingAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentThread?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
             .Returns(ToAsyncEnumerableAsync(this._testStreamingResponses));
 
         this._delegatingAgent = new TestDelegatingAIAgent(this._innerAgentMock.Object);
@@ -99,7 +102,7 @@ public class DelegatingAIAgentTests
 
         // Assert
         Assert.Equal("test-agent-id", id);
-        this._innerAgentMock.Verify(x => x.Id, Times.Once);
+        this._innerAgentMock.Protected().VerifyGet<string>("IdCore", Times.Once());
     }
 
     /// <summary>
@@ -182,7 +185,12 @@ public class DelegatingAIAgentTests
 
         var innerAgentMock = new Mock<AIAgent>();
         innerAgentMock
-            .Setup(x => x.RunAsync(expectedMessages, expectedThread, expectedOptions, expectedCancellationToken))
+            .Protected()
+            .Setup<Task<AgentRunResponse>>("RunCoreAsync",
+                ItExpr.Is<IEnumerable<ChatMessage>>(m => m == expectedMessages),
+                ItExpr.Is<AgentThread?>(t => t == expectedThread),
+                ItExpr.Is<AgentRunOptions?>(o => o == expectedOptions),
+                ItExpr.Is<CancellationToken>(ct => ct == expectedCancellationToken))
             .Returns(expectedResult.Task);
 
         var delegatingAgent = new TestDelegatingAIAgent(innerAgentMock.Object);
@@ -216,7 +224,12 @@ public class DelegatingAIAgentTests
 
         var innerAgentMock = new Mock<AIAgent>();
         innerAgentMock
-            .Setup(x => x.RunStreamingAsync(expectedMessages, expectedThread, expectedOptions, expectedCancellationToken))
+            .Protected()
+            .Setup<IAsyncEnumerable<AgentRunResponseUpdate>>("RunCoreStreamingAsync",
+                ItExpr.Is<IEnumerable<ChatMessage>>(m => m == expectedMessages),
+                ItExpr.Is<AgentThread?>(t => t == expectedThread),
+                ItExpr.Is<AgentRunOptions?>(o => o == expectedOptions),
+                ItExpr.Is<CancellationToken>(ct => ct == expectedCancellationToken))
             .Returns(ToAsyncEnumerableAsync(expectedResults));
 
         var delegatingAgent = new TestDelegatingAIAgent(innerAgentMock.Object);

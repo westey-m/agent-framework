@@ -11,8 +11,9 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel.Connectors.InMemory;
-using OpenAI;
+using OpenAI.Chat;
 using SampleApp;
+using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
 var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-4o-mini";
@@ -43,7 +44,7 @@ async Task CustomChatMessageStore_UsingFactory_Async()
         .GetChatClient(deploymentName)
         .CreateAIAgent(new ChatClientAgentOptions
         {
-            Instructions = "You are good at telling jokes.",
+            ChatOptions = new() { Instructions = "You are good at telling jokes." },
             Name = "Joker",
             ChatMessageStoreFactory = ctx =>
             {
@@ -95,7 +96,7 @@ async Task CustomChatMessageStore_UsingFactoryAndExistingExternalId_Async()
         .GetChatClient(deploymentName)
         .CreateAIAgent(new ChatClientAgentOptions
         {
-            Instructions = "You are good at telling jokes.",
+            ChatOptions = new() { Instructions = "You are good at telling jokes." },
             Name = "Joker",
             ChatMessageStoreFactory = ctx =>
             {
@@ -139,7 +140,7 @@ async Task CustomChatMessageStore_PerThread_Async()
         .GetChatClient(deploymentName)
         .CreateAIAgent(new ChatClientAgentOptions
         {
-            Instructions = "You are good at telling jokes.",
+            ChatOptions = new() { Instructions = "You are good at telling jokes." },
             Name = "Joker"
         });
 
@@ -174,7 +175,7 @@ async Task CustomChatMessageStore_PerRun_Async()
         .GetChatClient(deploymentName)
         .CreateAIAgent(new ChatClientAgentOptions
         {
-            Instructions = "You are good at telling jokes.",
+            ChatOptions = new() { Instructions = "You are good at telling jokes." },
             Name = "Joker"
         });
 

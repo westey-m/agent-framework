@@ -323,3 +323,37 @@ However, mixins are less flexible, in that user code and all matching agent impl
 This creates a push towards more centralized mixin contracts which limit flexibility.
 
 Combining multiple features together is also more difficult with mixins, as a new mixin interface needs to be created for each combination of features.
+
+### Feature Collection Implementation
+
+We have two options for implementing feature collections:
+
+1. Create our own [IAgentFeatureCollection interface](https://github.com/microsoft/agent-framework/pull/2354/files#diff-9c42f3e60d70a791af9841d9214e038c6de3eebfc10e3997cb4cdffeb2f1246d) and [implementation](https://github.com/microsoft/agent-framework/pull/2354/files#diff-a435cc738baec500b8799f7f58c1538e3bb06c772a208afc2615ff90ada3f4ca).
+2. Reuse the asp.net [IFeatureCollection interface](https://github.com/dotnet/aspnetcore/blob/main/src/Extensions/Features/src/IFeatureCollection.cs) and [implementation](https://github.com/dotnet/aspnetcore/blob/main/src/Extensions/Features/src/FeatureCollection.cs).
+
+#### Roll our own
+
+Advantages:
+
+Creating our own IAgentFeatureCollection interface and implementation has the advantage of being more clearly associated with the agent framework and allows us to
+improve on some of the design decisions made in asp.net core's IFeatureCollection.
+
+Drawbacks:
+
+It would mean a different implementation to maintain and test.
+
+#### Reuse asp.net IFeatureCollection
+
+Advantages:
+
+Reusing the asp.net IFeatureCollection has the advantage of being able to reuse the well-established and tested implementation from asp.net
+core. Users who are using agents in an asp.net core application may be able to pass feature collections from asp.net core to the agent framework directly.
+
+Drawbacks:
+
+While the package name is `Microsoft.Extensions.Features`, the namespaces of the types are `Microsoft.AspNetCore.Http.Features`, which may create confusion for users of agent framework who are not building web applications or services.
+Users may rightly ask: Why do I need to use a class from asp.net core when I'm not building a web application / service?
+
+The current design has some design issues that would be good to avoid.  E.g. it does not distinguish between a feature being "not set" and "null". Get returns both as null and there is no tryget method.
+Since the [default implementation](https://github.com/dotnet/aspnetcore/blob/main/src/Extensions/Features/src/FeatureCollection.cs) also supports value types, it throws for null values of value types.
+A TryGet method would be more appropriate.

@@ -28,27 +28,35 @@ namespace SampleApp
     {
         public override string? Name => "UpperCaseParrotAgent";
 
-        public override AgentThread GetNewThread()
-            => new CustomAgentThread();
+        public override ValueTask<AgentThread> GetNewThreadAsync(CancellationToken cancellationToken = default)
+            => new(new CustomAgentThread());
 
-        public override AgentThread DeserializeThread(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null)
-            => new CustomAgentThread(serializedThread, jsonSerializerOptions);
+        public override ValueTask<AgentThread> DeserializeThreadAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+            => new(new CustomAgentThread(serializedThread, jsonSerializerOptions));
 
         protected override async Task<AgentRunResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
         {
             // Create a thread if the user didn't supply one.
-            thread ??= this.GetNewThread();
+            thread ??= await this.GetNewThreadAsync(cancellationToken);
 
             if (thread is not CustomAgentThread typedThread)
             {
                 throw new ArgumentException($"The provided thread is not of type {nameof(CustomAgentThread)}.", nameof(thread));
             }
 
+            // Get existing messages from the store
+            var invokingContext = new ChatMessageStore.InvokingContext(messages);
+            var storeMessages = await typedThread.MessageStore.InvokingAsync(invokingContext, cancellationToken);
+
             // Clone the input messages and turn them into response messages with upper case text.
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.Name).ToList();
 
             // Notify the thread of the input and output messages.
-            await typedThread.MessageStore.AddMessagesAsync(messages.Concat(responseMessages), cancellationToken);
+            var invokedContext = new ChatMessageStore.InvokedContext(messages, storeMessages)
+            {
+                ResponseMessages = responseMessages
+            };
+            await typedThread.MessageStore.InvokedAsync(invokedContext, cancellationToken);
 
             return new AgentRunResponse
             {
@@ -61,18 +69,26 @@ namespace SampleApp
         protected override async IAsyncEnumerable<AgentRunResponseUpdate> RunCoreStreamingAsync(IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Create a thread if the user didn't supply one.
-            thread ??= this.GetNewThread();
+            thread ??= await this.GetNewThreadAsync(cancellationToken);
 
             if (thread is not CustomAgentThread typedThread)
             {
                 throw new ArgumentException($"The provided thread is not of type {nameof(CustomAgentThread)}.", nameof(thread));
             }
 
+            // Get existing messages from the store
+            var invokingContext = new ChatMessageStore.InvokingContext(messages);
+            var storeMessages = await typedThread.MessageStore.InvokingAsync(invokingContext, cancellationToken);
+
             // Clone the input messages and turn them into response messages with upper case text.
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.Name).ToList();
 
             // Notify the thread of the input and output messages.
-            await typedThread.MessageStore.AddMessagesAsync(messages.Concat(responseMessages), cancellationToken);
+            var invokedContext = new ChatMessageStore.InvokedContext(messages, storeMessages)
+            {
+                ResponseMessages = responseMessages
+            };
+            await typedThread.MessageStore.InvokedAsync(invokedContext, cancellationToken);
 
             foreach (var message in responseMessages)
             {

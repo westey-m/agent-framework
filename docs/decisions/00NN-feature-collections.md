@@ -223,6 +223,7 @@ Here are some comparisons about their suitability for our use case:
 |Type safety       |✅ Good             |❌ Bad                |✅ Good           |
 |Ability to modify registered options when progressing down the stack|✅ Supported|✅ Supported|❌ Not-Supported (IServiceProvider is read-only)|
 |Already available in MEAI stack|❌ No|✅ Yes|❌ No|
+|Ambiguity with existing AdditionalProperties|❌ Yes|✅ No|❌ Yes|
 
 ## IServiceProvider
 
@@ -259,13 +260,32 @@ if (options.AdditionalProperties.TryGetValue(typeof(MyFeature).FullName, out var
 }
 ```
 
+It would also be possible to add extension methods to simplify setting and getting features from AdditionalProperties.
+Having a base class for features should help make this more feature rich.
+
+```csharp
+// Setting a feature, this can use Type.FullName as the key.
+options.AdditionalProperties
+    .WithFeature(new MyFeature());
+
+// Retrieving a feature, this can use Type.FullName as the key.
+if (options.AdditionalProperties.TryGetFeature<MyFeature>(out var myFeature))
+{
+    // Use myFeature
+}
+```
+
 It would also be possible to add extension methods for a feature to simplify setting and getting features from AdditionalProperties.
 
 ```csharp
 // Setting a feature
-options.AdditionalProperties.SetMyFeature(new MyFeature());
+options.AdditionalProperties
+    .WithMyFeature(new MyFeature());
 // Retrieving a feature
-MyFeature myFeature = options.AdditionalProperties.GetMyFeature();
+if (options.AdditionalProperties.TryGetMyFeature(out var myFeature))
+{
+    // Use myFeature
+}
 ```
 
 ## Feature Collection
@@ -373,17 +393,20 @@ Introducing layering adds some challenges:
   - Do we layer the agent feature collection over the chat client feature collection (Application -> ChatClient -> Agent -> Run), or only use the agent feature collection in the agent (Application -> Agent -> Run), and the chat client feature collection in the chat client (Application -> ChatClient -> Run)?
 - The appropriate base feature collection may change when progressing down the stack, e.g. when an Agent calls a ChatClient, the action feature collection stays the same, but the artifact feature collection changes.
 - Who creates the feature collection hierarchy?
-  - Since the hierarchy changes as it progresses down the execution stack, and the caller can only pass in the action level feature collection, the callee needs to combine it with its own artifact level feature collection and the application level feature collection. Each action will need to build the appropriate feature collection hierarchy, at the start of its exercution.
+  - Since the hierarchy changes as it progresses down the execution stack, and the caller can only pass in the action level feature collection, the callee needs to combine it with its own artifact level feature collection and the application level feature collection. Each action will need to build the appropriate feature collection hierarchy, at the start of its execution.
+- For Artifact level features, it seems odd to pass them in as a bag of untyped features, when we are constructing a known artifact type and therefore can have typed settings.
+  - E.g. today we have a strongly typed setting on ChatClientAgentOptions to configure a ChatMessageStore for the agent.
+- To avoid global statics for application level features, the user would need to pass in the application level feature collection to each artifact that they create.
+  - This would be very odd if the user also already has to strongly typed settings for each feature that they want to set at the artifact level.
 
 ### Layering Options
 
 1. No layering - only a single feature collection is supported per action (the caller can still create a layered collection if desired, but the callee does not do any layering automatically).
-1. Simple layering - only support layering at the artifact level (Artifact -> Action).
-    1. Only apply applicable artifact level features when calling into that artifact.
-    1. Apply upstream artifact features when calling into downstream artifacts, e.g. Feature hierarchy in ChatClientAgent would be `Agent -> Run` and in ChatClient would be `ChatClient -> Agent -> Run` or `Agent -> ChatClient -> Run`
+    1. Fallback is to any features configured on the artifact via strongly typed settings.
 1. Full layering - support layering at all levels (Application -> Artifact -> Action).
     1. Only apply applicable artifact level features when calling into that artifact.
     1. Apply upstream artifact features when calling into downstream artifacts, e.g. Feature hierarchy in ChatClientAgent would be `Application -> Agent -> Run` and in ChatClient would be `Application -> ChatClient -> Agent -> Run` or `Application -> Agent -> ChatClient -> Run`
+    1. The user needs to provide the application level feature collection to each artifact that they create and artifact features are passed via strongly typed settings.
 
 ### Accessing application level features Options
 
@@ -399,4 +422,4 @@ We need to consider how application level features would be accessed if supporte
 Proposed Decisions:
 
 - Feature Collections Container: Use AdditionalProperties
-- Feature Layering: No layering - only a single collection/dictionary is supported per action. Artifact and Application layering can be added later if needed.
+- Feature Layering: No layering - only a single collection/dictionary is supported per action. Application layers can be added later if needed.

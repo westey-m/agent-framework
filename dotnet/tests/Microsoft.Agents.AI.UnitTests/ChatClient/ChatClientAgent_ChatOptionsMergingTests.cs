@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Moq;
 
-namespace Microsoft.Agents.AI.UnitTests.ChatClient;
+namespace Microsoft.Agents.AI.UnitTests;
 
 /// <summary>
 /// Contains tests for <see cref="ChatOptions"/> merging in <see cref="ChatClientAgent"/>.
@@ -135,7 +135,7 @@ public class ChatClientAgent_ChatOptionsMergingTests
         {
             MaxOutputTokens = 200, // Request value takes priority
             Temperature = 0.3f, // Request value takes priority
-            // Check that each level of presedence is respected in AdditionalProperties
+            // Check that each level of precedence is respected in AdditionalProperties
             AdditionalProperties = new AdditionalPropertiesDictionary { ["key1"] = "agent-value", ["key2"] = "request-value", ["key3"] = "runoptions-value" },
             TopP = 0.9f, // Agent value used when request doesn't specify
             ModelId = "agent-model", // Agent value used when request doesn't specify

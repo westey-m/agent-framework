@@ -142,7 +142,7 @@ public abstract class AIContextProvider
         /// <value>
         /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
         /// </value>
-        public IEnumerable<ChatMessage> RequestMessages { get; set; }
+        public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public abstract class AIContextProvider
         /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
         /// This does not include any <see cref="AIContextProvider"/> supplied messages.
         /// </value>
-        public IEnumerable<ChatMessage> RequestMessages { get; set; }
+        public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
 
         /// <summary>
         /// Gets the messages provided by the <see cref="AIContextProvider"/> for this invocation, if any.

@@ -73,7 +73,12 @@ public static partial class AIAgentExtensions
             [Description("Input query to invoke the agent.")] string query,
             CancellationToken cancellationToken)
         {
-            var response = await agent.RunAsync(query, thread: thread, cancellationToken: cancellationToken).ConfigureAwait(false);
+            // Propogate any additional properties from the parent agent's run to the child agent if the parent is using a FunctionInvokingChatClient.
+            AgentRunOptions? options = FunctionInvokingChatClient.CurrentContext?.Options?.AdditionalProperties is AdditionalPropertiesDictionary dict
+                ? new AgentRunOptions { AdditionalProperties = dict }
+                : null;
+
+            var response = await agent.RunAsync(query, thread: thread, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);
             return response.Text;
         }
 

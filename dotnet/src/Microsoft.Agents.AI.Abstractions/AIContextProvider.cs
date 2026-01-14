@@ -177,6 +177,15 @@ public abstract class AIContextProvider
         public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
 
         /// <summary>
+        /// Gets the messages retrieved from the chat history for this invocation, if any.
+        /// </summary>
+        /// <value>
+        /// A collection of <see cref="ChatMessage"/> instances that were retrieved from the chat history,
+        /// and were used by the agent as part of the invocation.
+        /// </value>
+        public IEnumerable<ChatMessage>? ChatHistoryMessages { get; set; }
+
+        /// <summary>
         /// Gets the messages provided by the <see cref="AIContextProvider"/> for this invocation, if any.
         /// </summary>
         /// <value>

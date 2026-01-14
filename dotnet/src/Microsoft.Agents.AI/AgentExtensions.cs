@@ -73,7 +73,7 @@ public static partial class AIAgentExtensions
             [Description("Input query to invoke the agent.")] string query,
             CancellationToken cancellationToken)
         {
-            // Propogate any additional properties from the parent agent's run to the child agent if the parent is using a FunctionInvokingChatClient.
+            // Propagate any additional properties from the parent agent's run to the child agent if the parent is using a FunctionInvokingChatClient.
             AgentRunOptions? agentRunOptions = FunctionInvokingChatClient.CurrentContext?.Options?.AdditionalProperties is AdditionalPropertiesDictionary dict
                 ? new AgentRunOptions { AdditionalProperties = dict }
                 : null;

@@ -278,7 +278,7 @@ public class AgentExtensionsTests
     }
 
     [Fact]
-    public async Task CreateFromAgent_InvokeWithAdditionalPropertiesFromAgentAsync_ReturnsCorrectResponseAsync()
+    public async Task CreateFromAgent_InvokeWithAdditionalProperties_PropagatesAdditionalPropertiesToChildAgentAsync()
     {
         // Arrange
         var expectedResponse = new AgentResponse

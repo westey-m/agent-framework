@@ -99,7 +99,7 @@ public sealed class InMemoryChatHistoryProvider : AIContextProvider, IList<ChatM
         {
             var jso = jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
             var state = serializedStoreState.Deserialize(
-                jso.GetTypeInfo(typeof(StoreState))) as StoreState;
+                jso.GetTypeInfo(typeof(State))) as State;
             if (state?.Messages is { } messages)
             {
                 this._messages = messages;
@@ -169,13 +169,13 @@ public sealed class InMemoryChatHistoryProvider : AIContextProvider, IList<ChatM
     /// <inheritdoc />
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        StoreState state = new()
+        State state = new()
         {
             Messages = this._messages,
         };
 
         var jso = jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
-        return JsonSerializer.SerializeToElement(state, jso.GetTypeInfo(typeof(StoreState)));
+        return JsonSerializer.SerializeToElement(state, jso.GetTypeInfo(typeof(State)));
     }
 
     /// <inheritdoc />
@@ -218,7 +218,7 @@ public sealed class InMemoryChatHistoryProvider : AIContextProvider, IList<ChatM
     IEnumerator IEnumerable.GetEnumerator()
         => this.GetEnumerator();
 
-    internal sealed class StoreState
+    internal sealed class State
     {
         public List<ChatMessage> Messages { get; set; } = [];
     }

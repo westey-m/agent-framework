@@ -157,8 +157,8 @@ public sealed class ChatClientAgentThread : AgentThread
 
         thread._chatHistoryProvider =
             chatHistoryProviderFactory is not null
-                ? await chatHistoryProviderFactory.Invoke(state?.StoreState ?? default, jsonSerializerOptions, cancellationToken).ConfigureAwait(false)
-                : new InMemoryChatHistoryProvider(state?.StoreState ?? default, jsonSerializerOptions); // default to an in-memory store
+                ? await chatHistoryProviderFactory.Invoke(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions, cancellationToken).ConfigureAwait(false)
+                : new InMemoryChatHistoryProvider(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions); // default to an in-memory store
 
         return thread;
     }
@@ -166,14 +166,14 @@ public sealed class ChatClientAgentThread : AgentThread
     /// <inheritdoc/>
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        JsonElement? storeState = this._chatHistoryProvider?.Serialize(jsonSerializerOptions);
+        JsonElement? chatHistoryProviderState = this._chatHistoryProvider?.Serialize(jsonSerializerOptions);
 
         JsonElement? aiContextProviderState = this.AIContextProvider?.Serialize(jsonSerializerOptions);
 
         var state = new ThreadState
         {
             ConversationId = this.ConversationId,
-            StoreState = storeState is { ValueKind: not JsonValueKind.Undefined } ? storeState : null,
+            ChatHistoryProviderState = chatHistoryProviderState is { ValueKind: not JsonValueKind.Undefined } ? chatHistoryProviderState : null,
             AIContextProviderState = aiContextProviderState is { ValueKind: not JsonValueKind.Undefined } ? aiContextProviderState : null,
         };
 
@@ -197,7 +197,7 @@ public sealed class ChatClientAgentThread : AgentThread
     {
         public string? ConversationId { get; set; }
 
-        public JsonElement? StoreState { get; set; }
+        public JsonElement? ChatHistoryProviderState { get; set; }
 
         public JsonElement? AIContextProviderState { get; set; }
     }

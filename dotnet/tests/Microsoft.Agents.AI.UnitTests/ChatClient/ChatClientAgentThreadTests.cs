@@ -98,7 +98,7 @@ public class ChatClientAgentThreadTests
         // Arrange
         var json = JsonSerializer.Deserialize("""
             {
-                "storeState": { "messages": [{"authorName": "testAuthor"}] }
+                "chatHistoryProviderState": { "messages": [{"authorName": "testAuthor"}] }
             }
             """, TestJsonSerializerContext.Default.JsonElement);
 
@@ -206,10 +206,10 @@ public class ChatClientAgentThreadTests
 
         Assert.False(json.TryGetProperty("conversationId", out _));
 
-        Assert.True(json.TryGetProperty("storeState", out var storeStateProperty));
-        Assert.Equal(JsonValueKind.Object, storeStateProperty.ValueKind);
+        Assert.True(json.TryGetProperty("chatHistoryProviderState", out var chatHistoryProviderStateProperty));
+        Assert.Equal(JsonValueKind.Object, chatHistoryProviderStateProperty.ValueKind);
 
-        Assert.True(storeStateProperty.TryGetProperty("messages", out var messagesProperty));
+        Assert.True(chatHistoryProviderStateProperty.TryGetProperty("messages", out var messagesProperty));
         Assert.Equal(JsonValueKind.Array, messagesProperty.ValueKind);
         Assert.Single(messagesProperty.EnumerateArray());
 
@@ -278,10 +278,10 @@ public class ChatClientAgentThreadTests
 
         Assert.False(json.TryGetProperty("conversationId", out var idProperty));
 
-        Assert.True(json.TryGetProperty("storeState", out var storeStateProperty));
-        Assert.Equal(JsonValueKind.Object, storeStateProperty.ValueKind);
+        Assert.True(json.TryGetProperty("chatHistoryProviderState", out var chatHistoryProviderStateProperty));
+        Assert.Equal(JsonValueKind.Object, chatHistoryProviderStateProperty.ValueKind);
 
-        Assert.True(storeStateProperty.TryGetProperty("Key", out var keyProperty));
+        Assert.True(chatHistoryProviderStateProperty.TryGetProperty("Key", out var keyProperty));
         Assert.Equal("TestValue", keyProperty.GetString());
 
         historyProviderMock.Verify(m => m.Serialize(options), Times.Once);

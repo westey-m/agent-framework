@@ -9,7 +9,7 @@ using Microsoft.Shared.Diagnostics;
 namespace Microsoft.Agents.AI;
 
 /// <summary>
-/// A <see cref="AIContextProvider"/> decorator that allows filtering the data
+/// An <see cref="AIContextProvider"/> decorator that allows filtering the data
 /// passed into and out of an inner <see cref="AIContextProvider"/>.
 /// </summary>
 public sealed class MessageFilteringAIContextProvider : AIContextProvider

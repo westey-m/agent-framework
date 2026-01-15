@@ -485,7 +485,12 @@ public sealed partial class ChatClientAgent : AIAgent
     {
         if (thread.AIContextProvider is not null)
         {
-            await thread.AIContextProvider.InvokedAsync(new(inputMessages, aiContextProviderMessages) { ResponseMessages = responseMessages },
+            await thread.AIContextProvider.InvokedAsync(
+                new(inputMessages, aiContextProviderMessages)
+                {
+                    ChatHistoryMessages = chatHistoryProviderMessages,
+                    ResponseMessages = responseMessages
+                },
                 cancellationToken).ConfigureAwait(false);
         }
     }
@@ -503,7 +508,12 @@ public sealed partial class ChatClientAgent : AIAgent
     {
         if (thread.AIContextProvider is not null)
         {
-            await thread.AIContextProvider.InvokedAsync(new(inputMessages, aiContextProviderMessages) { InvokeException = ex },
+            await thread.AIContextProvider.InvokedAsync(
+                new(inputMessages, aiContextProviderMessages)
+                {
+                    ChatHistoryMessages = chatHistoryProviderMessages,
+                    InvokeException = ex
+                },
                 cancellationToken).ConfigureAwait(false);
         }
     }

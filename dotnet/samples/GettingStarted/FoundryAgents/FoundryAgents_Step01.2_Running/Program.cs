@@ -24,7 +24,7 @@ AgentVersionCreationOptions options = new(new PromptAgentDefinition(model: deplo
 AgentVersion agentVersion = aiProjectClient.Agents.CreateAgentVersion(agentName: JokerName, options);
 
 // You can retrieve an AIAgent for a already created server side agent version.
-AIAgent jokerAgent = aiProjectClient.GetAIAgent(agentVersion);
+AIAgent jokerAgent = aiProjectClient.AsAIAgent(agentVersion);
 
 // Invoke the agent with streaming support.
 await foreach (AgentResponseUpdate update in jokerAgent.RunStreamingAsync("Tell me a joke about a pirate."))

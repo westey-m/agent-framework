@@ -43,7 +43,7 @@ public class AIProjectClientCreateTests
                     Description = AgentDescription,
                     ChatOptions = new() { Instructions = AgentInstructions }
                 }),
-            "CreateWithChatClientAgentOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithChatClientAgentOptionsSync" => await this._client.CreateAIAgentAsync(
                 model: s_config.DeploymentName,
                 options: new ChatClientAgentOptions()
                 {
@@ -54,7 +54,7 @@ public class AIProjectClientCreateTests
             "CreateWithFoundryOptionsAsync" => await this._client.CreateAIAgentAsync(
                 name: AgentName,
                 creationOptions: new AgentVersionCreationOptions(new PromptAgentDefinition(s_config.DeploymentName) { Instructions = AgentInstructions }) { Description = AgentDescription }),
-            "CreateWithFoundryOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithFoundryOptionsSync" => await this._client.CreateAIAgentAsync(
                 name: AgentName,
                 creationOptions: new AgentVersionCreationOptions(new PromptAgentDefinition(s_config.DeploymentName) { Instructions = AgentInstructions }) { Description = AgentDescription }),
             _ => throw new InvalidOperationException($"Unknown create mechanism: {createMechanism}")
@@ -120,7 +120,7 @@ public class AIProjectClientCreateTests
                 name: AgentName,
                 instructions: AgentInstructions,
                 tools: [new HostedFileSearchTool() { Inputs = [new HostedVectorStoreContent(vectorStoreMetadata.Value.Id)] }]),
-            "CreateWithChatClientAgentOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithChatClientAgentOptionsSync" => await this._client.CreateAIAgentAsync(
                 model: s_config.DeploymentName,
                 name: AgentName,
                 instructions: AgentInstructions,
@@ -130,7 +130,7 @@ public class AIProjectClientCreateTests
                 name: AgentName,
                 instructions: AgentInstructions,
                 tools: [ResponseTool.CreateFileSearchTool(vectorStoreIds: [vectorStoreMetadata.Value.Id]).AsAITool()]),
-            "CreateWithFoundryOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithFoundryOptionsSync" => await this._client.CreateAIAgentAsync(
                 model: s_config.DeploymentName,
                 name: AgentName,
                 instructions: AgentInstructions,
@@ -192,7 +192,7 @@ public class AIProjectClientCreateTests
                 name: AgentName,
                 instructions: AgentInstructions,
                 tools: [new HostedCodeInterpreterTool() { Inputs = [new HostedFileContent(uploadedCodeFile.Id)] }]),
-            "CreateWithChatClientAgentOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithChatClientAgentOptionsSync" => await this._client.CreateAIAgentAsync(
                 model: s_config.DeploymentName,
                 name: AgentName,
                 instructions: AgentInstructions,
@@ -203,7 +203,7 @@ public class AIProjectClientCreateTests
                 name: AgentName,
                 instructions: AgentInstructions,
                 tools: [ResponseTool.CreateCodeInterpreterTool(new CodeInterpreterToolContainer(CodeInterpreterToolContainerConfiguration.CreateAutomaticContainerConfiguration([uploadedCodeFile.Id]))).AsAITool()]),
-            "CreateWithFoundryOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithFoundryOptionsSync" => await this._client.CreateAIAgentAsync(
                 model: s_config.DeploymentName,
                 name: AgentName,
                 instructions: AgentInstructions,
@@ -248,7 +248,7 @@ public class AIProjectClientCreateTests
                     Name = AgentName,
                     ChatOptions = new() { Instructions = AgentInstructions, Tools = [weatherFunction] }
                 }),
-            "CreateWithChatClientAgentOptionsSync" => this._client.CreateAIAgent(
+            "CreateWithChatClientAgentOptionsSync" => await this._client.CreateAIAgentAsync(
                 s_config.DeploymentName,
                 options: new ChatClientAgentOptions()
                 {

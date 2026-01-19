@@ -30,10 +30,10 @@ var createdAgentVersion = aiProjectClient.Agents.CreateAgentVersion(agentName: J
 AIAgent existingJokerAgent = aiProjectClient.AsAIAgent(createdAgentVersion);
 
 // You can also create another AIAgent version by providing the same name with a different definition.
-AIAgent newJokerAgent = aiProjectClient.CreateAIAgent(name: JokerName, model: deploymentName, instructions: "You are extremely hilarious at telling jokes.");
+AIAgent newJokerAgent = await aiProjectClient.CreateAIAgentAsync(name: JokerName, model: deploymentName, instructions: "You are extremely hilarious at telling jokes.");
 
 // You can also get the AIAgent latest version just providing its name.
-AIAgent jokerAgentLatest = aiProjectClient.GetAIAgent(name: JokerName);
+AIAgent jokerAgentLatest = await aiProjectClient.GetAIAgentAsync(name: JokerName);
 var latestAgentVersion = jokerAgentLatest.GetService<AgentVersion>()!;
 
 // The AIAgent version can be accessed via the GetService method.

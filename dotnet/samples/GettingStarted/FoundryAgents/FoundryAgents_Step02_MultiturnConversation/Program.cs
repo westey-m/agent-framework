@@ -23,7 +23,7 @@ AgentVersionCreationOptions options = new(new PromptAgentDefinition(model: deplo
 AgentVersion agentVersion = aiProjectClient.Agents.CreateAgentVersion(agentName: JokerName, options);
 
 // Retrieve an AIAgent for the created server side agent version.
-AIAgent jokerAgent = aiProjectClient.GetAIAgent(agentVersion);
+AIAgent jokerAgent = aiProjectClient.AsAIAgent(agentVersion);
 
 // Invoke the agent with a multi-turn conversation, where the context is preserved in the thread object.
 AgentThread thread = await jokerAgent.GetNewThreadAsync();

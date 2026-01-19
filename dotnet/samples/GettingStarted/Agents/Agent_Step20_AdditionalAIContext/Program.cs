@@ -152,6 +152,8 @@ namespace SampleApp
 
     /// <summary>
     /// An <see cref="AIContextProvider"/> which aggregates multiple AI context providers into one.
+    /// Serialized state for the different providers are stored under their type name.
+    /// Tools and messages from all providers are combined, and instructions are concatenated.
     /// </summary>
     internal sealed class AggregatingAIContextProvider : AIContextProvider
     {

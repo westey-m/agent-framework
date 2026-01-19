@@ -7,6 +7,7 @@
 
 #pragma warning disable CA1869 // Cache and reuse 'JsonSerializerOptions' instances
 
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using Azure.AI.OpenAI;
@@ -36,24 +37,25 @@ Func<Task<string[]>> loadNextThreeCalendarEvents = async () =>
 AIAgent agent = new AzureOpenAIClient(
     new Uri(endpoint),
     new AzureCliCredential())
-     .GetChatClient(deploymentName)
-     .AsAIAgent(new ChatClientAgentOptions()
-     {
-         ChatOptions = new() { Instructions = """
-         You are a helpful personal assistant.
-         You manage a TODO list for the user. When the user has completed one of the tasks it can be removed from the TODO list. Only provide the list of TODO items if asked.
-         You remind users of upcoming calendar events when the user interacts with you.
-         """ },
-         // Use WithAIContextProviderMessageRemoval, so that we don't store the messages from the AI context provider in the chat history.
-         // You may want to store these messages, depending on their content and your requirements.
-         ChatMessageStoreFactory = (ctx, ct) => new ValueTask<ChatMessageStore>(new InMemoryChatMessageStore().WithAIContextProviderMessageRemoval()),
-         // Add an AI context provider that maintains a todo list for the agent and one that provides upcoming calendar entries.
-         // Wrap these in an AI context provider that aggregates the other two.
-         AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new AggregatingAIContextProvider([
-             AggregatingAIContextProvider.CreateFactory((jsonElement, jsonSerializerOptions) => new TodoListAIContextProvider(jsonElement, jsonSerializerOptions)),
-             AggregatingAIContextProvider.CreateFactory((_, _) => new CalendarSearchAIContextProvider(loadNextThreeCalendarEvents))
-         ], ctx.SerializedState, ctx.JsonSerializerOptions)),
-     });
+    .GetChatClient(deploymentName)
+    .AsAIAgent(new ChatClientAgentOptions()
+    {
+        ChatOptions = new() { Instructions = """
+        You are a helpful personal assistant.
+        You manage a TODO list for the user. When the user has completed one of the tasks it can be removed from the TODO list. Only provide the list of TODO items if asked.
+        You remind users of upcoming calendar events when the user interacts with you.
+        """ },
+        ChatMessageStoreFactory = (ctx, ct) => new ValueTask<ChatMessageStore>(new InMemoryChatMessageStore()
+            // Use WithAIContextProviderMessageRemoval, so that we don't store the messages from the AI context provider in the chat history.
+            // You may want to store these messages, depending on their content and your requirements.
+            .WithAIContextProviderMessageRemoval()),
+        // Add an AI context provider that maintains a todo list for the agent and one that provides upcoming calendar entries.
+        // Wrap these in an AI context provider that aggregates the other two.
+        AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new AggregatingAIContextProvider([
+            AggregatingAIContextProvider.CreateFactory((jsonElement, jsonSerializerOptions) => new TodoListAIContextProvider(jsonElement, jsonSerializerOptions)),
+            AggregatingAIContextProvider.CreateFactory((_, _) => new CalendarSearchAIContextProvider(loadNextThreeCalendarEvents))
+        ], ctx.SerializedState, ctx.JsonSerializerOptions)),
+    });
 
 // Invoke the agent and output the text result.
 AgentThread thread = await agent.GetNewThreadAsync();
@@ -103,7 +105,7 @@ namespace SampleApp
             {
                 for (int i = 0; i < this._todoItems.Count; i++)
                 {
-                    outputMessageBuilder.AppendLine($"{i + 1}. {this._todoItems[i]}");
+                    outputMessageBuilder.AppendLine($"{i}. {this._todoItems[i]}");
                 }
             }
 
@@ -114,11 +116,12 @@ namespace SampleApp
             });
         }
 
+        [Description("Adds an item to the todo list. Index is zero based.")]
         private void RemoveTodoItem(int index) =>
             this._todoItems.RemoveAt(index);
 
         private void AddTodoItem(string item) =>
-            this._todoItems.Add(item);
+            this._todoItems.Add(string.IsNullOrWhiteSpace(item) ? throw new ArgumentException("Item must have a value") : item);
 
         public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null) =>
             JsonSerializer.SerializeToElement(this._todoItems, jsonSerializerOptions);
@@ -215,11 +218,11 @@ namespace SampleApp
                 ProviderType = typeof(TProviderType)
             };
 
-        public struct ProviderFactory
+        public readonly struct ProviderFactory
         {
-            public Func<JsonElement, JsonSerializerOptions?, AIContextProvider> FactoryMethod { get; set; }
+            public Func<JsonElement, JsonSerializerOptions?, AIContextProvider> FactoryMethod { get; init; }
 
-            public Type ProviderType { get; set; }
+            public Type ProviderType { get; init; }
         }
     }
 }

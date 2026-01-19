@@ -23,7 +23,7 @@ AgentVersionCreationOptions options = new(new PromptAgentDefinition(model: deplo
 // You can create a server side agent version with the Azure.AI.Agents SDK client below.
 AgentVersion agentVersion = aiProjectClient.Agents.CreateAgentVersion(agentName: JokerName, options);
 
-// You can retrieve an AIAgent for a already created server side agent version.
+// You can use an AIAgent with an already created server side agent version.
 AIAgent jokerAgent = aiProjectClient.AsAIAgent(agentVersion);
 
 // Invoke the agent with streaming support.

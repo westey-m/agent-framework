@@ -93,7 +93,6 @@ public static class OpenAIAssistantClientExtensions
         }, services: services);
     }
 
-    [Obsolete("The Assistants API has been deprecated. Please use the Responses API instead.")]
     /// <summary>
     /// Retrieves an existing server side agent, wrapped as a <see cref="ChatClientAgent"/> using the provided <see cref="AssistantClient"/>.
     /// </summary>

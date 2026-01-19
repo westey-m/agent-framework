@@ -180,7 +180,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with requireInvocableTools=true enforces invocable tools.
+    /// Verify that AsAIAgent with requireInvocableTools=true enforces invocable tools.
     /// </summary>
     [Fact]
     public void AsAIAgent_WithAgentVersion_WithRequireInvocableToolsTrue_EnforcesInvocableTools()
@@ -202,7 +202,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with requireInvocableTools=false allows declarative functions.
+    /// Verify that AsAIAgent with requireInvocableTools=false allows declarative functions.
     /// </summary>
     [Fact]
     public void AsAIAgent_WithAgentVersion_WithRequireInvocableToolsFalse_AllowsDeclarativeFunctions()
@@ -276,13 +276,13 @@ public sealed class AzureAIProjectChatClientExtensionsTests
 
     #endregion
 
-    #region GetAIAgent(AIProjectClient, string) Tests
+    #region AsAIAgent(AIProjectClient, string) Tests
 
     /// <summary>
     /// Verify that AsAIAgent throws ArgumentNullException when AIProjectClient is null.
     /// </summary>
     [Fact]
-    public void GetAIAgent_ByName_WithNullClient_ThrowsArgumentNullException()
+    public void AsAIAgent_ByName_WithNullClient_ThrowsArgumentNullException()
     {
         // Arrange
         AIProjectClient? client = null;
@@ -298,7 +298,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     /// Verify that AsAIAgent throws ArgumentNullException when name is null.
     /// </summary>
     [Fact]
-    public void GetAIAgent_ByName_WithNullName_ThrowsArgumentNullException()
+    public void AsAIAgent_ByName_WithNullName_ThrowsArgumentNullException()
     {
         // Arrange
         var mockClient = new Mock<AIProjectClient>();
@@ -314,7 +314,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     /// Verify that AsAIAgent throws ArgumentException when name is empty.
     /// </summary>
     [Fact]
-    public void GetAIAgent_ByName_WithEmptyName_ThrowsArgumentException()
+    public void AsAIAgent_ByName_WithEmptyName_ThrowsArgumentException()
     {
         // Arrange
         var mockClient = new Mock<AIProjectClient>();
@@ -727,10 +727,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that when providing AITools with GetAIAgent, any additional tool that doesn't match the tools in agent definition are ignored.
+    /// Verify that when providing AITools with AsAIAgent, any additional tool that doesn't match the tools in agent definition are ignored.
     /// </summary>
     [Fact]
-    public void GetAIAgent_AdditionalAITools_WhenNotInTheDefinitionAreIgnored()
+    public void AsAIAgent_AdditionalAITools_WhenNotInTheDefinitionAreIgnored()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();
@@ -763,10 +763,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     #region Inline Tools vs Parameter Tools Tests
 
     /// <summary>
-    /// Verify that tools passed as parameters are accepted by GetAIAgent.
+    /// Verify that tools passed as parameters are accepted by AsAIAgent.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithParameterTools_AcceptsTools()
+    public void AsAIAgent_WithParameterTools_AcceptsTools()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();
@@ -1043,10 +1043,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that ChatClientAgentOptions preserve custom properties from input options.
+    /// Verify that GetAIAgentAsync with options preserves custom properties from input options.
     /// </summary>
     [Fact]
-    public async Task GetAIAgent_WithOptions_PreservesCustomPropertiesAsync()
+    public async Task GetAIAgentAsync_WithOptions_PreservesCustomPropertiesAsync()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient(agentName: "test-agent", instructions: "Custom instructions", description: "Custom description");
@@ -1068,7 +1068,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that CreateAIAgent with options generates correct ChatClientAgentOptions with tools.
+    /// Verify that CreateAIAgentAsync with options and tools generates correct ChatClientAgentOptions.
     /// </summary>
     [Fact]
     public async Task CreateAIAgentAsync_WithOptionsAndTools_GeneratesCorrectOptionsAsync()
@@ -1114,7 +1114,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     /// </summary>
     [Theory]
     [MemberData(nameof(InvalidAgentNameTestData.GetInvalidAgentNames), MemberType = typeof(InvalidAgentNameTestData))]
-    public void GetAIAgent_ByName_WithInvalidAgentName_ThrowsArgumentException(string invalidName)
+    public void AsAIAgent_ByName_WithInvalidAgentName_ThrowsArgumentException(string invalidName)
     {
         // Arrange
         var mockClient = new Mock<AIProjectClient>();
@@ -1222,11 +1222,11 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with AgentReference throws ArgumentException when agent name is invalid.
+    /// Verify that AsAIAgent with AgentReference throws ArgumentException when agent name is invalid.
     /// </summary>
     [Theory]
     [MemberData(nameof(InvalidAgentNameTestData.GetInvalidAgentNames), MemberType = typeof(InvalidAgentNameTestData))]
-    public void GetAIAgent_WithAgentReference_WithInvalidAgentName_ThrowsArgumentException(string invalidName)
+    public void AsAIAgent_WithAgentReference_WithInvalidAgentName_ThrowsArgumentException(string invalidName)
     {
         // Arrange
         var mockClient = new Mock<AIProjectClient>();
@@ -1420,7 +1420,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verifies that the user-agent header is added to both synchronous and asynchronous GetAIAgent requests.
+    /// Verifies that the user-agent header is added to asynchronous GetAIAgentAsync requests.
     /// </summary>
     [Fact]
     public async Task GetAIAgent_UserAgentHeaderAddedToRequestsAsync()
@@ -1441,12 +1441,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
         var aiProjectClient = new AIProjectClient(new Uri("https://test.openai.azure.com/"), new FakeAuthenticationTokenProvider(), new() { Transport = new HttpClientPipelineTransport(httpClient) });
 
         // Act
-        var agent1 = aiProjectClient.AsAIAgent("test");
-        var agent2 = await aiProjectClient.GetAIAgentAsync("test");
+        var agent = await aiProjectClient.GetAIAgentAsync("test");
 
         // Assert
-        Assert.NotNull(agent1);
-        Assert.NotNull(agent2);
+        Assert.NotNull(agent);
     }
 
     #endregion
@@ -1457,7 +1455,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     /// Verify that AsAIAgent throws ArgumentNullException when AIProjectClient is null.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithAgentReference_WithNullClient_ThrowsArgumentNullException()
+    public void AsAIAgent_WithAgentReference_WithNullClient_ThrowsArgumentNullException()
     {
         // Arrange
         AIProjectClient? client = null;
@@ -1474,7 +1472,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     /// Verify that AsAIAgent throws ArgumentNullException when agentReference is null.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithAgentReference_WithNullAgentReference_ThrowsArgumentNullException()
+    public void AsAIAgent_WithAgentReference_WithNullAgentReference_ThrowsArgumentNullException()
     {
         // Arrange
         var mockClient = new Mock<AIProjectClient>();
@@ -1487,10 +1485,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with AgentReference creates a valid agent.
+    /// Verify that AsAIAgent with AgentReference creates a valid agent.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithAgentReference_CreatesValidAgent()
+    public void AsAIAgent_WithAgentReference_CreatesValidAgent()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();
@@ -1506,10 +1504,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with AgentReference and clientFactory applies the factory.
+    /// Verify that AsAIAgent with AgentReference and clientFactory applies the factory.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithAgentReference_WithClientFactory_AppliesFactoryCorrectly()
+    public void AsAIAgent_WithAgentReference_WithClientFactory_AppliesFactoryCorrectly()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();
@@ -1529,10 +1527,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with AgentReference sets the agent ID correctly.
+    /// Verify that AsAIAgent with AgentReference sets the agent ID correctly.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithAgentReference_SetsAgentIdCorrectly()
+    public void AsAIAgent_WithAgentReference_SetsAgentIdCorrectly()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();
@@ -1547,10 +1545,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     }
 
     /// <summary>
-    /// Verify that GetAIAgent with AgentReference and tools includes the tools in ChatOptions.
+    /// Verify that AsAIAgent with AgentReference and tools includes the tools in ChatOptions.
     /// </summary>
     [Fact]
-    public void GetAIAgent_WithAgentReference_WithTools_IncludesToolsInChatOptions()
+    public void AsAIAgent_WithAgentReference_WithTools_IncludesToolsInChatOptions()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();

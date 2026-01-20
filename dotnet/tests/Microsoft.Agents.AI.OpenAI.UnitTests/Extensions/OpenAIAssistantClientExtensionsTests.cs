@@ -578,14 +578,9 @@ public sealed class OpenAIAssistantClientExtensionsTests
         {
         }
 
-        public override ClientResult<Assistant> CreateAssistant(string model, AssistantCreationOptions? options = null, CancellationToken cancellationToken = default)
+        public override Task<ClientResult<Assistant>> CreateAssistantAsync(string model, AssistantCreationOptions? options = null, CancellationToken cancellationToken = default)
         {
-            return ClientResult.FromValue(ModelReaderWriter.Read<Assistant>(BinaryData.FromString("""{"id": "asst_abc123"}""")), new FakePipelineResponse())!;
-        }
-
-        public override ClientResult<Assistant> GetAssistant(string assistantId, CancellationToken cancellationToken = default)
-        {
-            return ClientResult.FromValue(ModelReaderWriter.Read<Assistant>(BinaryData.FromString("""{"id": "asst_abc123", "name": "Original Name", "description": "Original Description", "instructions": "Original Instructions"}""")), new FakePipelineResponse())!;
+            return Task.FromResult<ClientResult<Assistant>>(ClientResult.FromValue(ModelReaderWriter.Read<Assistant>(BinaryData.FromString("""{"id": "asst_abc123"}""")), new FakePipelineResponse())!);
         }
 
         public override async Task<ClientResult<Assistant>> GetAssistantAsync(string assistantId, CancellationToken cancellationToken = default)

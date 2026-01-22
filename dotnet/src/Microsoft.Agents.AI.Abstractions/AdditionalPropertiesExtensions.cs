@@ -12,16 +12,36 @@ namespace Microsoft.Agents.AI;
 public static class AdditionalPropertiesExtensions
 {
     /// <summary>
-    /// Sets an additional property using the type name of the property as the key.
+    /// Adds an additional property using the type name of the property as the key.
     /// </summary>
-    /// <typeparam name="T">The type of the property to set.</typeparam>
+    /// <typeparam name="T">The type of the property to add.</typeparam>
     /// <param name="additionalProperties">The dictionary of additional properties.</param>
-    /// <param name="value">The value to set.</param>
+    /// <param name="value">The value to add.</param>
     public static void Add<T>(this AdditionalPropertiesDictionary additionalProperties, T value)
     {
         _ = Throw.IfNull(additionalProperties);
 
-        additionalProperties[typeof(T).FullName!] = value!;
+        additionalProperties.Add(typeof(T).FullName!, value);
+    }
+
+    /// <summary>
+    /// Attempts to add a property using the type name of the property as the key.
+    /// </summary>
+    /// <remarks>
+    /// This method uses the full name of the type parameter as the key. If the key already exists,
+    /// the value is not updated and the method returns <see langword="false"/>.
+    /// </remarks>
+    /// <typeparam name="T">The type of the property to add.</typeparam>
+    /// <param name="additionalProperties">The dictionary of additional properties.</param>
+    /// <param name="value">The value to add.</param>
+    /// <returns>
+    /// <see langword="true"/> if the value was added successfully; <see langword="false"/> if the key already exists.
+    /// </returns>
+    public static bool TryAdd<T>(this AdditionalPropertiesDictionary additionalProperties, T value)
+    {
+        _ = Throw.IfNull(additionalProperties);
+
+        return additionalProperties.TryAdd(typeof(T).FullName!, value);
     }
 
     /// <summary>
@@ -45,5 +65,35 @@ public static class AdditionalPropertiesExtensions
         _ = Throw.IfNull(additionalProperties);
 
         return additionalProperties.TryGetValue(typeof(T).FullName!, out value);
+    }
+
+    /// <summary>
+    /// Determines whether the additional properties dictionary contains a property with the name of the provided type as the key.
+    /// </summary>
+    /// <typeparam name="T">The type of the property to check for.</typeparam>
+    /// <param name="additionalProperties">The dictionary of additional properties.</param>
+    /// <returns>
+    /// <see langword="true"/> if the dictionary contains a property with the name of the provided type as the key; otherwise, <see langword="false"/>.
+    /// </returns>
+    public static bool Contains<T>(this AdditionalPropertiesDictionary additionalProperties)
+    {
+        _ = Throw.IfNull(additionalProperties);
+
+        return additionalProperties.ContainsKey(typeof(T).FullName!);
+    }
+
+    /// <summary>
+    /// Removes a property from the additional properties dictionary using the name of the provided type as the key.
+    /// </summary>
+    /// <typeparam name="T">The type of the property to remove.</typeparam>
+    /// <param name="additionalProperties">The dictionary of additional properties.</param>
+    /// <returns>
+    /// <see langword="true"/> if the property was successfully removed; otherwise, <see langword="false"/>.
+    /// </returns>
+    public static bool Remove<T>(this AdditionalPropertiesDictionary additionalProperties)
+    {
+        _ = Throw.IfNull(additionalProperties);
+
+        return additionalProperties.Remove(typeof(T).FullName!);
     }
 }

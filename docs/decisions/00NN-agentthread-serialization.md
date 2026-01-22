@@ -56,6 +56,14 @@ so if a user was to call `GetService<MyBehavior>()` on the AgentThread before it
 Behaviors like ChatMessageStore and AIContextProviders would need to change to support taking state as input and exposing state publicly.
 
 ```csharp
+public class ChatClientAgentThread
+{
+    ...
+    public ChatMessageStoreState ChatMessageStoreState { get; }
+    public ChatMessageStore? ChatMessageStore { get; }
+    ...
+}
+
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(InMemoryChatMessageStoreState), nameof(InMemoryChatMessageStoreState))]
 public abstract class ChatMessageStoreState
@@ -121,6 +129,15 @@ Each time the AgentThread is used by the Agent, the behavior is created based on
 This means that users are unable to access the behavior from the AgentThread, e.g. via `AgentThread.GetService<TBehavior>()`.
 
 However, we could potentially introduce a method on the Agent to get the behavior via the Agent, e.g. `AIAgent.GetBehavior<TBehavior>(AgentThread thread)`. This would require multiple copies of a behavior to be able to operate on a single behavior state, since it would not be possible to avoid having two behavior instances for the same behavior at the same time.
+
+```csharp
+public class ChatClientAgentThread
+{
+    ...
+    public ChatMessageStoreState ChatMessageStoreState { get; }
+    ...
+}
+```
 
 ### Option 3: Keep the current approach of custom Serialize/Deserialize methods
 

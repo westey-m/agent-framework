@@ -4,7 +4,6 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Azure.Core;
-using Azure.Identity;
 using Microsoft.Azure.Cosmos;
 
 namespace Microsoft.Agents.AI;
@@ -71,7 +70,7 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(tokenCredential));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(new CosmosChatHistoryProvider(accountEndpoint, new DefaultAzureCredential(), databaseId, containerId));
+        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(new CosmosChatHistoryProvider(accountEndpoint, tokenCredential, databaseId, containerId));
         return options;
     }
 

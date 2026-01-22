@@ -58,7 +58,7 @@ Console.WriteLine(JsonSerializer.Serialize(serializedThread, new JsonSerializerO
 // Deserialize the thread state after loading from storage.
 AgentThread resumedThread = await agent.DeserializeThreadAsync(serializedThread);
 
-// Run the agent with the thread that stores caht history in the vector store a second time.
+// Run the agent with the thread that stores chat history in the vector store a second time.
 Console.WriteLine(await agent.RunAsync("Now tell the same joke in the voice of a pirate, and add some emojis to the joke.", resumedThread));
 
 // We can access the VectorChatHistoryProvider via the thread's GetService method if we need to read the key under which chat history is stored.

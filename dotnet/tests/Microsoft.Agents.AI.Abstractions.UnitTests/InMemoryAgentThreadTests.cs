@@ -62,7 +62,7 @@ public class InMemoryAgentThreadTests
         // Arrange
         InMemoryChatHistoryProvider provider = [new(ChatRole.User, "TestMsg")];
         var providerState = provider.Serialize();
-        var threadStateWrapper = new InMemoryAgentThread.InMemoryAgentThreadState { ChatHistoryProvideState = providerState };
+        var threadStateWrapper = new InMemoryAgentThread.InMemoryAgentThreadState { ChatHistoryProviderState = providerState };
         var json = JsonSerializer.SerializeToElement(threadStateWrapper, TestJsonSerializerContext.Default.InMemoryAgentThreadState);
 
         // Act
@@ -130,7 +130,7 @@ public class InMemoryAgentThreadTests
     #region GetService Tests
 
     [Fact]
-    public void GetService_RequestingChatHistoryProvider_ReturnsChatHistoryProvide()
+    public void GetService_RequestingChatHistoryProvider_ReturnsChatHistoryProvider()
     {
         // Arrange
         var thread = new TestInMemoryAgentThread();

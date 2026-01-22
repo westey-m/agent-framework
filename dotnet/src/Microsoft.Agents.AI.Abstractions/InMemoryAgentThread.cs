@@ -60,7 +60,7 @@ public abstract class InMemoryAgentThread : AgentThread
     /// </summary>
     /// <param name="serializedThreadState">A <see cref="JsonElement"/> representing the serialized state of the thread.</param>
     /// <param name="jsonSerializerOptions">Optional settings for customizing the JSON deserialization process.</param>
-    /// <param name="chatHistoryProvideFactory">
+    /// <param name="chatHistoryProviderFactory">
     /// Optional factory function to create the <see cref="InMemoryChatHistoryProvider"/> from its serialized state.
     /// If not provided, a default factory will be used that creates a basic <see cref="InMemoryChatHistoryProvider"/>.
     /// </param>
@@ -73,7 +73,7 @@ public abstract class InMemoryAgentThread : AgentThread
     protected InMemoryAgentThread(
         JsonElement serializedThreadState,
         JsonSerializerOptions? jsonSerializerOptions = null,
-        Func<JsonElement, JsonSerializerOptions?, InMemoryChatHistoryProvider>? chatHistoryProvideFactory = null)
+        Func<JsonElement, JsonSerializerOptions?, InMemoryChatHistoryProvider>? chatHistoryProviderFactory = null)
     {
         if (serializedThreadState.ValueKind != JsonValueKind.Object)
         {
@@ -84,8 +84,8 @@ public abstract class InMemoryAgentThread : AgentThread
             AgentAbstractionsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(InMemoryAgentThreadState))) as InMemoryAgentThreadState;
 
         this.ChatHistoryProvider =
-            chatHistoryProvideFactory?.Invoke(state?.ChatHistoryProvideState ?? default, jsonSerializerOptions) ??
-            new InMemoryChatHistoryProvider(state?.ChatHistoryProvideState ?? default, jsonSerializerOptions);
+            chatHistoryProviderFactory?.Invoke(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions) ??
+            new InMemoryChatHistoryProvider(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public abstract class InMemoryAgentThread : AgentThread
 
         var state = new InMemoryAgentThreadState
         {
-            ChatHistoryProvideState = chatHistoryProviderState,
+            ChatHistoryProviderState = chatHistoryProviderState,
         };
 
         return JsonSerializer.SerializeToElement(state, AgentAbstractionsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(InMemoryAgentThreadState)));
@@ -119,6 +119,6 @@ public abstract class InMemoryAgentThread : AgentThread
 
     internal sealed class InMemoryAgentThreadState
     {
-        public JsonElement? ChatHistoryProvideState { get; set; }
+        public JsonElement? ChatHistoryProviderState { get; set; }
     }
 }

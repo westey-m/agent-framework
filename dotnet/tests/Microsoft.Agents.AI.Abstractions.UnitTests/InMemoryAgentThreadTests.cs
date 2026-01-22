@@ -99,7 +99,7 @@ public class InMemoryAgentThreadTests
 
         // Assert
         Assert.Equal(JsonValueKind.Object, json.ValueKind);
-        Assert.True(json.TryGetProperty("chatHistoryProvideState", out var providerStateProperty));
+        Assert.True(json.TryGetProperty("chatHistoryProviderState", out var providerStateProperty));
         Assert.Equal(JsonValueKind.Object, providerStateProperty.ValueKind);
         Assert.True(providerStateProperty.TryGetProperty("messages", out var messagesProperty));
         Assert.Equal(JsonValueKind.Array, messagesProperty.ValueKind);
@@ -118,7 +118,7 @@ public class InMemoryAgentThreadTests
 
         // Assert
         Assert.Equal(JsonValueKind.Object, json.ValueKind);
-        Assert.True(json.TryGetProperty("chatHistoryProvideState", out var providerStateProperty));
+        Assert.True(json.TryGetProperty("chatHistoryProviderState", out var providerStateProperty));
         Assert.Equal(JsonValueKind.Object, providerStateProperty.ValueKind);
         Assert.True(providerStateProperty.TryGetProperty("messages", out var messagesProperty));
         Assert.Equal(JsonValueKind.Array, messagesProperty.ValueKind);

@@ -99,8 +99,8 @@ public sealed class AIAgentBuilder
     /// <param name="sharedFunc">
     /// A delegate that provides the implementation for both <see cref="AIAgent.RunAsync(IEnumerable{ChatMessage}, AgentSession?, AgentRunOptions?, CancellationToken)"/> and
     /// <see cref="AIAgent.RunStreamingAsync(IEnumerable{ChatMessage}, AgentSession?, AgentRunOptions?, CancellationToken)"/>. This delegate is invoked with the list of messages, the agent
-    /// thread, the run options, a delegate that represents invoking the inner agent, and a cancellation token. The delegate should be passed
-    /// whatever messages, thread, options, and cancellation token should be passed along to the next stage in the pipeline.
+    /// session, the run options, a delegate that represents invoking the inner agent, and a cancellation token. The delegate should be passed
+    /// whatever messages, session, options, and cancellation token should be passed along to the next stage in the pipeline.
     /// It will handle both the non-streaming and streaming cases.
     /// </param>
     /// <returns>The updated <see cref="AIAgentBuilder"/> instance.</returns>

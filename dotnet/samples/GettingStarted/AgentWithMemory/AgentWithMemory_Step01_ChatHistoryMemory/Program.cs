@@ -40,9 +40,9 @@ AIAgent agent = new AzureOpenAIClient(
             vectorDimensions: 3072,
             // Configure the scope values under which chat messages will be stored.
             // In this case, we are using a fixed user ID and a unique session ID for each new session.
-            storageScope: new() { UserId = "UID1", ThreadId = new Guid().ToString() },
+            storageScope: new() { UserId = "UID1", SessionId = new Guid().ToString() },
             // Configure the scope which would be used to search for relevant prior messages.
-            // In this case, we are searching for any messages for the user across all threads.
+            // In this case, we are searching for any messages for the user across all sesssions.
             searchScope: new() { UserId = "UID1" }))
     });
 
@@ -52,7 +52,7 @@ AgentSession? session = await agent.GetNewSessionAsync();
 // Run the agent with the session that stores conversation history in the vector store.
 Console.WriteLine(await agent.RunAsync("I like jokes about Pirates. Tell me a joke about a pirate.", session));
 
-// Start a second session. Since we configured the search scope to be across all threads for the user,
+// Start a second session. Since we configured the search scope to be across all sessions for the user,
 // the agent should remember that the user likes pirate jokes.
 AgentSession? session2 = await agent.GetNewSessionAsync();
 

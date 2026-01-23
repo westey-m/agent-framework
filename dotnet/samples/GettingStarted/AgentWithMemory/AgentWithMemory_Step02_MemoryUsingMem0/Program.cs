@@ -2,7 +2,7 @@
 
 // This sample shows how to use the Mem0Provider to persist and recall memories for an agent.
 // The sample stores conversation messages in a Mem0 service and retrieves relevant memories
-// for subsequent invocations, even across new threads.
+// for subsequent invocations, even across new sessions.
 
 using System.Net.Http.Headers;
 using System.Text.Json;

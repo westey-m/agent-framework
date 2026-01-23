@@ -21,7 +21,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
     #region ConversationId Tests
 
     /// <summary>
-    /// Verify that RunAsync does not throw when providing a ConversationId via both AgentThread and
+    /// Verify that RunAsync does not throw when providing a ConversationId via both AgentSession and
     /// via ChatOptions and the two are the same.
     /// </summary>
     [Fact]
@@ -46,7 +46,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
     }
 
     /// <summary>
-    /// Verify that RunAsync throws when providing a ConversationId via both AgentThread and
+    /// Verify that RunAsync throws when providing a ConversationId via both AgentSession and
     /// via ChatOptions and the two are different.
     /// </summary>
     [Fact]

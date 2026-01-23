@@ -39,11 +39,11 @@ internal sealed class AFAgentApplication : AgentApplication
         await turnContext.StreamingResponse.QueueInformativeUpdateAsync("Working on a response for you", cancellationToken);
 
         // Get the conversation history from turn state.
-        JsonElement threadElementStart = turnState.GetValue<JsonElement>("conversation.chatHistory");
+        JsonElement sessionElementStart = turnState.GetValue<JsonElement>("conversation.chatHistory");
 
-        // Deserialize the conversation history into an AgentThread, or create a new one if none exists.
-        AgentSession agentSession = threadElementStart.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null
-            ? await this._agent.DeserializeSessionAsync(threadElementStart, JsonUtilities.DefaultOptions, cancellationToken)
+        // Deserialize the conversation history into an AgentSession, or create a new one if none exists.
+        AgentSession agentSession = sessionElementStart.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null
+            ? await this._agent.DeserializeSessionAsync(sessionElementStart, JsonUtilities.DefaultOptions, cancellationToken)
             : await this._agent.GetNewSessionAsync(cancellationToken);
 
         ChatMessage chatMessage = HandleUserInput(turnContext);
@@ -80,8 +80,8 @@ internal sealed class AFAgentApplication : AgentApplication
         }
 
         // Serialize and save the updated conversation history back to turn state.
-        JsonElement threadElementEnd = agentSession.Serialize(JsonUtilities.DefaultOptions);
-        turnState.SetValue("conversation.chatHistory", threadElementEnd);
+        JsonElement sessionElementEnd = agentSession.Serialize(JsonUtilities.DefaultOptions);
+        turnState.SetValue("conversation.chatHistory", sessionElementEnd);
 
         // End the streaming response
         await turnContext.StreamingResponse.EndStreamAsync(cancellationToken);

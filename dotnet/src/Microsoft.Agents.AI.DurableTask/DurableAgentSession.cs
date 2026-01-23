@@ -34,11 +34,11 @@ public sealed class DurableAgentSession : AgentSession
     }
 
     /// <summary>
-    /// Deserializes a DurableAgentThread from JSON.
+    /// Deserializes a DurableAgentSession from JSON.
     /// </summary>
     /// <param name="serializedSession">The serialized thread data.</param>
     /// <param name="jsonSerializerOptions">Optional JSON serializer options.</param>
-    /// <returns>The deserialized DurableAgentThread.</returns>
+    /// <returns>The deserialized DurableAgentSession.</returns>
     internal static DurableAgentSession Deserialize(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null)
     {
         if (!serializedSession.TryGetProperty("sessionId", out JsonElement sessionIdElement) ||

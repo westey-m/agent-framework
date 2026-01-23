@@ -24,10 +24,10 @@ ChatClient chatClient = new AzureOpenAIClient(
     .GetChatClient(deploymentName);
 
 // Create the agent and provide a factory to add our custom memory component to
-// all threads created by the agent. Here each new memory component will have its own
+// all sessions created by the agent. Here each new memory component will have its own
 // user info object, so each session will have its own memory.
 // In real world applications/services, where the user info would be persisted in a database,
-// and preferably shared between multiple threads used by the same user, ensure that the
+// and preferably shared between multiple sessions used by the same user, ensure that the
 // factory reads the user id from the current context and scopes the memory component
 // and its storage to that user id.
 AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions()
@@ -47,12 +47,12 @@ Console.WriteLine(await agent.RunAsync("My name is Ruaidhrí", session));
 Console.WriteLine(await agent.RunAsync("I am 20 years old", session));
 
 // We can serialize the session. The serialized state will include the state of the memory component.
-var threadElement = session.Serialize();
+var sesionElement = session.Serialize();
 
 Console.WriteLine("\n>> Use deserialized session with previously created memories\n");
 
 // Later we can deserialize the session and continue the conversation with the previous memory component state.
-var deserializedSession = await agent.DeserializeSessionAsync(threadElement);
+var deserializedSession = await agent.DeserializeSessionAsync(sesionElement);
 Console.WriteLine(await agent.RunAsync("What is my name and age?", deserializedSession));
 
 Console.WriteLine("\n>> Read memories from memory component\n");

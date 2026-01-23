@@ -75,8 +75,8 @@ AIAgent agentWithRequiredApproval = await persistentAgentsClient.CreateAIAgentAs
     });
 
 // You can then invoke the agent like any other AIAgent.
-var threadWithRequiredApproval = await agentWithRequiredApproval.GetNewSessionAsync();
-var response = await agentWithRequiredApproval.RunAsync("Please summarize the Azure AI Agent documentation related to MCP Tool calling?", threadWithRequiredApproval);
+var sessionWithRequiredApproval = await agentWithRequiredApproval.GetNewSessionAsync();
+var response = await agentWithRequiredApproval.RunAsync("Please summarize the Azure AI Agent documentation related to MCP Tool calling?", sessionWithRequiredApproval);
 var userInputRequests = response.UserInputRequests.ToList();
 
 while (userInputRequests.Count > 0)
@@ -98,7 +98,7 @@ while (userInputRequests.Count > 0)
         .ToList();
 
     // Pass the user input responses back to the agent for further processing.
-    response = await agentWithRequiredApproval.RunAsync(userInputResponses, threadWithRequiredApproval);
+    response = await agentWithRequiredApproval.RunAsync(userInputResponses, sessionWithRequiredApproval);
 
     userInputRequests = response.UserInputRequests.ToList();
 }

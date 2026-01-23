@@ -39,7 +39,7 @@ public class AgentSessionTests
     }
 
     /// <summary>
-    /// Verify that GetService returns the session itself when requesting the base AgentThread type.
+    /// Verify that GetService returns the session itself when requesting the base AgentSession type.
     /// </summary>
     [Fact]
     public void GetService_RequestingAgentSessionType_ReturnsSession()

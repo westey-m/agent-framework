@@ -28,7 +28,7 @@ ProjectConversationsClient conversationsClient = aiProjectClient.GetProjectOpenA
 ProjectConversation conversation = await conversationsClient.CreateProjectConversationAsync();
 
 // Providing the conversation Id is not strictly necessary, but by not providing it no information will show up in the Foundry Project UI as conversations.
-// Threads that doesn't have a conversation Id will work based on the `PreviousResponseId`.
+// Sessions that don't have a conversation Id will work based on the `PreviousResponseId`.
 AgentSession? session = await jokerAgent.GetNewSessionAsync(conversation.Id);
 
 Console.WriteLine(await jokerAgent.RunAsync("Tell me a joke about a pirate.", session));

@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 // This sample demonstrates how to maintain conversation state using the OpenAIResponseClientAgent
-// and AgentThread. By passing the same session to multiple agent invocations, the agent
+// and AgentSession. By passing the same session to multiple agent invocations, the agent
 // automatically maintains the conversation history, allowing the AI model to understand
 // context from previous exchanges.
 

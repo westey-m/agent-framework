@@ -63,7 +63,7 @@ Console.WriteLine(await agent.RunAsync("Now tell the same joke in the voice of a
 
 // We can access the VectorChatHistoryProvider via the session's GetService method if we need to read the key under which chat history is stored.
 var chatHistoryProvider = resumedSession.GetService<VectorChatHistoryProvider>()!;
-Console.WriteLine($"\nThread is stored in vector store under key: {chatHistoryProvider.SessionDbKey}");
+Console.WriteLine($"\nSession is stored in vector store under key: {chatHistoryProvider.SessionDbKey}");
 
 namespace SampleApp
 {
@@ -94,7 +94,7 @@ namespace SampleApp
 
             var records = await collection
                 .GetAsync(
-                    x => x.ThreadId == this.SessionDbKey, 10,
+                    x => x.SessionId == this.SessionDbKey, 10,
                     new() { OrderBy = x => x.Descending(y => y.Timestamp) },
                     cancellationToken)
                 .ToListAsync(cancellationToken);
@@ -126,7 +126,7 @@ namespace SampleApp
             {
                 Key = this.SessionDbKey + x.MessageId,
                 Timestamp = DateTimeOffset.UtcNow,
-                ThreadId = this.SessionDbKey,
+                SessionId = this.SessionDbKey,
                 SerializedMessage = JsonSerializer.Serialize(x),
                 MessageText = x.Text
             }), cancellationToken);
@@ -145,7 +145,7 @@ namespace SampleApp
             public string? Key { get; set; }
 
             [VectorStoreData]
-            public string? ThreadId { get; set; }
+            public string? SessionId { get; set; }
 
             [VectorStoreData]
             public DateTimeOffset? Timestamp { get; set; }

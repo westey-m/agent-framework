@@ -175,10 +175,10 @@ public abstract class ChatHistoryProvider
         /// <param name="requestMessages">The caller provided messages that were used by the agent for this invocation.</param>
         /// <param name="chatHistoryProviderMessages">The messages retrieved from the <see cref="ChatHistoryProvider"/> for this invocation.</param>
         /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
-        public InvokedContext(IEnumerable<ChatMessage> requestMessages, IEnumerable<ChatMessage> chatHistoryProviderMessages)
+        public InvokedContext(IEnumerable<ChatMessage> requestMessages, IEnumerable<ChatMessage>? chatHistoryProviderMessages)
         {
             this.RequestMessages = Throw.IfNull(requestMessages);
-            this.ChatHistoryProviderMessages = Throw.IfNull(chatHistoryProviderMessages);
+            this.ChatHistoryProviderMessages = chatHistoryProviderMessages;
         }
 
         /// <summary>
@@ -197,7 +197,7 @@ public abstract class ChatHistoryProvider
         /// A collection of <see cref="ChatMessage"/> instances that were retrieved from the <see cref="ChatHistoryProvider"/>,
         /// and were used by the agent as part of the invocation.
         /// </value>
-        public IEnumerable<ChatMessage> ChatHistoryProviderMessages { get; set { field = Throw.IfNull(value); } }
+        public IEnumerable<ChatMessage>? ChatHistoryProviderMessages { get; set; }
 
         /// <summary>
         /// Gets or sets the messages provided by the <see cref="AIContextProvider"/> for this invocation, if any.

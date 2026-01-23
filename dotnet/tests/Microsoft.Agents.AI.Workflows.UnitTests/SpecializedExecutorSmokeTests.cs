@@ -51,25 +51,25 @@ public class SpecializedExecutorSmokeTests
             return result;
         }
 
-        public override ValueTask<AgentThread> GetNewThreadAsync(CancellationToken cancellationToken = default)
-            => new(new TestAgentThread());
+        public override ValueTask<AgentSession> GetNewSessionAsync(CancellationToken cancellationToken = default)
+            => new(new TestAgentSession());
 
-        public override ValueTask<AgentThread> DeserializeThreadAsync(JsonElement serializedThread, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
-            => new(new TestAgentThread());
+        public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+            => new(new TestAgentSession());
 
         public static TestAIAgent FromStrings(params string[] messages) =>
             new(ToChatMessages(messages));
 
         public List<ChatMessage> Messages { get; } = Validate(messages) ?? [];
 
-        protected override Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default) =>
+        protected override Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(new AgentResponse(this.Messages)
             {
                 AgentId = this.Id,
                 ResponseId = Guid.NewGuid().ToString("N")
             });
 
-        protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             string responseId = Guid.NewGuid().ToString("N");
             foreach (ChatMessage message in this.Messages)
@@ -111,7 +111,7 @@ public class SpecializedExecutorSmokeTests
         }
     }
 
-    public sealed class TestAgentThread() : InMemoryAgentThread();
+    public sealed class TestAgentSession() : InMemoryAgentSession();
 
     internal sealed class TestWorkflowContext(string executorId, bool concurrentRunsEnabled = false) : IWorkflowContext
     {

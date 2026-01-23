@@ -41,7 +41,7 @@ public sealed class ChatHistoryMemoryProviderScope
     public string? AgentId { get; set; }
 
     /// <summary>
-    /// Gets or sets an optional ID for the thread to scope chat history to.
+    /// Gets or sets an optional ID for the session to scope chat history to.
     /// </summary>
     public string? ThreadId { get; set; }
 

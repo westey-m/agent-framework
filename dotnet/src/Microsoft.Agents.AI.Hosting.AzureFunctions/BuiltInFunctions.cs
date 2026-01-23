@@ -69,7 +69,7 @@ internal static class BuiltInFunctions
             message = await req.ReadAsStringAsync();
         }
 
-        // The thread ID can come from query string or JSON body
+        // The session ID can come from query string or JSON body
         string? threadIdFromQuery = req.Query["thread_id"];
 
         // Validate that if thread_id is specified in both places, they must match
@@ -121,7 +121,7 @@ internal static class BuiltInFunctions
         {
             AgentResponse agentResponse = await agentProxy.RunAsync(
                 message: new ChatMessage(ChatRole.User, message),
-                thread: new DurableAgentThread(sessionId),
+                session: new DurableAgentSession(sessionId),
                 options: options,
                 cancellationToken: context.CancellationToken);
 
@@ -136,7 +136,7 @@ internal static class BuiltInFunctions
         // Fire and forget - return 202 Accepted
         await agentProxy.RunAsync(
             message: new ChatMessage(ChatRole.User, message),
-            thread: new DurableAgentThread(sessionId),
+            session: new DurableAgentSession(sessionId),
             options: options,
             cancellationToken: context.CancellationToken);
 
@@ -172,7 +172,7 @@ internal static class BuiltInFunctions
 
         AgentResponse agentResponse = await agentProxy.RunAsync(
             message: new ChatMessage(ChatRole.User, query),
-            thread: new DurableAgentThread(sessionId),
+            session: new DurableAgentSession(sessionId),
             options: null);
 
         return agentResponse.Text;
@@ -216,7 +216,7 @@ internal static class BuiltInFunctions
     /// <param name="req">The HTTP request data.</param>
     /// <param name="context">The function context.</param>
     /// <param name="statusCode">The HTTP status code (typically 200 OK).</param>
-    /// <param name="threadId">The thread ID for the conversation.</param>
+    /// <param name="threadId">The session ID for the conversation.</param>
     /// <param name="agentResponse">The agent's response.</param>
     /// <returns>The HTTP response data containing the success response.</returns>
     private static async Task<HttpResponseData> CreateSuccessResponseAsync(
@@ -227,7 +227,7 @@ internal static class BuiltInFunctions
         AgentResponse agentResponse)
     {
         HttpResponseData response = req.CreateResponse(statusCode);
-        response.Headers.Add("x-ms-thread-id", threadId);
+        response.Headers.Add("x-ms-session-id", threadId);
 
         bool acceptsJson = req.Headers.TryGetValues("Accept", out IEnumerable<string>? acceptValues) &&
             acceptValues.Contains("application/json", StringComparer.OrdinalIgnoreCase);
@@ -251,7 +251,7 @@ internal static class BuiltInFunctions
     /// </summary>
     /// <param name="req">The HTTP request data.</param>
     /// <param name="context">The function context.</param>
-    /// <param name="threadId">The thread ID for the conversation.</param>
+    /// <param name="threadId">The session ID for the conversation.</param>
     /// <returns>The HTTP response data containing the accepted response.</returns>
     private static async Task<HttpResponseData> CreateAcceptedResponseAsync(
         HttpRequestData req,
@@ -259,7 +259,7 @@ internal static class BuiltInFunctions
         string threadId)
     {
         HttpResponseData response = req.CreateResponse(HttpStatusCode.Accepted);
-        response.Headers.Add("x-ms-thread-id", threadId);
+        response.Headers.Add("x-ms-session-id", threadId);
 
         bool acceptsJson = req.Headers.TryGetValues("Accept", out IEnumerable<string>? acceptValues) &&
             acceptValues.Contains("application/json", StringComparer.OrdinalIgnoreCase);
@@ -298,7 +298,7 @@ internal static class BuiltInFunctions
     /// Represents a request to run an agent.
     /// </summary>
     /// <param name="Message">The message to send to the agent.</param>
-    /// <param name="ThreadId">The optional thread ID to continue a conversation.</param>
+    /// <param name="ThreadId">The optional session ID to continue a conversation.</param>
     private sealed record AgentRunRequest(
         [property: JsonPropertyName("message")] string? Message,
         [property: JsonPropertyName("thread_id")] string? ThreadId);
@@ -316,7 +316,7 @@ internal static class BuiltInFunctions
     /// Represents a successful agent run response.
     /// </summary>
     /// <param name="Status">The HTTP status code.</param>
-    /// <param name="ThreadId">The thread ID for the conversation.</param>
+    /// <param name="ThreadId">The session ID for the conversation.</param>
     /// <param name="Response">The agent response.</param>
     private sealed record AgentRunSuccessResponse(
         [property: JsonPropertyName("status")] int Status,
@@ -327,7 +327,7 @@ internal static class BuiltInFunctions
     /// Represents an accepted (fire-and-forget) agent run response.
     /// </summary>
     /// <param name="Status">The HTTP status code.</param>
-    /// <param name="ThreadId">The thread ID for the conversation.</param>
+    /// <param name="ThreadId">The session ID for the conversation.</param>
     private sealed record AgentRunAcceptedResponse(
         [property: JsonPropertyName("status")] int Status,
         [property: JsonPropertyName("thread_id")] string ThreadId);

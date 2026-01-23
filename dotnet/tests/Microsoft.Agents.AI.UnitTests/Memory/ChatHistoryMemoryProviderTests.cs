@@ -486,7 +486,7 @@ public class ChatHistoryMemoryProviderTests
         {
             ApplicationId = "app",
             AgentId = "agent",
-            ThreadId = "thread",
+            ThreadId = "session",
             UserId = "user"
         };
 
@@ -507,7 +507,7 @@ public class ChatHistoryMemoryProviderTests
         var storage = doc.RootElement.GetProperty("storageScope");
         Assert.Equal("app", storage.GetProperty("applicationId").GetString());
         Assert.Equal("agent", storage.GetProperty("agentId").GetString());
-        Assert.Equal("thread", storage.GetProperty("threadId").GetString());
+        Assert.Equal("session", storage.GetProperty("threadId").GetString());
         Assert.Equal("user", storage.GetProperty("userId").GetString());
 
         var search = doc.RootElement.GetProperty("searchScope");

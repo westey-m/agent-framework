@@ -322,7 +322,7 @@ public sealed partial class TextSearchStore : IDisposable
             return this._vectorStoreRecordCollection;
         }
 
-        // Wait on a lock to ensure that only one thread can create the collection.
+        // Wait on a lock to ensure that only one session can create the collection.
         await this._collectionInitializationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         // If multiple threads waited on the lock, and the first already created the collection,
@@ -333,7 +333,7 @@ public sealed partial class TextSearchStore : IDisposable
             return this._vectorStoreRecordCollection;
         }
 
-        // Only the winning thread should reach this point and create the collection.
+        // Only the winning session should reach this point and create the collection.
         try
         {
             await this._vectorStoreRecordCollection.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);

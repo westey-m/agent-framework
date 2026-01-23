@@ -42,14 +42,14 @@ internal sealed class AFAgentApplication : AgentApplication
         JsonElement threadElementStart = turnState.GetValue<JsonElement>("conversation.chatHistory");
 
         // Deserialize the conversation history into an AgentThread, or create a new one if none exists.
-        AgentThread agentThread = threadElementStart.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null
-            ? await this._agent.DeserializeThreadAsync(threadElementStart, JsonUtilities.DefaultOptions, cancellationToken)
-            : await this._agent.GetNewThreadAsync(cancellationToken);
+        AgentSession agentSession = threadElementStart.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null
+            ? await this._agent.DeserializeSessionAsync(threadElementStart, JsonUtilities.DefaultOptions, cancellationToken)
+            : await this._agent.GetNewSessionAsync(cancellationToken);
 
         ChatMessage chatMessage = HandleUserInput(turnContext);
 
         // Invoke the WeatherForecastAgent to process the message
-        AgentResponse agentResponse = await this._agent.RunAsync(chatMessage, agentThread, cancellationToken: cancellationToken);
+        AgentResponse agentResponse = await this._agent.RunAsync(chatMessage, agentSession, cancellationToken: cancellationToken);
 
         // Check for any user input requests in the response
         // and turn them into adaptive cards in the streaming response.
@@ -80,7 +80,7 @@ internal sealed class AFAgentApplication : AgentApplication
         }
 
         // Serialize and save the updated conversation history back to turn state.
-        JsonElement threadElementEnd = agentThread.Serialize(JsonUtilities.DefaultOptions);
+        JsonElement threadElementEnd = agentSession.Serialize(JsonUtilities.DefaultOptions);
         turnState.SetValue("conversation.chatHistory", threadElementEnd);
 
         // End the streaming response

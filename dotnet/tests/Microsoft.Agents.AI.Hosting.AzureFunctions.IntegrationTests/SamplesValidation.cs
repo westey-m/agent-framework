@@ -73,12 +73,12 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
             Assert.NotEmpty(responseText);
             this._outputHelper.WriteLine($"Agent run response: {responseText}");
 
-            // The response headers should include the agent thread ID, which can be used to continue the conversation.
-            string? threadId = response.Headers.GetValues("x-ms-thread-id")?.FirstOrDefault();
+            // The response headers should include the agent session ID, which can be used to continue the conversation.
+            string? threadId = response.Headers.GetValues("x-ms-session-id")?.FirstOrDefault();
             Assert.NotNull(threadId);
             Assert.NotEmpty(threadId);
 
-            this._outputHelper.WriteLine($"Agent thread ID: {threadId}");
+            this._outputHelper.WriteLine($"Agent session ID: {threadId}");
 
             // Wait for up to 30 seconds to see if the agent response is available in the logs
             await this.WaitForConditionAsync(
@@ -286,8 +286,8 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
             string startResponseText = await startResponse.Content.ReadAsStringAsync();
             this._outputHelper.WriteLine($"Agent response: {startResponseText}");
 
-            // The response should be deserializable as an AgentResponse object and have a valid thread ID
-            startResponse.Headers.TryGetValues("x-ms-thread-id", out IEnumerable<string>? agentIdValues);
+            // The response should be deserializable as an AgentResponse object and have a valid session ID
+            startResponse.Headers.TryGetValues("x-ms-session-id", out IEnumerable<string>? agentIdValues);
             string? threadId = agentIdValues?.FirstOrDefault();
             Assert.NotNull(threadId);
             Assert.NotEmpty(threadId);

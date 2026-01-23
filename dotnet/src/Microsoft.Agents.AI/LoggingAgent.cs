@@ -18,8 +18,8 @@ namespace Microsoft.Agents.AI;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The provided implementation of <see cref="AIAgent"/> is thread-safe for concurrent use so long as the
-/// <see cref="ILogger"/> employed is also thread-safe for concurrent use.
+/// The provided implementation of <see cref="AIAgent"/> is session-safe for concurrent use so long as the
+/// <see cref="ILogger"/> employed is also session-safe for concurrent use.
 /// </para>
 /// <para>
 /// When the employed <see cref="ILogger"/> enables <see cref="LogLevel.Trace"/>, the contents of
@@ -56,7 +56,7 @@ public sealed partial class LoggingAgent : DelegatingAIAgent
 
     /// <inheritdoc/>
     protected override async Task<AgentResponse> RunCoreAsync(
-        IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
+        IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (this._logger.IsEnabled(LogLevel.Debug))
         {
@@ -72,7 +72,7 @@ public sealed partial class LoggingAgent : DelegatingAIAgent
 
         try
         {
-            AgentResponse response = await base.RunCoreAsync(messages, thread, options, cancellationToken).ConfigureAwait(false);
+            AgentResponse response = await base.RunCoreAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
 
             if (this._logger.IsEnabled(LogLevel.Debug))
             {
@@ -102,7 +102,7 @@ public sealed partial class LoggingAgent : DelegatingAIAgent
 
     /// <inheritdoc/>
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
-        IEnumerable<ChatMessage> messages, AgentThread? thread = null, AgentRunOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (this._logger.IsEnabled(LogLevel.Debug))
         {
@@ -119,7 +119,7 @@ public sealed partial class LoggingAgent : DelegatingAIAgent
         IAsyncEnumerator<AgentResponseUpdate> e;
         try
         {
-            e = base.RunCoreStreamingAsync(messages, thread, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+            e = base.RunCoreStreamingAsync(messages, session, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
         }
         catch (OperationCanceledException)
         {

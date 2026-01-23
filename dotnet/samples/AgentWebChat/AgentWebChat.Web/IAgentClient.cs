@@ -16,13 +16,13 @@ internal abstract class AgentClientBase
     /// </summary>
     /// <param name="agentName">The name of the agent to run.</param>
     /// <param name="messages">The messages to send to the agent.</param>
-    /// <param name="threadId">Optional thread identifier for conversation continuity.</param>
+    /// <param name="sessionId">Optional session identifier for conversation continuity.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An asynchronous enumerable of agent response updates.</returns>
     public abstract IAsyncEnumerable<AgentResponseUpdate> RunStreamingAsync(
         string agentName,
         IList<ChatMessage> messages,
-        string? threadId = null,
+        string? sessionId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -36,14 +36,14 @@ internal abstract class AgentClientBase
 }
 
 /// <summary>
-/// Helper class to create a thread-like wrapper for agent clients.
+/// Helper class to create a session-like wrapper for agent clients.
 /// </summary>
-public class AgentClientThread
+public class AgentClientSession
 {
     public string ThreadId { get; }
 
-    public AgentClientThread(string? threadId = null)
+    public AgentClientSession(string? sessionId = null)
     {
-        this.ThreadId = threadId ?? Guid.NewGuid().ToString("N");
+        this.ThreadId = sessionId ?? Guid.NewGuid().ToString("N");
     }
 }

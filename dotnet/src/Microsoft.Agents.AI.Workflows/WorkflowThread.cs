@@ -117,7 +117,7 @@ internal sealed class WorkflowThread : AgentThread
             RawRepresentation = raw
         };
 
-        this.MessageStore.AddMessages(update.ToChatMessage());
+        this.ChatHistoryProvider.AddMessages(update.ToChatMessage());
 
         return update;
     }

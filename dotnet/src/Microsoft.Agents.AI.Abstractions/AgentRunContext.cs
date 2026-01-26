@@ -11,11 +11,11 @@ public class AgentRunContext
     /// Initializes a new instance of the <see cref="AgentRunContext"/> class.
     /// </summary>
     /// <param name="agent">The <see cref="AIAgent"/> that is executing the current run.</param>
-    /// <param name="thread">The <see cref="AgentThread"/> that is associated with the current run.</param>
-    public AgentRunContext(AIAgent agent, AgentThread thread)
+    /// <param name="session">The <see cref="AgentSession"/> that is associated with the current run.</param>
+    public AgentRunContext(AIAgent agent, AgentSession session)
     {
         this.Agent = Throw.IfNull(agent);
-        this.Thread = Throw.IfNull(thread);
+        this.Session = Throw.IfNull(session);
     }
 
     /// <summary>Gets or sets the <see cref="AIAgent"/> that is executing the current run.</summary>
@@ -25,8 +25,8 @@ public class AgentRunContext
         private set => field = Throw.IfNull(value);
     }
 
-    /// <summary>Gets or sets the <see cref="AgentThread"/> that is associated with the current run.</summary>
-    public AgentThread Thread
+    /// <summary>Gets or sets the <see cref="AgentSession"/> that is associated with the current run.</summary>
+    public AgentSession Session
     {
         get;
         private set => field = Throw.IfNull(value);

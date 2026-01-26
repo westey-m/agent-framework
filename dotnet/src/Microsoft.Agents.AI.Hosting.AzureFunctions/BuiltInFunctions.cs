@@ -216,25 +216,25 @@ internal static class BuiltInFunctions
     /// <param name="req">The HTTP request data.</param>
     /// <param name="context">The function context.</param>
     /// <param name="statusCode">The HTTP status code (typically 200 OK).</param>
-    /// <param name="threadId">The session ID for the conversation.</param>
+    /// <param name="sessionId">The session ID for the conversation.</param>
     /// <param name="agentResponse">The agent's response.</param>
     /// <returns>The HTTP response data containing the success response.</returns>
     private static async Task<HttpResponseData> CreateSuccessResponseAsync(
         HttpRequestData req,
         FunctionContext context,
         HttpStatusCode statusCode,
-        string threadId,
+        string sessionId,
         AgentResponse agentResponse)
     {
         HttpResponseData response = req.CreateResponse(statusCode);
-        response.Headers.Add("x-ms-session-id", threadId);
+        response.Headers.Add("x-ms-thread-id", sessionId);
 
         bool acceptsJson = req.Headers.TryGetValues("Accept", out IEnumerable<string>? acceptValues) &&
             acceptValues.Contains("application/json", StringComparer.OrdinalIgnoreCase);
 
         if (acceptsJson)
         {
-            AgentRunSuccessResponse successResponse = new((int)statusCode, threadId, agentResponse);
+            AgentRunSuccessResponse successResponse = new((int)statusCode, sessionId, agentResponse);
             await response.WriteAsJsonAsync(successResponse, context.CancellationToken);
         }
         else
@@ -251,22 +251,22 @@ internal static class BuiltInFunctions
     /// </summary>
     /// <param name="req">The HTTP request data.</param>
     /// <param name="context">The function context.</param>
-    /// <param name="threadId">The session ID for the conversation.</param>
+    /// <param name="sessionId">The session ID for the conversation.</param>
     /// <returns>The HTTP response data containing the accepted response.</returns>
     private static async Task<HttpResponseData> CreateAcceptedResponseAsync(
         HttpRequestData req,
         FunctionContext context,
-        string threadId)
+        string sessionId)
     {
         HttpResponseData response = req.CreateResponse(HttpStatusCode.Accepted);
-        response.Headers.Add("x-ms-session-id", threadId);
+        response.Headers.Add("x-ms-thread-id", sessionId);
 
         bool acceptsJson = req.Headers.TryGetValues("Accept", out IEnumerable<string>? acceptValues) &&
             acceptValues.Contains("application/json", StringComparer.OrdinalIgnoreCase);
 
         if (acceptsJson)
         {
-            AgentRunAcceptedResponse acceptedResponse = new((int)HttpStatusCode.Accepted, threadId);
+            AgentRunAcceptedResponse acceptedResponse = new((int)HttpStatusCode.Accepted, sessionId);
             await response.WriteAsJsonAsync(acceptedResponse, context.CancellationToken);
         }
         else

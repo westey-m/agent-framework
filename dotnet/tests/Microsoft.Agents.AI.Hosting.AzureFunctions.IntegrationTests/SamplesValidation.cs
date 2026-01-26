@@ -74,11 +74,11 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
             this._outputHelper.WriteLine($"Agent run response: {responseText}");
 
             // The response headers should include the agent session ID, which can be used to continue the conversation.
-            string? threadId = response.Headers.GetValues("x-ms-session-id")?.FirstOrDefault();
-            Assert.NotNull(threadId);
-            Assert.NotEmpty(threadId);
+            string? sessionId = response.Headers.GetValues("x-ms-thread-id")?.FirstOrDefault();
+            Assert.NotNull(sessionId);
+            Assert.NotEmpty(sessionId);
 
-            this._outputHelper.WriteLine($"Agent session ID: {threadId}");
+            this._outputHelper.WriteLine($"Agent session ID: {sessionId}");
 
             // Wait for up to 30 seconds to see if the agent response is available in the logs
             await this.WaitForConditionAsync(
@@ -87,7 +87,7 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
                     lock (logs)
                     {
                         bool exists = logs.Any(
-                            log => log.Message.Contains("Response:") && log.Message.Contains(threadId));
+                            log => log.Message.Contains("Response:") && log.Message.Contains(sessionId));
                         return Task.FromResult(exists);
                     }
                 },
@@ -287,10 +287,10 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
             this._outputHelper.WriteLine($"Agent response: {startResponseText}");
 
             // The response should be deserializable as an AgentResponse object and have a valid session ID
-            startResponse.Headers.TryGetValues("x-ms-session-id", out IEnumerable<string>? agentIdValues);
-            string? threadId = agentIdValues?.FirstOrDefault();
-            Assert.NotNull(threadId);
-            Assert.NotEmpty(threadId);
+            startResponse.Headers.TryGetValues("x-ms-thread-id", out IEnumerable<string>? agentIdValues);
+            string? sessionId = agentIdValues?.FirstOrDefault();
+            Assert.NotNull(sessionId);
+            Assert.NotEmpty(sessionId);
 
             // Wait for the orchestration to report that it's waiting for human approval
             await this.WaitForConditionAsync(
@@ -308,7 +308,7 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
                 timeout: TimeSpan.FromSeconds(60));
 
             // Approve the content
-            Uri approvalUri = new($"{runAgentUri}?thread_id={threadId}");
+            Uri approvalUri = new($"{runAgentUri}?thread_id={sessionId}");
             using HttpContent approvalContent = new StringContent("Approve the content", Encoding.UTF8, "text/plain");
             using HttpResponseMessage approvalResponse = await s_sharedHttpClient.PostAsync(approvalUri, approvalContent);
             Assert.True(approvalResponse.IsSuccessStatusCode, $"Approve content request failed with status: {approvalResponse.StatusCode}");
@@ -328,7 +328,7 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
                 timeout: TimeSpan.FromSeconds(60));
 
             // Verify the final orchestration status by asking the agent for the status
-            Uri statusUri = new($"{runAgentUri}?thread_id={threadId}");
+            Uri statusUri = new($"{runAgentUri}?thread_id={sessionId}");
             await this.WaitForConditionAsync(
                 condition: async () =>
                 {

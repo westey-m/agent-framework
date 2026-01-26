@@ -241,7 +241,7 @@ public partial class ChatClientAgentTests
 
         ChatClientAgent agent = new(mockService.Object, options: new() { ChatOptions = new() { Instructions = "test instructions" } });
 
-        // Create a session using the agent's GetNewThreadAsync method
+        // Create a session using the agent's GetNewSessionAsync method
         var session = await agent.GetNewSessionAsync();
 
         // Act

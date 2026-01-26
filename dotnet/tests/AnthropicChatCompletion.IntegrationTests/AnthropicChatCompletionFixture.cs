@@ -98,7 +98,7 @@ public class AnthropicChatCompletionFixture : IChatClientAgentFixture
         Task.CompletedTask;
 
     public Task DeleteSessionAsync(AgentSession session) =>
-        // Chat Completion does not require/support deleting threads, so this is a no-op.
+        // Chat Completion does not require/support deleting sessions, so this is a no-op.
         Task.CompletedTask;
 
     public async Task InitializeAsync() =>

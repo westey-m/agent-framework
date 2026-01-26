@@ -76,13 +76,13 @@ AIAgent agent = azureOpenAIClient
 
 AgentSession session = await agent.GetNewSessionAsync();
 
-Console.WriteLine(">> Asking about SK threads\n");
-Console.WriteLine(await agent.RunAsync("Hi! How do I create a session in Semantic Kernel?", session));
+Console.WriteLine(">> Asking about SK sessions\n");
+Console.WriteLine(await agent.RunAsync("Hi! How do I create a thread/session in Semantic Kernel?", session));
 
 // Here we are asking a very vague question when taken out of context,
 // but since we are including previous messages in our search using RecentMessageMemoryLimit
 // the RAG search should still produce useful results.
-Console.WriteLine("\n>> Asking about AF threads\n");
+Console.WriteLine("\n>> Asking about AF sessions\n");
 Console.WriteLine(await agent.RunAsync("and in Agent Framework?", session));
 
 Console.WriteLine("\n>> Contrasting Approaches\n");

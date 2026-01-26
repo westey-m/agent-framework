@@ -39,7 +39,7 @@ public class AIProjectClientFixture : IChatClientAgentFixture
 
         if (chatClientSession.ConversationId?.StartsWith("conv_", StringComparison.OrdinalIgnoreCase) == true)
         {
-            // Conversation threads do not persist message history.
+            // Conversation sessions do not persist message history.
             return await this.GetChatHistoryFromConversationAsync(chatClientSession.ConversationId);
         }
 

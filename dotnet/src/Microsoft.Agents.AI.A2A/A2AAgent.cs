@@ -225,7 +225,7 @@ public sealed class A2AAgent : AIAgent
 
         if (session is not A2AAgentSession typedSession)
         {
-            throw new InvalidOperationException($"The provided session type {session.GetType()} is not compatible with the agent. Only A2A agent created threads are supported.");
+            throw new InvalidOperationException($"The provided session type {session.GetType()} is not compatible with the agent. Only A2A agent created sessions are supported.");
         }
 
         return typedSession;

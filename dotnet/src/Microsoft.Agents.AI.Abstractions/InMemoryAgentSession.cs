@@ -33,7 +33,7 @@ public abstract class InMemoryAgentSession : AgentSession
     /// If <see langword="null"/>, a new empty <see cref="InMemoryChatHistoryProvider"/> will be created.
     /// </param>
     /// <remarks>
-    /// This constructor allows sharing of <see cref="ChatHistoryProvider"/> between threads or providing pre-configured
+    /// This constructor allows sharing of <see cref="ChatHistoryProvider"/> between sessions or providing pre-configured
     /// <see cref="ChatHistoryProvider"/> with specific reduction or processing logic.
     /// </remarks>
     protected InMemoryAgentSession(InMemoryChatHistoryProvider? chatHistoryProvider = null)
@@ -47,7 +47,7 @@ public abstract class InMemoryAgentSession : AgentSession
     /// <param name="messages">The initial messages to populate the conversation history.</param>
     /// <exception cref="ArgumentNullException"><paramref name="messages"/> is <see langword="null"/>.</exception>
     /// <remarks>
-    /// This constructor is useful for initializing threads with existing conversation history or
+    /// This constructor is useful for initializing sessions with existing conversation history or
     /// for migrating conversations from other storage systems.
     /// </remarks>
     protected InMemoryAgentSession(IEnumerable<ChatMessage> messages)

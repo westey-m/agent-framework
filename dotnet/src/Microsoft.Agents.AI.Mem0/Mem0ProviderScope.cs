@@ -45,7 +45,7 @@ public sealed class Mem0ProviderScope
     public string? AgentId { get; set; }
 
     /// <summary>
-    /// Gets or sets an optional ID for the session to scope memories to.
+    /// Gets or sets an optional ID for the thread to scope memories to.
     /// </summary>
     public string? ThreadId { get; set; }
 

@@ -23,7 +23,7 @@ public abstract class ChatClientAgentRunTests<TAgentFixture>(Func<TAgentFixture>
         var agent = await this.Fixture.CreateChatClientAgentAsync(instructions: "ALWAYS RESPOND WITH 'Computer says no', even if there was no user input.");
         var session = await agent.GetNewSessionAsync();
         await using var agentCleanup = new AgentCleanup(agent, this.Fixture);
-        await using var threadCleanup = new SessionCleanup(session, this.Fixture);
+        await using var sessionCleanup = new SessionCleanup(session, this.Fixture);
 
         // Act
         var response = await agent.RunAsync(session);

@@ -34,16 +34,3 @@ internal abstract class AgentClientBase
     public virtual Task<AgentCard?> GetAgentCardAsync(string agentName, CancellationToken cancellationToken = default)
         => Task.FromResult<AgentCard?>(null);
 }
-
-/// <summary>
-/// Helper class to create a session-like wrapper for agent clients.
-/// </summary>
-public class AgentClientSession
-{
-    public string ThreadId { get; }
-
-    public AgentClientSession(string? sessionId = null)
-    {
-        this.ThreadId = sessionId ?? Guid.NewGuid().ToString("N");
-    }
-}

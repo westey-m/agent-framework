@@ -18,8 +18,8 @@ namespace Microsoft.Agents.AI;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The provided implementation of <see cref="AIAgent"/> is session-safe for concurrent use so long as the
-/// <see cref="ILogger"/> employed is also session-safe for concurrent use.
+/// The provided implementation of <see cref="AIAgent"/> is thread-safe for concurrent use so long as the
+/// <see cref="ILogger"/> employed is also thread-safe for concurrent use.
 /// </para>
 /// <para>
 /// When the employed <see cref="ILogger"/> enables <see cref="LogLevel.Trace"/>, the contents of

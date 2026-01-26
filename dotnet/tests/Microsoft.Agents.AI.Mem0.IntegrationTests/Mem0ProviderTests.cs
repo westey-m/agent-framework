@@ -45,7 +45,7 @@ public sealed class Mem0ProviderTests : IDisposable
         // Arrange
         var question = new ChatMessage(ChatRole.User, "What is my name?");
         var input = new ChatMessage(ChatRole.User, "Hello, my name is Caoimhe.");
-        var storageScope = new Mem0ProviderScope { ThreadId = "it-session-1", UserId = "it-user-1" };
+        var storageScope = new Mem0ProviderScope { ThreadId = "it-thread-1", UserId = "it-user-1" };
         var sut = new Mem0Provider(this._httpClient, storageScope);
 
         await sut.ClearStoredMemoriesAsync();

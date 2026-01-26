@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 namespace Microsoft.Agents.AI.Hosting;
 
 /// <summary>
-/// This store implementation does not have any store under the hood and operates with empty threads.
-/// It is the "noop" store, and could be used if you are keeping the session contents on the client side for example.
+/// This store implementation does not have any store under the hood and therefore does not store sessions.
+/// <see cref="GetSessionAsync(AIAgent, string, CancellationToken)"/> always returns a new session.
 /// </summary>
 public sealed class NoopAgentSessionStore : AgentSessionStore
 {

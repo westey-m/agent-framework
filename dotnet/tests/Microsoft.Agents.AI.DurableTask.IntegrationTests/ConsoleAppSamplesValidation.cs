@@ -848,7 +848,7 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
         Process process = new() { StartInfo = startInfo };
 
         // Capture the output and error streams asynchronously
-        // These events fire asynchronously, so we add to the blocking collection which is session-safe
+        // These events fire asynchronously, so we add to the blocking collection which is thread-safe
         process.ErrorDataReceived += (sender, e) =>
         {
             if (e.Data != null)

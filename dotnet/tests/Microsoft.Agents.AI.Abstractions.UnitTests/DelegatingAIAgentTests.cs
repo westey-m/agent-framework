@@ -132,10 +132,10 @@ public class DelegatingAIAgentTests
     #region Method Delegation Tests
 
     /// <summary>
-    /// Verify that GetNewThreadAsync delegates to inner agent.
+    /// Verify that GetNewSessionAsync delegates to inner agent.
     /// </summary>
     [Fact]
-    public async Task GetNewThreadAsync_DelegatesToInnerAgentAsync()
+    public async Task GetNewSessionAsync_DelegatesToInnerAgentAsync()
     {
         // Act
         var session = await this._delegatingAgent.GetNewSessionAsync();

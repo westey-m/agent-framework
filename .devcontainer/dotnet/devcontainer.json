@@ -1,6 +1,10 @@
 {
   "name": "C# (.NET)",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:2-10.0",
+  //"image": "mcr.microsoft.com/devcontainers/dotnet",
+  // Workaround for https://github.com/devcontainers/images/issues/1752
+  "build": {
+    "dockerfile": "dotnet.Dockerfile"
+  },
   "features": {
     "ghcr.io/devcontainers/features/dotnet:2.4.2": {},
     "ghcr.io/devcontainers/features/powershell:1.5.1": {},

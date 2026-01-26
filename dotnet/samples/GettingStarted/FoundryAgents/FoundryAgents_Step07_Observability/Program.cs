@@ -38,7 +38,7 @@ AIAgent agent = (await aiProjectClient.CreateAIAgentAsync(name: JokerName, model
     .Build();
 
 // Invoke the agent and output the text result.
-AgentSession? session = await agent.GetNewSessionAsync();
+AgentSession session = await agent.GetNewSessionAsync();
 Console.WriteLine(await agent.RunAsync("Tell me a joke about a pirate.", session));
 
 // Invoke the agent with streaming support.

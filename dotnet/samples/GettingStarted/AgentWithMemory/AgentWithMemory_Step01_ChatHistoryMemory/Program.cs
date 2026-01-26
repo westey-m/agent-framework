@@ -47,7 +47,7 @@ AIAgent agent = new AzureOpenAIClient(
     });
 
 // Start a new session for the agent conversation.
-AgentSession? session = await agent.GetNewSessionAsync();
+AgentSession session = await agent.GetNewSessionAsync();
 
 // Run the agent with the session that stores conversation history in the vector store.
 Console.WriteLine(await agent.RunAsync("I like jokes about Pirates. Tell me a joke about a pirate.", session));

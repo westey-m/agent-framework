@@ -299,7 +299,7 @@ Console.WriteLine("Enter a topic for the Publisher agent to write about (or 'exi
 Console.WriteLine();
 
 // Create a session for the conversation
-AgentSession? session = await agentProxy.GetNewSessionAsync();
+AgentSession session = await agentProxy.GetNewSessionAsync();
 
 using CancellationTokenSource cts = new();
 Console.CancelKeyPress += (sender, e) =>

@@ -29,7 +29,7 @@ ProjectConversation conversation = await conversationsClient.CreateProjectConver
 
 // Providing the conversation Id is not strictly necessary, but by not providing it no information will show up in the Foundry Project UI as conversations.
 // Sessions that don't have a conversation Id will work based on the `PreviousResponseId`.
-AgentSession? session = await jokerAgent.GetNewSessionAsync(conversation.Id);
+AgentSession session = await jokerAgent.GetNewSessionAsync(conversation.Id);
 
 Console.WriteLine(await jokerAgent.RunAsync("Tell me a joke about a pirate.", session));
 Console.WriteLine(await jokerAgent.RunAsync("Now add some emojis to the joke and tell it in the voice of a pirate's parrot.", session));

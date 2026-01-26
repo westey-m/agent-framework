@@ -26,7 +26,7 @@ AIAgent agent = new AnthropicClient { APIKey = apiKey }
     .AsAIAgent(model: model, instructions: AssistantInstructions, name: AssistantName, tools: [tool]);
 
 // Non-streaming agent interaction with function tools.
-AgentSession? session = await agent.GetNewSessionAsync();
+AgentSession session = await agent.GetNewSessionAsync();
 Console.WriteLine(await agent.RunAsync("What is the weather like in Amsterdam?", session));
 
 // Streaming agent interaction with function tools.

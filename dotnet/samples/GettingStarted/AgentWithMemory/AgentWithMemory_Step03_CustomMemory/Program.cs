@@ -37,7 +37,7 @@ AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions()
 });
 
 // Create a new session for the conversation.
-AgentSession? session = await agent.GetNewSessionAsync();
+AgentSession session = await agent.GetNewSessionAsync();
 
 Console.WriteLine(">> Use session with blank memory\n");
 

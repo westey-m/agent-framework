@@ -228,7 +228,7 @@ public sealed class AGUIAgentTests
 
         var chatClient = new AGUIChatClient(httpClient, "http://localhost/agent", null, AGUIJsonSerializerContext.Default.Options);
         AIAgent agent = chatClient.AsAIAgent(instructions: null, name: "agent1", description: "Test agent", tools: []);
-        AgentSession? session = await agent.GetNewSessionAsync();
+        AgentSession session = await agent.GetNewSessionAsync();
         List<ChatMessage> messages = [new ChatMessage(ChatRole.User, "Hello")];
 
         // Act
@@ -487,7 +487,7 @@ public sealed class AGUIAgentTests
 
         var chatClient = new AGUIChatClient(httpClient, "http://localhost/agent", null, AGUIJsonSerializerContext.Default.Options);
         AIAgent agent = chatClient.AsAIAgent(instructions: null, name: "agent1", description: "Test agent", tools: [testTool]);
-        AgentSession? session = await agent.GetNewSessionAsync();
+        AgentSession session = await agent.GetNewSessionAsync();
         List<ChatMessage> messages = [new ChatMessage(ChatRole.User, "Test")];
 
         // Act

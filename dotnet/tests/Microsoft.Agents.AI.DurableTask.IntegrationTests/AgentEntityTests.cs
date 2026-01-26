@@ -51,7 +51,7 @@ public sealed class AgentEntityTests(ITestOutputHelper outputHelper) : IDisposab
         // A proxy agent is needed to call the hosted test agent
         AIAgent simpleAgentProxy = simpleAgent.AsDurableAgentProxy(testHelper.Services);
 
-        AgentSession? session = await simpleAgentProxy.GetNewSessionAsync(this.TestTimeoutToken);
+        AgentSession session = await simpleAgentProxy.GetNewSessionAsync(this.TestTimeoutToken);
 
         DurableTaskClient client = testHelper.GetClient();
 
@@ -98,7 +98,7 @@ public sealed class AgentEntityTests(ITestOutputHelper outputHelper) : IDisposab
         // A proxy agent is needed to call the hosted test agent
         AIAgent simpleAgentProxy = simpleAgent.AsDurableAgentProxy(testHelper.Services);
 
-        AgentSession? session = await simpleAgentProxy.GetNewSessionAsync(this.TestTimeoutToken);
+        AgentSession session = await simpleAgentProxy.GetNewSessionAsync(this.TestTimeoutToken);
 
         DurableTaskClient client = testHelper.GetClient();
 

@@ -40,7 +40,7 @@ AIAgent agent = new AzureOpenAIClient(
             : new Mem0Provider(mem0HttpClient, ctx.SerializedState, ctx.JsonSerializerOptions))
     });
 
-AgentSession? session = await agent.GetNewSessionAsync();
+AgentSession session = await agent.GetNewSessionAsync();
 
 // Clear any existing memories for this scope to demonstrate fresh behavior.
 Mem0Provider mem0Provider = session.GetService<Mem0Provider>()!;

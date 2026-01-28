@@ -13,17 +13,17 @@ public sealed class AgentRunContext
     /// Initializes a new instance of the <see cref="AgentRunContext"/> class.
     /// </summary>
     /// <param name="agent">The <see cref="AIAgent"/> that is executing the current run.</param>
-    /// <param name="session">The <see cref="AgentSession"/> that is associated with the current run.</param>
+    /// <param name="session">The <see cref="AgentSession"/> that is associated with the current run if any.</param>
     /// <param name="requestMessages">The request messages passed into the current run.</param>
     /// <param name="agentRunOptions">The <see cref="AgentRunOptions"/> that was passed to the current run.</param>
     public AgentRunContext(
         AIAgent agent,
-        AgentSession session,
+        AgentSession? session,
         IReadOnlyCollection<ChatMessage> requestMessages,
         AgentRunOptions? agentRunOptions)
     {
         this.Agent = Throw.IfNull(agent);
-        this.Session = Throw.IfNull(session);
+        this.Session = session;
         this.RequestMessages = Throw.IfNull(requestMessages);
         this.RunOptions = agentRunOptions;
     }
@@ -32,7 +32,7 @@ public sealed class AgentRunContext
     public AIAgent Agent { get; }
 
     /// <summary>Gets or sets the <see cref="AgentSession"/> that is associated with the current run.</summary>
-    public AgentSession Session { get; }
+    public AgentSession? Session { get; }
 
     /// <summary>Gets or sets the request messages passed into the current run.</summary>
     public IReadOnlyCollection<ChatMessage> RequestMessages { get; }

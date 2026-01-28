@@ -255,7 +255,6 @@ public abstract class AIAgent
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        session ??= await this.GetNewSessionAsync(cancellationToken).ConfigureAwait(false);
         CurrentRunContext = new(this, session, messages as IReadOnlyCollection<ChatMessage> ?? messages.ToList(), options);
         return await this.RunCoreAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
     }
@@ -381,7 +380,6 @@ public abstract class AIAgent
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        session ??= await this.GetNewSessionAsync(cancellationToken).ConfigureAwait(false);
         AgentRunContext context = new(this, session, messages as IReadOnlyCollection<ChatMessage> ?? messages.ToList(), options);
         CurrentRunContext = context;
         await foreach (var update in this.RunCoreStreamingAsync(messages, session, options, cancellationToken).ConfigureAwait(false))

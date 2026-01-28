@@ -249,14 +249,14 @@ public abstract class AIAgent
     /// The agent's response will also be added to <paramref name="session"/> if one is provided.
     /// </para>
     /// </remarks>
-    public async Task<AgentResponse> RunAsync(
+    public Task<AgentResponse> RunAsync(
         IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         CurrentRunContext = new(this, session, messages as IReadOnlyCollection<ChatMessage> ?? messages.ToList(), options);
-        return await this.RunCoreAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
+        return this.RunCoreAsync(messages, session, options, cancellationToken);
     }
 
     /// <summary>

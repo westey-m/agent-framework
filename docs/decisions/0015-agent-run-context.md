@@ -57,7 +57,7 @@ To enable these scenarios, we need a way to access the parent agent run context,
             //     session = agent.GetNewSession(chp);
             // }
 
-            var response = await agent.RunAsync(query, session: session, options: agentRunOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var response = await agent.RunAsync(query, session: session, cancellationToken: cancellationToken).ConfigureAwait(false);
             return response.Text;
         }
 

@@ -28,15 +28,15 @@ public sealed class AgentRunContext
         this.RunOptions = agentRunOptions;
     }
 
-    /// <summary>Gets or sets the <see cref="AIAgent"/> that is executing the current run.</summary>
+    /// <summary>Gets the <see cref="AIAgent"/> that is executing the current run.</summary>
     public AIAgent Agent { get; }
 
-    /// <summary>Gets or sets the <see cref="AgentSession"/> that is associated with the current run.</summary>
+    /// <summary>Gets the <see cref="AgentSession"/> that is associated with the current run.</summary>
     public AgentSession? Session { get; }
 
-    /// <summary>Gets or sets the request messages passed into the current run.</summary>
+    /// <summary>Gets the request messages passed into the current run.</summary>
     public IReadOnlyCollection<ChatMessage> RequestMessages { get; }
 
-    /// <summary>Gets or sets the <see cref="AgentRunOptions"/> that was passed to the current run.</summary>
+    /// <summary>Gets the <see cref="AgentRunOptions"/> that was passed to the current run.</summary>
     public AgentRunOptions? RunOptions { get; }
 }

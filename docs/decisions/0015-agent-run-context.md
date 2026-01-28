@@ -49,7 +49,7 @@ To enable these scenarios, we need a way to access the parent agent run context,
             // var parentChatHistory = AIAgent.CurrentRunContext?.Session?.GetService<IList<ChatMessage>>();
             // if (parentChatHistory != null)
             // {
-            //     var chp = new InMemoryChatHistoryProvider()
+            //     var chp = new InMemoryChatHistoryProvider();
             //     foreach (var message in parentChatHistory)
             //     {
             //         chp.Add(message);
@@ -97,7 +97,7 @@ This approach provides the best of both worlds:
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        session ??= await this.GetNewSessionAsync(cancellationToken).ConfigureAwait(false);
+
         CurrentRunContext = new(this, session, messages as IReadOnlyCollection<ChatMessage> ?? messages.ToList(), options);
         return await this.RunCoreAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
     }
@@ -124,12 +124,12 @@ public class AgentRunContext
 {
     public AgentRunContext(
         AIAgent agent,
-        AgentSession session,
+        AgentSession? session,
         IReadOnlyCollection<ChatMessage> requestMessages,
         AgentRunOptions? agentRunOptions)
 
     public AIAgent Agent { get; }
-    public AgentSession Session { get; }
+    public AgentSession? Session { get; }
     public IReadOnlyCollection<ChatMessage> RequestMessages { get; }
     public AgentRunOptions? RunOptions { get; }
 }

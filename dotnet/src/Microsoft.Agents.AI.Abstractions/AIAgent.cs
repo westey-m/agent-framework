@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
@@ -255,7 +256,7 @@ public abstract class AIAgent
         CancellationToken cancellationToken = default)
     {
         session ??= await this.GetNewSessionAsync(cancellationToken).ConfigureAwait(false);
-        CurrentRunContext = new(this, session) { RunOptions = options };
+        CurrentRunContext = new(this, session, messages as IReadOnlyCollection<ChatMessage> ?? messages.ToList(), options);
         return await this.RunCoreAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
     }
 
@@ -381,7 +382,7 @@ public abstract class AIAgent
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         session ??= await this.GetNewSessionAsync(cancellationToken).ConfigureAwait(false);
-        AgentRunContext context = new(this, session) { RunOptions = options };
+        AgentRunContext context = new(this, session, messages as IReadOnlyCollection<ChatMessage> ?? messages.ToList(), options);
         CurrentRunContext = context;
         await foreach (var update in this.RunCoreStreamingAsync(messages, session, options, cancellationToken).ConfigureAwait(false))
         {

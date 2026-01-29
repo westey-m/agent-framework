@@ -319,7 +319,7 @@ public sealed class AnthropicClientExtensionsTests
             defaultMaxTokens: 8192);
 
         // Invoke the agent to trigger the request
-        var session = await agent.GetNewSessionAsync();
+        var session = await agent.CreateSessionAsync();
         try
         {
             await agent.RunAsync("Test message", session);

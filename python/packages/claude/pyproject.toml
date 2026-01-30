@@ -1,6 +1,6 @@
 [project]
-name = "agent-framework-redis"
-description = "Redis integration for Microsoft Agent Framework."
+name = "agent-framework-claude"
+description = "Claude Agent SDK integration for Microsoft Agent Framework."
 authors = [{ name = "Microsoft", email = "af-support@microsoft.com"}]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,9 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "agent-framework-core",
-    "redis>=6.4.0",
-    "redisvl>=0.8.2",
-    "numpy>=2.2.6"
+    "claude-agent-sdk>=0.1.25",
 ]
 
 [tool.uv]
@@ -59,6 +57,7 @@ omit = [
 
 [tool.pyright]
 extends = "../../pyproject.toml"
+exclude = ['tests']
 
 [tool.mypy]
 plugins = ['pydantic.mypy']
@@ -75,15 +74,15 @@ disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 
 [tool.bandit]
-targets = ["agent_framework_redis"]
+targets = ["agent_framework_claude"]
 exclude_dirs = ["tests"]
 
 [tool.poe]
 executor.type = "uv"
 include = "../../shared_tasks.toml"
 [tool.poe.tasks]
-mypy = "mypy --config-file $POE_ROOT/pyproject.toml agent_framework_redis"
-test = "pytest --cov=agent_framework_redis --cov-report=term-missing:skip-covered tests"
+mypy = "mypy --config-file $POE_ROOT/pyproject.toml agent_framework_claude"
+test = "pytest --cov=agent_framework_claude --cov-report=term-missing:skip-covered tests"
 
 [build-system]
 requires = ["flit-core >= 3.11,<4.0"]

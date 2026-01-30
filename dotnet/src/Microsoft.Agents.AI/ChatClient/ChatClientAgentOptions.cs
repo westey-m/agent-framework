@@ -46,7 +46,7 @@ public sealed class ChatClientAgentOptions
 
     /// <summary>
     /// Gets or sets a factory function to create an instance of <see cref="AIContextProvider"/>
-    /// which will be used to create a context provider for each new thread, and can then
+    /// which will be used to create a context provider for each new session, and can then
     /// provide additional context for each agent run.
     /// </summary>
     public Func<AIContextProviderFactoryContext, CancellationToken, ValueTask<AIContextProvider>>? AIContextProviderFactory { get; set; }

@@ -54,6 +54,11 @@ public abstract class AgentSession
     }
 
     /// <summary>
+    /// Gets any arbitrary state associated with this session.
+    /// </summary>
+    public AgentSessionStateBag StateBag { get; protected set; } = new();
+
+    /// <summary>
     /// Serializes the current object's state to a <see cref="JsonElement"/> using the specified serialization options.
     /// </summary>
     /// <param name="jsonSerializerOptions">The JSON serialization options to use.</param>

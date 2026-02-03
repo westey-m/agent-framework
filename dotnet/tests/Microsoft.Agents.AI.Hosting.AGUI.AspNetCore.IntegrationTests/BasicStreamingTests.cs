@@ -286,6 +286,9 @@ internal sealed class FakeChatClientAgent : AIAgent
     public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
         new(new FakeInMemoryAgentSession(serializedSession, jsonSerializerOptions));
 
+    public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+        => throw new NotImplementedException();
+
     protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
@@ -349,6 +352,9 @@ internal sealed class FakeMultiMessageAgent : AIAgent
 
     public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
         new(new FakeInMemoryAgentSession(serializedSession, jsonSerializerOptions));
+
+    public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+        => throw new NotImplementedException();
 
     protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,

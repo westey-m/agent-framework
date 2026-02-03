@@ -423,6 +423,9 @@ internal sealed class FakeStateAgent : AIAgent
     public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
         new(new FakeInMemoryAgentSession(serializedSession, jsonSerializerOptions));
 
+    public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+        => throw new NotImplementedException();
+
     private sealed class FakeInMemoryAgentSession : InMemoryAgentSession
     {
         public FakeInMemoryAgentSession()

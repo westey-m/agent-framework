@@ -431,6 +431,9 @@ public sealed class AGUIEndpointRouteBuilderExtensionsTests
         public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
             new(new TestInMemoryAgentSession(serializedSession, jsonSerializerOptions));
 
+        public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+            => throw new NotImplementedException();
+
         protected override Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
@@ -520,6 +523,9 @@ public sealed class AGUIEndpointRouteBuilderExtensionsTests
 
         public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedSession, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
             new(new TestInMemoryAgentSession(serializedSession, jsonSerializerOptions));
+
+        public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+            => throw new NotImplementedException();
 
         protected override Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
         {

@@ -29,7 +29,7 @@ public class SampleAIContextProvider : AIContextProvider2
     }
 
     /// <inheritdoc/>
-    protected override async ValueTask<ResponseContext> InvokeCoreAsync(RequestContext context, Func<RequestContext, CancellationToken, ValueTask<ResponseContext>> nextProvider, CancellationToken cancellationToken = default)
+    protected override async ValueTask<AgentResponse> InvokeCoreAsync(RequestContext context, Func<RequestContext, CancellationToken, ValueTask<AgentResponse>> nextProvider, CancellationToken cancellationToken = default)
     {
         MyState? providerState = null;
         if (context.Session != null)

@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -163,48 +162,18 @@ public sealed class AIAgentBuilder
             innerAgent,
             async (IEnumerable<ChatMessage> messages, AgentSession? session, AgentRunOptions? agentRunOptions, AIAgent agent, CancellationToken cancellationToken) =>
             {
-                AgentResponse? response = null;
+                async ValueTask<AgentResponse> nextAsync(AIMessageProvider.RequestContext ctx, CancellationToken ct)
+                    => await innerAgent.RunAsync(ctx.RequestMessages, ctx.Session, agentRunOptions, ct).ConfigureAwait(false);
 
-                async ValueTask<AIMessageProvider.ResponseContext> nextAsync(AIMessageProvider.RequestContext ctx, CancellationToken ct)
-                {
-                    response = await innerAgent.RunAsync(ctx.RequestMessages, ctx.Session, agentRunOptions, ct).ConfigureAwait(false);
-                    return new AIMessageProvider.ResponseContext(response.Messages);
-                }
-
-                var responseContext = await messageProvider.InvokeAsync(new AIMessageProvider.RequestContext(agent, session, messages), nextAsync, cancellationToken).ConfigureAwait(false);
-
-                // If the runFunc did not call nextAsync, we need to create a response ourselves.
-                response ??= new AgentResponse();
-
-                response.Messages = responseContext.ResponseMessages as IList<ChatMessage> ?? responseContext.ResponseMessages.ToList();
-                return response;
+                return await messageProvider.InvokeAsync(new AIMessageProvider.RequestContext(agent, session, messages), nextAsync, cancellationToken).ConfigureAwait(false);
             },
-            null));
+            (IEnumerable<ChatMessage> messages, AgentSession? session, AgentRunOptions? agentRunOptions, AIAgent agent, CancellationToken cancellationToken) =>
+            {
+                IAsyncEnumerable<AgentResponseUpdate> nextAsync(AIMessageProvider.RequestContext ctx, CancellationToken ct)
+                    => innerAgent.RunStreamingAsync(ctx.RequestMessages, ctx.Session, agentRunOptions, ct);
 
-        ////async (IEnumerable<ChatMessage> messages, AgentSession? session, AgentRunOptions? agentRunOptions, AIAgent agent, CancellationToken cancellationToken) =>
-        ////{
-        ////    var channel = Channel.CreateUnbounded<AgentResponseUpdate>(new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true });
-
-        ////    async ValueTask<AIMessageProvider.ResponseContext> nextAsync(AIMessageProvider.RequestContext ctx, CancellationToken ct)
-        ////    {
-        ////        List<AgentResponseUpdate> updates = new();
-        ////        var responseUpdates = innerAgent.RunStreamingAsync(ctx.RequestMessages, ctx.Session, agentRunOptions, ct);
-        ////        await foreach (var update in responseUpdates.WithCancellation(ct).ConfigureAwait(false))
-        ////        {
-        ////            updates.Add(update);
-        ////            channel.Writer.TryWrite(update);
-        ////        }
-
-        ////        return new AIMessageProvider.ResponseContext(updates.ToAgentResponse().Messages);
-        ////    }
-
-        ////    await foreach (var update in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-        ////    {
-        ////        yield return update;
-        ////    }
-
-        ////    var responseContext = await messageProvider.InvokeAsync(new AIMessageProvider.RequestContext(agent, session, messages), nextAsync, cancellationToken).ConfigureAwait(false);
-        ////}));
+                return messageProvider.InvokeStreamingAsync(new AIMessageProvider.RequestContext(agent, session, messages), nextAsync, cancellationToken);
+            }));
     }
 
     /// <summary>

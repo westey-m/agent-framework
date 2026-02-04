@@ -52,7 +52,7 @@ public class TestReplayAgent(List<ChatMessage>? messages = null, string? id = nu
         => new(new ReplayAgentSession());
 
     public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
-        => throw new NotImplementedException();
+        => default;
 
     public static TestReplayAgent FromStrings(params string[] messages) =>
         new(ToChatMessages(messages));

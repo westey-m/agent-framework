@@ -215,8 +215,11 @@ public abstract class AIContextProvider2
         public AgentSession? Session { get; }
 
         /// <summary>
-        /// Gets the caller provided messages that will be used by the agent for this invocation.
+        /// Gets or sets the caller provided messages that will be used by the agent for this invocation.
         /// </summary>
+        /// <remarks>
+        /// This can be replaced or updated by the <see cref="AIContextProvider2"/> to add additional messages.
+        /// </remarks>
         /// <value>
         /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
         /// </value>

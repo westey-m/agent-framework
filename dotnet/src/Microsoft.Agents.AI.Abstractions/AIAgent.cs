@@ -132,6 +132,7 @@ public abstract class AIAgent
     /// <param name="jsonSerializerOptions">Optional settings to customize the serialization process.</param>
     /// <returns>A <see cref="JsonElement"/> containing the serialized session state.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">The type of <paramref name="session"/> is not supported by this agent.</exception>
     /// <remarks>
     /// This method enables saving conversation sessions to persistent storage,
     /// allowing conversations to resume across application restarts or be migrated between

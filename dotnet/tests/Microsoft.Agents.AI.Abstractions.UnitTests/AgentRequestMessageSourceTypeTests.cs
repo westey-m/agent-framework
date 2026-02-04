@@ -7,7 +7,7 @@ namespace Microsoft.Agents.AI.Abstractions.UnitTests;
 /// <summary>
 /// Contains tests for the <see cref="AgentRequestMessageSourceType"/> class.
 /// </summary>
-public sealed class AgentRequestMessageSourceTests
+public sealed class AgentRequestMessageSourceTypeTests
 {
     #region Constructor Tests
 

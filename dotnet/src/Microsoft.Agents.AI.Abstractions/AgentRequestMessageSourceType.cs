@@ -7,11 +7,11 @@ using Microsoft.Shared.Diagnostics;
 namespace Microsoft.Agents.AI;
 
 /// <summary>
-/// An enumeration representing the source types of an agent request message.
+/// Represents the source of an agent request message.
 /// </summary>
 /// <remarks>
 /// Input messages for a specific agent run can originate from various sources.
-/// This enumeration helps to identify whether a message came from outside the agent pipeline,
+/// This type helps to identify whether a message came from outside the agent pipeline,
 /// whether it was produced by middleware, or came from chat history.
 /// </remarks>
 public sealed class AgentRequestMessageSourceType : IEquatable<AgentRequestMessageSourceType>

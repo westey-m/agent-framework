@@ -5,7 +5,7 @@ using Microsoft.Extensions.AI;
 namespace Microsoft.Agents.AI;
 
 /// <summary>
-/// Conatins extension methods for <see cref="ChatMessage"/>
+/// Contains extension methods for <see cref="ChatMessage"/>
 /// </summary>
 public static class ChatMessageExtensions
 {

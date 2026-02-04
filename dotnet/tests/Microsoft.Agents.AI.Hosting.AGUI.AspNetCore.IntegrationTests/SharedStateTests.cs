@@ -424,7 +424,14 @@ internal sealed class FakeStateAgent : AIAgent
         new(new FakeInMemoryAgentSession(serializedSession, jsonSerializerOptions));
 
     public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
-        => throw new NotImplementedException();
+    {
+        if (session is not FakeInMemoryAgentSession fakeSession)
+        {
+            throw new InvalidOperationException("The provided session is not compatible with the agent. Only sessions created by the agent can be serialized.");
+        }
+
+        return fakeSession.Serialize(jsonSerializerOptions);
+    }
 
     private sealed class FakeInMemoryAgentSession : InMemoryAgentSession
     {
@@ -437,6 +444,9 @@ internal sealed class FakeStateAgent : AIAgent
             : base(serializedSession, jsonSerializerOptions)
         {
         }
+
+        internal new JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
+            => base.Serialize(jsonSerializerOptions);
     }
 
     public override object? GetService(Type serviceType, object? serviceKey = null) => null;

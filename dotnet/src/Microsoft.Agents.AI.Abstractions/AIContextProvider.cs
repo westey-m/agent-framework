@@ -32,6 +32,25 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public abstract class AIContextProvider
 {
+    private readonly string _sourceName;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AIContextProvider"/> class.
+    /// </summary>
+    protected AIContextProvider()
+    {
+        this._sourceName = this.GetType().FullName!;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AIContextProvider"/> class with the specified source name.
+    /// </summary>
+    /// <param name="sourceName">The source name to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="AIContextProvider"/>.</param>
+    protected AIContextProvider(string sourceName)
+    {
+        this._sourceName = sourceName;
+    }
+
     /// <summary>
     /// Called at the start of agent invocation to provide additional context.
     /// </summary>
@@ -60,16 +79,20 @@ public abstract class AIContextProvider
         aiContext.Messages = aiContext.Messages.Select(message =>
         {
             if (message.AdditionalProperties != null
-                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var source)
-                && source is AgentRequestMessageSource typedSource
-                && typedSource == AgentRequestMessageSource.AIContextProvider)
+                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out var messageSourceType)
+                && messageSourceType is AgentRequestMessageSourceType typedMessageSourceType
+                && typedMessageSourceType == AgentRequestMessageSourceType.AIContextProvider
+                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var messageSource)
+                && messageSource is string typedMessageSource
+                && typedMessageSource == this._sourceName)
             {
                 return message;
             }
 
             message = message.Clone();
             message.AdditionalProperties ??= new();
-            message.AdditionalProperties[AgentRequestMessageSource.AdditionalPropertiesKey] = AgentRequestMessageSource.AIContextProvider;
+            message.AdditionalProperties[AgentRequestMessageSourceType.AdditionalPropertiesKey] = AgentRequestMessageSourceType.AIContextProvider;
+            message.AdditionalProperties[AgentRequestMessageSource.AdditionalPropertiesKey] = this._sourceName;
             return message;
         }).ToList();
 

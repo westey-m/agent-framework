@@ -37,6 +37,25 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public abstract class ChatHistoryProvider
 {
+    private readonly string _sourceName;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class.
+    /// </summary>
+    protected ChatHistoryProvider()
+    {
+        this._sourceName = this.GetType().FullName!;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class with the specified source name.
+    /// </summary>
+    /// <param name="sourceName">The source name to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="ChatHistoryProvider"/>.</param>
+    protected ChatHistoryProvider(string sourceName)
+    {
+        this._sourceName = sourceName;
+    }
+
     /// <summary>
     /// Called at the start of agent invocation to provide messages from the chat history as context for the next agent invocation.
     /// </summary>
@@ -73,16 +92,20 @@ public abstract class ChatHistoryProvider
         return messages.Select(message =>
         {
             if (message.AdditionalProperties != null
-                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var source)
-                && source is AgentRequestMessageSource typedSource
-                && typedSource == AgentRequestMessageSource.ChatHistory)
+                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out var messageSourceType)
+                && messageSourceType is AgentRequestMessageSourceType typedMessageSourceType
+                && typedMessageSourceType == AgentRequestMessageSourceType.ChatHistory
+                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var messageSource)
+                && messageSource is string typedMessageSource
+                && typedMessageSource == this._sourceName)
             {
                 return message;
             }
 
             message = message.Clone();
             message.AdditionalProperties ??= new();
-            message.AdditionalProperties[AgentRequestMessageSource.AdditionalPropertiesKey] = AgentRequestMessageSource.ChatHistory;
+            message.AdditionalProperties[AgentRequestMessageSourceType.AdditionalPropertiesKey] = AgentRequestMessageSourceType.ChatHistory;
+            message.AdditionalProperties[AgentRequestMessageSource.AdditionalPropertiesKey] = this._sourceName;
             return message;
         });
     }

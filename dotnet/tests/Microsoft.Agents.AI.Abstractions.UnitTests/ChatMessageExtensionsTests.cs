@@ -18,10 +18,10 @@ public sealed class ChatMessageExtensionsTests
         ChatMessage message = new(ChatRole.User, "Hello");
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.External, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result);
     }
 
     [Fact]
@@ -34,10 +34,10 @@ public sealed class ChatMessageExtensionsTests
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.External, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result);
     }
 
     [Fact]
@@ -50,10 +50,10 @@ public sealed class ChatMessageExtensionsTests
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.External, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result);
     }
 
     [Fact]
@@ -64,15 +64,15 @@ public sealed class ChatMessageExtensionsTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.External }
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.External }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.External, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result);
     }
 
     [Fact]
@@ -83,15 +83,15 @@ public sealed class ChatMessageExtensionsTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.AIContextProvider }
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.AIContextProvider }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.AIContextProvider, result);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, result);
     }
 
     [Fact]
@@ -102,32 +102,32 @@ public sealed class ChatMessageExtensionsTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.ChatHistory }
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.ChatHistory }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.ChatHistory, result);
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, result);
     }
 
     [Fact]
     public void GetAgentRequestMessageSource_WithCustomSource_ReturnsCustomSource()
     {
         // Arrange
-        AgentRequestMessageSource customSource = new("CustomSource");
+        AgentRequestMessageSourceType customSource = new("CustomSource");
         ChatMessage message = new(ChatRole.User, "Hello")
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                { AgentRequestMessageSource.AdditionalPropertiesKey, customSource }
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, customSource }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
         Assert.Equal(customSource, result);
@@ -142,15 +142,15 @@ public sealed class ChatMessageExtensionsTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                { AgentRequestMessageSource.AdditionalPropertiesKey, "NotAnAgentRequestMessageSource" }
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, "NotAnAgentRequestMessageSource" }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.External, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result);
     }
 
     [Fact]
@@ -161,15 +161,15 @@ public sealed class ChatMessageExtensionsTests
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                { AgentRequestMessageSource.AdditionalPropertiesKey, null! }
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, null! }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.External, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result);
     }
 
     [Fact]
@@ -181,16 +181,16 @@ public sealed class ChatMessageExtensionsTests
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
                 { "OtherProperty", "SomeValue" },
-                { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.ChatHistory },
+                { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.ChatHistory },
                 { "AnotherProperty", 123 }
             }
         };
 
         // Act
-        AgentRequestMessageSource result = message.GetAgentRequestMessageSource();
+        AgentRequestMessageSourceType result = message.GetAgentRequestMessageSource();
 
         // Assert
-        Assert.Equal(AgentRequestMessageSource.ChatHistory, result);
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, result);
     }
 
     #endregion

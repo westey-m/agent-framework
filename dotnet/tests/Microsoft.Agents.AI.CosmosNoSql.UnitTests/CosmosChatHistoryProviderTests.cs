@@ -283,7 +283,7 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
             new ChatMessage(ChatRole.User, "First message"),
             new ChatMessage(ChatRole.Assistant, "Second message"),
             new ChatMessage(ChatRole.User, "Third message"),
-            new ChatMessage(ChatRole.System, "System context message") { AdditionalProperties = new() { { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.AIContextProvider } } }
+            new ChatMessage(ChatRole.System, "System context message") { AdditionalProperties = new() { { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.AIContextProvider } } }
         };
         var responseMessages = new[]
         {

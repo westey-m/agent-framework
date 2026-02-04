@@ -13,15 +13,15 @@ public static class ChatMessageExtensions
     /// Gets the source of the provided <see cref="ChatMessage"/> in the context of messages passed into an agent run.
     /// </summary>
     /// <param name="message">The <see cref="ChatMessage"/> for which we need the source.</param>
-    /// <returns>An <see cref="AgentRequestMessageSource"/> value indicating the source of the <see cref="ChatMessage"/>. Defaults to <see
-    /// cref="AgentRequestMessageSource.External"/> if no explicit source is defined.</returns>
-    public static AgentRequestMessageSource GetAgentRequestMessageSource(this ChatMessage message)
+    /// <returns>An <see cref="AgentRequestMessageSourceType"/> value indicating the source of the <see cref="ChatMessage"/>. Defaults to <see
+    /// cref="AgentRequestMessageSourceType.External"/> if no explicit source is defined.</returns>
+    public static AgentRequestMessageSourceType GetAgentRequestMessageSource(this ChatMessage message)
     {
-        if (message.AdditionalProperties?.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var source) is true && source is AgentRequestMessageSource typedSource)
+        if (message.AdditionalProperties?.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out var source) is true && source is AgentRequestMessageSourceType typedSource)
         {
             return typedSource;
         }
 
-        return AgentRequestMessageSource.External;
+        return AgentRequestMessageSourceType.External;
     }
 }

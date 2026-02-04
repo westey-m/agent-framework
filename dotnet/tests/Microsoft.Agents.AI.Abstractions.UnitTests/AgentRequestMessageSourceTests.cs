@@ -5,7 +5,7 @@ using System;
 namespace Microsoft.Agents.AI.Abstractions.UnitTests;
 
 /// <summary>
-/// Contains tests for the <see cref="AgentRequestMessageSource"/> class.
+/// Contains tests for the <see cref="AgentRequestMessageSourceType"/> class.
 /// </summary>
 public sealed class AgentRequestMessageSourceTests
 {
@@ -18,7 +18,7 @@ public sealed class AgentRequestMessageSourceTests
         const string ExpectedValue = "CustomSource";
 
         // Act
-        AgentRequestMessageSource source = new(ExpectedValue);
+        AgentRequestMessageSourceType source = new(ExpectedValue);
 
         // Assert
         Assert.Equal(ExpectedValue, source.Value);
@@ -28,14 +28,14 @@ public sealed class AgentRequestMessageSourceTests
     public void Constructor_WithNullValue_Throws()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new AgentRequestMessageSource(null!));
+        Assert.Throws<ArgumentNullException>(() => new AgentRequestMessageSourceType(null!));
     }
 
     [Fact]
     public void Constructor_WithEmptyValue_Throws()
     {
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => new AgentRequestMessageSource(string.Empty));
+        Assert.Throws<ArgumentException>(() => new AgentRequestMessageSourceType(string.Empty));
     }
 
     #endregion
@@ -46,7 +46,7 @@ public sealed class AgentRequestMessageSourceTests
     public void External_ReturnsInstanceWithExternalValue()
     {
         // Arrange & Act
-        AgentRequestMessageSource source = AgentRequestMessageSource.External;
+        AgentRequestMessageSourceType source = AgentRequestMessageSourceType.External;
 
         // Assert
         Assert.NotNull(source);
@@ -57,7 +57,7 @@ public sealed class AgentRequestMessageSourceTests
     public void AIContextProvider_ReturnsInstanceWithAIContextProviderValue()
     {
         // Arrange & Act
-        AgentRequestMessageSource source = AgentRequestMessageSource.AIContextProvider;
+        AgentRequestMessageSourceType source = AgentRequestMessageSourceType.AIContextProvider;
 
         // Assert
         Assert.NotNull(source);
@@ -68,7 +68,7 @@ public sealed class AgentRequestMessageSourceTests
     public void ChatHistory_ReturnsInstanceWithChatHistoryValue()
     {
         // Arrange & Act
-        AgentRequestMessageSource source = AgentRequestMessageSource.ChatHistory;
+        AgentRequestMessageSourceType source = AgentRequestMessageSourceType.ChatHistory;
 
         // Assert
         Assert.NotNull(source);
@@ -79,22 +79,22 @@ public sealed class AgentRequestMessageSourceTests
     public void AdditionalPropertiesKey_ReturnsExpectedValue()
     {
         // Arrange & Act
-        string key = AgentRequestMessageSource.AdditionalPropertiesKey;
+        string key = AgentRequestMessageSourceType.AdditionalPropertiesKey;
 
         // Assert
-        Assert.Equal("Agent.RequestMessageSource", key);
+        Assert.Equal("Agent.RequestMessageSourceType", key);
     }
 
     [Fact]
     public void StaticProperties_ReturnSameInstanceOnMultipleCalls()
     {
         // Arrange & Act
-        AgentRequestMessageSource external1 = AgentRequestMessageSource.External;
-        AgentRequestMessageSource external2 = AgentRequestMessageSource.External;
-        AgentRequestMessageSource aiContextProvider1 = AgentRequestMessageSource.AIContextProvider;
-        AgentRequestMessageSource aiContextProvider2 = AgentRequestMessageSource.AIContextProvider;
-        AgentRequestMessageSource chatHistory1 = AgentRequestMessageSource.ChatHistory;
-        AgentRequestMessageSource chatHistory2 = AgentRequestMessageSource.ChatHistory;
+        AgentRequestMessageSourceType external1 = AgentRequestMessageSourceType.External;
+        AgentRequestMessageSourceType external2 = AgentRequestMessageSourceType.External;
+        AgentRequestMessageSourceType aiContextProvider1 = AgentRequestMessageSourceType.AIContextProvider;
+        AgentRequestMessageSourceType aiContextProvider2 = AgentRequestMessageSourceType.AIContextProvider;
+        AgentRequestMessageSourceType chatHistory1 = AgentRequestMessageSourceType.ChatHistory;
+        AgentRequestMessageSourceType chatHistory2 = AgentRequestMessageSourceType.ChatHistory;
 
         // Assert
         Assert.Same(external1, external2);
@@ -110,7 +110,7 @@ public sealed class AgentRequestMessageSourceTests
     public void Equals_WithSameInstance_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource source = new("Test");
+        AgentRequestMessageSourceType source = new("Test");
 
         // Act
         bool result = source.Equals(source);
@@ -123,8 +123,8 @@ public sealed class AgentRequestMessageSourceTests
     public void Equals_WithEqualValue_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act
         bool result = source1.Equals(source2);
@@ -137,8 +137,8 @@ public sealed class AgentRequestMessageSourceTests
     public void Equals_WithDifferentValue_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test1");
-        AgentRequestMessageSource source2 = new("Test2");
+        AgentRequestMessageSourceType source1 = new("Test1");
+        AgentRequestMessageSourceType source2 = new("Test2");
 
         // Act
         bool result = source1.Equals(source2);
@@ -151,7 +151,7 @@ public sealed class AgentRequestMessageSourceTests
     public void Equals_WithNull_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source = new("Test");
+        AgentRequestMessageSourceType source = new("Test");
 
         // Act
         bool result = source.Equals(null);
@@ -164,8 +164,8 @@ public sealed class AgentRequestMessageSourceTests
     public void Equals_WithDifferentCase_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource source2 = new("test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType source2 = new("test");
 
         // Act
         bool result = source1.Equals(source2);
@@ -178,8 +178,8 @@ public sealed class AgentRequestMessageSourceTests
     public void Equals_StaticExternalWithNewInstanceHavingSameValue_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource external = AgentRequestMessageSource.External;
-        AgentRequestMessageSource newExternal = new("External");
+        AgentRequestMessageSourceType external = AgentRequestMessageSourceType.External;
+        AgentRequestMessageSourceType newExternal = new("External");
 
         // Act
         bool result = external.Equals(newExternal);
@@ -196,8 +196,8 @@ public sealed class AgentRequestMessageSourceTests
     public void ObjectEquals_WithEqualAgentRequestMessageSource_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        object source2 = new AgentRequestMessageSource("Test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        object source2 = new AgentRequestMessageSourceType("Test");
 
         // Act
         bool result = source1.Equals(source2);
@@ -210,7 +210,7 @@ public sealed class AgentRequestMessageSourceTests
     public void ObjectEquals_WithDifferentType_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source = new("Test");
+        AgentRequestMessageSourceType source = new("Test");
         object other = "Test";
 
         // Act
@@ -224,7 +224,7 @@ public sealed class AgentRequestMessageSourceTests
     public void ObjectEquals_WithNullObject_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source = new("Test");
+        AgentRequestMessageSourceType source = new("Test");
         object? other = null;
 
         // Act
@@ -242,8 +242,8 @@ public sealed class AgentRequestMessageSourceTests
     public void GetHashCode_WithSameValue_ReturnsSameHashCode()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act
         int hashCode1 = source1.GetHashCode();
@@ -257,8 +257,8 @@ public sealed class AgentRequestMessageSourceTests
     public void GetHashCode_WithDifferentValue_ReturnsDifferentHashCode()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test1");
-        AgentRequestMessageSource source2 = new("Test2");
+        AgentRequestMessageSourceType source1 = new("Test1");
+        AgentRequestMessageSourceType source2 = new("Test2");
 
         // Act
         int hashCode1 = source1.GetHashCode();
@@ -272,8 +272,8 @@ public sealed class AgentRequestMessageSourceTests
     public void GetHashCode_ConsistentWithEquals()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act & Assert
         // If two objects are equal, they must have the same hash code
@@ -289,8 +289,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_WithEqualValues_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act
         bool result = source1 == source2;
@@ -303,8 +303,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_WithDifferentValues_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test1");
-        AgentRequestMessageSource source2 = new("Test2");
+        AgentRequestMessageSourceType source1 = new("Test1");
+        AgentRequestMessageSourceType source2 = new("Test2");
 
         // Act
         bool result = source1 == source2;
@@ -317,8 +317,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_WithBothNull_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource? source1 = null;
-        AgentRequestMessageSource? source2 = null;
+        AgentRequestMessageSourceType? source1 = null;
+        AgentRequestMessageSourceType? source2 = null;
 
         // Act
         bool result = source1 == source2;
@@ -331,8 +331,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_WithLeftNull_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource? source1 = null;
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType? source1 = null;
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act
         bool result = source1 == source2;
@@ -345,8 +345,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_WithRightNull_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource? source2 = null;
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType? source2 = null;
 
         // Act
         bool result = source1 == source2;
@@ -359,8 +359,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_WithStaticInstances_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource external1 = AgentRequestMessageSource.External;
-        AgentRequestMessageSource external2 = AgentRequestMessageSource.External;
+        AgentRequestMessageSourceType external1 = AgentRequestMessageSourceType.External;
+        AgentRequestMessageSourceType external2 = AgentRequestMessageSourceType.External;
 
         // Act
         bool result = external1 == external2;
@@ -373,8 +373,8 @@ public sealed class AgentRequestMessageSourceTests
     public void EqualityOperator_StaticWithNewInstanceHavingSameValue_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource external = AgentRequestMessageSource.External;
-        AgentRequestMessageSource newExternal = new("External");
+        AgentRequestMessageSourceType external = AgentRequestMessageSourceType.External;
+        AgentRequestMessageSourceType newExternal = new("External");
 
         // Act
         bool result = external == newExternal;
@@ -391,8 +391,8 @@ public sealed class AgentRequestMessageSourceTests
     public void InequalityOperator_WithEqualValues_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act
         bool result = source1 != source2;
@@ -405,8 +405,8 @@ public sealed class AgentRequestMessageSourceTests
     public void InequalityOperator_WithDifferentValues_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test1");
-        AgentRequestMessageSource source2 = new("Test2");
+        AgentRequestMessageSourceType source1 = new("Test1");
+        AgentRequestMessageSourceType source2 = new("Test2");
 
         // Act
         bool result = source1 != source2;
@@ -419,8 +419,8 @@ public sealed class AgentRequestMessageSourceTests
     public void InequalityOperator_WithBothNull_ReturnsFalse()
     {
         // Arrange
-        AgentRequestMessageSource? source1 = null;
-        AgentRequestMessageSource? source2 = null;
+        AgentRequestMessageSourceType? source1 = null;
+        AgentRequestMessageSourceType? source2 = null;
 
         // Act
         bool result = source1 != source2;
@@ -433,8 +433,8 @@ public sealed class AgentRequestMessageSourceTests
     public void InequalityOperator_WithLeftNull_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource? source1 = null;
-        AgentRequestMessageSource source2 = new("Test");
+        AgentRequestMessageSourceType? source1 = null;
+        AgentRequestMessageSourceType source2 = new("Test");
 
         // Act
         bool result = source1 != source2;
@@ -447,8 +447,8 @@ public sealed class AgentRequestMessageSourceTests
     public void InequalityOperator_WithRightNull_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource source1 = new("Test");
-        AgentRequestMessageSource? source2 = null;
+        AgentRequestMessageSourceType source1 = new("Test");
+        AgentRequestMessageSourceType? source2 = null;
 
         // Act
         bool result = source1 != source2;
@@ -461,8 +461,8 @@ public sealed class AgentRequestMessageSourceTests
     public void InequalityOperator_DifferentStaticInstances_ReturnsTrue()
     {
         // Arrange
-        AgentRequestMessageSource external = AgentRequestMessageSource.External;
-        AgentRequestMessageSource chatHistory = AgentRequestMessageSource.ChatHistory;
+        AgentRequestMessageSourceType external = AgentRequestMessageSourceType.External;
+        AgentRequestMessageSourceType chatHistory = AgentRequestMessageSourceType.ChatHistory;
 
         // Act
         bool result = external != chatHistory;
@@ -479,10 +479,10 @@ public sealed class AgentRequestMessageSourceTests
     public void IEquatable_ImplementedCorrectly()
     {
         // Arrange
-        AgentRequestMessageSource source = new("Test");
+        AgentRequestMessageSourceType source = new("Test");
 
         // Act & Assert
-        Assert.IsAssignableFrom<IEquatable<AgentRequestMessageSource>>(source);
+        Assert.IsAssignableFrom<IEquatable<AgentRequestMessageSourceType>>(source);
     }
 
     #endregion

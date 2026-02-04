@@ -52,7 +52,7 @@ public class InMemoryChatHistoryProviderTests
         var requestMessages = new List<ChatMessage>
         {
             new(ChatRole.User, "Hello"),
-            new(ChatRole.System, "additional context") { AdditionalProperties = new() { { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.ChatHistory } } },
+            new(ChatRole.System, "additional context") { AdditionalProperties = new() { { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.ChatHistory } } },
         };
         var responseMessages = new List<ChatMessage>
         {

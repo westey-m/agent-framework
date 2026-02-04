@@ -154,7 +154,7 @@ public sealed class ChatHistoryProviderMessageFilterTests
         var innerProviderMock = new Mock<ChatHistoryProvider>();
         List<ChatMessage> requestMessages =
         [
-            new(ChatRole.System, "System") { AdditionalProperties = new() { { AgentRequestMessageSource.AdditionalPropertiesKey, AgentRequestMessageSource.ChatHistory } } },
+            new(ChatRole.System, "System") { AdditionalProperties = new() { { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.ChatHistory } } },
             new(ChatRole.User, "Hello"),
         ];
         var responseMessages = new List<ChatMessage> { new(ChatRole.Assistant, "Response") };
@@ -173,7 +173,7 @@ public sealed class ChatHistoryProviderMessageFilterTests
         // Filter that modifies the context
         ChatHistoryProvider.InvokedContext InvokedFilter(ChatHistoryProvider.InvokedContext ctx)
         {
-            var modifiedRequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSource() == AgentRequestMessageSource.External).Select(m => new ChatMessage(m.Role, $"[FILTERED] {m.Text}")).ToList();
+            var modifiedRequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External).Select(m => new ChatMessage(m.Role, $"[FILTERED] {m.Text}")).ToList();
             return new ChatHistoryProvider.InvokedContext(modifiedRequestMessages)
             {
                 ResponseMessages = ctx.ResponseMessages,

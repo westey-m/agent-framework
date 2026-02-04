@@ -35,7 +35,7 @@ public static class ChatHistoryProviderExtensions
 
     /// <summary>
     /// Decorates the provided <see cref="ChatHistoryProvider"/> so that it does not add
-    /// messages with <see cref="AgentRequestMessageSource.AIContextProvider"/> to chat history.
+    /// messages with <see cref="AgentRequestMessageSourceType.AIContextProvider"/> to chat history.
     /// </summary>
     /// <param name="provider">The <see cref="ChatHistoryProvider"/> to add the message filter to.</param>
     /// <returns>A new <see cref="ChatHistoryProvider"/> instance that filters out <see cref="AIContextProvider"/> messages so they do not get added.</returns>
@@ -45,7 +45,7 @@ public static class ChatHistoryProviderExtensions
             innerProvider: provider,
             invokedMessagesFilter: (ctx) =>
             {
-                ctx.RequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSource() != AgentRequestMessageSource.AIContextProvider);
+                ctx.RequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSource() != AgentRequestMessageSourceType.AIContextProvider);
                 return ctx;
             });
     }

@@ -70,10 +70,7 @@ internal sealed class WorkflowHostAgent : AIAgent
 
     public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        if (session is null)
-        {
-            throw new ArgumentNullException(nameof(session));
-        }
+        _ = Throw.IfNull(session);
 
         if (session is not WorkflowSession workflowSession)
         {

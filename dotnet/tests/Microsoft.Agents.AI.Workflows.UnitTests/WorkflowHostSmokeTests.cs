@@ -52,7 +52,7 @@ public class WorkflowHostSmokeTests
         }
 
         public override JsonElement SerializeSession(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
-            => throw new NotImplementedException();
+            => default;
 
         protected override async Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
         {

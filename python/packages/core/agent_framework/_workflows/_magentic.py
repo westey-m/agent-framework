@@ -26,7 +26,7 @@ from ._base_group_chat_orchestrator import (
     GroupChatParticipantMessage,
     GroupChatRequestMessage,
     GroupChatResponseMessage,
-    GroupChatWorkflowContext_T_Out,
+    GroupChatWorkflowContextOutT,
     ParticipantRegistry,
 )
 from ._checkpoint import CheckpointStorage
@@ -904,7 +904,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
     async def _handle_messages(
         self,
         messages: list[ChatMessage],
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Handle the initial task messages to start the workflow."""
         if self._terminated:
@@ -955,7 +955,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
     async def _handle_response(
         self,
         response: AgentExecutorResponse | GroupChatResponseMessage,
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Handle a response message from a participant."""
         if self._magentic_context is None or self._task_ledger is None:
@@ -981,7 +981,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
         self,
         original_request: MagenticPlanReviewRequest,
         response: MagenticPlanReviewResponse,
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Handle the human response to the plan review request.
 
@@ -1039,7 +1039,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
 
     async def _run_inner_loop(
         self,
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Run the inner orchestration loop. Coordination phase. Serialized with a lock."""
         if self._magentic_context is None or self._task_ledger is None:
@@ -1049,7 +1049,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
 
     async def _run_inner_loop_helper(
         self,
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Run inner loop with exclusive access."""
         # Narrow optional context for the remainder of this method
@@ -1135,7 +1135,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
 
     async def _reset_and_replan(
         self,
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Reset context and replan."""
         if self._magentic_context is None:
@@ -1170,7 +1170,7 @@ class MagenticOrchestrator(BaseGroupChatOrchestrator):
 
     async def _run_outer_loop(
         self,
-        ctx: WorkflowContext[GroupChatWorkflowContext_T_Out, list[ChatMessage]],
+        ctx: WorkflowContext[GroupChatWorkflowContextOutT, list[ChatMessage]],
     ) -> None:
         """Run the outer orchestration loop - planning phase."""
         if self._magentic_context is None:

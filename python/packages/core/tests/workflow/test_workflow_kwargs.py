@@ -11,17 +11,19 @@ from agent_framework import (
     AgentThread,
     BaseAgent,
     ChatMessage,
-    ConcurrentBuilder,
     Content,
-    GroupChatBuilder,
-    GroupChatState,
-    HandoffBuilder,
-    SequentialBuilder,
     WorkflowRunState,
     WorkflowStatusEvent,
     tool,
 )
 from agent_framework._workflows._const import WORKFLOW_RUN_KWARGS_KEY
+from agent_framework.orchestrations import (
+    ConcurrentBuilder,
+    GroupChatBuilder,
+    GroupChatState,
+    HandoffBuilder,
+    SequentialBuilder,
+)
 
 # Track kwargs received by tools during test execution
 _received_kwargs: list[dict[str, Any]] = []
@@ -371,13 +373,14 @@ async def test_handoff_kwargs_flow_to_agents() -> None:
 
 async def test_magentic_kwargs_flow_to_agents() -> None:
     """Test that kwargs flow to agents in a magentic workflow via MagenticAgentExecutor."""
-    from agent_framework import MagenticBuilder
-    from agent_framework._workflows._magentic import (
+    from agent_framework_orchestrations._magentic import (
         MagenticContext,
         MagenticManagerBase,
         MagenticProgressLedger,
         MagenticProgressLedgerItem,
     )
+
+    from agent_framework.orchestrations import MagenticBuilder
 
     # Create a mock manager that completes after one round
     class _MockManager(MagenticManagerBase):
@@ -422,13 +425,14 @@ async def test_magentic_kwargs_flow_to_agents() -> None:
 
 async def test_magentic_kwargs_stored_in_state() -> None:
     """Test that kwargs are stored in State when using MagenticWorkflow.run_stream()."""
-    from agent_framework import MagenticBuilder
-    from agent_framework._workflows._magentic import (
+    from agent_framework_orchestrations._magentic import (
         MagenticContext,
         MagenticManagerBase,
         MagenticProgressLedger,
         MagenticProgressLedgerItem,
     )
+
+    from agent_framework.orchestrations import MagenticBuilder
 
     class _MockManager(MagenticManagerBase):
         def __init__(self) -> None:

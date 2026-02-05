@@ -53,11 +53,6 @@ public abstract class AgentSession
     {
     }
 
-    /// <summary>
-    /// Gets any arbitrary state associated with this session.
-    /// </summary>
-    public AgentSessionStateBag StateBag { get; protected set; } = new();
-
     /// <summary>Asks the <see cref="AgentSession"/> for an object of the specified type <paramref name="serviceType"/>.</summary>
     /// <param name="serviceType">The type of object being requested.</param>
     /// <param name="serviceKey">An optional key that can be used to help identify the target service.</param>

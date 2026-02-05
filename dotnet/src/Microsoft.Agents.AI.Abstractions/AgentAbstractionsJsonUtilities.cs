@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -84,7 +83,6 @@ public static partial class AgentAbstractionsJsonUtilities
     [JsonSerializable(typeof(ServiceIdAgentSession.ServiceIdAgentSessionState))]
     [JsonSerializable(typeof(InMemoryAgentSession.InMemoryAgentSessionState))]
     [JsonSerializable(typeof(InMemoryChatHistoryProvider.State))]
-    [JsonSerializable(typeof(ConcurrentDictionary<string, AgentSessionStateBagValue>))]
 
     [ExcludeFromCodeCoverage]
     private sealed partial class JsonContext : JsonSerializerContext;

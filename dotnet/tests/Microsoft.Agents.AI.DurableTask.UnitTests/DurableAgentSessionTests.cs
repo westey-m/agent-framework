@@ -15,7 +15,7 @@ public sealed class DurableAgentSessionTests
         JsonElement serializedSession = session.Serialize();
 
         // Expected format: "{\"sessionId\":\"@dafx-test-agent@<random-key>\"}"
-        string expectedSerializedSession = $"{{\"sessionId\":\"@dafx-{sessionId.Name}@{sessionId.Key}\",\"stateBag\":{{}}}}";
+        string expectedSerializedSession = $"{{\"sessionId\":\"@dafx-{sessionId.Name}@{sessionId.Key}\"}}";
         Assert.Equal(expectedSerializedSession, serializedSession.ToString());
 
         DurableAgentSession deserializedSession = DurableAgentSession.Deserialize(serializedSession);
@@ -33,7 +33,7 @@ public sealed class DurableAgentSessionTests
         string serializedSession = JsonSerializer.Serialize(session, typeof(DurableAgentSession));
 
         // Expected format: "{\"sessionId\":\"@dafx-test-agent@<random-key>\"}"
-        string expectedSerializedSession = $"{{\"sessionId\":\"@dafx-{sessionId.Name}@{sessionId.Key}\",\"StateBag\":{{}}}}";
+        string expectedSerializedSession = $"{{\"sessionId\":\"@dafx-{sessionId.Name}@{sessionId.Key}\"}}";
         Assert.Equal(expectedSerializedSession, serializedSession);
 
         DurableAgentSession? deserializedSession = JsonSerializer.Deserialize<DurableAgentSession>(serializedSession);

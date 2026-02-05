@@ -140,7 +140,7 @@ public abstract class AIContextProvider
         {
             this.Agent = Throw.IfNull(agent);
             this.Session = session;
-            this.RequestMessages = requestMessages ?? throw new ArgumentNullException(nameof(requestMessages));
+            this.RequestMessages = Throw.IfNull(requestMessages);
         }
 
         /// <summary>

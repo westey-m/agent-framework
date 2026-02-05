@@ -148,6 +148,8 @@ public sealed class ChatClientAgentSession : AgentSession
             ? await aiContextProviderFactory.Invoke(state?.AIContextProviderState ?? default, jsonSerializerOptions, cancellationToken).ConfigureAwait(false)
             : null;
 
+        session.StateBag = AgentSessionStateBag.Deserialize(state?.StateBag ?? default);
+
         if (state?.ConversationId is string sessionId)
         {
             session.ConversationId = sessionId;
@@ -176,6 +178,7 @@ public sealed class ChatClientAgentSession : AgentSession
             ConversationId = this.ConversationId,
             ChatHistoryProviderState = chatHistoryProviderState is { ValueKind: not JsonValueKind.Undefined } ? chatHistoryProviderState : null,
             AIContextProviderState = aiContextProviderState is { ValueKind: not JsonValueKind.Undefined } ? aiContextProviderState : null,
+            StateBag = this.StateBag.Serialize(),
         };
 
         return JsonSerializer.SerializeToElement(state, AgentJsonUtilities.DefaultOptions.GetTypeInfo(typeof(SessionState)));
@@ -201,5 +204,7 @@ public sealed class ChatClientAgentSession : AgentSession
         public JsonElement? ChatHistoryProviderState { get; set; }
 
         public JsonElement? AIContextProviderState { get; set; }
+
+        public JsonElement? StateBag { get; set; }
     }
 }

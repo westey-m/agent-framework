@@ -153,6 +153,33 @@ public class ChatClientAgentSessionTests
     }
 
     [Fact]
+    public async Task VerifyDeserializeWithStateBagAsync()
+    {
+        // Arrange
+        var json = JsonSerializer.Deserialize("""
+            {
+                "conversationId": "TestConvId",
+                "stateBag": {
+                    "dog": {
+                        "jsonValue": {
+                            "name": "Fido"
+                        }
+                    }
+                }
+            }
+            """, TestJsonSerializerContext.Default.JsonElement);
+        Mock<AIContextProvider> mockProvider = new();
+
+        // Act
+        var session = await ChatClientAgentSession.DeserializeAsync(json, aiContextProviderFactory: (_, _, _) => new(mockProvider.Object));
+
+        // Assert
+        var dog = session.StateBag.GetValue<Animal>("dog", TestJsonSerializerContext.Default.Options);
+        Assert.NotNull(dog);
+        Assert.Equal("Fido", dog.Name);
+    }
+
+    [Fact]
     public async Task DeserializeWithInvalidJsonThrowsAsync()
     {
         // Arrange
@@ -249,6 +276,27 @@ public class ChatClientAgentSessionTests
         mockProvider.Verify(m => m.Serialize(It.IsAny<JsonSerializerOptions?>()), Times.Once);
     }
 
+    [Fact]
+    public void VerifySessionSerializationWithWithStateBag()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        session.StateBag.SetValue("dog", new Animal { Name = "Fido" }, TestJsonSerializerContext.Default.Options);
+
+        // Act
+        var json = session.Serialize();
+
+        // Assert
+        Assert.Equal(JsonValueKind.Object, json.ValueKind);
+        Assert.True(json.TryGetProperty("stateBag", out var stateBagProperty));
+        Assert.Equal(JsonValueKind.Object, stateBagProperty.ValueKind);
+        Assert.True(stateBagProperty.TryGetProperty("dog", out var dogProperty));
+        Assert.Equal(JsonValueKind.Object, dogProperty.ValueKind);
+        Assert.True(dogProperty.TryGetProperty("jsonValue", out var dogJsonValueProperty));
+        Assert.True(dogJsonValueProperty.TryGetProperty("name", out var nameProperty));
+        Assert.Equal("Fido", nameProperty.GetString());
+    }
+
     /// <summary>
     /// Verify session serialization to JSON with custom options.
     /// </summary>
@@ -289,6 +337,27 @@ public class ChatClientAgentSessionTests
 
     #endregion Serialize Tests
 
+    #region StateBag Roundtrip Tests
+
+    [Fact]
+    public async Task VerifyStateBagRoundtripsAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        session.StateBag.SetValue("dog", new Animal { Name = "Fido" }, TestJsonSerializerContext.Default.Options);
+
+        // Act
+        var serializedSession = session.Serialize();
+        var deserializedSession = await ChatClientAgentSession.DeserializeAsync(serializedSession);
+
+        // Assert
+        var dog = deserializedSession.StateBag.GetValue<Animal>("dog", TestJsonSerializerContext.Default.Options);
+        Assert.NotNull(dog);
+        Assert.Equal("Fido", dog.Name);
+    }
+
+    #endregion
+
     #region GetService Tests
 
     [Fact]
@@ -327,4 +396,9 @@ public class ChatClientAgentSessionTests
     }
 
     #endregion
+
+    internal sealed class Animal
+    {
+        public string Name { get; set; } = string.Empty;
+    }
 }

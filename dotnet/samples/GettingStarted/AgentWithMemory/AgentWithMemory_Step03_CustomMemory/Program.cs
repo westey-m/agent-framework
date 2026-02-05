@@ -33,7 +33,7 @@ ChatClient chatClient = new AzureOpenAIClient(
 AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions()
 {
     ChatOptions = new() { Instructions = "You are a friendly assistant. Always address the user by their name." },
-    AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new UserInfoMemory(chatClient.AsIChatClient(), ctx.SerializedState, ctx.JsonSerializerOptions))
+    AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new UserInfoMemory(chatClient.AsIChatClient()))
 });
 
 // Create a new session for the conversation.
@@ -58,7 +58,7 @@ Console.WriteLine(await agent.RunAsync("What is my name and age?", deserializedS
 Console.WriteLine("\n>> Read memories from memory component\n");
 
 // It's possible to access the memory component via the session's GetService method.
-var userInfo = deserializedSession.GetService<UserInfoMemory>()?.UserInfo;
+var userInfo = deserializedSession.GetService<UserInfoMemory>()?.GetUserInfo(deserializedSession);
 
 // Output the user info that was captured by the memory component.
 Console.WriteLine($"MEMORY - User Name: {userInfo?.UserName}");
@@ -71,7 +71,7 @@ Console.WriteLine("\n>> Use new session with previously created memories\n");
 var newSession = await agent.CreateSessionAsync();
 if (userInfo is not null && newSession.GetService<UserInfoMemory>() is UserInfoMemory newSessionMemory)
 {
-    newSessionMemory.UserInfo = userInfo;
+    newSessionMemory.SetUserInfo(newSession, userInfo);
 }
 
 // Invoke the agent and output the text result.
@@ -86,28 +86,28 @@ namespace SampleApp
     internal sealed class UserInfoMemory : AIContextProvider
     {
         private readonly IChatClient _chatClient;
+        private readonly Func<AgentSession?, UserInfo>? _stateInitializer;
 
-        public UserInfoMemory(IChatClient chatClient, UserInfo? userInfo = null)
+        public UserInfoMemory(IChatClient chatClient, Func<AgentSession?, UserInfo>? stateInitializer = null)
         {
             this._chatClient = chatClient;
-            this.UserInfo = userInfo ?? new UserInfo();
+            this._stateInitializer = stateInitializer;
         }
 
-        public UserInfoMemory(IChatClient chatClient, JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null)
-        {
-            this._chatClient = chatClient;
+        public UserInfo GetUserInfo(AgentSession session)
+            => session.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory)) ?? new UserInfo();
 
-            this.UserInfo = serializedState.ValueKind == JsonValueKind.Object ?
-                serializedState.Deserialize<UserInfo>(jsonSerializerOptions)! :
-                new UserInfo();
-        }
-
-        public UserInfo UserInfo { get; set; }
+        public void SetUserInfo(AgentSession session, UserInfo userInfo)
+            => session.StateBag.SetValue(nameof(UserInfoMemory), userInfo);
 
         public override async ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
         {
+            var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
+                ?? this._stateInitializer?.Invoke(context.Session)
+                ?? new UserInfo();
+
             // Try and extract the user name and age from the message if we don't have it already and it's a user message.
-            if ((this.UserInfo.UserName is null || this.UserInfo.UserAge is null) && context.RequestMessages.Any(x => x.Role == ChatRole.User))
+            if ((userInfo.UserName is null || userInfo.UserAge is null) && context.RequestMessages.Any(x => x.Role == ChatRole.User))
             {
                 var result = await this._chatClient.GetResponseAsync<UserInfo>(
                     context.RequestMessages,
@@ -117,25 +117,31 @@ namespace SampleApp
                     },
                     cancellationToken: cancellationToken);
 
-                this.UserInfo.UserName ??= result.Result.UserName;
-                this.UserInfo.UserAge ??= result.Result.UserAge;
+                userInfo.UserName ??= result.Result.UserName;
+                userInfo.UserAge ??= result.Result.UserAge;
             }
+
+            context.Session?.StateBag.SetValue(nameof(UserInfoMemory), userInfo);
         }
 
         public override ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
+            var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
+                ?? this._stateInitializer?.Invoke(context.Session)
+                ?? new UserInfo();
+
             StringBuilder instructions = new();
 
             // If we don't already know the user's name and age, add instructions to ask for them, otherwise just provide what we have to the context.
             instructions
                 .AppendLine(
-                    this.UserInfo.UserName is null ?
+                    userInfo.UserName is null ?
                         "Ask the user for their name and politely decline to answer any questions until they provide it." :
-                        $"The user's name is {this.UserInfo.UserName}.")
+                        $"The user's name is {userInfo.UserName}.")
                 .AppendLine(
-                    this.UserInfo.UserAge is null ?
+                    userInfo.UserAge is null ?
                         "Ask the user for their age and politely decline to answer any questions until they provide it." :
-                        $"The user's age is {this.UserInfo.UserAge}.");
+                        $"The user's age is {userInfo.UserAge}.");
 
             return new ValueTask<AIContext>(new AIContext
             {
@@ -145,7 +151,7 @@ namespace SampleApp
 
         public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
         {
-            return JsonSerializer.SerializeToElement(this.UserInfo, jsonSerializerOptions);
+            return JsonSerializer.SerializeToElement(new UserInfo(), jsonSerializerOptions);
         }
     }
 

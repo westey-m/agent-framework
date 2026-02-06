@@ -380,7 +380,7 @@ async def main() -> None:
 
     approval_response = "approve"
     output_event: WorkflowEvent | None = None
-    async for event in workflow2.send_responses_streaming({request_info_event.request_id: approval_response}):
+    async for event in workflow2.run(stream=True, responses={request_info_event.request_id: approval_response}):
         if event.type == "output":
             output_event = event
 

@@ -201,9 +201,11 @@ async def test_basic_sub_workflow() -> None:
     assert request_events[0].data.domain == "example.com"
 
     # Send response through the main workflow
-    await main_workflow.send_responses({
-        request_events[0].request_id: True  # Domain is approved
-    })
+    await main_workflow.run(
+        responses={
+            request_events[0].request_id: True  # Domain is approved
+        }
+    )
 
     # Check result
     assert parent.result is not None
@@ -245,9 +247,11 @@ async def test_sub_workflow_with_interception():
     assert request_events[0].data.domain == "unknown.com"
 
     # Send external response
-    await main_workflow.send_responses({
-        request_events[0].request_id: False  # Domain not approved
-    })
+    await main_workflow.run(
+        responses={
+            request_events[0].request_id: False  # Domain not approved
+        }
+    )
     assert parent.result is not None
     assert parent.result.email == "user@unknown.com"
     assert parent.result.is_valid is False
@@ -447,7 +451,7 @@ async def test_concurrent_sub_workflow_execution() -> None:
 
     # Send responses for all requests (approve all domains)
     responses = {event.request_id: True for event in request_events}
-    await main_workflow.send_responses(responses)
+    await main_workflow.run(responses=responses)
 
     # All results should be collected
     assert len(processor.results) == len(emails)
@@ -613,7 +617,7 @@ async def test_sub_workflow_checkpoint_restore_no_duplicate_requests() -> None:
     assert resumed_first_request_id == first_request_id
 
     request_events: list[WorkflowEvent] = []
-    async for event in workflow2.send_responses_streaming({resumed_first_request_id: "first_answer"}):
+    async for event in workflow2.run(stream=True, responses={resumed_first_request_id: "first_answer"}):
         if event.type == "request_info":
             request_events.append(event)
 

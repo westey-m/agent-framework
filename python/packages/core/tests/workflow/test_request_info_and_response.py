@@ -192,7 +192,7 @@ class TestRequestInfoAndResponse:
 
         # Send response and continue workflow
         completed = False
-        async for event in workflow.send_responses_streaming({request_info_event.request_id: True}):
+        async for event in workflow.run(stream=True, responses={request_info_event.request_id: True}):
             if event.type == "status" and event.state == WorkflowRunState.IDLE:
                 completed = True
 
@@ -219,7 +219,7 @@ class TestRequestInfoAndResponse:
         # Send response with calculated result
         calculated_result = 31.0
         completed = False
-        async for event in workflow.send_responses_streaming({request_info_event.request_id: calculated_result}):
+        async for event in workflow.run(stream=True, responses={request_info_event.request_id: calculated_result}):
             if event.type == "status" and event.state == WorkflowRunState.IDLE:
                 completed = True
 
@@ -254,7 +254,7 @@ class TestRequestInfoAndResponse:
         # Send responses for both requests
         responses = {approval_event.request_id: True, calc_event.request_id: 50.0}
         completed = False
-        async for event in workflow.send_responses_streaming(responses):
+        async for event in workflow.run(stream=True, responses=responses):
             if event.type == "status" and event.state == WorkflowRunState.IDLE:
                 completed = True
 
@@ -276,7 +276,7 @@ class TestRequestInfoAndResponse:
 
         # Deny the request
         completed = False
-        async for event in workflow.send_responses_streaming({request_info_event.request_id: False}):
+        async for event in workflow.run(stream=True, responses={request_info_event.request_id: False}):
             if event.type == "status" and event.state == WorkflowRunState.IDLE:
                 completed = True
 
@@ -303,7 +303,7 @@ class TestRequestInfoAndResponse:
 
         # Continue with response
         completed = False
-        async for event in workflow.send_responses_streaming({request_info_event.request_id: True}):
+        async for event in workflow.run(stream=True, responses={request_info_event.request_id: True}):
             if event.type == "status" and event.state == WorkflowRunState.IDLE:
                 completed = True
 
@@ -395,9 +395,12 @@ class TestRequestInfoAndResponse:
 
             # Step 6: Provide response to the restored request and complete the workflow
             final_completed = False
-            async for event in restored_workflow.send_responses_streaming({
-                request_info_event.request_id: True  # Approve the request
-            }):
+            async for event in restored_workflow.run(
+                stream=True,
+                responses={
+                    request_info_event.request_id: True  # Approve the request
+                },
+            ):
                 if event.type == "status" and event.state == WorkflowRunState.IDLE:
                     final_completed = True
 

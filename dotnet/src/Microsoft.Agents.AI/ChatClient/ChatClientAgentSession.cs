@@ -161,7 +161,7 @@ public sealed class ChatClientAgentSession : AgentSession
         session._chatHistoryProvider =
             chatHistoryProviderFactory is not null
                 ? await chatHistoryProviderFactory.Invoke(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions, cancellationToken).ConfigureAwait(false)
-                : new InMemoryChatHistoryProvider(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions); // default to an in-memory ChatHistoryProvider
+                : new InMemoryChatHistoryProvider(); // default to an in-memory ChatHistoryProvider
 
         return session;
     }
@@ -193,7 +193,7 @@ public sealed class ChatClientAgentSession : AgentSession
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     private string DebuggerDisplay =>
         this.ConversationId is { } conversationId ? $"ConversationId = {conversationId}" :
-        this._chatHistoryProvider is InMemoryChatHistoryProvider inMemoryChatHistoryProvider ? $"Count = {inMemoryChatHistoryProvider.Count}" :
+        this._chatHistoryProvider is InMemoryChatHistoryProvider ? "InMemoryChatHistoryProvider" :
         this._chatHistoryProvider is { } chatHistoryProvider ? $"ChatHistoryProvider = {chatHistoryProvider.GetType().Name}" :
         "Count = 0";
 

@@ -86,12 +86,12 @@ namespace SampleApp
     internal sealed class UserInfoMemory : AIContextProvider
     {
         private readonly IChatClient _chatClient;
-        private readonly Func<AgentSession?, UserInfo>? _stateInitializer;
+        private readonly Func<AgentSession?, UserInfo> _stateInitializer;
 
         public UserInfoMemory(IChatClient chatClient, Func<AgentSession?, UserInfo>? stateInitializer = null)
         {
             this._chatClient = chatClient;
-            this._stateInitializer = stateInitializer;
+            this._stateInitializer = stateInitializer ?? (_ => new UserInfo());
         }
 
         public UserInfo GetUserInfo(AgentSession session)
@@ -103,8 +103,7 @@ namespace SampleApp
         public override async ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
         {
             var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
-                ?? this._stateInitializer?.Invoke(context.Session)
-                ?? new UserInfo();
+                ?? this._stateInitializer.Invoke(context.Session);
 
             // Try and extract the user name and age from the message if we don't have it already and it's a user message.
             if ((userInfo.UserName is null || userInfo.UserAge is null) && context.RequestMessages.Any(x => x.Role == ChatRole.User))
@@ -127,8 +126,7 @@ namespace SampleApp
         public override ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
             var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
-                ?? this._stateInitializer?.Invoke(context.Session)
-                ?? new UserInfo();
+                ?? this._stateInitializer.Invoke(context.Session);
 
             StringBuilder instructions = new();
 

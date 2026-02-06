@@ -98,7 +98,11 @@ public class ChatClientAgentSessionTests
         // Arrange
         var json = JsonSerializer.Deserialize("""
             {
-                "chatHistoryProviderState": { "messages": [{"authorName": "testAuthor"}] }
+                "stateBag": {
+                    "InMemoryChatHistoryProvider.State": {
+                        "jsonValue": { "messages": [{"authorName": "testAuthor"}] }
+                    }
+                }
             }
             """, TestJsonSerializerContext.Default.JsonElement);
 
@@ -110,8 +114,9 @@ public class ChatClientAgentSessionTests
 
         var chatHistoryProvider = session.ChatHistoryProvider as InMemoryChatHistoryProvider;
         Assert.NotNull(chatHistoryProvider);
-        Assert.Single(chatHistoryProvider);
-        Assert.Equal("testAuthor", chatHistoryProvider[0].AuthorName);
+        var messages = chatHistoryProvider.GetMessages(session);
+        Assert.Single(messages);
+        Assert.Equal("testAuthor", messages[0].AuthorName);
     }
 
     [Fact]
@@ -222,8 +227,9 @@ public class ChatClientAgentSessionTests
     public void VerifySessionSerializationWithMessages()
     {
         // Arrange
-        InMemoryChatHistoryProvider provider = [new(ChatRole.User, "TestContent") { AuthorName = "TestAuthor" }];
+        var provider = new InMemoryChatHistoryProvider();
         var session = new ChatClientAgentSession { ChatHistoryProvider = provider };
+        provider.SetMessages(session, [new(ChatRole.User, "TestContent") { AuthorName = "TestAuthor" }]);
 
         // Act
         var json = session.Serialize();
@@ -233,10 +239,18 @@ public class ChatClientAgentSessionTests
 
         Assert.False(json.TryGetProperty("conversationId", out _));
 
+        // chatHistoryProviderState should be an empty JSON object (state is in StateBag now)
         Assert.True(json.TryGetProperty("chatHistoryProviderState", out var chatHistoryProviderStateProperty));
         Assert.Equal(JsonValueKind.Object, chatHistoryProviderStateProperty.ValueKind);
 
-        Assert.True(chatHistoryProviderStateProperty.TryGetProperty("messages", out var messagesProperty));
+        // Messages should be stored in the stateBag
+        Assert.True(json.TryGetProperty("stateBag", out var stateBagProperty));
+        Assert.Equal(JsonValueKind.Object, stateBagProperty.ValueKind);
+        Assert.True(stateBagProperty.TryGetProperty("InMemoryChatHistoryProvider.State", out var providerStateProperty));
+        Assert.Equal(JsonValueKind.Object, providerStateProperty.ValueKind);
+        Assert.True(providerStateProperty.TryGetProperty("jsonValue", out var jsonValueProperty));
+        Assert.Equal(JsonValueKind.Object, jsonValueProperty.ValueKind);
+        Assert.True(jsonValueProperty.TryGetProperty("messages", out var messagesProperty));
         Assert.Equal(JsonValueKind.Array, messagesProperty.ValueKind);
         Assert.Single(messagesProperty.EnumerateArray());
 

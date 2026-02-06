@@ -163,9 +163,10 @@ public class ChatClientAgent_ChatHistoryManagementTests
 
         // Assert
         InMemoryChatHistoryProvider chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
-        Assert.Equal(2, chatHistoryProvider.Count);
-        Assert.Equal("test", chatHistoryProvider[0].Text);
-        Assert.Equal("response", chatHistoryProvider[1].Text);
+        var messages = chatHistoryProvider.GetMessages(session);
+        Assert.Equal(2, messages.Count);
+        Assert.Equal("test", messages[0].Text);
+        Assert.Equal("response", messages[1].Text);
     }
 
     /// <summary>

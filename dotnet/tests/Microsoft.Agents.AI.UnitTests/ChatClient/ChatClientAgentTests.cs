@@ -373,10 +373,11 @@ public partial class ChatClientAgentTests
 
         // Verify that the session was updated with the ai context provider, input and response messages
         var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
-        Assert.Equal(3, chatHistoryProvider.Count);
-        Assert.Equal("user message", chatHistoryProvider[0].Text);
-        Assert.Equal("context provider message", chatHistoryProvider[1].Text);
-        Assert.Equal("response", chatHistoryProvider[2].Text);
+        var messages = chatHistoryProvider.GetMessages(session);
+        Assert.Equal(3, messages.Count);
+        Assert.Equal("user message", messages[0].Text);
+        Assert.Equal("context provider message", messages[1].Text);
+        Assert.Equal("response", messages[2].Text);
 
         mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
         mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>
@@ -1301,9 +1302,10 @@ public partial class ChatClientAgentTests
 
         // Assert
         var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
-        Assert.Equal(2, chatHistoryProvider.Count);
-        Assert.Equal("test", chatHistoryProvider[0].Text);
-        Assert.Equal("what?", chatHistoryProvider[1].Text);
+        var historyMessages = chatHistoryProvider.GetMessages(session);
+        Assert.Equal(2, historyMessages.Count);
+        Assert.Equal("test", historyMessages[0].Text);
+        Assert.Equal("what?", historyMessages[1].Text);
         mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -1409,10 +1411,11 @@ public partial class ChatClientAgentTests
 
         // Verify that the session was updated with the input, ai context provider, and response messages
         var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
-        Assert.Equal(3, chatHistoryProvider.Count);
-        Assert.Equal("user message", chatHistoryProvider[0].Text);
-        Assert.Equal("context provider message", chatHistoryProvider[1].Text);
-        Assert.Equal("response", chatHistoryProvider[2].Text);
+        var historyMessages2 = chatHistoryProvider.GetMessages(session);
+        Assert.Equal(3, historyMessages2.Count);
+        Assert.Equal("user message", historyMessages2[0].Text);
+        Assert.Equal("context provider message", historyMessages2[1].Text);
+        Assert.Equal("response", historyMessages2[2].Text);
 
         mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
         mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>

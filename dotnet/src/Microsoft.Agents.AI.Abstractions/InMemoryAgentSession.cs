@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
 
@@ -38,7 +39,7 @@ public abstract class InMemoryAgentSession : AgentSession
     /// </remarks>
     protected InMemoryAgentSession(InMemoryChatHistoryProvider? chatHistoryProvider = null)
     {
-        this.ChatHistoryProvider = chatHistoryProvider ?? [];
+        this.ChatHistoryProvider = chatHistoryProvider ?? new InMemoryChatHistoryProvider();
     }
 
     /// <summary>
@@ -52,7 +53,8 @@ public abstract class InMemoryAgentSession : AgentSession
     /// </remarks>
     protected InMemoryAgentSession(IEnumerable<ChatMessage> messages)
     {
-        this.ChatHistoryProvider = [.. messages];
+        this.ChatHistoryProvider = new InMemoryChatHistoryProvider();
+        this.ChatHistoryProvider.GetMessages(this).AddRange(Throw.IfNull(messages));
     }
 
     /// <summary>
@@ -85,7 +87,12 @@ public abstract class InMemoryAgentSession : AgentSession
 
         this.ChatHistoryProvider =
             chatHistoryProviderFactory?.Invoke(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions) ??
-            new InMemoryChatHistoryProvider(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions);
+            new InMemoryChatHistoryProvider();
+
+        if (state?.StateBag is { ValueKind: JsonValueKind.Object } stateBagElement)
+        {
+            this.StateBag = AgentSessionStateBag.Deserialize(stateBagElement);
+        }
     }
 
     /// <summary>
@@ -105,6 +112,7 @@ public abstract class InMemoryAgentSession : AgentSession
         var state = new InMemoryAgentSessionState
         {
             ChatHistoryProviderState = chatHistoryProviderState,
+            StateBag = this.StateBag.Serialize(),
         };
 
         return JsonSerializer.SerializeToElement(state, AgentAbstractionsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(InMemoryAgentSessionState)));
@@ -115,10 +123,12 @@ public abstract class InMemoryAgentSession : AgentSession
         base.GetService(serviceType, serviceKey) ?? this.ChatHistoryProvider?.GetService(serviceType, serviceKey);
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-    private string DebuggerDisplay => $"Count = {this.ChatHistoryProvider.Count}";
+    private string DebuggerDisplay => $"Count = {this.ChatHistoryProvider.GetMessages(this).Count}";
 
     internal sealed class InMemoryAgentSessionState
     {
         public JsonElement? ChatHistoryProviderState { get; set; }
+
+        public JsonElement? StateBag { get; set; }
     }
 }

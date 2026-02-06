@@ -302,21 +302,13 @@ public sealed partial class ChatClientAgent : AIAgent
         : this.ChatClient.GetService(serviceType, serviceKey));
 
     /// <inheritdoc/>
-    public override async ValueTask<AgentSession> CreateSessionAsync(CancellationToken cancellationToken = default)
+    public override ValueTask<AgentSession> CreateSessionAsync(CancellationToken cancellationToken = default)
     {
-        ChatHistoryProvider? chatHistoryProvider = this._agentOptions?.ChatHistoryProviderFactory is not null
-            ? await this._agentOptions.ChatHistoryProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-            : null;
-
-        AIContextProvider? contextProvider = this._agentOptions?.AIContextProviderFactory is not null
-            ? await this._agentOptions.AIContextProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-            : null;
-
-        return new ChatClientAgentSession
+        return new(new ChatClientAgentSession
         {
-            ChatHistoryProvider = chatHistoryProvider,
-            AIContextProvider = contextProvider
-        };
+            ChatHistoryProvider = this._agentOptions?.ChatHistoryProvider,
+            AIContextProvider = this._agentOptions?.AIContextProvider
+        });
     }
 
     /// <summary>
@@ -337,17 +329,13 @@ public sealed partial class ChatClientAgent : AIAgent
     /// instances that support server-side conversation storage through their underlying <see cref="IChatClient"/>.
     /// </para>
     /// </remarks>
-    public async ValueTask<AgentSession> CreateSessionAsync(string conversationId, CancellationToken cancellationToken = default)
+    public ValueTask<AgentSession> CreateSessionAsync(string conversationId, CancellationToken cancellationToken = default)
     {
-        AIContextProvider? contextProvider = this._agentOptions?.AIContextProviderFactory is not null
-            ? await this._agentOptions.AIContextProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-            : null;
-
-        return new ChatClientAgentSession()
+        return new(new ChatClientAgentSession()
         {
             ConversationId = conversationId,
-            AIContextProvider = contextProvider
-        };
+            AIContextProvider = this._agentOptions?.AIContextProvider
+        });
     }
 
     /// <summary>
@@ -372,17 +360,13 @@ public sealed partial class ChatClientAgent : AIAgent
     /// the session will throw an exception to indicate that it cannot continue using the provided <see cref="ChatHistoryProvider"/>.
     /// </para>
     /// </remarks>
-    public async ValueTask<AgentSession> CreateSessionAsync(ChatHistoryProvider chatHistoryProvider, CancellationToken cancellationToken = default)
+    public ValueTask<AgentSession> CreateSessionAsync(ChatHistoryProvider chatHistoryProvider, CancellationToken cancellationToken = default)
     {
-        AIContextProvider? contextProvider = this._agentOptions?.AIContextProviderFactory is not null
-            ? await this._agentOptions.AIContextProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-            : null;
-
-        return new ChatClientAgentSession()
+        return new(new ChatClientAgentSession()
         {
             ChatHistoryProvider = Throw.IfNull(chatHistoryProvider),
-            AIContextProvider = contextProvider
-        };
+            AIContextProvider = this._agentOptions?.AIContextProvider
+        });
     }
 
     /// <inheritdoc/>
@@ -399,21 +383,12 @@ public sealed partial class ChatClientAgent : AIAgent
     }
 
     /// <inheritdoc/>
-    public override async ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
+    public override ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
-        Func<CancellationToken, ValueTask<ChatHistoryProvider>>? chatHistoryProviderFactory = this._agentOptions?.ChatHistoryProviderFactory is null ?
-            null :
-            (ct) => this._agentOptions.ChatHistoryProviderFactory.Invoke(ct);
-
-        Func<CancellationToken, ValueTask<AIContextProvider>>? aiContextProviderFactory = this._agentOptions?.AIContextProviderFactory is null ?
-            null :
-            (ct) => this._agentOptions.AIContextProviderFactory.Invoke(ct);
-
-        return await ChatClientAgentSession.DeserializeAsync(
+        return new(ChatClientAgentSession.Deserialize(
             serializedState,
-            chatHistoryProviderFactory,
-            aiContextProviderFactory,
-            cancellationToken).ConfigureAwait(false);
+            this._agentOptions?.ChatHistoryProvider,
+            this._agentOptions?.AIContextProvider));
     }
 
     #region Private
@@ -805,9 +780,8 @@ public sealed partial class ChatClientAgent : AIAgent
             // If the service doesn't use service side chat history storage (i.e. we got no id back from invocation), and
             // the session has no ChatHistoryProvider yet, we should update the session with the custom ChatHistoryProvider or
             // default InMemoryChatHistoryProvider so that it has somewhere to store the chat history.
-            session.ChatHistoryProvider ??= this._agentOptions?.ChatHistoryProviderFactory is not null
-                ? await this._agentOptions.ChatHistoryProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-                : new InMemoryChatHistoryProvider();
+            session.ChatHistoryProvider ??= this._agentOptions?.ChatHistoryProvider
+                ?? new InMemoryChatHistoryProvider();
         }
     }
 

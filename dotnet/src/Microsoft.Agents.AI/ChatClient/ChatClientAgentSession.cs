@@ -3,8 +3,6 @@
 using System;
 using System.Diagnostics;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
@@ -116,21 +114,19 @@ public sealed class ChatClientAgentSession : AgentSession
     /// Creates a new instance of the <see cref="ChatClientAgentSession"/> class from previously serialized state.
     /// </summary>
     /// <param name="serializedState">A <see cref="JsonElement"/> representing the serialized state of the session.</param>
-    /// <param name="chatHistoryProviderFactory">
-    /// An optional factory function to create a custom <see cref="AI.ChatHistoryProvider"/>.
+    /// <param name="chatHistoryProvider">
+    /// An optional <see cref="ChatHistoryProvider"/> instance.
     /// If not provided, the default <see cref="InMemoryChatHistoryProvider"/> will be used.
     /// </param>
-    /// <param name="aiContextProviderFactory">
-    /// An optional factory function to create a custom <see cref="AIContextProvider"/>.
+    /// <param name="aiContextProvider">
+    /// An optional <see cref="AIContextProvider"/> instance.
     /// If not provided, no context provider will be configured.
     /// </param>
-    /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation. The task result contains the deserialized <see cref="ChatClientAgentSession"/>.</returns>
-    internal static async Task<ChatClientAgentSession> DeserializeAsync(
+    /// <returns>The deserialized <see cref="ChatClientAgentSession"/>.</returns>
+    internal static ChatClientAgentSession Deserialize(
         JsonElement serializedState,
-        Func<CancellationToken, ValueTask<ChatHistoryProvider>>? chatHistoryProviderFactory = null,
-        Func<CancellationToken, ValueTask<AIContextProvider>>? aiContextProviderFactory = null,
-        CancellationToken cancellationToken = default)
+        ChatHistoryProvider? chatHistoryProvider = null,
+        AIContextProvider? aiContextProvider = null)
     {
         if (serializedState.ValueKind != JsonValueKind.Object)
         {
@@ -142,9 +138,7 @@ public sealed class ChatClientAgentSession : AgentSession
 
         var session = new ChatClientAgentSession();
 
-        session.AIContextProvider = aiContextProviderFactory is not null
-            ? await aiContextProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-            : null;
+        session.AIContextProvider = aiContextProvider;
 
         session.StateBag = AgentSessionStateBag.Deserialize(state?.StateBag ?? default);
 
@@ -157,9 +151,8 @@ public sealed class ChatClientAgentSession : AgentSession
         }
 
         session._chatHistoryProvider =
-            chatHistoryProviderFactory is not null
-                ? await chatHistoryProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
-                : new InMemoryChatHistoryProvider(); // default to an in-memory ChatHistoryProvider
+            chatHistoryProvider
+                ?? new InMemoryChatHistoryProvider(); // default to an in-memory ChatHistoryProvider
 
         return session;
     }

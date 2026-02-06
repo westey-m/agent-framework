@@ -24,7 +24,7 @@ AIAgent agent = new AzureOpenAIClient(
     {
         ChatOptions = new() { Instructions = "You are good at telling jokes." },
         Name = "Joker",
-        ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(new InMemoryChatHistoryProvider(chatReducer: new MessageCountingChatReducer(2)))
+        ChatHistoryProvider = new InMemoryChatHistoryProvider(chatReducer: new MessageCountingChatReducer(2))
     });
 
 AgentSession session = await agent.CreateSessionAsync();

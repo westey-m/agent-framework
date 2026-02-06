@@ -12,54 +12,42 @@ namespace Microsoft.Agents.AI.UnitTests;
 public class ChatClientAgent_CreateSessionTests
 {
     [Fact]
-    public async Task CreateSession_UsesAIContextProviderFactory_IfProvidedAsync()
+    public async Task CreateSession_UsesAIContextProvider_IfProvidedAsync()
     {
         // Arrange
         var mockChatClient = new Mock<IChatClient>();
         var mockContextProvider = new Mock<AIContextProvider>();
-        var factoryCalled = false;
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
             ChatOptions = new() { Instructions = "Test instructions" },
-            AIContextProviderFactory = (_) =>
-            {
-                factoryCalled = true;
-                return new ValueTask<AIContextProvider>(mockContextProvider.Object);
-            }
+            AIContextProvider = mockContextProvider.Object
         });
 
         // Act
         var session = await agent.CreateSessionAsync();
 
         // Assert
-        Assert.True(factoryCalled, "AIContextProviderFactory was not called.");
         Assert.IsType<ChatClientAgentSession>(session);
         var typedSession = (ChatClientAgentSession)session;
         Assert.Same(mockContextProvider.Object, typedSession.AIContextProvider);
     }
 
     [Fact]
-    public async Task CreateSession_UsesChatHistoryProviderFactory_IfProvidedAsync()
+    public async Task CreateSession_UsesChatHistoryProvider_IfProvidedAsync()
     {
         // Arrange
         var mockChatClient = new Mock<IChatClient>();
         var mockChatHistoryProvider = new Mock<ChatHistoryProvider>();
-        var factoryCalled = false;
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
             ChatOptions = new() { Instructions = "Test instructions" },
-            ChatHistoryProviderFactory = (_) =>
-            {
-                factoryCalled = true;
-                return new ValueTask<ChatHistoryProvider>(mockChatHistoryProvider.Object);
-            }
+            ChatHistoryProvider = mockChatHistoryProvider.Object
         });
 
         // Act
         var session = await agent.CreateSessionAsync();
 
         // Assert
-        Assert.True(factoryCalled, "ChatHistoryProviderFactory was not called.");
         Assert.IsType<ChatClientAgentSession>(session);
         var typedSession = (ChatClientAgentSession)session;
         Assert.Same(mockChatHistoryProvider.Object, typedSession.ChatHistoryProvider);

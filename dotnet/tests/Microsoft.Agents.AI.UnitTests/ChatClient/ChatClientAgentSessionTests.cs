@@ -3,7 +3,6 @@
 using System;
 using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Moq;
 
@@ -92,7 +91,7 @@ public class ChatClientAgentSessionTests
     #region Deserialize Tests
 
     [Fact]
-    public async Task VerifyDeserializeWithMessagesAsync()
+    public void VerifyDeserializeWithMessages()
     {
         // Arrange
         var json = JsonSerializer.Deserialize("""
@@ -106,7 +105,7 @@ public class ChatClientAgentSessionTests
             """, TestJsonSerializerContext.Default.JsonElement);
 
         // Act.
-        var session = await ChatClientAgentSession.DeserializeAsync(json);
+        var session = ChatClientAgentSession.Deserialize(json);
 
         // Assert
         Assert.Null(session.ConversationId);
@@ -119,7 +118,7 @@ public class ChatClientAgentSessionTests
     }
 
     [Fact]
-    public async Task VerifyDeserializeWithIdAsync()
+    public void VerifyDeserializeWithId()
     {
         // Arrange
         var json = JsonSerializer.Deserialize("""
@@ -129,7 +128,7 @@ public class ChatClientAgentSessionTests
             """, TestJsonSerializerContext.Default.JsonElement);
 
         // Act
-        var session = await ChatClientAgentSession.DeserializeAsync(json);
+        var session = ChatClientAgentSession.Deserialize(json);
 
         // Assert
         Assert.Equal("TestConvId", session.ConversationId);
@@ -137,7 +136,7 @@ public class ChatClientAgentSessionTests
     }
 
     [Fact]
-    public async Task VerifyDeserializeWithAIContextProviderAsync()
+    public void VerifyDeserializeWithAIContextProvider()
     {
         // Arrange
         var json = JsonSerializer.Deserialize("""
@@ -149,7 +148,7 @@ public class ChatClientAgentSessionTests
         Mock<AIContextProvider> mockProvider = new();
 
         // Act
-        var session = await ChatClientAgentSession.DeserializeAsync(json, aiContextProviderFactory: (_) => new(mockProvider.Object));
+        var session = ChatClientAgentSession.Deserialize(json, aiContextProvider: mockProvider.Object);
 
         // Assert
         Assert.Null(session.ChatHistoryProvider);
@@ -157,7 +156,7 @@ public class ChatClientAgentSessionTests
     }
 
     [Fact]
-    public async Task VerifyDeserializeWithStateBagAsync()
+    public void VerifyDeserializeWithStateBag()
     {
         // Arrange
         var json = JsonSerializer.Deserialize("""
@@ -175,7 +174,7 @@ public class ChatClientAgentSessionTests
         Mock<AIContextProvider> mockProvider = new();
 
         // Act
-        var session = await ChatClientAgentSession.DeserializeAsync(json, aiContextProviderFactory: (_) => new(mockProvider.Object));
+        var session = ChatClientAgentSession.Deserialize(json, aiContextProvider: mockProvider.Object);
 
         // Assert
         var dog = session.StateBag.GetValue<Animal>("dog", TestJsonSerializerContext.Default.Options);
@@ -184,14 +183,13 @@ public class ChatClientAgentSessionTests
     }
 
     [Fact]
-    public async Task DeserializeWithInvalidJsonThrowsAsync()
+    public void DeserializeWithInvalidJsonThrows()
     {
         // Arrange
         var invalidJson = JsonSerializer.Deserialize("[42]", TestJsonSerializerContext.Default.JsonElement);
-        var session = new ChatClientAgentSession();
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => ChatClientAgentSession.DeserializeAsync(invalidJson));
+        Assert.Throws<ArgumentException>(() => ChatClientAgentSession.Deserialize(invalidJson));
     }
 
     #endregion Deserialize Tests
@@ -308,7 +306,7 @@ public class ChatClientAgentSessionTests
     #region StateBag Roundtrip Tests
 
     [Fact]
-    public async Task VerifyStateBagRoundtripsAsync()
+    public void VerifyStateBagRoundtrips()
     {
         // Arrange
         var session = new ChatClientAgentSession();
@@ -316,7 +314,7 @@ public class ChatClientAgentSessionTests
 
         // Act
         var serializedSession = session.Serialize();
-        var deserializedSession = await ChatClientAgentSession.DeserializeAsync(serializedSession);
+        var deserializedSession = ChatClientAgentSession.Deserialize(serializedSession);
 
         // Assert
         var dog = deserializedSession.StateBag.GetValue<Animal>("dog", TestJsonSerializerContext.Default.Options);

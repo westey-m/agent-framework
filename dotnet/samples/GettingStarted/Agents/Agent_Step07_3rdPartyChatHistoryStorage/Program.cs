@@ -33,9 +33,8 @@ AIAgent agent = new AzureOpenAIClient(
     {
         ChatOptions = new() { Instructions = "You are good at telling jokes." },
         Name = "Joker",
-        ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
-            // Create a new ChatHistoryProvider for this agent that stores chat history in a vector store.
-            new VectorChatHistoryProvider(vectorStore))
+        // Create a new ChatHistoryProvider for this agent that stores chat history in a vector store.
+        ChatHistoryProvider = new VectorChatHistoryProvider(vectorStore)
     });
 
 // Start a new session for the agent conversation.

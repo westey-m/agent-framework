@@ -353,7 +353,7 @@ public partial class ChatClientAgentTests
             .Setup(p => p.InvokedAsync(It.IsAny<AIContextProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
             .Returns(new ValueTask());
 
-        ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProviderFactory = (_) => new(mockProvider.Object), ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
+        ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
 
         // Act
         var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
@@ -416,7 +416,7 @@ public partial class ChatClientAgentTests
             .Setup(p => p.InvokedAsync(It.IsAny<AIContextProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
             .Returns(new ValueTask());
 
-        ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProviderFactory = (_) => new(mockProvider.Object), ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
+        ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
 
         // Act
         await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync(requestMessages));
@@ -462,7 +462,7 @@ public partial class ChatClientAgentTests
             .Setup(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AIContext());
 
-        ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProviderFactory = (_) => new(mockProvider.Object), ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
+        ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
 
         // Act
         await agent.RunAsync([new(ChatRole.User, "user message")]);
@@ -1288,12 +1288,10 @@ public partial class ChatClientAgentTests
                 It.IsAny<IEnumerable<ChatMessage>>(),
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).Returns(ToAsyncEnumerableAsync(returnUpdates));
-        Mock<Func<CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<CancellationToken>())).ReturnsAsync(new InMemoryChatHistoryProvider());
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatOptions = new() { Instructions = "test instructions" },
-            ChatHistoryProviderFactory = mockFactory.Object
+            ChatHistoryProvider = new InMemoryChatHistoryProvider()
         });
 
         // Act
@@ -1306,14 +1304,13 @@ public partial class ChatClientAgentTests
         Assert.Equal(2, historyMessages.Count);
         Assert.Equal("test", historyMessages[0].Text);
         Assert.Equal("what?", historyMessages[1].Text);
-        mockFactory.Verify(f => f(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
-    /// Verify that RunStreamingAsync throws when a <see cref="ChatHistoryProvider"/> factory is provided and the chat client returns a conversation id.
+    /// Verify that RunStreamingAsync throws when a <see cref="ChatHistoryProvider"/> is provided and the chat client returns a conversation id.
     /// </summary>
     [Fact]
-    public async Task RunStreamingAsyncThrowsWhenChatHistoryProviderFactoryProvidedAndConversationIdReturnedByChatClientAsync()
+    public async Task RunStreamingAsyncThrowsWhenChatHistoryProviderProvidedAndConversationIdReturnedByChatClientAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -1327,12 +1324,10 @@ public partial class ChatClientAgentTests
                 It.IsAny<IEnumerable<ChatMessage>>(),
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).Returns(ToAsyncEnumerableAsync(returnUpdates));
-        Mock<Func<CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<CancellationToken>())).ReturnsAsync(new InMemoryChatHistoryProvider());
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatOptions = new() { Instructions = "test instructions" },
-            ChatHistoryProviderFactory = mockFactory.Object
+            ChatHistoryProvider = new InMemoryChatHistoryProvider()
         });
 
         // Act & Assert
@@ -1389,7 +1384,7 @@ public partial class ChatClientAgentTests
             options: new()
             {
                 ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] },
-                AIContextProviderFactory = (_) => new(mockProvider.Object)
+                AIContextProvider = mockProvider.Object
             });
 
         // Act
@@ -1459,7 +1454,7 @@ public partial class ChatClientAgentTests
             options: new()
             {
                 ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] },
-                AIContextProviderFactory = (_) => new(mockProvider.Object)
+                AIContextProvider = mockProvider.Object
             });
 
         // Act

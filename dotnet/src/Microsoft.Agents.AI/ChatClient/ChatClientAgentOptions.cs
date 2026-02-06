@@ -1,8 +1,5 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 
 namespace Microsoft.Agents.AI;
@@ -38,17 +35,14 @@ public sealed class ChatClientAgentOptions
     public ChatOptions? ChatOptions { get; set; }
 
     /// <summary>
-    /// Gets or sets a factory function to create an instance of <see cref="ChatHistoryProvider"/>
-    /// which will be used to provide chat history for this agent.
+    /// Gets or sets the <see cref="ChatHistoryProvider"/> instance to use for providing chat history for this agent.
     /// </summary>
-    public Func<CancellationToken, ValueTask<ChatHistoryProvider>>? ChatHistoryProviderFactory { get; set; }
+    public ChatHistoryProvider? ChatHistoryProvider { get; set; }
 
     /// <summary>
-    /// Gets or sets a factory function to create an instance of <see cref="AIContextProvider"/>
-    /// which will be used to create a context provider for each new thread, and can then
-    /// provide additional context for each agent run.
+    /// Gets or sets the <see cref="AIContextProvider"/> instance to use for providing additional context for each agent run.
     /// </summary>
-    public Func<CancellationToken, ValueTask<AIContextProvider>>? AIContextProviderFactory { get; set; }
+    public AIContextProvider? AIContextProvider { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to use the provided <see cref="IChatClient"/> instance as is,
@@ -74,7 +68,7 @@ public sealed class ChatClientAgentOptions
             Name = this.Name,
             Description = this.Description,
             ChatOptions = this.ChatOptions?.Clone(),
-            ChatHistoryProviderFactory = this.ChatHistoryProviderFactory,
-            AIContextProviderFactory = this.AIContextProviderFactory,
+            ChatHistoryProvider = this.ChatHistoryProvider,
+            AIContextProvider = this.AIContextProvider,
         };
 }

@@ -2,7 +2,6 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Azure.Cosmos;
 
@@ -41,8 +40,8 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
-        options.ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
-            new CosmosChatHistoryProvider(connectionString, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
+        options.ChatHistoryProvider =
+            new CosmosChatHistoryProvider(connectionString, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer);
         return options;
     }
 
@@ -78,8 +77,8 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(tokenCredential));
         }
 
-        options.ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
-            new CosmosChatHistoryProvider(accountEndpoint, tokenCredential, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
+        options.ChatHistoryProvider =
+            new CosmosChatHistoryProvider(accountEndpoint, tokenCredential, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer);
         return options;
     }
 
@@ -108,8 +107,8 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
-        options.ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
-            new CosmosChatHistoryProvider(cosmosClient, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
+        options.ChatHistoryProvider =
+            new CosmosChatHistoryProvider(cosmosClient, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer);
         return options;
     }
 }

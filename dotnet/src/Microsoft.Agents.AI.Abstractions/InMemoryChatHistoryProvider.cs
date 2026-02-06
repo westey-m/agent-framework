@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -155,22 +154,6 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         {
             state.Messages = (await this.ChatReducer.ReduceAsync(state.Messages, cancellationToken).ConfigureAwait(false)).ToList();
         }
-    }
-
-    /// <summary>
-    /// Serializes the current provider state to a <see cref="JsonElement"/>.
-    /// </summary>
-    /// <param name="jsonSerializerOptions">Optional serializer options (ignored, source generated context is used).</param>
-    /// <returns>An empty <see cref="JsonElement"/> object.</returns>
-    /// <remarks>
-    /// State is now stored in the <see cref="AgentSession.StateBag"/> and serialized as part of the session.
-    /// </remarks>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        // State is now stored in the session StateBag, so there is nothing to serialize here.
-        // Return an empty JSON object.
-        using var doc = JsonDocument.Parse("{}");
-        return doc.RootElement.Clone();
     }
 
     /// <summary>

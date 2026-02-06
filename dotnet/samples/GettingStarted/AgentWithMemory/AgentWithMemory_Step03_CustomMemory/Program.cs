@@ -33,7 +33,7 @@ ChatClient chatClient = new AzureOpenAIClient(
 AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions()
 {
     ChatOptions = new() { Instructions = "You are a friendly assistant. Always address the user by their name." },
-    AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new UserInfoMemory(chatClient.AsIChatClient()))
+    AIContextProviderFactory = (ct) => new ValueTask<AIContextProvider>(new UserInfoMemory(chatClient.AsIChatClient()))
 });
 
 // Create a new session for the conversation.
@@ -145,11 +145,6 @@ namespace SampleApp
             {
                 Instructions = instructions.ToString()
             });
-        }
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-        {
-            return JsonSerializer.SerializeToElement(new UserInfo(), jsonSerializerOptions);
         }
     }
 

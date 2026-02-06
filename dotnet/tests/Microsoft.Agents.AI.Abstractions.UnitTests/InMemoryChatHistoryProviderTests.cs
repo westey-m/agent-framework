@@ -370,20 +370,6 @@ public class InMemoryChatHistoryProviderTests
         await Assert.ThrowsAsync<ArgumentNullException>(() => provider.InvokingAsync(null!, CancellationToken.None).AsTask());
     }
 
-    [Fact]
-    public void Serialize_ReturnsEmptyJsonObject()
-    {
-        // Arrange
-        var provider = new InMemoryChatHistoryProvider();
-
-        // Act
-        var result = provider.Serialize();
-
-        // Assert
-        Assert.Equal(System.Text.Json.JsonValueKind.Object, result.ValueKind);
-        Assert.Empty(result.EnumerateObject());
-    }
-
     public class TestAIContent(string testData) : AIContent
     {
         public string TestData => testData;

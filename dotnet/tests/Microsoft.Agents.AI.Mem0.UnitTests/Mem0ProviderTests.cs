@@ -342,22 +342,6 @@ public sealed class Mem0ProviderTests : IDisposable
     }
 
     [Fact]
-    public void Serialize_ReturnsEmptyJsonObject()
-    {
-        // Arrange
-        var storageScope = new Mem0ProviderScope { ApplicationId = "app", AgentId = "agent", ThreadId = "session", UserId = "user" };
-        var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), options: new() { ContextPrompt = "Custom:" }, loggerFactory: this._loggerFactoryMock.Object);
-
-        // Act
-        var stateElement = sut.Serialize();
-
-        // Assert
-        using JsonDocument doc = JsonDocument.Parse(stateElement.GetRawText());
-        Assert.Equal(JsonValueKind.Object, doc.RootElement.ValueKind);
-        Assert.Empty(doc.RootElement.EnumerateObject());
-    }
-
-    [Fact]
     public async Task InvokingAsync_ShouldNotThrow_WhenSearchFailsAsync()
     {
         // Arrange

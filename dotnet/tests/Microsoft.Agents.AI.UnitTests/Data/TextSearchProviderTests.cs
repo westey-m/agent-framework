@@ -500,25 +500,6 @@ public sealed class TextSearchProviderTests
     #region Serialization Tests
 
     [Fact]
-    public void Serialize_ShouldReturnEmptyState()
-    {
-        // Arrange
-        var options = new TextSearchProviderOptions
-        {
-            SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
-            RecentMessageMemoryLimit = 3
-        };
-        var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
-
-        // Act
-        var state = provider.Serialize();
-
-        // Assert - State is now stored in session StateBag, so provider.Serialize() returns empty state
-        Assert.Equal(JsonValueKind.Object, state.ValueKind);
-        Assert.False(state.TryGetProperty("recentMessagesText", out _));
-    }
-
-    [Fact]
     public async Task InvokedAsync_ShouldPersistMessagesToSessionStateBagAsync()
     {
         // Arrange

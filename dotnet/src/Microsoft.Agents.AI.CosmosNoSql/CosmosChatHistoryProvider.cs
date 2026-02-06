@@ -434,28 +434,6 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
     }
 
     /// <summary>
-    /// Serializes the current provider state to a <see cref="JsonElement"/>.
-    /// </summary>
-    /// <param name="jsonSerializerOptions">Optional serializer options (ignored).</param>
-    /// <returns>An empty <see cref="JsonElement"/> object.</returns>
-    /// <remarks>
-    /// State is now stored in the <see cref="AgentSession.StateBag"/> and serialized as part of the session.
-    /// </remarks>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-#pragma warning disable CA1513 // Use ObjectDisposedException.ThrowIf - not available on all target frameworks
-        if (this._disposed)
-        {
-            throw new ObjectDisposedException(this.GetType().FullName);
-        }
-#pragma warning restore CA1513
-
-        // State is now stored in the session StateBag, so there is nothing to serialize here.
-        using var doc = JsonDocument.Parse("{}");
-        return doc.RootElement.Clone();
-    }
-
-    /// <summary>
     /// Gets the count of messages in this conversation.
     /// This is an additional utility method beyond the base contract.
     /// </summary>

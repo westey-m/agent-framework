@@ -191,8 +191,8 @@ public class ChatClientAgent_ChatHistoryManagementTests
             It.IsAny<ChatHistoryProvider.InvokedContext>(),
             It.IsAny<CancellationToken>())).Returns(new ValueTask());
 
-        Mock<Func<ChatClientAgentOptions.ChatHistoryProviderFactoryContext, CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(mockChatHistoryProvider.Object);
+        Mock<Func<CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
+        mockFactory.Setup(f => f(It.IsAny<CancellationToken>())).ReturnsAsync(mockChatHistoryProvider.Object);
 
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
@@ -220,7 +220,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
             It.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 1 && x.ChatHistoryProviderMessages != null && x.ChatHistoryProviderMessages.Count() == 1 && x.ResponseMessages!.Count() == 1),
             It.IsAny<CancellationToken>()),
             Times.Once);
-        mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        mockFactory.Verify(f => f(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -239,8 +239,8 @@ public class ChatClientAgent_ChatHistoryManagementTests
 
         Mock<ChatHistoryProvider> mockChatHistoryProvider = new();
 
-        Mock<Func<ChatClientAgentOptions.ChatHistoryProviderFactoryContext, CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(mockChatHistoryProvider.Object);
+        Mock<Func<CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
+        mockFactory.Setup(f => f(It.IsAny<CancellationToken>())).ReturnsAsync(mockChatHistoryProvider.Object);
 
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
@@ -258,7 +258,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
             It.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 1 && x.ResponseMessages == null && x.InvokeException!.Message == "Test Error"),
             It.IsAny<CancellationToken>()),
             Times.Once);
-        mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        mockFactory.Verify(f => f(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -274,8 +274,8 @@ public class ChatClientAgent_ChatHistoryManagementTests
                 It.IsAny<IEnumerable<ChatMessage>>(),
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]) { ConversationId = "ConvId" });
-        Mock<Func<ChatClientAgentOptions.ChatHistoryProviderFactoryContext, CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(new InMemoryChatHistoryProvider());
+        Mock<Func<CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
+        mockFactory.Setup(f => f(It.IsAny<CancellationToken>())).ReturnsAsync(new InMemoryChatHistoryProvider());
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatOptions = new() { Instructions = "test instructions" },
@@ -326,8 +326,8 @@ public class ChatClientAgent_ChatHistoryManagementTests
             It.IsAny<ChatHistoryProvider.InvokedContext>(),
             It.IsAny<CancellationToken>())).Throws(FailException.ForFailure("Base ChatHistoryProvider shouldn't be used."));
 
-        Mock<Func<ChatClientAgentOptions.ChatHistoryProviderFactoryContext, CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
-        mockFactory.Setup(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>())).ReturnsAsync(mockFactoryChatHistoryProvider.Object);
+        Mock<Func<CancellationToken, ValueTask<ChatHistoryProvider>>> mockFactory = new();
+        mockFactory.Setup(f => f(It.IsAny<CancellationToken>())).ReturnsAsync(mockFactoryChatHistoryProvider.Object);
 
         ChatClientAgent agent = new(mockService.Object, options: new()
         {

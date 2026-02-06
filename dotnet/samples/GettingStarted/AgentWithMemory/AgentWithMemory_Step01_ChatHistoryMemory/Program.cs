@@ -34,7 +34,7 @@ AIAgent agent = new AzureOpenAIClient(
     {
         ChatOptions = new() { Instructions = "You are good at telling jokes." },
         Name = "Joker",
-        AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new ChatHistoryMemoryProvider(
+        AIContextProviderFactory = (ct) => new ValueTask<AIContextProvider>(new ChatHistoryMemoryProvider(
             vectorStore,
             collectionName: "chathistory",
             vectorDimensions: 3072,

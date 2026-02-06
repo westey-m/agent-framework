@@ -31,7 +31,7 @@ AIAgent agent = new AzureOpenAIClient(
     .AsAIAgent(new ChatClientAgentOptions()
     {
         ChatOptions = new() { Instructions = "You are a friendly travel assistant. Use known memories about the user when responding, and do not invent details." },
-        AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(
+        AIContextProviderFactory = (ct) => new ValueTask<AIContextProvider>(
             // The stateInitializer can be used to customize the Mem0 scope per session and it will be called each time a session
             // is encountered by the Mem0Provider that does not already have Mem0Provider state stored on the session.
             // If each session should have its own Mem0 scope, you can create a new id per session via the stateInitializer, e.g.:

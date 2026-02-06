@@ -44,13 +44,13 @@ AIAgent agent = new AzureOpenAIClient(
         You manage a TODO list for the user. When the user has completed one of the tasks it can be removed from the TODO list. Only provide the list of TODO items if asked.
         You remind users of upcoming calendar events when the user interacts with you.
         """ },
-        ChatHistoryProviderFactory = (ctx, ct) => new ValueTask<ChatHistoryProvider>(new InMemoryChatHistoryProvider()
+        ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(new InMemoryChatHistoryProvider()
             // Use WithAIContextProviderMessageRemoval, so that we don't store the messages from the AI context provider in the chat history.
             // You may want to store these messages, depending on their content and your requirements.
             .WithAIContextProviderMessageRemoval()),
         // Add an AI context provider that maintains a todo list for the agent and one that provides upcoming calendar entries.
         // Wrap these in an AI context provider that aggregates the other two.
-        AIContextProviderFactory = (ctx, ct) => new ValueTask<AIContextProvider>(new AggregatingAIContextProvider([
+        AIContextProviderFactory = (ct) => new ValueTask<AIContextProvider>(new AggregatingAIContextProvider([
             new TodoListAIContextProvider(),
             new CalendarSearchAIContextProvider(loadNextThreeCalendarEvents)
         ])),
@@ -135,9 +135,6 @@ namespace SampleApp
             items.Add(item);
             SetTodoItems(session, items);
         }
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null) =>
-            JsonSerializer.SerializeToElement(new List<string>(), jsonSerializerOptions);
     }
 
     /// <summary>
@@ -192,23 +189,6 @@ namespace SampleApp
                 Messages = results.SelectMany(r => r.Messages ?? []).ToList(),
                 Instructions = string.Join("\n", results.Select(r => r.Instructions).Where(s => !string.IsNullOrEmpty(s)))
             };
-        }
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-        {
-            Dictionary<string, JsonElement> elements = new();
-            foreach (var provider in this._providers)
-            {
-                JsonElement element = provider.Serialize(jsonSerializerOptions);
-
-                // Don't try to store state for any providers that aren't producing any.
-                if (element.ValueKind != JsonValueKind.Undefined && element.ValueKind != JsonValueKind.Null)
-                {
-                    elements[provider.GetType().Name] = element;
-                }
-            }
-
-            return JsonSerializer.SerializeToElement(elements, jsonSerializerOptions);
         }
     }
 }

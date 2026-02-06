@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -502,29 +501,6 @@ public class ChatHistoryMemoryProviderTests
                 Assert.Equal(enableSensitiveTelemetryData ? "## Memories\nConsider the following memories when answering user questions:\nName is Caoimhe" : "<redacted>", messageTextValue);
             }
         }
-    }
-
-    #endregion
-
-    #region Serialization Tests
-
-    [Fact]
-    public void Serialize_ReturnsEmptyState()
-    {
-        // Arrange
-        var provider = new ChatHistoryMemoryProvider(
-            this._vectorStoreMock.Object,
-            TestCollectionName,
-            1,
-            _ => new ChatHistoryMemoryProvider.State(new ChatHistoryMemoryProviderScope { UserId = "UID" }, null));
-
-        // Act
-        var stateElement = provider.Serialize();
-
-        // Assert - Serialize returns empty object since state is now stored in StateBag
-        using JsonDocument doc = JsonDocument.Parse(stateElement.GetRawText());
-        Assert.Equal(JsonValueKind.Object, doc.RootElement.ValueKind);
-        Assert.Empty(doc.RootElement.EnumerateObject());
     }
 
     #endregion

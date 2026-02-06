@@ -33,7 +33,7 @@ AIAgent agent = new AzureOpenAIClient(
     {
         ChatOptions = new() { Instructions = "You are good at telling jokes." },
         Name = "Joker",
-        ChatHistoryProviderFactory = (ctx, ct) => new ValueTask<ChatHistoryProvider>(
+        ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
             // Create a new ChatHistoryProvider for this agent that stores chat history in a vector store.
             new VectorChatHistoryProvider(vectorStore))
     });
@@ -148,13 +148,6 @@ namespace SampleApp
                 SerializedMessage = JsonSerializer.Serialize(x),
                 MessageText = x.Text
             }), cancellationToken);
-        }
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-        {
-            // State is stored in the session StateBag, so there is nothing to serialize here.
-            using var doc = JsonDocument.Parse("{}");
-            return doc.RootElement.Clone();
         }
 
         /// <summary>

@@ -21,7 +21,7 @@ public class ChatClientAgent_CreateSessionTests
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
             ChatOptions = new() { Instructions = "Test instructions" },
-            AIContextProviderFactory = (_, _) =>
+            AIContextProviderFactory = (_) =>
             {
                 factoryCalled = true;
                 return new ValueTask<AIContextProvider>(mockContextProvider.Object);
@@ -48,7 +48,7 @@ public class ChatClientAgent_CreateSessionTests
         var agent = new ChatClientAgent(mockChatClient.Object, new ChatClientAgentOptions
         {
             ChatOptions = new() { Instructions = "Test instructions" },
-            ChatHistoryProviderFactory = (_, _) =>
+            ChatHistoryProviderFactory = (_) =>
             {
                 factoryCalled = true;
                 return new ValueTask<ChatHistoryProvider>(mockChatHistoryProvider.Object);

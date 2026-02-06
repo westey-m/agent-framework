@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -194,20 +193,6 @@ public sealed class TextSearchProvider : AIContextProvider
             AgentJsonUtilities.DefaultOptions);
 
         return default;
-    }
-
-    /// <summary>
-    /// Serializes the current provider state to a <see cref="JsonElement"/> containing any overridden prompts or descriptions.
-    /// </summary>
-    /// <param name="jsonSerializerOptions">Optional serializer options (ignored, source generated context is used).</param>
-    /// <returns>A <see cref="JsonElement"/> with overridden values, or default if nothing was overridden.</returns>
-    /// <remarks>
-    /// This method is deprecated. State is now stored in the <see cref="AgentSession.StateBag"/> and serialized as part of the session.
-    /// </remarks>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        // State is now stored in the session StateBag, so there is nothing to serialize here.
-        return JsonSerializer.SerializeToElement(new TextSearchProviderState(), AgentJsonUtilities.DefaultOptions.GetTypeInfo(typeof(TextSearchProviderState)));
     }
 
     /// <summary>

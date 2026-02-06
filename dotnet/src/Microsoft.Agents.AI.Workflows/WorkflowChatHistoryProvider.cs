@@ -2,7 +2,6 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -73,11 +72,5 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
     {
         var state = this.GetOrInitializeState(session);
         state.Bookmark = state.Messages.Count;
-    }
-
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        return JsonSerializer.SerializeToElement(null,
-            WorkflowsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(StoreState)));
     }
 }

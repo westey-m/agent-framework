@@ -446,22 +446,6 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Serializes the current provider state to a <see cref="JsonElement"/> containing any overridden prompts or descriptions.
-    /// </summary>
-    /// <param name="jsonSerializerOptions">Optional serializer options (ignored, source generated context is used).</param>
-    /// <returns>An empty <see cref="JsonElement"/> object.</returns>
-    /// <remarks>
-    /// This method is deprecated. State is now stored in the <see cref="AgentSession.StateBag"/> and serialized as part of the session.
-    /// </remarks>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        // State is now stored in the session StateBag, so there is nothing to serialize here.
-        // Return an empty JSON object.
-        using var doc = JsonDocument.Parse("{}");
-        return doc.RootElement.Clone();
-    }
-
     private string? SanitizeLogData(string? data) => this._enableSensitiveTelemetryData ? data : "<redacted>";
 
     /// <summary>

@@ -319,8 +319,5 @@ public class ChatHistoryProviderTests
 
         public override ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
             => default;
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-            => default;
     }
 }

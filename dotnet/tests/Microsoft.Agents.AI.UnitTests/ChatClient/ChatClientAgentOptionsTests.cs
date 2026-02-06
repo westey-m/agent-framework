@@ -118,10 +118,10 @@ public class ChatClientAgentOptionsTests
         var tools = new List<AITool> { AIFunctionFactory.Create(() => "test") };
 
         static ValueTask<ChatHistoryProvider> ChatHistoryProviderFactoryAsync(
-            ChatClientAgentOptions.ChatHistoryProviderFactoryContext ctx, CancellationToken ct) => new(new Mock<ChatHistoryProvider>().Object);
+            CancellationToken ct) => new(new Mock<ChatHistoryProvider>().Object);
 
         static ValueTask<AIContextProvider> AIContextProviderFactoryAsync(
-            ChatClientAgentOptions.AIContextProviderFactoryContext ctx, CancellationToken ct) => new(new Mock<AIContextProvider>().Object);
+            CancellationToken ct) => new(new Mock<AIContextProvider>().Object);
 
         var original = new ChatClientAgentOptions()
         {

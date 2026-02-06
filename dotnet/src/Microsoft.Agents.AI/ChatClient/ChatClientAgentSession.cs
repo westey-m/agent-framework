@@ -116,22 +116,20 @@ public sealed class ChatClientAgentSession : AgentSession
     /// Creates a new instance of the <see cref="ChatClientAgentSession"/> class from previously serialized state.
     /// </summary>
     /// <param name="serializedState">A <see cref="JsonElement"/> representing the serialized state of the session.</param>
-    /// <param name="jsonSerializerOptions">Optional settings for customizing the JSON deserialization process.</param>
     /// <param name="chatHistoryProviderFactory">
-    /// An optional factory function to create a custom <see cref="AI.ChatHistoryProvider"/> from its serialized state.
+    /// An optional factory function to create a custom <see cref="AI.ChatHistoryProvider"/>.
     /// If not provided, the default <see cref="InMemoryChatHistoryProvider"/> will be used.
     /// </param>
     /// <param name="aiContextProviderFactory">
-    /// An optional factory function to create a custom <see cref="AIContextProvider"/> from its serialized state.
+    /// An optional factory function to create a custom <see cref="AIContextProvider"/>.
     /// If not provided, no context provider will be configured.
     /// </param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the deserialized <see cref="ChatClientAgentSession"/>.</returns>
     internal static async Task<ChatClientAgentSession> DeserializeAsync(
         JsonElement serializedState,
-        JsonSerializerOptions? jsonSerializerOptions = null,
-        Func<JsonElement, JsonSerializerOptions?, CancellationToken, ValueTask<ChatHistoryProvider>>? chatHistoryProviderFactory = null,
-        Func<JsonElement, JsonSerializerOptions?, CancellationToken, ValueTask<AIContextProvider>>? aiContextProviderFactory = null,
+        Func<CancellationToken, ValueTask<ChatHistoryProvider>>? chatHistoryProviderFactory = null,
+        Func<CancellationToken, ValueTask<AIContextProvider>>? aiContextProviderFactory = null,
         CancellationToken cancellationToken = default)
     {
         if (serializedState.ValueKind != JsonValueKind.Object)
@@ -145,7 +143,7 @@ public sealed class ChatClientAgentSession : AgentSession
         var session = new ChatClientAgentSession();
 
         session.AIContextProvider = aiContextProviderFactory is not null
-            ? await aiContextProviderFactory.Invoke(state?.AIContextProviderState ?? default, jsonSerializerOptions, cancellationToken).ConfigureAwait(false)
+            ? await aiContextProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
             : null;
 
         session.StateBag = AgentSessionStateBag.Deserialize(state?.StateBag ?? default);
@@ -160,7 +158,7 @@ public sealed class ChatClientAgentSession : AgentSession
 
         session._chatHistoryProvider =
             chatHistoryProviderFactory is not null
-                ? await chatHistoryProviderFactory.Invoke(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions, cancellationToken).ConfigureAwait(false)
+                ? await chatHistoryProviderFactory.Invoke(cancellationToken).ConfigureAwait(false)
                 : new InMemoryChatHistoryProvider(); // default to an in-memory ChatHistoryProvider
 
         return session;
@@ -169,15 +167,9 @@ public sealed class ChatClientAgentSession : AgentSession
     /// <inheritdoc/>
     internal JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        JsonElement? chatHistoryProviderState = this._chatHistoryProvider?.Serialize(jsonSerializerOptions);
-
-        JsonElement? aiContextProviderState = this.AIContextProvider?.Serialize(jsonSerializerOptions);
-
         var state = new SessionState
         {
             ConversationId = this.ConversationId,
-            ChatHistoryProviderState = chatHistoryProviderState is { ValueKind: not JsonValueKind.Undefined } ? chatHistoryProviderState : null,
-            AIContextProviderState = aiContextProviderState is { ValueKind: not JsonValueKind.Undefined } ? aiContextProviderState : null,
             StateBag = this.StateBag.Serialize(),
         };
 
@@ -200,10 +192,6 @@ public sealed class ChatClientAgentSession : AgentSession
     internal sealed class SessionState
     {
         public string? ConversationId { get; set; }
-
-        public JsonElement? ChatHistoryProviderState { get; set; }
-
-        public JsonElement? AIContextProviderState { get; set; }
 
         public JsonElement? StateBag { get; set; }
     }

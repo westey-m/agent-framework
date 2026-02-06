@@ -41,7 +41,7 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(
+        options.ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
             new CosmosChatHistoryProvider(connectionString, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
         return options;
     }
@@ -78,7 +78,7 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(tokenCredential));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(
+        options.ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
             new CosmosChatHistoryProvider(accountEndpoint, tokenCredential, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
         return options;
     }
@@ -108,7 +108,7 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(options));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(
+        options.ChatHistoryProviderFactory = (ct) => new ValueTask<ChatHistoryProvider>(
             new CosmosChatHistoryProvider(cosmosClient, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
         return options;
     }

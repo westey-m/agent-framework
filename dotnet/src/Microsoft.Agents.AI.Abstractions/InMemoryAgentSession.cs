@@ -63,7 +63,7 @@ public abstract class InMemoryAgentSession : AgentSession
     /// <param name="serializedState">A <see cref="JsonElement"/> representing the serialized state of the session.</param>
     /// <param name="jsonSerializerOptions">Optional settings for customizing the JSON deserialization process.</param>
     /// <param name="chatHistoryProviderFactory">
-    /// Optional factory function to create the <see cref="InMemoryChatHistoryProvider"/> from its serialized state.
+    /// Optional factory function to create the <see cref="InMemoryChatHistoryProvider"/>.
     /// If not provided, a default factory will be used that creates a basic <see cref="InMemoryChatHistoryProvider"/>.
     /// </param>
     /// <exception cref="ArgumentException">The <paramref name="serializedState"/> is not a JSON object.</exception>
@@ -75,7 +75,7 @@ public abstract class InMemoryAgentSession : AgentSession
     protected InMemoryAgentSession(
         JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions = null,
-        Func<JsonElement, JsonSerializerOptions?, InMemoryChatHistoryProvider>? chatHistoryProviderFactory = null)
+        Func<InMemoryChatHistoryProvider>? chatHistoryProviderFactory = null)
     {
         if (serializedState.ValueKind != JsonValueKind.Object)
         {
@@ -85,9 +85,7 @@ public abstract class InMemoryAgentSession : AgentSession
         var state = serializedState.Deserialize(
             AgentAbstractionsJsonUtilities.DefaultOptions.GetTypeInfo(typeof(InMemoryAgentSessionState))) as InMemoryAgentSessionState;
 
-        this.ChatHistoryProvider =
-            chatHistoryProviderFactory?.Invoke(state?.ChatHistoryProviderState ?? default, jsonSerializerOptions) ??
-            new InMemoryChatHistoryProvider();
+        this.ChatHistoryProvider = chatHistoryProviderFactory?.Invoke() ?? new InMemoryChatHistoryProvider();
 
         if (state?.StateBag is { ValueKind: JsonValueKind.Object } stateBagElement)
         {
@@ -107,11 +105,8 @@ public abstract class InMemoryAgentSession : AgentSession
     /// <returns>A <see cref="JsonElement"/> representation of the object's state.</returns>
     protected internal virtual JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        var chatHistoryProviderState = this.ChatHistoryProvider.Serialize(jsonSerializerOptions);
-
         var state = new InMemoryAgentSessionState
         {
-            ChatHistoryProviderState = chatHistoryProviderState,
             StateBag = this.StateBag.Serialize(),
         };
 
@@ -127,8 +122,6 @@ public abstract class InMemoryAgentSession : AgentSession
 
     internal sealed class InMemoryAgentSessionState
     {
-        public JsonElement? ChatHistoryProviderState { get; set; }
-
         public JsonElement? StateBag { get; set; }
     }
 }

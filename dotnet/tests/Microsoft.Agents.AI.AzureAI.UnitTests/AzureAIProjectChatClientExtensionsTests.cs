@@ -2322,7 +2322,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
         {
             Name = "test-agent",
             ChatOptions = new ChatOptions { Instructions = "Test" },
-            AIContextProviderFactory = (_, _) =>
+            AIContextProviderFactory = (_) =>
             {
                 factoryInvoked = true;
                 return new ValueTask<AIContextProvider>(new TestAIContextProvider());
@@ -2350,7 +2350,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
         {
             Name = "test-agent",
             ChatOptions = new ChatOptions { Instructions = "Test" },
-            ChatHistoryProviderFactory = (_, _) => new ValueTask<ChatHistoryProvider>(new TestChatHistoryProvider())
+            ChatHistoryProviderFactory = (_) => new ValueTask<ChatHistoryProvider>(new TestChatHistoryProvider())
         };
 
         // Act
@@ -3157,11 +3157,6 @@ public sealed class AzureAIProjectChatClientExtensionsTests
         }
 
         public override ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
-        {
-            return default;
-        }
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
         {
             return default;
         }

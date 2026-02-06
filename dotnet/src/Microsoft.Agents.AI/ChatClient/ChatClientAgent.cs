@@ -105,8 +105,10 @@ public sealed partial class ChatClientAgent : AIAgent
         // If the user has not opted out of using our default decorators, we wrap the chat client.
         this.ChatClient = options?.UseProvidedChatClientAsIs is true ? chatClient : chatClient.WithDefaultAgentMiddleware(options, services);
 
-        // Default to an InMemoryChatHistoryProvider if no provider is configured.
-        this.ChatHistoryProvider = options?.ChatHistoryProvider ?? new InMemoryChatHistoryProvider();
+        // Use the ChatHistoryProvider from options if provided.
+        // If one was not provided, and we later find out that the underlying service does not manage chat history server-side,
+        // we will use the defalut InMemoryChatHistoryProvider at that time.
+        this.ChatHistoryProvider = options?.ChatHistoryProvider;
 
         this._logger = (loggerFactory ?? chatClient.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger<ChatClientAgent>();
     }
@@ -129,7 +131,7 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <remarks>
     /// This property may be null in case the agent stores messages in the underlying agent service.
     /// </remarks>
-    public ChatHistoryProvider? ChatHistoryProvider { get; }
+    public ChatHistoryProvider? ChatHistoryProvider { get; private set; }
 
     /// <inheritdoc/>
     protected override string? IdCore => this._agentOptions?.Id;
@@ -755,6 +757,13 @@ public sealed partial class ChatClientAgent : AIAgent
             // If we got a conversation id back from the chat client, it means that the service supports server side session storage
             // so we should update the session with the new id.
             session.ConversationId = responseConversationId;
+        }
+        else
+        {
+            // If the service doesn't use service side chat history storage (i.e. we got no id back from invocation), and
+            // the agent has no ChatHistoryProvider yet, we should use the default InMemoryChatHistoryProvider so that
+            // we have somewhere to store the chat history.
+            this.ChatHistoryProvider ??= new InMemoryChatHistoryProvider();
         }
     }
 

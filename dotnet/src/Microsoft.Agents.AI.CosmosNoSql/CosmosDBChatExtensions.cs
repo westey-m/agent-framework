@@ -13,6 +13,9 @@ namespace Microsoft.Agents.AI;
 /// </summary>
 public static class CosmosDBChatExtensions
 {
+    private static readonly Func<AgentSession?, CosmosChatHistoryProvider.State> s_defaultStateInitializer =
+        _ => new CosmosChatHistoryProvider.State(Guid.NewGuid().ToString("N"));
+
     /// <summary>
     /// Configures the agent to use Cosmos DB for message storage with connection string authentication.
     /// </summary>
@@ -20,6 +23,7 @@ public static class CosmosDBChatExtensions
     /// <param name="connectionString">The Cosmos DB connection string.</param>
     /// <param name="databaseId">The identifier of the Cosmos DB database.</param>
     /// <param name="containerId">The identifier of the Cosmos DB container.</param>
+    /// <param name="stateInitializer">An optional delegate that initializes the provider state on the first invocation, providing the conversation routing info (conversationId, tenantId, userId). When not provided, a new conversation ID is generated automatically.</param>
     /// <returns>The configured <see cref="ChatClientAgentOptions"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="options"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when any string parameter is null or whitespace.</exception>
@@ -29,14 +33,16 @@ public static class CosmosDBChatExtensions
         this ChatClientAgentOptions options,
         string connectionString,
         string databaseId,
-        string containerId)
+        string containerId,
+        Func<AgentSession?, CosmosChatHistoryProvider.State>? stateInitializer = null)
     {
         if (options is null)
         {
             throw new ArgumentNullException(nameof(options));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(new CosmosChatHistoryProvider(connectionString, databaseId, containerId));
+        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(
+            new CosmosChatHistoryProvider(connectionString, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
         return options;
     }
 
@@ -48,6 +54,7 @@ public static class CosmosDBChatExtensions
     /// <param name="databaseId">The identifier of the Cosmos DB database.</param>
     /// <param name="containerId">The identifier of the Cosmos DB container.</param>
     /// <param name="tokenCredential">The TokenCredential to use for authentication (e.g., DefaultAzureCredential, ManagedIdentityCredential).</param>
+    /// <param name="stateInitializer">An optional delegate that initializes the provider state on the first invocation, providing the conversation routing info (conversationId, tenantId, userId). When not provided, a new conversation ID is generated automatically.</param>
     /// <returns>The configured <see cref="ChatClientAgentOptions"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="options"/> or <paramref name="tokenCredential"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when any string parameter is null or whitespace.</exception>
@@ -58,7 +65,8 @@ public static class CosmosDBChatExtensions
         string accountEndpoint,
         string databaseId,
         string containerId,
-        TokenCredential tokenCredential)
+        TokenCredential tokenCredential,
+        Func<AgentSession?, CosmosChatHistoryProvider.State>? stateInitializer = null)
     {
         if (options is null)
         {
@@ -70,7 +78,8 @@ public static class CosmosDBChatExtensions
             throw new ArgumentNullException(nameof(tokenCredential));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(new CosmosChatHistoryProvider(accountEndpoint, tokenCredential, databaseId, containerId));
+        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(
+            new CosmosChatHistoryProvider(accountEndpoint, tokenCredential, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
         return options;
     }
 
@@ -81,6 +90,7 @@ public static class CosmosDBChatExtensions
     /// <param name="cosmosClient">The <see cref="CosmosClient"/> instance to use for Cosmos DB operations.</param>
     /// <param name="databaseId">The identifier of the Cosmos DB database.</param>
     /// <param name="containerId">The identifier of the Cosmos DB container.</param>
+    /// <param name="stateInitializer">An optional delegate that initializes the provider state on the first invocation, providing the conversation routing info (conversationId, tenantId, userId). When not provided, a new conversation ID is generated automatically.</param>
     /// <returns>The configured <see cref="ChatClientAgentOptions"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when any required parameter is null.</exception>
     /// <exception cref="ArgumentException">Thrown when any string parameter is null or whitespace.</exception>
@@ -90,14 +100,16 @@ public static class CosmosDBChatExtensions
         this ChatClientAgentOptions options,
         CosmosClient cosmosClient,
         string databaseId,
-        string containerId)
+        string containerId,
+        Func<AgentSession?, CosmosChatHistoryProvider.State>? stateInitializer = null)
     {
         if (options is null)
         {
             throw new ArgumentNullException(nameof(options));
         }
 
-        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(new CosmosChatHistoryProvider(cosmosClient, databaseId, containerId));
+        options.ChatHistoryProviderFactory = (context, ct) => new ValueTask<ChatHistoryProvider>(
+            new CosmosChatHistoryProvider(cosmosClient, databaseId, containerId, stateInitializer ?? s_defaultStateInitializer));
         return options;
     }
 }

@@ -336,10 +336,11 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         var conversation1 = Guid.NewGuid().ToString();
         var conversation2 = Guid.NewGuid().ToString();
 
+        // Use different stateKey values so the providers don't overwrite each other's state in the shared session
         using var store1 = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
-            _ => new CosmosChatHistoryProvider.State(conversation1));
+            _ => new CosmosChatHistoryProvider.State(conversation1), stateKey: "conv1");
         using var store2 = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
-            _ => new CosmosChatHistoryProvider.State(conversation2));
+            _ => new CosmosChatHistoryProvider.State(conversation2), stateKey: "conv2");
 
         var context1 = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "Message for conversation 1")], []);
         var context2 = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "Message for conversation 2")], []);
@@ -625,10 +626,11 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         const string SessionId = "session-isolation";
 
         // Different userIds create different hierarchical partitions, providing proper isolation
+        // Use different stateKey values so the providers don't overwrite each other's state in the shared session
         using var store1 = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId,
-            _ => new CosmosChatHistoryProvider.State(SessionId, TenantId, UserId1));
+            _ => new CosmosChatHistoryProvider.State(SessionId, TenantId, UserId1), stateKey: "user1");
         using var store2 = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId,
-            _ => new CosmosChatHistoryProvider.State(SessionId, TenantId, UserId2));
+            _ => new CosmosChatHistoryProvider.State(SessionId, TenantId, UserId2), stateKey: "user2");
 
         // Add messages to both stores
         var context1 = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "Message from user 1")], []);
@@ -702,10 +704,11 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
 
         var session = CreateMockSession();
         // Create simple provider using simple partitioning container and hierarchical provider using hierarchical container
+        // Use different stateKey values so the providers don't overwrite each other's state in the shared session
         using var simpleProvider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
-            _ => new CosmosChatHistoryProvider.State(SessionId));
+            _ => new CosmosChatHistoryProvider.State(SessionId), stateKey: "simple");
         using var hierarchicalProvider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, HierarchicalTestContainerId,
-            _ => new CosmosChatHistoryProvider.State(SessionId, "tenant-coexist", "user-coexist"));
+            _ => new CosmosChatHistoryProvider.State(SessionId, "tenant-coexist", "user-coexist"), stateKey: "hierarchical");
 
         // Add messages to both
         var simpleContext = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "Simple partitioning message")], []);

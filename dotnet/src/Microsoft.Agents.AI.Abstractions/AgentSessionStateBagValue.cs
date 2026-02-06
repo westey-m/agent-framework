@@ -27,8 +27,9 @@ internal class AgentSessionStateBagValue
     /// <param name="deserializedValue">The value to associate with the session state. Can be any object, including null.</param>
     /// <param name="valueType">The type of the value.</param>
     /// <param name="jsonSerializerOptions">The JSON serializer options to use for serializing the value.</param>
-    public AgentSessionStateBagValue(object deserializedValue, Type valueType, JsonSerializerOptions jsonSerializerOptions)
+    public AgentSessionStateBagValue(object? deserializedValue, Type valueType, JsonSerializerOptions jsonSerializerOptions)
     {
+        this.IsDeserialized = true;
         this.DeserializedValue = deserializedValue;
         this.ValueType = valueType;
         this.JsonSerializerOptions = jsonSerializerOptions;
@@ -41,20 +42,22 @@ internal class AgentSessionStateBagValue
     {
         get
         {
-            if (this.DeserializedValue != null)
+            if (this.IsDeserialized)
             {
                 if (this.ValueType is null || this.JsonSerializerOptions is null)
                 {
                     throw new InvalidOperationException($"{nameof(AgentSessionStateBagValue)} has not been properly initialized, please set {nameof(this.ValueType)} and {nameof(this.JsonSerializerOptions)} before accessing {nameof(this.JsonValue)}.");
                 }
 
-                return JsonSerializer.SerializeToElement(this.DeserializedValue, this.JsonSerializerOptions.GetTypeInfo(this.ValueType));
+                field = JsonSerializer.SerializeToElement(this.DeserializedValue, this.JsonSerializerOptions.GetTypeInfo(this.ValueType));
             }
 
             return field;
         }
         set;
     }
+
+    public bool IsDeserialized { get; set; }
 
     public object? DeserializedValue { get; set; }
 

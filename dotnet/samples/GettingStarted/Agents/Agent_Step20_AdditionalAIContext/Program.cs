@@ -110,8 +110,8 @@ namespace SampleApp
             {
                 Tools =
                 [
-                    AIFunctionFactory.Create(() => AddTodoItem(context.Session, string.Empty), "AddTodoItem", "Adds an item to the todo list."),
-                    AIFunctionFactory.Create(() => RemoveTodoItem(context.Session, 0), "RemoveTodoItem", "Adds an item to the todo list. Index is zero based.")
+                    AIFunctionFactory.Create((string item) => AddTodoItem(context.Session, item), "AddTodoItem", "Adds an item to the todo list."),
+                    AIFunctionFactory.Create((int index) => RemoveTodoItem(context.Session, index), "RemoveTodoItem", "Adds an item to the todo list. Index is zero based.")
                 ],
                 Messages = [new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString())]
             });

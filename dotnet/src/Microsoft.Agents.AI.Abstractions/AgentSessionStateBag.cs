@@ -68,12 +68,12 @@ public class AgentSessionStateBag
 
             switch (stateValue.JsonValue)
             {
-                case T tValue:
-                    value = tValue;
-                    return true;
-                case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Null || jsonElement.ValueKind == JsonValueKind.Undefined:
+                case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Undefined:
                     value = null;
                     return false;
+                case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Null:
+                    value = null;
+                    return true;
                 default:
                     T? result = stateValue.JsonValue.Deserialize(jso.GetTypeInfo(typeof(T))) as T;
                     if (result is null)
@@ -117,8 +117,6 @@ public class AgentSessionStateBag
 
             switch (stateValue.JsonValue)
             {
-                case T tValue:
-                    return tValue;
                 case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Null || jsonElement.ValueKind == JsonValueKind.Undefined:
                     return null;
                 default:
@@ -127,6 +125,7 @@ public class AgentSessionStateBag
                     {
                         throw new InvalidOperationException($"Failed to deserialize session state value to type {typeof(T).FullName}.");
                     }
+                    stateValue.IsDeserialized = true;
                     stateValue.DeserializedValue = result;
                     stateValue.ValueType = typeof(T);
                     stateValue.JsonSerializerOptions = jso;
@@ -144,7 +143,7 @@ public class AgentSessionStateBag
     /// <param name="key">The key to store the value under.</param>
     /// <param name="value">The value to set.</param>
     /// <param name="jsonSerializerOptions">The JSON serializer options to use for serializing the value.</param>
-    public void SetValue<T>(string key, T value, JsonSerializerOptions? jsonSerializerOptions = null)
+    public void SetValue<T>(string key, T? value, JsonSerializerOptions? jsonSerializerOptions = null)
         where T : class
     {
         _ = Throw.IfNullOrWhitespace(key);
@@ -153,10 +152,19 @@ public class AgentSessionStateBag
         var stateValue = this._state.GetOrAdd(key, _ =>
             new AgentSessionStateBagValue(value, typeof(T), jso));
 
+        stateValue.IsDeserialized = true;
         stateValue.DeserializedValue = value;
         stateValue.ValueType = typeof(T);
         stateValue.JsonSerializerOptions = jso;
     }
+
+    /// <summary>
+    /// Tries to remove a value from the session state.
+    /// </summary>
+    /// <param name="key">The key of the value to remove.</param>
+    /// <returns><see langword="true"/> if the value was successfully removed; otherwise, <see langword="false"/>.</returns>
+    public bool TryRemoveValue(string key)
+        => this._state.TryRemove(Throw.IfNullOrWhitespace(key), out _);
 
     /// <summary>
     /// Serializes all session state values to a JSON object.

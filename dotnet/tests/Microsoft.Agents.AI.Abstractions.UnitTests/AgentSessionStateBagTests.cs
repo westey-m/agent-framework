@@ -206,6 +206,195 @@ public sealed class AgentSessionStateBagTests
 
     #endregion
 
+    #region Null Value Tests
+
+    [Fact]
+    public void SetValue_WithNullValue_StoresNull()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+
+        // Act
+        stateBag.SetValue<string>("key1", null);
+
+        // Assert
+        Assert.Equal(1, stateBag.Count);
+    }
+
+    [Fact]
+    public void TryGetValue_WithNullValue_ReturnsTrueAndNull()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue<string>("key1", null);
+
+        // Act
+        var found = stateBag.TryGetValue<string>("key1", out var result);
+
+        // Assert
+        Assert.True(found);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetValue_WithNullValue_ReturnsNull()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue<string>("key1", null);
+
+        // Act
+        var result = stateBag.GetValue<string>("key1");
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void SetValue_OverwriteWithNull_ReturnsNull()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("key1", "value1");
+
+        // Act
+        stateBag.SetValue<string>("key1", null);
+
+        // Assert
+        Assert.True(stateBag.TryGetValue<string>("key1", out var result));
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void SetValue_OverwriteNullWithValue_ReturnsValue()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue<string>("key1", null);
+
+        // Act
+        stateBag.SetValue("key1", "newValue");
+
+        // Assert
+        Assert.True(stateBag.TryGetValue<string>("key1", out var result));
+        Assert.Equal("newValue", result);
+    }
+
+    [Fact]
+    public void SerializeDeserialize_WithNullValue_SerializesAsNull()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue<string>("nullKey", null);
+
+        // Act
+        var json = stateBag.Serialize();
+
+        // Assert - null values are serialized as JSON null
+        Assert.Equal(JsonValueKind.Object, json.ValueKind);
+        Assert.True(json.TryGetProperty("nullKey", out var nullElement));
+        Assert.Equal(JsonValueKind.Null, nullElement.ValueKind);
+    }
+
+    #endregion
+
+    #region TryRemoveValue Tests
+
+    [Fact]
+    public void TryRemoveValue_ExistingKey_ReturnsTrueAndRemoves()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("key1", "value1");
+
+        // Act
+        var removed = stateBag.TryRemoveValue("key1");
+
+        // Assert
+        Assert.True(removed);
+        Assert.Equal(0, stateBag.Count);
+        Assert.False(stateBag.TryGetValue<string>("key1", out _));
+    }
+
+    [Fact]
+    public void TryRemoveValue_NonexistentKey_ReturnsFalse()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+
+        // Act
+        var removed = stateBag.TryRemoveValue("nonexistent");
+
+        // Assert
+        Assert.False(removed);
+    }
+
+    [Fact]
+    public void TryRemoveValue_WithNullKey_ThrowsArgumentException()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => stateBag.TryRemoveValue(null!));
+    }
+
+    [Fact]
+    public void TryRemoveValue_WithEmptyKey_ThrowsArgumentException()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => stateBag.TryRemoveValue(""));
+    }
+
+    [Fact]
+    public void TryRemoveValue_WithWhitespaceKey_ThrowsArgumentException()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => stateBag.TryRemoveValue("   "));
+    }
+
+    [Fact]
+    public void TryRemoveValue_DoesNotAffectOtherKeys()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("key1", "value1");
+        stateBag.SetValue("key2", "value2");
+
+        // Act
+        stateBag.TryRemoveValue("key1");
+
+        // Assert
+        Assert.Equal(1, stateBag.Count);
+        Assert.False(stateBag.TryGetValue<string>("key1", out _));
+        Assert.True(stateBag.TryGetValue<string>("key2", out var value));
+        Assert.Equal("value2", value);
+    }
+
+    [Fact]
+    public void TryRemoveValue_ThenSetValue_Works()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("key1", "original");
+
+        // Act
+        stateBag.TryRemoveValue("key1");
+        stateBag.SetValue("key1", "replacement");
+
+        // Assert
+        Assert.True(stateBag.TryGetValue<string>("key1", out var result));
+        Assert.Equal("replacement", result);
+    }
+
+    #endregion
+
     #region Serialize/Deserialize Tests
 
     [Fact]

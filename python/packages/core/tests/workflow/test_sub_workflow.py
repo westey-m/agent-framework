@@ -8,12 +8,12 @@ from typing_extensions import Never
 
 from agent_framework import (
     Executor,
-    RequestInfoEvent,
     SubWorkflowRequestMessage,
     SubWorkflowResponseMessage,
     Workflow,
     WorkflowBuilder,
     WorkflowContext,
+    WorkflowEvent,
     WorkflowExecutor,
     handler,
     response_handler,
@@ -591,30 +591,30 @@ async def test_sub_workflow_checkpoint_restore_no_duplicate_requests() -> None:
     workflow1 = _build_checkpoint_test_workflow(storage)
 
     first_request_id: str | None = None
-    async for event in workflow1.run_stream("test_value"):
-        if isinstance(event, RequestInfoEvent):
+    async for event in workflow1.run("test_value", stream=True):
+        if event.type == "request_info":
             first_request_id = event.request_id
 
     assert first_request_id is not None
 
     # Get checkpoint
     checkpoints = await storage.list_checkpoints(workflow1.id)
-    checkpoint_id = max(checkpoints, key=lambda cp: cp.timestamp).checkpoint_id
+    checkpoint_id = max(checkpoints, key=lambda cp: cp.iteration_count).checkpoint_id
 
     # Step 2: Resume workflow from checkpoint
     workflow2 = _build_checkpoint_test_workflow(storage)
 
     resumed_first_request_id: str | None = None
-    async for event in workflow2.run_stream(checkpoint_id=checkpoint_id):
-        if isinstance(event, RequestInfoEvent):
+    async for event in workflow2.run(checkpoint_id=checkpoint_id, stream=True):
+        if event.type == "request_info":
             resumed_first_request_id = event.request_id
 
     assert resumed_first_request_id is not None
     assert resumed_first_request_id == first_request_id
 
-    request_events: list[RequestInfoEvent] = []
+    request_events: list[WorkflowEvent] = []
     async for event in workflow2.send_responses_streaming({resumed_first_request_id: "first_answer"}):
-        if isinstance(event, RequestInfoEvent):
+        if event.type == "request_info":
             request_events.append(event)
 
     # Key assertion: Only the second request should be received, not a duplicate of the first

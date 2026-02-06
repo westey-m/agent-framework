@@ -11,6 +11,8 @@ from agent_framework import (
     ChatResponse,
     ChatResponseUpdate,
     Content,
+    Context,
+    ContextProvider,
     ResponseStream,
     WorkflowEvent,
     resolve_agent_id,
@@ -301,6 +303,48 @@ async def test_tool_choice_preserved_from_agent_config():
     last_tool_choice = recorded_tool_choices[-1]
     assert last_tool_choice is not None, "tool_choice should not be None"
     assert last_tool_choice == {"mode": "required"}, f"Expected 'required', got {last_tool_choice}"
+
+
+async def test_context_provider_preserved_during_handoff():
+    """Verify that context_provider is preserved when cloning agents in handoff workflows."""
+    # Track whether context provider methods were called
+    provider_calls: list[str] = []
+
+    class TestContextProvider(ContextProvider):
+        """A test context provider that tracks its invocations."""
+
+        async def invoking(self, messages: Sequence[ChatMessage], **kwargs: Any) -> Context:
+            provider_calls.append("invoking")
+            return Context(instructions="Test context from provider.")
+
+    # Create context provider
+    context_provider = TestContextProvider()
+
+    # Create a mock chat client
+    mock_client = MockChatClient(name="test_agent")
+
+    # Create agent with context provider using proper constructor
+    agent = ChatAgent(
+        chat_client=mock_client,
+        name="test_agent",
+        id="test_agent",
+        context_provider=context_provider,
+    )
+
+    # Verify the original agent has the context provider
+    assert agent.context_provider is context_provider, "Original agent should have context provider"
+
+    # Build handoff workflow - this should clone the agent and preserve context_provider
+    workflow = HandoffBuilder(participants=[agent]).with_start_agent(agent).build()
+
+    # Run workflow with a simple message to trigger context provider
+    await _drain(workflow.run("Test message", stream=True))
+
+    # Verify context provider was invoked during the workflow execution
+    assert len(provider_calls) > 0, (
+        "Context provider should be called during workflow execution, "
+        "indicating it was properly preserved during agent cloning"
+    )
 
 
 # region Participant Factory Tests

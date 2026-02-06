@@ -44,7 +44,7 @@ AgentSession session = await agent.CreateSessionAsync();
 // Clear any existing memories for this scope to demonstrate fresh behavior.
 // Note that the ClearStoredMemoriesAsync method will clear memories
 // using the scope stored in the session, or provided via the stateInitializer.
-Mem0Provider mem0Provider = session.GetService<Mem0Provider>()!;
+Mem0Provider mem0Provider = agent.GetService<Mem0Provider>()!;
 await mem0Provider.ClearStoredMemoriesAsync(session);
 
 Console.WriteLine(await agent.RunAsync("Hi there! My name is Taylor and I'm planning a hiking trip to Patagonia in November.", session));

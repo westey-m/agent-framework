@@ -60,8 +60,10 @@ AgentSession resumedSession = await agent.DeserializeSessionAsync(serializedSess
 // Run the agent with the session that stores chat history in the vector store a second time.
 Console.WriteLine(await agent.RunAsync("Now tell the same joke in the voice of a pirate, and add some emojis to the joke.", resumedSession));
 
-// We can access the VectorChatHistoryProvider via the session's GetService method if we need to read the key under which chat history is stored.
-var chatHistoryProvider = resumedSession.GetService<VectorChatHistoryProvider>()!;
+// We can access the VectorChatHistoryProvider via the agent's GetService method
+// if we need to read the key under which chat history is stored. The key is stored
+// in the session state, and therefore we need to provide the session when reading it.
+var chatHistoryProvider = agent.GetService<VectorChatHistoryProvider>()!;
 Console.WriteLine($"\nSession is stored in vector store under key: {chatHistoryProvider.GetSessionDbKey(resumedSession)}");
 
 namespace SampleApp

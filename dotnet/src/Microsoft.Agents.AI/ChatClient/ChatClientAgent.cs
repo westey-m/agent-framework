@@ -311,7 +311,7 @@ public sealed partial class ChatClientAgent : AIAgent
         : serviceType == typeof(ChatOptions) ? this._agentOptions?.ChatOptions
         : serviceType == typeof(ChatClientAgentOptions) ? this._agentOptions
         : this._agentOptions?.AIContextProvider?.GetService(serviceType, serviceKey)
-        ?? this._agentOptions?.ChatHistoryProvider?.GetService(serviceType, serviceKey)
+        ?? this.ChatHistoryProvider?.GetService(serviceType, serviceKey)
         ?? this.ChatClient.GetService(serviceType, serviceKey));
 
     /// <inheritdoc/>
@@ -745,7 +745,7 @@ public sealed partial class ChatClientAgent : AIAgent
 
         if (!string.IsNullOrWhiteSpace(responseConversationId))
         {
-            if (this._agentOptions?.ChatHistoryProvider is not null)
+            if (this.ChatHistoryProvider is not null)
             {
                 // The agent has a ChatHistoryProvider configured, but the service returned a conversation id,
                 // meaning the service manages chat history server-side. Both cannot be used simultaneously.

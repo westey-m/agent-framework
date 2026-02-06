@@ -55,10 +55,10 @@ Console.WriteLine("\n>> Use deserialized session with previously created memorie
 var deserializedSession = await agent.DeserializeSessionAsync(sesionElement);
 Console.WriteLine(await agent.RunAsync("What is my name and age?", deserializedSession));
 
-Console.WriteLine("\n>> Read memories from memory component\n");
+Console.WriteLine("\n>> Read memories using memory component\n");
 
-// It's possible to access the memory component via the session's GetService method.
-var userInfo = deserializedSession.GetService<UserInfoMemory>()?.GetUserInfo(deserializedSession);
+// It's possible to access the memory component via the agent's GetService method.
+var userInfo = agent.GetService<UserInfoMemory>()?.GetUserInfo(deserializedSession);
 
 // Output the user info that was captured by the memory component.
 Console.WriteLine($"MEMORY - User Name: {userInfo?.UserName}");
@@ -66,10 +66,10 @@ Console.WriteLine($"MEMORY - User Age: {userInfo?.UserAge}");
 
 Console.WriteLine("\n>> Use new session with previously created memories\n");
 
-// It is also possible to set the memories in a memory component on an individual session.
+// It is also possible to set the memories using a memory component on an individual session.
 // This is useful if we want to start a new session, but have it share the same memories as a previous session.
 var newSession = await agent.CreateSessionAsync();
-if (userInfo is not null && newSession.GetService<UserInfoMemory>() is UserInfoMemory newSessionMemory)
+if (userInfo is not null && agent.GetService<UserInfoMemory>() is UserInfoMemory newSessionMemory)
 {
     newSessionMemory.SetUserInfo(newSession, userInfo);
 }

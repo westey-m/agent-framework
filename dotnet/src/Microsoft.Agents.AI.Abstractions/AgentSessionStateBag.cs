@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
@@ -16,6 +17,7 @@ namespace Microsoft.Agents.AI;
 /// Values can be accessed in a type-safe manner and are serialized or deserialized using configurable JSON serializer
 /// options. This class is designed for concurrent access and is safe to use across multiple threads.
 /// </remarks>
+[JsonConverter(typeof(AgentSessionStateBagJsonConverter))]
 public class AgentSessionStateBag
 {
     private readonly ConcurrentDictionary<string, AgentSessionStateBagValue> _state;
@@ -36,6 +38,11 @@ public class AgentSessionStateBag
     {
         this._state = state ?? new ConcurrentDictionary<string, AgentSessionStateBagValue>();
     }
+
+    /// <summary>
+    /// Gets the number of key-value pairs contained in the session state.
+    /// </summary>
+    public int Count => this._state.Count;
 
     /// <summary>
     /// Tries to get a value from the session state.

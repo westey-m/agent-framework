@@ -396,11 +396,92 @@ public sealed class AgentSessionStateBagTests
         // Assert
         Assert.Equal(JsonValueKind.Object, json.ValueKind);
         Assert.True(json.TryGetProperty("animal", out JsonElement animalElement));
-        Assert.True(animalElement.TryGetProperty("jsonValue", out JsonElement jsonValueElement));
-        Assert.Equal(JsonValueKind.Object, jsonValueElement.ValueKind);
-        Assert.Equal(7, jsonValueElement.GetProperty("id").GetInt32());
-        Assert.Equal("Spot", jsonValueElement.GetProperty("fullName").GetString());
-        Assert.Equal("Walrus", jsonValueElement.GetProperty("species").GetString());
+        Assert.Equal(JsonValueKind.Object, animalElement.ValueKind);
+        Assert.Equal(7, animalElement.GetProperty("id").GetInt32());
+        Assert.Equal("Spot", animalElement.GetProperty("fullName").GetString());
+        Assert.Equal("Walrus", animalElement.GetProperty("species").GetString());
+    }
+
+    #endregion
+
+    #region JsonSerializer Integration Tests
+
+    [Fact]
+    public void JsonSerializerSerialize_EmptyStateBag_ReturnsEmptyObject()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+
+        // Act
+        var json = JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions);
+
+        // Assert
+        Assert.Equal("{}", json);
+    }
+
+    [Fact]
+    public void JsonSerializerSerialize_WithStringValue_ProducesSameOutputAsSerializeMethod()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("stringKey", "stringValue");
+
+        // Act
+        var jsonFromSerializer = JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions);
+        var jsonFromMethod = stateBag.Serialize().GetRawText();
+
+        // Assert
+        Assert.Equal(jsonFromMethod, jsonFromSerializer);
+    }
+
+    [Fact]
+    public void JsonSerializerRoundtrip_WithStringValue_PreservesData()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("greeting", "hello world");
+
+        // Act
+        var json = JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions);
+        var restored = JsonSerializer.Deserialize<AgentSessionStateBag>(json, AgentAbstractionsJsonUtilities.DefaultOptions);
+
+        // Assert
+        Assert.NotNull(restored);
+        Assert.Equal("hello world", restored!.GetValue<string>("greeting"));
+    }
+
+    [Fact]
+    public void JsonSerializerRoundtrip_WithComplexObject_PreservesData()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        var animal = new Animal { Id = 10, FullName = "Rex", Species = Species.Tiger };
+        stateBag.SetValue("animal", animal, TestJsonSerializerContext.Default.Options);
+
+        // Act
+        var json = JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions);
+        var restored = JsonSerializer.Deserialize<AgentSessionStateBag>(json, AgentAbstractionsJsonUtilities.DefaultOptions);
+
+        // Assert
+        Assert.NotNull(restored);
+        var restoredAnimal = restored!.GetValue<Animal>("animal", TestJsonSerializerContext.Default.Options);
+        Assert.NotNull(restoredAnimal);
+        Assert.Equal(10, restoredAnimal!.Id);
+        Assert.Equal("Rex", restoredAnimal.FullName);
+        Assert.Equal(Species.Tiger, restoredAnimal.Species);
+    }
+
+    [Fact]
+    public void JsonSerializerDeserialize_NullJson_ReturnsNull()
+    {
+        // Arrange
+        const string Json = "null";
+
+        // Act
+        var stateBag = JsonSerializer.Deserialize<AgentSessionStateBag>(Json, AgentAbstractionsJsonUtilities.DefaultOptions);
+
+        // Assert
+        Assert.Null(stateBag);
     }
 
     #endregion

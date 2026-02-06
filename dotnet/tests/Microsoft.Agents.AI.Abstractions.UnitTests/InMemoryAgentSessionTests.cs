@@ -102,9 +102,7 @@ public class InMemoryAgentSessionTests
         Assert.Equal(JsonValueKind.Object, stateBagProperty.ValueKind);
         Assert.True(stateBagProperty.TryGetProperty("InMemoryChatHistoryProvider.State", out var providerStateProperty));
         Assert.Equal(JsonValueKind.Object, providerStateProperty.ValueKind);
-        Assert.True(providerStateProperty.TryGetProperty("jsonValue", out var jsonValueProperty));
-        Assert.Equal(JsonValueKind.Object, jsonValueProperty.ValueKind);
-        Assert.True(jsonValueProperty.TryGetProperty("messages", out var messagesProperty));
+        Assert.True(providerStateProperty.TryGetProperty("messages", out var messagesProperty));
         Assert.Equal(JsonValueKind.Array, messagesProperty.ValueKind);
         var messagesList = messagesProperty.EnumerateArray().ToList();
         Assert.Single(messagesList);

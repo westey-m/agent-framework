@@ -524,8 +524,7 @@ public sealed class TextSearchProviderTests
         // Assert - State should be in the session's StateBag
         var stateBagSerialized = session.StateBag.Serialize();
         Assert.True(stateBagSerialized.TryGetProperty("TextSearchProvider.RecentMessagesText", out var stateProperty));
-        Assert.True(stateProperty.TryGetProperty("jsonValue", out var jsonValueProperty));
-        Assert.True(jsonValueProperty.TryGetProperty("recentMessagesText", out var recentProperty));
+        Assert.True(stateProperty.TryGetProperty("recentMessagesText", out var recentProperty));
         Assert.Equal(JsonValueKind.Array, recentProperty.ValueKind);
         var list = recentProperty.EnumerateArray().Select(e => e.GetString()).ToList();
         Assert.Equal(3, list.Count);

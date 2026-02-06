@@ -9,13 +9,13 @@ namespace Microsoft.Agents.AI;
 /// <summary>
 /// Used to store a value in session state.
 /// </summary>
+[JsonConverter(typeof(AgentSessionStateBagValueJsonConverter))]
 internal class AgentSessionStateBagValue
 {
     /// <summary>
     /// Initializes a new instance of the SessionStateValue class with the specified value.
     /// </summary>
     /// <param name="jsonValue">The serialized value to associate with the session state.</param>
-    [JsonConstructor]
     public AgentSessionStateBagValue(JsonElement jsonValue)
     {
         this.JsonValue = jsonValue;
@@ -56,12 +56,9 @@ internal class AgentSessionStateBagValue
         set;
     }
 
-    [JsonIgnore]
     public object? DeserializedValue { get; set; }
 
-    [JsonIgnore]
     public Type? ValueType { get; set; }
 
-    [JsonIgnore]
     public JsonSerializerOptions? JsonSerializerOptions { get; set; }
 }

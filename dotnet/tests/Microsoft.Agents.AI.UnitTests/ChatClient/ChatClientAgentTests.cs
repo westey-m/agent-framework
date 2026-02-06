@@ -372,7 +372,8 @@ public partial class ChatClientAgentTests
         Assert.Contains(capturedTools, t => t.Name == "context provider function");
 
         // Verify that the session was updated with the ai context provider, input and response messages
-        var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
+        var chatHistoryProvider = agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
+        Assert.NotNull(chatHistoryProvider);
         var messages = chatHistoryProvider.GetMessages(session);
         Assert.Equal(3, messages.Count);
         Assert.Equal("user message", messages[0].Text);
@@ -1299,7 +1300,7 @@ public partial class ChatClientAgentTests
         await agent.RunStreamingAsync([new(ChatRole.User, "test")], session).ToListAsync();
 
         // Assert
-        var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
+        var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(agent.GetService(typeof(ChatHistoryProvider)));
         var historyMessages = chatHistoryProvider.GetMessages(session);
         Assert.Equal(2, historyMessages.Count);
         Assert.Equal("test", historyMessages[0].Text);
@@ -1333,7 +1334,7 @@ public partial class ChatClientAgentTests
         // Act & Assert
         ChatClientAgentSession? session = await agent.CreateSessionAsync() as ChatClientAgentSession;
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await agent.RunStreamingAsync([new(ChatRole.User, "test")], session).ToListAsync());
-        Assert.Equal("Only the ConversationId or ChatHistoryProvider may be set, but not both and switching from one to another is not supported.", exception.Message);
+        Assert.Equal("Only the ConversationId or ChatHistoryProvider may be used, but not both. The service returned a conversation id indicating server-side chat history management, but the agent has a ChatHistoryProvider configured.", exception.Message);
     }
 
     /// <summary>
@@ -1405,7 +1406,8 @@ public partial class ChatClientAgentTests
         Assert.Contains(capturedTools, t => t.Name == "context provider function");
 
         // Verify that the session was updated with the input, ai context provider, and response messages
-        var chatHistoryProvider = Assert.IsType<InMemoryChatHistoryProvider>(session!.ChatHistoryProvider);
+        var chatHistoryProvider = agent.ChatHistoryProvider as InMemoryChatHistoryProvider;
+        Assert.NotNull(chatHistoryProvider);
         var historyMessages2 = chatHistoryProvider.GetMessages(session);
         Assert.Equal(3, historyMessages2.Count);
         Assert.Equal("user message", historyMessages2[0].Text);

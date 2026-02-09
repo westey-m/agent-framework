@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -29,6 +30,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
 
     private readonly string _stateKey;
     private readonly Func<AgentSession?, State> _stateInitializer;
+    private readonly JsonSerializerOptions _jsonSerializerOptions;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InMemoryChatHistoryProvider"/> class.
@@ -49,6 +51,11 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     /// An optional key to use for storing the state in the <see cref="AgentSession.StateBag"/>.
     /// If <see langword="null"/>, a default key will be used.
     /// </param>
+    /// <param name="jsonSerializerOptions">
+    /// Optional JSON serializer options for serializing the state of this provider.
+    /// This is valuable for cases like when the chat history contains custom <see cref="AIContent"/> types
+    /// and source generated serializers are required, or Native AOT / Trimming is required.
+    /// </param>
     /// <remarks>
     /// Message reducers enable automatic management of message storage by implementing strategies to
     /// keep memory usage under control while preserving important conversation context.
@@ -57,12 +64,14 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         Func<AgentSession?, State>? stateInitializer = null,
         IChatReducer? chatReducer = null,
         ChatReducerTriggerEvent reducerTriggerEvent = ChatReducerTriggerEvent.BeforeMessagesRetrieval,
-        string? stateKey = null)
+        string? stateKey = null,
+        JsonSerializerOptions? jsonSerializerOptions = null)
     {
         this._stateInitializer = stateInitializer ?? (_ => new State());
         this.ChatReducer = chatReducer;
         this.ReducerTriggerEvent = reducerTriggerEvent;
         this._stateKey = stateKey ?? DefaultStateBagKey;
+        this._jsonSerializerOptions = jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
     }
 
     /// <summary>
@@ -104,7 +113,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     /// <returns>The provider state, or null if no session is available.</returns>
     private State GetOrInitializeState(AgentSession? session)
     {
-        var state = session?.StateBag.GetValue<State>(this._stateKey, AgentAbstractionsJsonUtilities.DefaultOptions);
+        var state = session?.StateBag.GetValue<State>(this._stateKey, this._jsonSerializerOptions);
         if (state is not null)
         {
             return state;
@@ -113,7 +122,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         state = this._stateInitializer(session);
         if (session is not null)
         {
-            session.StateBag.SetValue(this._stateKey, state, AgentAbstractionsJsonUtilities.DefaultOptions);
+            session.StateBag.SetValue(this._stateKey, state, this._jsonSerializerOptions);
         }
 
         return state;

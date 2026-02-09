@@ -24,10 +24,10 @@ public class InMemoryChatHistoryProviderTests
     {
         // Arrange & Act
         var reducerMock = new Mock<IChatReducer>();
-        var provider = new InMemoryChatHistoryProvider(chatReducer: reducerMock.Object);
+        var provider = new InMemoryChatHistoryProvider(new() { ChatReducer = reducerMock.Object });
 
         // Assert
-        Assert.Equal(InMemoryChatHistoryProvider.ChatReducerTriggerEvent.BeforeMessagesRetrieval, provider.ReducerTriggerEvent);
+        Assert.Equal(InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval, provider.ReducerTriggerEvent);
     }
 
     [Fact]
@@ -35,11 +35,11 @@ public class InMemoryChatHistoryProviderTests
     {
         // Arrange & Act
         var reducerMock = new Mock<IChatReducer>();
-        var provider = new InMemoryChatHistoryProvider(chatReducer: reducerMock.Object, reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.AfterMessageAdded);
+        var provider = new InMemoryChatHistoryProvider(new() { ChatReducer = reducerMock.Object, ReducerTriggerEvent = InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded });
 
         // Assert
         Assert.Same(reducerMock.Object, provider.ChatReducer);
-        Assert.Equal(InMemoryChatHistoryProvider.ChatReducerTriggerEvent.AfterMessageAdded, provider.ReducerTriggerEvent);
+        Assert.Equal(InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded, provider.ReducerTriggerEvent);
     }
 
     [Fact]
@@ -128,8 +128,10 @@ public class InMemoryChatHistoryProviderTests
         {
             new(ChatRole.User, "Initial message")
         };
-        var provider = new InMemoryChatHistoryProvider(
-            stateInitializer: _ => new InMemoryChatHistoryProvider.State { Messages = initialMessages });
+        var provider = new InMemoryChatHistoryProvider(new()
+        {
+            StateInitializer = _ => new InMemoryChatHistoryProvider.State { Messages = initialMessages }
+        });
 
         // Act
         var messages = provider.GetMessages(CreateMockSession());
@@ -232,7 +234,7 @@ public class InMemoryChatHistoryProviderTests
             .Setup(r => r.ReduceAsync(It.Is<List<ChatMessage>>(x => x.SequenceEqual(originalMessages)), It.IsAny<CancellationToken>()))
             .ReturnsAsync(reducedMessages);
 
-        var provider = new InMemoryChatHistoryProvider(chatReducer: reducerMock.Object, reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.AfterMessageAdded);
+        var provider = new InMemoryChatHistoryProvider(new() { ChatReducer = reducerMock.Object, ReducerTriggerEvent = InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded });
 
         // Act
         var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, originalMessages, []);
@@ -266,8 +268,7 @@ public class InMemoryChatHistoryProviderTests
             .Setup(r => r.ReduceAsync(It.Is<List<ChatMessage>>(x => x.SequenceEqual(originalMessages)), It.IsAny<CancellationToken>()))
             .ReturnsAsync(reducedMessages);
 
-        var provider = new InMemoryChatHistoryProvider(chatReducer: reducerMock.Object, reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.BeforeMessagesRetrieval);
-        // Add messages directly to the provider for this test
+        var provider = new InMemoryChatHistoryProvider(new() { ChatReducer = reducerMock.Object, ReducerTriggerEvent = InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval });
         provider.SetMessages(session, new List<ChatMessage>(originalMessages));
 
         // Act
@@ -293,7 +294,7 @@ public class InMemoryChatHistoryProviderTests
 
         var reducerMock = new Mock<IChatReducer>();
 
-        var provider = new InMemoryChatHistoryProvider(chatReducer: reducerMock.Object, reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.BeforeMessagesRetrieval);
+        var provider = new InMemoryChatHistoryProvider(new() { ChatReducer = reducerMock.Object, ReducerTriggerEvent = InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval });
 
         // Act
         var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, originalMessages, []);
@@ -319,7 +320,7 @@ public class InMemoryChatHistoryProviderTests
 
         var reducerMock = new Mock<IChatReducer>();
 
-        var provider = new InMemoryChatHistoryProvider(chatReducer: reducerMock.Object, reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.AfterMessageAdded);
+        var provider = new InMemoryChatHistoryProvider(new() { ChatReducer = reducerMock.Object, ReducerTriggerEvent = InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded });
         provider.SetMessages(session, new List<ChatMessage>(originalMessages));
 
         // Act

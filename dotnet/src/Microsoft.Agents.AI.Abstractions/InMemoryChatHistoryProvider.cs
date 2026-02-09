@@ -35,43 +35,17 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     /// <summary>
     /// Initializes a new instance of the <see cref="InMemoryChatHistoryProvider"/> class.
     /// </summary>
-    /// <param name="stateInitializer">
-    /// An optional delegate that initializes the provider state on the first invocation.
-    /// If <see langword="null"/>, a default initializer that creates an empty state will be used.
+    /// <param name="options">
+    /// Optional configuration options that control the provider's behavior, including state initialization,
+    /// message reduction, and serialization settings. If <see langword="null"/>, default settings will be used.
     /// </param>
-    /// <param name="chatReducer">
-    /// An optional <see cref="IChatReducer"/> instance used to process, reduce, or optimize chat messages.
-    /// This can be used to implement strategies like message summarization, truncation, or cleanup.
-    /// </param>
-    /// <param name="reducerTriggerEvent">
-    /// Specifies when the message reducer should be invoked. The default is <see cref="ChatReducerTriggerEvent.BeforeMessagesRetrieval"/>,
-    /// which applies reduction logic when messages are retrieved for agent consumption.
-    /// </param>
-    /// <param name="stateKey">
-    /// An optional key to use for storing the state in the <see cref="AgentSession.StateBag"/>.
-    /// If <see langword="null"/>, a default key will be used.
-    /// </param>
-    /// <param name="jsonSerializerOptions">
-    /// Optional JSON serializer options for serializing the state of this provider.
-    /// This is valuable for cases like when the chat history contains custom <see cref="AIContent"/> types
-    /// and source generated serializers are required, or Native AOT / Trimming is required.
-    /// </param>
-    /// <remarks>
-    /// Message reducers enable automatic management of message storage by implementing strategies to
-    /// keep memory usage under control while preserving important conversation context.
-    /// </remarks>
-    public InMemoryChatHistoryProvider(
-        Func<AgentSession?, State>? stateInitializer = null,
-        IChatReducer? chatReducer = null,
-        ChatReducerTriggerEvent reducerTriggerEvent = ChatReducerTriggerEvent.BeforeMessagesRetrieval,
-        string? stateKey = null,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+    public InMemoryChatHistoryProvider(InMemoryChatHistoryProviderOptions? options = null)
     {
-        this._stateInitializer = stateInitializer ?? (_ => new State());
-        this.ChatReducer = chatReducer;
-        this.ReducerTriggerEvent = reducerTriggerEvent;
-        this._stateKey = stateKey ?? DefaultStateBagKey;
-        this._jsonSerializerOptions = jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
+        this._stateInitializer = options?.StateInitializer ?? (_ => new State());
+        this.ChatReducer = options?.ChatReducer;
+        this.ReducerTriggerEvent = options?.ReducerTriggerEvent ?? InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval;
+        this._stateKey = options?.StateKey ?? DefaultStateBagKey;
+        this._jsonSerializerOptions = options?.JsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
     }
 
     /// <summary>
@@ -82,7 +56,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     /// <summary>
     /// Gets the event that triggers the reducer invocation in this provider.
     /// </summary>
-    public ChatReducerTriggerEvent ReducerTriggerEvent { get; }
+    public InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent ReducerTriggerEvent { get; }
 
     /// <summary>
     /// Gets the chat messages stored for the specified session.
@@ -135,7 +109,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
 
         var state = this.GetOrInitializeState(context.Session);
 
-        if (this.ReducerTriggerEvent is ChatReducerTriggerEvent.BeforeMessagesRetrieval && this.ChatReducer is not null)
+        if (this.ReducerTriggerEvent is InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval && this.ChatReducer is not null)
         {
             state.Messages = (await this.ChatReducer.ReduceAsync(state.Messages, cancellationToken).ConfigureAwait(false)).ToList();
         }
@@ -159,7 +133,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         var allNewMessages = context.RequestMessages.Concat(context.AIContextProviderMessages ?? []).Concat(context.ResponseMessages ?? []);
         state.Messages.AddRange(allNewMessages);
 
-        if (this.ReducerTriggerEvent is ChatReducerTriggerEvent.AfterMessageAdded && this.ChatReducer is not null)
+        if (this.ReducerTriggerEvent is InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded && this.ChatReducer is not null)
         {
             state.Messages = (await this.ChatReducer.ReduceAsync(state.Messages, cancellationToken).ConfigureAwait(false)).ToList();
         }
@@ -174,23 +148,5 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         /// Gets or sets the list of chat messages.
         /// </summary>
         public List<ChatMessage> Messages { get; set; } = [];
-    }
-
-    /// <summary>
-    /// Defines the events that can trigger a reducer in the <see cref="InMemoryChatHistoryProvider"/>.
-    /// </summary>
-    public enum ChatReducerTriggerEvent
-    {
-        /// <summary>
-        /// Trigger the reducer when a new message is added.
-        /// <see cref="InvokedAsync(InvokedContext, CancellationToken)"/> will only complete when reducer processing is done.
-        /// </summary>
-        AfterMessageAdded,
-
-        /// <summary>
-        /// Trigger the reducer before messages are retrieved from the provider.
-        /// The reducer will process the messages before they are returned to the caller.
-        /// </summary>
-        BeforeMessagesRetrieval
     }
 }

@@ -84,7 +84,17 @@ public sealed class Mem0Provider : AIContextProvider
         }
 
         state = this._stateInitializer(session);
-        if (state is not null && session is not null)
+
+        if (state is null
+            || state.StorageScope is null
+            || (state.StorageScope.AgentId is null && state.StorageScope.ThreadId is null && state.StorageScope.UserId is null && state.StorageScope.ApplicationId is null)
+            || state.SearchScope is null
+            || (state.SearchScope.AgentId is null && state.SearchScope.ThreadId is null && state.SearchScope.UserId is null && state.SearchScope.ApplicationId is null))
+        {
+            throw new InvalidOperationException("State initializer must return a non-null state with valid storage and search scopes, where at lest one scoping parameter is set for each.");
+        }
+
+        if (session is not null)
         {
             session.StateBag.SetValue(this._stateKey, state, Mem0JsonUtilities.DefaultOptions);
         }

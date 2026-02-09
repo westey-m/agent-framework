@@ -671,7 +671,7 @@ public sealed partial class ChatClientAgent : AIAgent
         // Populate the session messages only if we are not continuing an existing response as it's not allowed
         if (chatOptions?.ContinuationToken is null)
         {
-            ChatHistoryProvider? chatHistoryProvider = this.ResolveChatHistoryProvider(chatOptions);
+            ChatHistoryProvider? chatHistoryProvider = this.ResolveChatHistoryProvider(chatOptions, typedSession);
 
             // Add any existing messages from the session to the messages to be sent to the chat client.
             if (chatHistoryProvider is not null)
@@ -751,7 +751,8 @@ public sealed partial class ChatClientAgent : AIAgent
             {
                 // The agent has a ChatHistoryProvider configured, but the service returned a conversation id,
                 // meaning the service manages chat history server-side. Both cannot be used simultaneously.
-                throw new InvalidOperationException("Only the ConversationId or ChatHistoryProvider may be used, but not both. The service returned a conversation id indicating server-side chat history management, but the agent has a ChatHistoryProvider configured.");
+                throw new InvalidOperationException(
+                    $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The service returned a conversation id indicating server-side chat history management, but the agent has a {nameof(this.ChatHistoryProvider)} configured.");
             }
 
             // If we got a conversation id back from the chat client, it means that the service supports server side session storage
@@ -776,7 +777,7 @@ public sealed partial class ChatClientAgent : AIAgent
         ChatOptions? chatOptions,
         CancellationToken cancellationToken)
     {
-        ChatHistoryProvider? provider = this.ResolveChatHistoryProvider(chatOptions);
+        ChatHistoryProvider? provider = this.ResolveChatHistoryProvider(chatOptions, session);
 
         // Only notify the provider if we have one.
         // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
@@ -803,7 +804,7 @@ public sealed partial class ChatClientAgent : AIAgent
         ChatOptions? chatOptions,
         CancellationToken cancellationToken)
     {
-        ChatHistoryProvider? provider = this.ResolveChatHistoryProvider(chatOptions);
+        ChatHistoryProvider? provider = this.ResolveChatHistoryProvider(chatOptions, session);
 
         // Only notify the provider if we have one.
         // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
@@ -820,13 +821,25 @@ public sealed partial class ChatClientAgent : AIAgent
         return Task.CompletedTask;
     }
 
-    private ChatHistoryProvider? ResolveChatHistoryProvider(ChatOptions? chatOptions)
+    private ChatHistoryProvider? ResolveChatHistoryProvider(ChatOptions? chatOptions, ChatClientAgentSession session)
     {
         ChatHistoryProvider? provider = this.ChatHistoryProvider;
+
+        if (provider is not null)
+        {
+            throw new InvalidOperationException(
+                $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but the agent has a {nameof(this.ChatHistoryProvider)} configured.");
+        }
 
         // If someone provided an override ChatHistoryProvider via AdditionalProperties, we should use that instead.
         if (chatOptions?.AdditionalProperties?.TryGetValue(out ChatHistoryProvider? overrideProvider) is true)
         {
+            if (overrideProvider is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but an override {nameof(this.ChatHistoryProvider)} is was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");
+            }
+
             provider = overrideProvider;
         }
 

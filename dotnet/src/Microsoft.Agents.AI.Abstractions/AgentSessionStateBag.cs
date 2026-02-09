@@ -49,8 +49,8 @@ public class AgentSessionStateBag
     /// </summary>
     /// <typeparam name="T">The type of the value to retrieve.</typeparam>
     /// <param name="key">The key from which to retrieve the value.</param>
-    /// <param name="value">The value if found and convertable to the required type; otherwise, null.</param>
-    /// <param name="jsonSerializerOptions">The JSON serializer options to use for serializing/deserialing the value.</param>
+    /// <param name="value">The value if found and convertible to the required type; otherwise, null.</param>
+    /// <param name="jsonSerializerOptions">The JSON serializer options to use for serializing/deserializing the value.</param>
     /// <returns><see langword="true"/> if the value was successfully retrieved, <see langword="false"/> otherwise.</returns>
     public bool TryGetValue<T>(string key, out T? value, JsonSerializerOptions? jsonSerializerOptions = null)
         where T : class

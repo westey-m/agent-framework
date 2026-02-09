@@ -29,7 +29,7 @@ namespace SampleApp
     {
         public override string? Name => "UpperCaseParrotAgent";
 
-        public ChatHistoryProvider ChatHistoryProvider = new InMemoryChatHistoryProvider();
+        public readonly ChatHistoryProvider ChatHistoryProvider = new InMemoryChatHistoryProvider();
 
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
             => new(new CustomAgentSession());

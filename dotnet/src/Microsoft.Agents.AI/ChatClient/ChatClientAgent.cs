@@ -837,7 +837,7 @@ public sealed partial class ChatClientAgent : AIAgent
             if (session.ConversationId is not null && overrideProvider is not null)
             {
                 throw new InvalidOperationException(
-                    $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but an override {nameof(this.ChatHistoryProvider)} is was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");
+                    $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but an override {nameof(this.ChatHistoryProvider)} was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");
             }
 
             provider = overrideProvider;

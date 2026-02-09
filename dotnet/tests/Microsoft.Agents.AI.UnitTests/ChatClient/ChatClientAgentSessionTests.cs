@@ -56,13 +56,10 @@ public class ChatClientAgentSessionTests
             """, TestJsonSerializerContext.Default.JsonElement);
 
         // Act.
-        var session = ChatClientAgentSession.Deserialize(json);
+        var session = ChatClientAgentSession.Deserialize(json, TestJsonSerializerContext.Default.Options);
 
         // Assert
         Assert.Null(session.ConversationId);
-
-        // Verify the StateBag contains the serialized chat history provider state
-        Assert.True(session.StateBag.TryGetValue<object>("InMemoryChatHistoryProvider.State", out _));
 
         var chatHistoryProvider = new InMemoryChatHistoryProvider();
         var messages = chatHistoryProvider.GetMessages(session);

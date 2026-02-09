@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -147,6 +148,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         /// <summary>
         /// Gets or sets the list of chat messages.
         /// </summary>
+        [JsonPropertyName("messages")]
         public List<ChatMessage> Messages { get; set; } = [];
     }
 }

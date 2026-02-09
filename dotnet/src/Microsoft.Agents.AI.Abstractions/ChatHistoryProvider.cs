@@ -63,10 +63,6 @@ public abstract class ChatHistoryProvider
     /// <item><description>Archiving old messages while keeping active conversation context</description></item>
     /// </list>
     /// </para>
-    /// <para>
-    /// Each <see cref="ChatHistoryProvider"/> instance should be associated with a single <see cref="AgentSession"/> to ensure proper message isolation
-    /// and context management.
-    /// </para>
     /// </remarks>
     public abstract ValueTask<IEnumerable<ChatMessage>> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default);
 

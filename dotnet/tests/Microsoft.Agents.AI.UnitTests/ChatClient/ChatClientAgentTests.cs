@@ -1334,7 +1334,7 @@ public partial class ChatClientAgentTests
         // Act & Assert
         ChatClientAgentSession? session = await agent.CreateSessionAsync() as ChatClientAgentSession;
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await agent.RunStreamingAsync([new(ChatRole.User, "test")], session).ToListAsync());
-        Assert.Equal("Only the ConversationId or ChatHistoryProvider may be used, but not both. The service returned a conversation id indicating server-side chat history management, but the agent has a ChatHistoryProvider configured.", exception.Message);
+        Assert.Equal("Only ConversationId or ChatHistoryProvider may be used, but not both. The service returned a conversation id indicating server-side chat history management, but the agent has a ChatHistoryProvider configured.", exception.Message);
     }
 
     /// <summary>

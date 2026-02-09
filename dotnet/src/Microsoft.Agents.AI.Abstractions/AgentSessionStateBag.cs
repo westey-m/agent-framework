@@ -60,37 +60,9 @@ public class AgentSessionStateBag
 
         if (this._state.TryGetValue(key, out var stateValue))
         {
-            if (stateValue.DeserializedValue is T cachedValue)
-            {
-                value = cachedValue;
-                return true;
-            }
-
-            switch (stateValue.JsonValue)
-            {
-                case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Undefined:
-                    value = null;
-                    return false;
-                case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Null:
-                    value = null;
-                    return true;
-                default:
-                    T? result = stateValue.JsonValue.Deserialize(jso.GetTypeInfo(typeof(T))) as T;
-                    if (result is null)
-                    {
-                        value = null;
-                        return false;
-                    }
-
-                    stateValue.IsDeserialized = true;
-                    stateValue.DeserializedValue = result;
-                    stateValue.ValueType = typeof(T);
-                    stateValue.JsonSerializerOptions = jso;
-
-                    value = result;
-                    return true;
-            }
+            return stateValue.TryReadDeserializedValue(out value, jso);
         }
+
         value = null;
         return false;
     }
@@ -111,28 +83,7 @@ public class AgentSessionStateBag
 
         if (this._state.TryGetValue(key, out var stateValue))
         {
-            if (stateValue.DeserializedValue is T cachedValue)
-            {
-                return cachedValue;
-            }
-
-            switch (stateValue.JsonValue)
-            {
-                case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Null || jsonElement.ValueKind == JsonValueKind.Undefined:
-                    return null;
-                default:
-                    T? result = stateValue.JsonValue.Deserialize(jso.GetTypeInfo(typeof(T))) as T;
-                    if (result is null)
-                    {
-                        throw new InvalidOperationException($"Failed to deserialize session state value to type {typeof(T).FullName}.");
-                    }
-
-                    stateValue.IsDeserialized = true;
-                    stateValue.DeserializedValue = result;
-                    stateValue.ValueType = typeof(T);
-                    stateValue.JsonSerializerOptions = jso;
-                    return result;
-            }
+            return stateValue.ReadDeserializedValue<T>(jso);
         }
 
         return null;
@@ -154,10 +105,7 @@ public class AgentSessionStateBag
         var stateValue = this._state.GetOrAdd(key, _ =>
             new AgentSessionStateBagValue(value, typeof(T), jso));
 
-        stateValue.IsDeserialized = true;
-        stateValue.DeserializedValue = value;
-        stateValue.ValueType = typeof(T);
-        stateValue.JsonSerializerOptions = jso;
+        stateValue.SetDeserialized(value, typeof(T), jso);
     }
 
     /// <summary>

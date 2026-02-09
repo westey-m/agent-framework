@@ -494,6 +494,63 @@ public sealed class AgentSessionStateBagTests
         }
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task ConcurrentWritesAndSerialize_DoesNotThrowAsync()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("shared", "initial");
+        var tasks = new System.Threading.Tasks.Task[100];
+
+        // Act - concurrently write and serialize the same key
+        for (int i = 0; i < 100; i++)
+        {
+            int index = i;
+            tasks[i] = System.Threading.Tasks.Task.Run(() =>
+            {
+                stateBag.SetValue("shared", $"value{index}");
+                _ = stateBag.Serialize();
+            });
+        }
+
+        await System.Threading.Tasks.Task.WhenAll(tasks);
+
+        // Assert - should have some value and serialize without error
+        Assert.True(stateBag.TryGetValue<string>("shared", out var result));
+        Assert.NotNull(result);
+        var json = stateBag.Serialize();
+        Assert.Equal(JsonValueKind.Object, json.ValueKind);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task ConcurrentReadsAndWrites_DoesNotThrowAsync()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("key", "initial");
+        var tasks = new System.Threading.Tasks.Task[200];
+
+        // Act - half readers, half writers on the same key
+        for (int i = 0; i < 200; i++)
+        {
+            int index = i;
+            if (index % 2 == 0)
+            {
+                tasks[i] = System.Threading.Tasks.Task.Run(() => stateBag.GetValue<string>("key"));
+            }
+            else
+            {
+                tasks[i] = System.Threading.Tasks.Task.Run(() => stateBag.SetValue("key", $"value{index}"));
+            }
+        }
+
+        await System.Threading.Tasks.Task.WhenAll(tasks);
+
+        // Assert - should have a consistent value
+        Assert.True(stateBag.TryGetValue<string>("key", out var result));
+        Assert.NotNull(result);
+    }
+
     #endregion
 
     #region Complex Object Tests

@@ -21,7 +21,7 @@ public sealed class A2AAgentSessionTests
         // Act
         JsonElement serialized = originalSession.Serialize();
 
-        A2AAgentSession deserializedSession = new(serialized);
+        A2AAgentSession deserializedSession = A2AAgentSession.Deserialize(serialized);
 
         // Assert
         Assert.Equal(originalSession.ContextId, deserializedSession.ContextId);
@@ -37,7 +37,7 @@ public sealed class A2AAgentSessionTests
 
         // Act
         JsonElement serialized = originalSession.Serialize();
-        A2AAgentSession deserializedSession = new(serialized);
+        A2AAgentSession deserializedSession = A2AAgentSession.Deserialize(serialized);
 
         // Assert
         Assert.Equal("ctx-1", deserializedSession.ContextId);

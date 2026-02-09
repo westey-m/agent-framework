@@ -3,6 +3,7 @@
 using System;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
@@ -18,6 +19,12 @@ public sealed class ChatClientAgentSession : AgentSession
     /// </summary>
     internal ChatClientAgentSession()
     {
+    }
+
+    [JsonConstructor]
+    internal ChatClientAgentSession(string? conversationId, AgentSessionStateBag? stateBag) : base(stateBag ?? new())
+    {
+        this.ConversationId = conversationId;
     }
 
     /// <summary>
@@ -37,6 +44,7 @@ public sealed class ChatClientAgentSession : AgentSession
     /// to fork the chat history with each iteration.
     /// </para>
     /// </remarks>
+    [JsonPropertyName("conversationId")]
     public string? ConversationId
     {
         get;
@@ -55,50 +63,29 @@ public sealed class ChatClientAgentSession : AgentSession
     /// Creates a new instance of the <see cref="ChatClientAgentSession"/> class from previously serialized state.
     /// </summary>
     /// <param name="serializedState">A <see cref="JsonElement"/> representing the serialized state of the session.</param>
+    /// <param name="jsonSerializerOptions">Optional JSON serialization options to use instead of the default options.</param>
     /// <returns>The deserialized <see cref="ChatClientAgentSession"/>.</returns>
-    internal static ChatClientAgentSession Deserialize(JsonElement serializedState)
+    internal static ChatClientAgentSession Deserialize(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null)
     {
         if (serializedState.ValueKind != JsonValueKind.Object)
         {
             throw new ArgumentException("The serialized session state must be a JSON object.", nameof(serializedState));
         }
 
-        var state = serializedState.Deserialize(
-            AgentJsonUtilities.DefaultOptions.GetTypeInfo(typeof(SessionState))) as SessionState;
-
-        var session = new ChatClientAgentSession();
-
-        session.StateBag = AgentSessionStateBag.Deserialize(state?.StateBag ?? default);
-
-        if (state?.ConversationId is string sessionId)
-        {
-            session.ConversationId = sessionId;
-        }
-
-        return session;
+        var jso = jsonSerializerOptions ?? AgentJsonUtilities.DefaultOptions;
+        return serializedState.Deserialize(jso.GetTypeInfo(typeof(ChatClientAgentSession))) as ChatClientAgentSession
+            ?? new ChatClientAgentSession();
     }
 
     /// <inheritdoc/>
     internal JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        var state = new SessionState
-        {
-            ConversationId = this.ConversationId,
-            StateBag = this.StateBag.Serialize(),
-        };
-
-        return JsonSerializer.SerializeToElement(state, AgentJsonUtilities.DefaultOptions.GetTypeInfo(typeof(SessionState)));
+        var jso = jsonSerializerOptions ?? AgentJsonUtilities.DefaultOptions;
+        return JsonSerializer.SerializeToElement(this, jso.GetTypeInfo(typeof(ChatClientAgentSession)));
     }
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     private string DebuggerDisplay =>
         this.ConversationId is { } conversationId ? $"ConversationId = {conversationId}, StateBag Count = {this.StateBag.Count}" :
         $"StateBag Count = {this.StateBag.Count}";
-
-    internal sealed class SessionState
-    {
-        public string? ConversationId { get; set; }
-
-        public JsonElement? StateBag { get; set; }
-    }
 }

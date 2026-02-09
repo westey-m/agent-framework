@@ -212,7 +212,7 @@ public class ChatClientAgentSessionTests
         // Arrange
         var session = new ChatClientAgentSession();
         JsonSerializerOptions options = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
-        options.TypeInfoResolverChain.Add(AgentAbstractionsJsonUtilities.DefaultOptions.TypeInfoResolver!);
+        options.TypeInfoResolverChain.Add(AgentJsonUtilities.DefaultOptions.TypeInfoResolver!);
 
         // Act
         var json = session.Serialize(options);
@@ -220,7 +220,8 @@ public class ChatClientAgentSessionTests
         // Assert
         Assert.Equal(JsonValueKind.Object, json.ValueKind);
 
-        Assert.False(json.TryGetProperty("conversationId", out var _));
+        // [JsonPropertyName] takes precedence over naming policy
+        Assert.True(json.TryGetProperty("conversationId", out var _));
     }
 
     #endregion Serialize Tests

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Shared.Diagnostics;
@@ -45,6 +46,7 @@ namespace Microsoft.Agents.AI;
 /// <seealso cref="AIAgent"/>
 /// <seealso cref="AIAgent.CreateSessionAsync(System.Threading.CancellationToken)"/>
 /// <seealso cref="AIAgent.DeserializeSessionAsync(JsonElement, JsonSerializerOptions?, System.Threading.CancellationToken)"/>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public abstract class AgentSession
 {
     /// <summary>
@@ -97,4 +99,7 @@ public abstract class AgentSession
     /// </remarks>
     public TService? GetService<TService>(object? serviceKey = null)
         => this.GetService(typeof(TService), serviceKey) is TService service ? service : default;
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private string DebuggerDisplay => $"StateBag Count = {this.StateBag.Count}";
 }

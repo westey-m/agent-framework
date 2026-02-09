@@ -82,7 +82,6 @@ public static partial class AgentAbstractionsJsonUtilities
     [JsonSerializable(typeof(AgentResponseUpdate))]
     [JsonSerializable(typeof(AgentResponseUpdate[]))]
     [JsonSerializable(typeof(ServiceIdAgentSession.ServiceIdAgentSessionState))]
-    [JsonSerializable(typeof(InMemoryAgentSession.InMemoryAgentSessionState))]
     [JsonSerializable(typeof(InMemoryChatHistoryProvider.State))]
     [JsonSerializable(typeof(AgentSessionStateBag))]
     [JsonSerializable(typeof(ConcurrentDictionary<string, AgentSessionStateBagValue>))]

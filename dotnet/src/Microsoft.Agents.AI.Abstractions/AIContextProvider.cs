@@ -59,11 +59,16 @@ public abstract class AIContextProvider
     /// <para>
     /// Implementers can use the request and response messages in the provided <paramref name="context"/> to:
     /// <list type="bullet">
-    /// <item><description>Update internal state based on conversation outcomes</description></item>
+    /// <item><description>Update state based on conversation outcomes</description></item>
     /// <item><description>Extract and store memories or preferences from user messages</description></item>
     /// <item><description>Log or audit conversation details</description></item>
     /// <item><description>Perform cleanup or finalization tasks</description></item>
     /// </list>
+    /// </para>
+    /// <para>
+    /// The <see cref="AIContextProvider"/> is passed a reference to the <see cref="AgentSession"/> via <see cref="InvokingContext"/> and <see cref="InvokedContext"/>
+    /// allowing it to store state in the <see cref="AgentSession.StateBag"/>. Since an <see cref="AIContextProvider"/> is used with many different sessions, it should
+    /// not store any session-specific information within its own instance fields. Instead, any session-specific state should be stored in the associated <see cref="AgentSession.StateBag"/>.
     /// </para>
     /// <para>
     /// This method is called regardless of whether the invocation succeeded or failed.

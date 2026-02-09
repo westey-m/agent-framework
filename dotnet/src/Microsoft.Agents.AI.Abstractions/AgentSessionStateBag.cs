@@ -82,6 +82,7 @@ public class AgentSessionStateBag
                         return false;
                     }
 
+                    stateValue.IsDeserialized = true;
                     stateValue.DeserializedValue = result;
                     stateValue.ValueType = typeof(T);
                     stateValue.JsonSerializerOptions = jso;
@@ -125,6 +126,7 @@ public class AgentSessionStateBag
                     {
                         throw new InvalidOperationException($"Failed to deserialize session state value to type {typeof(T).FullName}.");
                     }
+
                     stateValue.IsDeserialized = true;
                     stateValue.DeserializedValue = result;
                     stateValue.ValueType = typeof(T);

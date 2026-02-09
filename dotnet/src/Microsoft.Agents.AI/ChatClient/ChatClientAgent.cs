@@ -107,7 +107,7 @@ public sealed partial class ChatClientAgent : AIAgent
 
         // Use the ChatHistoryProvider from options if provided.
         // If one was not provided, and we later find out that the underlying service does not manage chat history server-side,
-        // we will use the defalut InMemoryChatHistoryProvider at that time.
+        // we will use the default InMemoryChatHistoryProvider at that time.
         this.ChatHistoryProvider = options?.ChatHistoryProvider;
 
         this._logger = (loggerFactory ?? chatClient.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger<ChatClientAgent>();

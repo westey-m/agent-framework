@@ -28,6 +28,11 @@ namespace Microsoft.Agents.AI;
 /// </list>
 /// </para>
 /// <para>
+/// The <see cref="ChatHistoryProvider"/> is passed a reference to the <see cref="AgentSession"/> via <see cref="InvokingContext"/> and <see cref="InvokedContext"/>
+/// allowing it to store state in the <see cref="AgentSession.StateBag"/>. Since a <see cref="ChatHistoryProvider"/> is used with many different sessions, it should
+/// not store any session-specific information within its own instance fields. Instead, any session-specific state should be stored in the associated <see cref="AgentSession.StateBag"/>.
+/// </para>
+/// <para>
 /// A <see cref="ChatHistoryProvider"/> is only relevant for scenarios where the underlying AI service that the agent is using
 /// does not use in-service chat history storage.
 /// </para>

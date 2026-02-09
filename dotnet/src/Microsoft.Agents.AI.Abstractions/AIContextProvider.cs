@@ -79,9 +79,11 @@ public abstract class AIContextProvider
         aiContext.Messages = aiContext.Messages.Select(message =>
         {
             if (message.AdditionalProperties != null
+                // Check if the message was already tagged with this provider's source type
                 && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out var messageSourceType)
                 && messageSourceType is AgentRequestMessageSourceType typedMessageSourceType
                 && typedMessageSourceType == AgentRequestMessageSourceType.AIContextProvider
+                // Check if the message was already tagged with this provider's source
                 && message.AdditionalProperties.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var messageSource)
                 && messageSource is string typedMessageSource
                 && typedMessageSource == this._sourceName)

@@ -825,7 +825,7 @@ public sealed partial class ChatClientAgent : AIAgent
     {
         ChatHistoryProvider? provider = this.ChatHistoryProvider;
 
-        if (provider is not null)
+        if (session.ConversationId is not null && provider is not null)
         {
             throw new InvalidOperationException(
                 $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but the agent has a {nameof(this.ChatHistoryProvider)} configured.");
@@ -834,7 +834,7 @@ public sealed partial class ChatClientAgent : AIAgent
         // If someone provided an override ChatHistoryProvider via AdditionalProperties, we should use that instead.
         if (chatOptions?.AdditionalProperties?.TryGetValue(out ChatHistoryProvider? overrideProvider) is true)
         {
-            if (overrideProvider is not null)
+            if (session.ConversationId is not null && overrideProvider is not null)
             {
                 throw new InvalidOperationException(
                     $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but an override {nameof(this.ChatHistoryProvider)} is was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");

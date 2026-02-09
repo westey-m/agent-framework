@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "semantic-kernel",
+# ]
+# ///
+# Run with any PEP 723 compatible runner, e.g.:
+#   uv run samples/semantic-kernel-migration/orchestrations/sequential.py
+
 # Copyright (c) Microsoft. All rights reserved.
 
 """Side-by-side sequential orchestrations for Agent Framework and Semantic Kernel."""
@@ -74,7 +83,7 @@ async def run_agent_framework_example(prompt: str) -> list[ChatMessage]:
         name="reviewer",
     )
 
-    workflow = SequentialBuilder().participants([writer, reviewer]).build()
+    workflow = SequentialBuilder(participants=[writer, reviewer]).build()
 
     conversation_outputs: list[list[ChatMessage]] = []
     async for event in workflow.run(prompt, stream=True):

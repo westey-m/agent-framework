@@ -54,7 +54,7 @@ public sealed class InMemoryChatHistoryProviderOptions
     {
         /// <summary>
         /// Trigger the reducer when a new message is added.
-        /// <see cref="InMemoryChatHistoryProvider.InvokedAsync"/> will only complete when reducer processing is done.
+        /// <see cref="AIContextProvider.InvokedAsync"/> will only complete when reducer processing is done.
         /// </summary>
         AfterMessageAdded,
 

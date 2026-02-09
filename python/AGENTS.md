@@ -61,16 +61,9 @@ from agent_framework.azure import AzureOpenAIChatClient, AzureAIAgentClient
 - **Comments**: Avoid excessive comments; prefer clear code
 - **Formatting**: Format only files you changed, not the entire codebase
 
-## Sample Structure
+## Samples
 
-1. Copyright header: `# Copyright (c) Microsoft. All rights reserved.`
-2. Required imports
-3. Module docstring: `"""This sample demonstrates..."""`
-4. Helper functions
-5. Main function(s) demonstrating functionality
-6. Entry point: `if __name__ == "__main__": asyncio.run(main())`
-
-When modifying samples, update associated README files in the same or parent folders.
+See [samples/SAMPLE_GUIDELINES.md](samples/SAMPLE_GUIDELINES.md) for sample structure, external dependency handling (PEP 723), and syntax checking instructions.
 
 ## Package Documentation
 

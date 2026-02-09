@@ -100,7 +100,7 @@ namespace SampleApp
         public void SetUserInfo(AgentSession session, UserInfo userInfo)
             => session.StateBag.SetValue(nameof(UserInfoMemory), userInfo);
 
-        public override async ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
+        protected override async ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
         {
             var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
                 ?? this._stateInitializer.Invoke(context.Session);
@@ -123,7 +123,7 @@ namespace SampleApp
             context.Session?.StateBag.SetValue(nameof(UserInfoMemory), userInfo);
         }
 
-        public override ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
+        protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
             var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
                 ?? this._stateInitializer.Invoke(context.Session);

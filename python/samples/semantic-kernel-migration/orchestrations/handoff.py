@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "semantic-kernel",
+# ]
+# ///
+# Run with any PEP 723 compatible runner, e.g.:
+#   uv run samples/semantic-kernel-migration/orchestrations/handoff.py
+
 # Copyright (c) Microsoft. All rights reserved.
 """Side-by-side handoff orchestrations for Semantic Kernel and Agent Framework."""
 
@@ -252,7 +261,7 @@ async def run_agent_framework_example(initial_task: str, scripted_responses: Seq
         except StopIteration:
             user_reply = "Thanks, that's all."
         responses = {request.request_id: user_reply for request in pending}
-        final_events = await _drain_events(workflow.send_responses_streaming(responses))
+        final_events = await _drain_events(workflow.run(stream=True, responses=responses))
         pending = _collect_handoff_requests(final_events)
 
     conversation = _extract_final_conversation(final_events)

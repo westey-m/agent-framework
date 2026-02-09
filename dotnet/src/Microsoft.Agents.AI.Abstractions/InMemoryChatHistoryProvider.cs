@@ -104,7 +104,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <inheritdoc />
-    public override async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
+    protected override async ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         _ = Throw.IfNull(context);
 
@@ -119,7 +119,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <inheritdoc />
-    public override async ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
+    protected override async ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
     {
         _ = Throw.IfNull(context);
 
@@ -130,8 +130,8 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
 
         var state = this.GetOrInitializeState(context.Session);
 
-        // Add request, AI context provider, and response messages to the provider
-        var allNewMessages = context.RequestMessages.Concat(context.AIContextProviderMessages ?? []).Concat(context.ResponseMessages ?? []);
+        // Add request and response messages to the provider
+        var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
         state.Messages.AddRange(allNewMessages);
 
         if (this.ReducerTriggerEvent is InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded && this.ChatReducer is not null)

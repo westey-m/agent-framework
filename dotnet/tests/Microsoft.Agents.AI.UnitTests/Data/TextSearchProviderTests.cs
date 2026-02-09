@@ -346,7 +346,7 @@ public sealed class TextSearchProviderTests
         };
 
         var session = new TestAgentSession();
-        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages, aiContextProviderMessages: null) { InvokeException = new InvalidOperationException("Request Failed") });
+        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages) { InvokeException = new InvalidOperationException("Request Failed") });
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -389,7 +389,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "C"),
             new ChatMessage(ChatRole.Assistant, "D"),
         };
-        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages, aiContextProviderMessages: null));
+        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages));
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -431,7 +431,7 @@ public sealed class TextSearchProviderTests
             [
                 new ChatMessage(ChatRole.User, "A"),
                 new ChatMessage(ChatRole.Assistant, "B"),
-            ], aiContextProviderMessages: null));
+            ]));
 
         // Second memory update (C,D,E)
         await provider.InvokedAsync(new(
@@ -441,7 +441,7 @@ public sealed class TextSearchProviderTests
                 new ChatMessage(ChatRole.User, "C"),
                 new ChatMessage(ChatRole.Assistant, "D"),
                 new ChatMessage(ChatRole.User, "E"),
-            ], aiContextProviderMessages: null));
+            ]));
 
         var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "F")]);
 
@@ -479,7 +479,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "U2"),
             new ChatMessage(ChatRole.Assistant, "A2"),
         };
-        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages, null));
+        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages));
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -519,7 +519,7 @@ public sealed class TextSearchProviderTests
         };
 
         // Act
-        await provider.InvokedAsync(new(s_mockAgent, session, messages, aiContextProviderMessages: null)); // Populate recent memory.
+        await provider.InvokedAsync(new(s_mockAgent, session, messages)); // Populate recent memory.
 
         // Assert - State should be in the session's StateBag
         var stateBagSerialized = session.StateBag.Serialize();
@@ -550,7 +550,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "C"),
             new ChatMessage(ChatRole.Assistant, "D"),
         };
-        await provider.InvokedAsync(new(s_mockAgent, session, messages, aiContextProviderMessages: null));
+        await provider.InvokedAsync(new(s_mockAgent, session, messages));
 
         // Act - Serialize and deserialize the StateBag
         var serializedStateBag = session.StateBag.Serialize();

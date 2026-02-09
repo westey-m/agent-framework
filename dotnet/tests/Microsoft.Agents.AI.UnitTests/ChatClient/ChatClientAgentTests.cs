@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Moq;
+using Moq.Protected;
 
 namespace Microsoft.Agents.AI.UnitTests;
 
@@ -342,7 +343,8 @@ public partial class ChatClientAgentTests
 
         var mockProvider = new Mock<AIContextProvider>();
         mockProvider
-            .Setup(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new AIContext
             {
                 Messages = aiContextProviderMessages,
@@ -350,7 +352,8 @@ public partial class ChatClientAgentTests
                 Tools = [AIFunctionFactory.Create(() => { }, "context provider function")]
             });
         mockProvider
-            .Setup(p => p.InvokedAsync(It.IsAny<AIContextProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
             .Returns(new ValueTask());
 
         ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
@@ -380,12 +383,15 @@ public partial class ChatClientAgentTests
         Assert.Equal("context provider message", messages[1].Text);
         Assert.Equal("response", messages[2].Text);
 
-        mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
-        mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>
-            x.RequestMessages == requestMessages &&
-            x.AIContextProviderMessages == aiContextProviderMessages &&
-            x.ResponseMessages == responseMessages &&
-            x.InvokeException == null), It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider
+            .Protected()
+            .Verify<ValueTask<AIContext>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
+        mockProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(), ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                x.RequestMessages.Count() == requestMessages.Length + aiContextProviderMessages.Length &&
+                x.ResponseMessages == responseMessages &&
+                x.InvokeException == null), ItExpr.IsAny<CancellationToken>());
     }
 
     /// <summary>
@@ -396,7 +402,6 @@ public partial class ChatClientAgentTests
     {
         // Arrange
         ChatMessage[] requestMessages = [new(ChatRole.User, "user message")];
-        ChatMessage[] responseMessages = [new(ChatRole.Assistant, "response")];
         ChatMessage[] aiContextProviderMessages = [new(ChatRole.System, "context provider message")];
         Mock<IChatClient> mockService = new();
         mockService
@@ -408,13 +413,15 @@ public partial class ChatClientAgentTests
 
         var mockProvider = new Mock<AIContextProvider>();
         mockProvider
-            .Setup(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new AIContext
             {
                 Messages = aiContextProviderMessages,
             });
         mockProvider
-            .Setup(p => p.InvokedAsync(It.IsAny<AIContextProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
             .Returns(new ValueTask());
 
         ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
@@ -423,12 +430,15 @@ public partial class ChatClientAgentTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync(requestMessages));
 
         // Assert
-        mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
-        mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>
-            x.RequestMessages == requestMessages &&
-            x.AIContextProviderMessages == aiContextProviderMessages &&
-            x.ResponseMessages == null &&
-            x.InvokeException is InvalidOperationException), It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider
+            .Protected()
+            .Verify<ValueTask<AIContext>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
+        mockProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(), ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                x.RequestMessages.Count() == requestMessages.Length + aiContextProviderMessages.Length &&
+                x.ResponseMessages == null &&
+                x.InvokeException is InvalidOperationException), ItExpr.IsAny<CancellationToken>());
     }
 
     /// <summary>
@@ -460,7 +470,8 @@ public partial class ChatClientAgentTests
 
         var mockProvider = new Mock<AIContextProvider>();
         mockProvider
-            .Setup(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new AIContext());
 
         ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
@@ -476,7 +487,9 @@ public partial class ChatClientAgentTests
         Assert.Equal(ChatRole.User, capturedMessages[0].Role);
         Assert.Single(capturedTools);
         Assert.Contains(capturedTools, t => t.Name == "base function");
-        mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider
+            .Protected()
+            .Verify<ValueTask<AIContext>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
     }
 
     #endregion
@@ -1369,7 +1382,8 @@ public partial class ChatClientAgentTests
 
         var mockProvider = new Mock<AIContextProvider>();
         mockProvider
-            .Setup(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new AIContext
             {
                 Messages = aiContextProviderMessages,
@@ -1377,7 +1391,8 @@ public partial class ChatClientAgentTests
                 Tools = [AIFunctionFactory.Create(() => { }, "context provider function")]
             });
         mockProvider
-            .Setup(p => p.InvokedAsync(It.IsAny<AIContextProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
             .Returns(new ValueTask());
 
         ChatClientAgent agent = new(
@@ -1414,13 +1429,16 @@ public partial class ChatClientAgentTests
         Assert.Equal("context provider message", historyMessages2[1].Text);
         Assert.Equal("response", historyMessages2[2].Text);
 
-        mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
-        mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>
-            x.RequestMessages == requestMessages &&
-            x.AIContextProviderMessages == aiContextProviderMessages &&
-            x.ResponseMessages!.Count() == 1 &&
-            x.ResponseMessages!.ElementAt(0).Text == "response" &&
-            x.InvokeException == null), It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider
+            .Protected()
+            .Verify<ValueTask<AIContext>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
+        mockProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(), ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                x.RequestMessages.Count() == requestMessages.Length + aiContextProviderMessages.Length &&
+                x.ResponseMessages!.Count() == 1 &&
+                x.ResponseMessages!.ElementAt(0).Text == "response" &&
+                x.InvokeException == null), ItExpr.IsAny<CancellationToken>());
     }
 
     /// <summary>
@@ -1442,13 +1460,15 @@ public partial class ChatClientAgentTests
 
         var mockProvider = new Mock<AIContextProvider>();
         mockProvider
-            .Setup(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(new AIContext
             {
                 Messages = aiContextProviderMessages,
             });
         mockProvider
-            .Setup(p => p.InvokedAsync(It.IsAny<AIContextProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
             .Returns(new ValueTask());
 
         ChatClientAgent agent = new(
@@ -1467,12 +1487,15 @@ public partial class ChatClientAgentTests
         });
 
         // Assert
-        mockProvider.Verify(p => p.InvokingAsync(It.IsAny<AIContextProvider.InvokingContext>(), It.IsAny<CancellationToken>()), Times.Once);
-        mockProvider.Verify(p => p.InvokedAsync(It.Is<AIContextProvider.InvokedContext>(x =>
-            x.RequestMessages == requestMessages &&
-            x.AIContextProviderMessages == aiContextProviderMessages &&
-            x.ResponseMessages == null &&
-            x.InvokeException is InvalidOperationException), It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider
+            .Protected()
+            .Verify<ValueTask<AIContext>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
+        mockProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(), ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                x.RequestMessages.Count() == requestMessages.Length + aiContextProviderMessages.Length &&
+                x.ResponseMessages == null &&
+                x.InvokeException is InvalidOperationException), ItExpr.IsAny<CancellationToken>());
     }
 
     #endregion

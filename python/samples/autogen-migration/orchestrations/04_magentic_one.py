@@ -1,3 +1,13 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "autogen-agentchat",
+#     "autogen-ext[openai]",
+# ]
+# ///
+# Run with any PEP 723 compatible runner, e.g.:
+#   uv run samples/autogen-migration/orchestrations/04_magentic_one.py
+
 # Copyright (c) Microsoft. All rights reserved.
 """AutoGen MagenticOneGroupChat vs Agent Framework MagenticBuilder.
 
@@ -91,21 +101,17 @@ async def run_agent_framework() -> None:
     )
 
     # Create Magentic workflow
-    workflow = (
-        MagenticBuilder()
-        .participants([researcher, coder, reviewer])
-        .with_manager(
-            agent=client.as_agent(
-                name="magentic_manager",
-                instructions="You coordinate a team to complete complex tasks efficiently.",
-                description="Orchestrator for team coordination",
-            ),
-            max_round_count=20,
-            max_stall_count=3,
-            max_reset_count=1,
-        )
-        .build()
-    )
+    workflow = MagenticBuilder(
+        participants=[researcher, coder, reviewer],
+        manager_agent=client.as_agent(
+            name="magentic_manager",
+            instructions="You coordinate a team to complete complex tasks efficiently.",
+            description="Orchestrator for team coordination",
+        ),
+        max_round_count=20,
+        max_stall_count=3,
+        max_reset_count=1,
+    ).build()
 
     # Run complex task
     last_message_id: str | None = None

@@ -2,6 +2,8 @@
 
 """Agent Framework entity discovery implementation."""
 
+from __future__ import annotations
+
 import ast
 import importlib
 import importlib.util
@@ -540,7 +542,7 @@ class EntityDiscovery:
 
         This safely checks for module-level assignments like:
         - agent = ChatAgent(...)
-        - workflow = WorkflowBuilder()...
+        - workflow = WorkflowBuilder(start_executor=...)...
 
         Args:
             file_path: Python file to check

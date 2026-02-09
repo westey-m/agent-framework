@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Moq;
+using Moq.Protected;
 
 namespace Microsoft.Agents.AI.Abstractions.UnitTests;
 
@@ -64,7 +65,8 @@ public sealed class ChatHistoryProviderMessageFilterTests
         var context = new ChatHistoryProvider.InvokingContext(s_mockAgent, s_mockSession, [new ChatMessage(ChatRole.User, "Test")]);
 
         innerProviderMock
-            .Setup(s => s.InvokingAsync(context, It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(expectedMessages);
 
         var filter = new ChatHistoryProviderMessageFilter(innerProviderMock.Object, x => x, x => x);
@@ -76,7 +78,9 @@ public sealed class ChatHistoryProviderMessageFilterTests
         Assert.Equal(2, result.Count);
         Assert.Equal("Hello", result[0].Text);
         Assert.Equal("Hi there!", result[1].Text);
-        innerProviderMock.Verify(s => s.InvokingAsync(context, It.IsAny<CancellationToken>()), Times.Once);
+        innerProviderMock
+            .Protected()
+            .Verify<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
     }
 
     [Fact]
@@ -93,7 +97,8 @@ public sealed class ChatHistoryProviderMessageFilterTests
         var context = new ChatHistoryProvider.InvokingContext(s_mockAgent, s_mockSession, [new ChatMessage(ChatRole.User, "Test")]);
 
         innerProviderMock
-            .Setup(s => s.InvokingAsync(context, It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(innerMessages);
 
         // Filter to only user messages
@@ -107,7 +112,9 @@ public sealed class ChatHistoryProviderMessageFilterTests
         // Assert
         Assert.Equal(2, result.Count);
         Assert.All(result, msg => Assert.Equal(ChatRole.User, msg.Role));
-        innerProviderMock.Verify(s => s.InvokingAsync(context, It.IsAny<CancellationToken>()), Times.Once);
+        innerProviderMock
+            .Protected()
+            .Verify<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", Times.Once(), ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>());
     }
 
     [Fact]
@@ -123,7 +130,8 @@ public sealed class ChatHistoryProviderMessageFilterTests
         var context = new ChatHistoryProvider.InvokingContext(s_mockAgent, s_mockSession, [new ChatMessage(ChatRole.User, "Test")]);
 
         innerProviderMock
-            .Setup(s => s.InvokingAsync(context, It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
             .ReturnsAsync(innerMessages);
 
         // Filter that transforms messages
@@ -146,28 +154,31 @@ public sealed class ChatHistoryProviderMessageFilterTests
     {
         // Arrange
         var innerProviderMock = new Mock<ChatHistoryProvider>();
-        var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
-        var chatHistoryProviderMessages = new List<ChatMessage> { new(ChatRole.System, "System") };
+        List<ChatMessage> requestMessages =
+        [
+            new(ChatRole.System, "System") { AdditionalProperties = new() { { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.ChatHistory } } },
+            new(ChatRole.User, "Hello"),
+        ];
         var responseMessages = new List<ChatMessage> { new(ChatRole.Assistant, "Response") };
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, chatHistoryProviderMessages)
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages)
         {
             ResponseMessages = responseMessages
         };
 
         ChatHistoryProvider.InvokedContext? capturedContext = null;
         innerProviderMock
-            .Setup(s => s.InvokedAsync(It.IsAny<ChatHistoryProvider.InvokedContext>(), It.IsAny<CancellationToken>()))
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
             .Callback<ChatHistoryProvider.InvokedContext, CancellationToken>((ctx, ct) => capturedContext = ctx)
             .Returns(default(ValueTask));
 
         // Filter that modifies the context
         ChatHistoryProvider.InvokedContext InvokedFilter(ChatHistoryProvider.InvokedContext ctx)
         {
-            var modifiedRequestMessages = ctx.RequestMessages.Select(m => new ChatMessage(m.Role, $"[FILTERED] {m.Text}")).ToList();
-            return new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, modifiedRequestMessages, ctx.ChatHistoryProviderMessages)
+            var modifiedRequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External).Select(m => new ChatMessage(m.Role, $"[FILTERED] {m.Text}")).ToList();
+            return new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, modifiedRequestMessages)
             {
                 ResponseMessages = ctx.ResponseMessages,
-                AIContextProviderMessages = ctx.AIContextProviderMessages,
                 InvokeException = ctx.InvokeException
             };
         }
@@ -181,6 +192,8 @@ public sealed class ChatHistoryProviderMessageFilterTests
         Assert.NotNull(capturedContext);
         Assert.Single(capturedContext.RequestMessages);
         Assert.Equal("[FILTERED] Hello", capturedContext.RequestMessages.First().Text);
-        innerProviderMock.Verify(s => s.InvokedAsync(It.IsAny<ChatHistoryProvider.InvokedContext>(), It.IsAny<CancellationToken>()), Times.Once);
+        innerProviderMock
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(), ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>());
     }
 }

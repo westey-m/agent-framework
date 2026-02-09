@@ -424,7 +424,7 @@ public sealed class TextSearchProviderTests
         // First memory update (A,B)
         await provider.InvokedAsync(new(
         s_mockAgent,
-        S_mockSession, 
+        s_mockSession,
         [
             new ChatMessage(ChatRole.User, "A"),
             new ChatMessage(ChatRole.Assistant, "B"),
@@ -475,7 +475,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "U2"),
             new ChatMessage(ChatRole.Assistant, "A2"),
         };
-        await provider.InvokedAsync(s_mockAgent, s_mockSession, new(initialMessages));
+        await provider.InvokedAsync(new(s_mockAgent, s_mockSession, initialMessages));
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -533,7 +533,7 @@ public sealed class TextSearchProviderTests
         };
 
         // Act
-        await provider.InvokedAsync(s_mockAgent, s_mockSession, new(messages)); // Populate recent memory.
+        await provider.InvokedAsync(new(s_mockAgent, s_mockSession, messages)); // Populate recent memory.
         var state = provider.Serialize();
 
         // Assert
@@ -562,7 +562,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "C"),
             new ChatMessage(ChatRole.Assistant, "D"),
         };
-        await provider.InvokedAsync(s_mockAgent, s_mockSession, new(messages));
+        await provider.InvokedAsync(new(s_mockAgent, s_mockSession, messages));
 
         // Act
         var state = provider.Serialize();
@@ -603,7 +603,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.Assistant, "L4"),
             new ChatMessage(ChatRole.User, "L5"),
         };
-        await initialProvider.InvokedAsync(s_mockAgent, s_mockSession, new(messages));
+        await initialProvider.InvokedAsync(new(s_mockAgent, s_mockSession, messages));
         var state = initialProvider.Serialize();
 
         string? capturedInput = null;

@@ -222,7 +222,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
         mockChatHistoryProvider
             .Protected()
             .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
-                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 2 && x.ResponseMessages!.Count() == 1),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 1 && x.ResponseMessages!.Count() == 1),
                 ItExpr.IsAny<CancellationToken>());
         mockFactory.Verify(f => f(It.IsAny<ChatClientAgentOptions.ChatHistoryProviderFactoryContext>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -366,7 +366,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
         mockOverrideChatHistoryProvider
             .Protected()
             .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
-                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 2 && x.ResponseMessages!.Count() == 1),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 1 && x.ResponseMessages!.Count() == 1),
                 ItExpr.IsAny<CancellationToken>());
 
         mockFactoryChatHistoryProvider

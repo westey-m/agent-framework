@@ -206,6 +206,7 @@ public sealed partial class ChatClientAgent : AIAgent
 
         (ChatClientAgentSession safeSession,
          ChatOptions? chatOptions,
+         List<ChatMessage> inputMessagesForProviders,
          List<ChatMessage> inputMessagesForChatClient,
          ChatClientAgentContinuationToken? continuationToken) =
             await this.PrepareSessionAndMessagesAsync(session, inputMessages, options, cancellationToken).ConfigureAwait(false);
@@ -225,12 +226,12 @@ public sealed partial class ChatClientAgent : AIAgent
         try
         {
             // Using the enumerator to ensure we consider the case where no updates are returned for notification.
-            responseUpdatesEnumerator = chatClient.GetStreamingResponseAsync(inputMessagesForChatClient, chatOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
+            responseUpdatesEnumerator = chatClient.GetStreamingResponseAsync(inputMessagesForProviders, chatOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
         }
         catch (Exception ex)
         {
-            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessages, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
-            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessages, continuationToken), cancellationToken).ConfigureAwait(false);
+            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForProviders, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
+            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForProviders, continuationToken), cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -244,8 +245,8 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessages, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
-            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessages, continuationToken), cancellationToken).ConfigureAwait(false);
+            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForProviders, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
+            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForProviders, continuationToken), cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -271,8 +272,8 @@ public sealed partial class ChatClientAgent : AIAgent
             }
             catch (Exception ex)
             {
-                await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessages, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
-                await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessages, continuationToken), cancellationToken).ConfigureAwait(false);
+                await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForProviders, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
+                await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForProviders, continuationToken), cancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
@@ -284,10 +285,10 @@ public sealed partial class ChatClientAgent : AIAgent
         await this.UpdateSessionWithTypeAndConversationIdAsync(safeSession, chatResponse.ConversationId, cancellationToken).ConfigureAwait(false);
 
         // To avoid inconsistent state we only notify the session of the input messages if no error occurs after the initial request.
-        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, GetInputMessages(inputMessages, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, GetInputMessages(inputMessagesForProviders, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
 
         // Notify the AIContextProvider of all new messages.
-        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, GetInputMessages(inputMessages, continuationToken), chatResponse.Messages, cancellationToken).ConfigureAwait(false);
+        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, GetInputMessages(inputMessagesForProviders, continuationToken), chatResponse.Messages, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -431,6 +432,7 @@ public sealed partial class ChatClientAgent : AIAgent
 
         (ChatClientAgentSession safeSession,
          ChatOptions? chatOptions,
+         List<ChatMessage> inputMessagesForProviders,
          List<ChatMessage> inputMessagesForChatClient,
          ChatClientAgentContinuationToken? _) =
             await this.PrepareSessionAndMessagesAsync(session, inputMessages, options, cancellationToken).ConfigureAwait(false);
@@ -451,8 +453,8 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, inputMessages, chatOptions, cancellationToken).ConfigureAwait(false);
-            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, inputMessages, cancellationToken).ConfigureAwait(false);
+            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, inputMessagesForProviders, chatOptions, cancellationToken).ConfigureAwait(false);
+            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, inputMessagesForProviders, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -469,10 +471,10 @@ public sealed partial class ChatClientAgent : AIAgent
         }
 
         // Only notify the session of new messages if the chatResponse was successful to avoid inconsistent message state in the session.
-        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, inputMessages, chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, inputMessagesForProviders, chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
 
         // Notify the AIContextProvider of all new messages.
-        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, inputMessages, chatResponse.Messages, cancellationToken).ConfigureAwait(false);
+        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, inputMessagesForProviders, chatResponse.Messages, cancellationToken).ConfigureAwait(false);
 
         var agentResponse = agentResponseFactoryFunc(chatResponse);
 
@@ -677,6 +679,7 @@ public sealed partial class ChatClientAgent : AIAgent
         <(
             ChatClientAgentSession AgentSession,
             ChatOptions? ChatOptions,
+            List<ChatMessage> inputMessagesForProviders,
             List<ChatMessage> InputMessagesForChatClient,
             ChatClientAgentContinuationToken? ContinuationToken
         )> PrepareSessionAndMessagesAsync(
@@ -706,6 +709,7 @@ public sealed partial class ChatClientAgent : AIAgent
             throw new InvalidOperationException("Input messages are not allowed when continuing a background response using a continuation token.");
         }
 
+        List<ChatMessage> inputMessagesForProviders = [];
         List<ChatMessage> inputMessagesForChatClient = [];
 
         // Populate the session messages only if we are not continuing an existing response as it's not allowed
@@ -722,6 +726,7 @@ public sealed partial class ChatClientAgent : AIAgent
             }
 
             // Add the input messages before getting context from AIContextProvider.
+            inputMessagesForProviders.AddRange(inputMessages);
             inputMessagesForChatClient.AddRange(inputMessages);
 
             // If we have an AIContextProvider, we should get context from it, and update our
@@ -732,6 +737,7 @@ public sealed partial class ChatClientAgent : AIAgent
                 var aiContext = await typedSession.AIContextProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
                 if (aiContext.Messages is { Count: > 0 })
                 {
+                    inputMessagesForProviders.AddRange(aiContext.Messages);
                     inputMessagesForChatClient.AddRange(aiContext.Messages);
                 }
 
@@ -771,7 +777,7 @@ public sealed partial class ChatClientAgent : AIAgent
             chatOptions.ConversationId = typedSession.ConversationId;
         }
 
-        return (typedSession, chatOptions, inputMessagesForChatClient, continuationToken);
+        return (typedSession, chatOptions, inputMessagesForProviders, inputMessagesForChatClient, continuationToken);
     }
 
     private async Task UpdateSessionWithTypeAndConversationIdAsync(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)

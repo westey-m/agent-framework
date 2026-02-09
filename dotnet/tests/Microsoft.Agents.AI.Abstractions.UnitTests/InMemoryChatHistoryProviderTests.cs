@@ -626,7 +626,7 @@ public class InMemoryChatHistoryProviderTests
         {
             new(ChatRole.Assistant, "Hi there!")
         };
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, [])
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages)
         {
             ResponseMessages = responseMessages,
             InvokeException = new InvalidOperationException("Test exception")

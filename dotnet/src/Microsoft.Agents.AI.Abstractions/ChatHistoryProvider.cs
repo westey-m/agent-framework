@@ -298,7 +298,7 @@ public abstract class ChatHistoryProvider
         public InvokedContext(
             AIAgent agent,
             AgentSession? session,
-            IEnumerable<ChatMessage> requestMessages,)
+            IEnumerable<ChatMessage> requestMessages)
         {
             this.Agent = Throw.IfNull(agent);
             this.Session = session;

@@ -161,7 +161,7 @@ public sealed class ChatHistoryProviderMessageFilterTests
             new(ChatRole.User, "Hello"),
         ];
         var responseMessages = new List<ChatMessage> { new(ChatRole.Assistant, "Response") };
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, s_mockAgent, s_mockSession, requestMessages)
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages)
         {
             ResponseMessages = responseMessages
         };

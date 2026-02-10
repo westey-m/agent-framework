@@ -114,7 +114,7 @@ public sealed class Mem0Provider : AIContextProvider
         string queryText = string.Join(
             Environment.NewLine,
             context.RequestMessages
-                .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+                .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                 .Where(m => !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
 
@@ -197,7 +197,7 @@ public sealed class Mem0Provider : AIContextProvider
             await this.PersistMessagesAsync(
                 storageScope,
                 context.RequestMessages
-                    .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+                    .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                     .Concat(context.ResponseMessages ?? []),
                 cancellationToken).ConfigureAwait(false);
         }

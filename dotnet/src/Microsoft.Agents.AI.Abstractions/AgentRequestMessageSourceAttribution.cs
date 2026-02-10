@@ -16,7 +16,8 @@ namespace Microsoft.Agents.AI;
 public readonly struct AgentRequestMessageSourceAttribution : IEquatable<AgentRequestMessageSourceAttribution>
 {
     /// <summary>
-    /// Provides the key used in <see cref="ChatMessage.AdditionalProperties"/> to store the source type of the agent request message.
+    /// Provides the key used in <see cref="ChatMessage.AdditionalProperties"/> to store the <see cref="AgentRequestMessageSourceAttribution"/>
+    /// associated with the agent request message.
     /// </summary>
     public static readonly string AdditionalPropertiesKey = "attribution";
 

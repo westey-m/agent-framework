@@ -125,7 +125,7 @@ namespace SampleApp
 
             var messages = records.ConvertAll(x => JsonSerializer.Deserialize<ChatMessage>(x.SerializedMessage!)!);
             messages.Reverse();
-            return messages;
+            return messages.Concat(context.RequestMessages);
         }
 
         protected override async ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)

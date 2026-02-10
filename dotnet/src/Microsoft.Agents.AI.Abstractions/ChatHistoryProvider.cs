@@ -241,7 +241,7 @@ public abstract class ChatHistoryProvider
         /// </summary>
         /// <param name="agent">The agent being invoked.</param>
         /// <param name="session">The session associated with the agent invocation.</param>
-        /// <param name="requestMessages">The new messages to be used by the agent for this invocation.</param>
+        /// <param name="requestMessages">The messages to be used by the agent for this invocation.</param>
         /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
         public InvokingContext(
             AIAgent agent,
@@ -264,11 +264,22 @@ public abstract class ChatHistoryProvider
         public AgentSession? Session { get; }
 
         /// <summary>
-        /// Gets the caller provided messages that will be used by the agent for this invocation.
+        /// Gets the messages that will be used by the agent for this invocation. <see cref="ChatHistoryProvider"/> instances can modify
+        /// and return or return a new message list to add additional messages for the invocation.
         /// </summary>
         /// <value>
-        /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
+        /// A collection of <see cref="ChatMessage"/> instances representing the messages that will be used by the agent for this invocation.
         /// </value>
+        /// <remarks>
+        /// <para>
+        /// If multiple <see cref="ChatHistoryProvider"/> instances are used in the same invocation, each <see cref="ChatHistoryProvider"/>
+        /// will receive the messages returned by the previous <see cref="ChatHistoryProvider"/> allowing them to build on top of each other's context.
+        /// </para>
+        /// <para>
+        /// The first <see cref="ChatHistoryProvider"/> in the invocation pipeline will receive the
+        /// caller provided messages.
+        /// </para>
+        /// </remarks>
         public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
     }
 

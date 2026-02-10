@@ -80,7 +80,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
         var mockSession = new TestAgentSession();
         var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), options: new() { EnableSensitiveTelemetryData = true }, loggerFactory: this._loggerFactoryMock.Object);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, [new ChatMessage(ChatRole.User, "What is my name?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "What is my name?") } });
 
         // Act
         var aiContext = await sut.InvokingAsync(invokingContext);
@@ -95,7 +95,8 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.Equal("What is my name?", doc.RootElement.GetProperty("query").GetString());
 
         Assert.NotNull(aiContext.Messages);
-        var contextMessage = Assert.Single(aiContext.Messages);
+        Assert.Equal(2, aiContext.Messages.Count);
+        var contextMessage = aiContext.Messages[1];
         Assert.Equal(ChatRole.User, contextMessage.Role);
         Assert.Contains("Name is Caoimhe", contextMessage.Text);
 
@@ -146,7 +147,7 @@ public sealed class Mem0ProviderTests : IDisposable
         var mockSession = new TestAgentSession();
 
         var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), options: options, loggerFactory: this._loggerFactoryMock.Object);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, [new ChatMessage(ChatRole.User, "Who am I?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Who am I?") } });
 
         // Act
         await sut.InvokingAsync(invokingContext, CancellationToken.None);
@@ -348,13 +349,14 @@ public sealed class Mem0ProviderTests : IDisposable
         var storageScope = new Mem0ProviderScope { ApplicationId = "app" };
         var mockSession = new TestAgentSession();
         var provider = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), loggerFactory: this._loggerFactoryMock.Object);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
-        Assert.Null(aiContext.Messages);
+        Assert.NotNull(aiContext.Messages);
+        Assert.Single(aiContext.Messages);
         Assert.Null(aiContext.Tools);
         this._loggerMock.Verify(
             l => l.Log(
@@ -380,7 +382,7 @@ public sealed class Mem0ProviderTests : IDisposable
             initializerCallCount++;
             return new Mem0Provider.State(storageScope);
         });
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         await sut.InvokingAsync(invokingContext, CancellationToken.None);
@@ -399,7 +401,7 @@ public sealed class Mem0ProviderTests : IDisposable
         var mockSession = new TestAgentSession();
         const string CustomKey = "MyCustomKey";
         var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), options: new() { StateKey = CustomKey });
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         await sut.InvokingAsync(invokingContext, CancellationToken.None);

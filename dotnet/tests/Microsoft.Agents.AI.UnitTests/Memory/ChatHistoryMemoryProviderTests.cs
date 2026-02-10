@@ -352,7 +352,7 @@ public class ChatHistoryMemoryProviderTests
             options: providerOptions);
 
         var requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [requestMsg]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { requestMsg } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -408,7 +408,7 @@ public class ChatHistoryMemoryProviderTests
             options: providerOptions);
 
         var requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [requestMsg]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { requestMsg } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -471,7 +471,7 @@ public class ChatHistoryMemoryProviderTests
             options: options,
             loggerFactory: this._loggerFactoryMock.Object);
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "requesting relevant history")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "requesting relevant history") } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);

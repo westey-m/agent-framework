@@ -31,7 +31,10 @@ public class ChatHistoryProviderTests
         IEnumerable<ChatMessage> messages = await provider.InvokingAsync(context);
 
         // Assert
-        ChatMessage message = messages.Single();
+        List<ChatMessage> messageList = messages.ToList();
+        Assert.Equal(2, messageList.Count);
+
+        ChatMessage message = messageList.First();
         Assert.NotNull(message.AdditionalProperties);
         Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out object? sourceType));
         Assert.Equal(AgentRequestMessageSourceType.ChatHistory, sourceType);
@@ -51,7 +54,10 @@ public class ChatHistoryProviderTests
         IEnumerable<ChatMessage> messages = await provider.InvokingAsync(context);
 
         // Assert
-        ChatMessage message = messages.Single();
+        List<ChatMessage> messageList = messages.ToList();
+        Assert.Equal(2, messageList.Count);
+
+        ChatMessage message = messageList.First();
         Assert.NotNull(message.AdditionalProperties);
         Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out object? sourceType));
         Assert.Equal(AgentRequestMessageSourceType.ChatHistory, sourceType);
@@ -70,7 +76,10 @@ public class ChatHistoryProviderTests
         IEnumerable<ChatMessage> messages = await provider.InvokingAsync(context);
 
         // Assert
-        ChatMessage message = messages.Single();
+        List<ChatMessage> messageList = messages.ToList();
+        Assert.Equal(2, messageList.Count);
+
+        ChatMessage message = messageList.First();
         Assert.NotNull(message.AdditionalProperties);
         Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out object? sourceType));
         Assert.Equal(AgentRequestMessageSourceType.ChatHistory, sourceType);
@@ -90,7 +99,7 @@ public class ChatHistoryProviderTests
 
         // Assert
         List<ChatMessage> messageList = messages.ToList();
-        Assert.Equal(3, messageList.Count);
+        Assert.Equal(4, messageList.Count);
 
         foreach (ChatMessage message in messageList)
         {
@@ -371,7 +380,7 @@ public class ChatHistoryProviderTests
     private sealed class TestChatHistoryProvider : ChatHistoryProvider
     {
         protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-            => new([new ChatMessage(ChatRole.User, "Test Message")]);
+            => new(new ChatMessage[] { new(ChatRole.User, "Test Message") }.Concat(context.RequestMessages));
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
             => default;
@@ -384,7 +393,7 @@ public class ChatHistoryProviderTests
         }
 
         protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-            => new([new ChatMessage(ChatRole.User, "Test Message")]);
+            => new(new ChatMessage[] { new(ChatRole.User, "Test Message") }.Concat(context.RequestMessages));
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
             => default;
@@ -400,7 +409,7 @@ public class ChatHistoryProviderTests
                 [AgentRequestMessageSourceType.AdditionalPropertiesKey] = AgentRequestMessageSourceType.ChatHistory,
                 [AgentRequestMessageSource.AdditionalPropertiesKey] = this.GetType().FullName!
             };
-            return new([message]);
+            return new(new ChatMessage[] { message }.Concat(context.RequestMessages));
         }
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
@@ -410,11 +419,12 @@ public class ChatHistoryProviderTests
     private sealed class TestChatHistoryProviderWithMultipleMessages : ChatHistoryProvider
     {
         protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-            => new([
-                new ChatMessage(ChatRole.User, "Message 1"),
-                new ChatMessage(ChatRole.Assistant, "Message 2"),
-                new ChatMessage(ChatRole.User, "Message 3")
-            ]);
+            => new(new ChatMessage[]
+            {
+                new(ChatRole.User, "Message 1"),
+                new(ChatRole.Assistant, "Message 2"),
+                new(ChatRole.User, "Message 3")
+            }.Concat(context.RequestMessages));
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
             => default;

@@ -53,7 +53,7 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
         => this.GetOrInitializeState(session).Messages.AddRange(messages);
 
     protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-        => new(this.GetOrInitializeState(context.Session).Messages.AsReadOnly());
+        => new(this.GetOrInitializeState(context.Session).Messages.AsReadOnly().Concat(context.RequestMessages));
 
     protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
     {

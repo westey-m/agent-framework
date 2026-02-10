@@ -114,7 +114,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
             state.Messages = (await this.ChatReducer.ReduceAsync(state.Messages, cancellationToken).ConfigureAwait(false)).ToList();
         }
 
-        return state.Messages;
+        return state.Messages.Concat(context.RequestMessages);
     }
 
     /// <inheritdoc />

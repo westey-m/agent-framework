@@ -256,7 +256,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
             messages.Reverse();
         }
 
-        return messages;
+        return messages.Concat(context.RequestMessages);
     }
 
     /// <inheritdoc />

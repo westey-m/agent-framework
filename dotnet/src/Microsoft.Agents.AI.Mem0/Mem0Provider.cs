@@ -106,12 +106,13 @@ public sealed class Mem0Provider : AIContextProvider
     {
         Throw.IfNull(context);
 
+        var inputContext = context.AIContext;
         var state = this.GetOrInitializeState(context.Session);
         var searchScope = state?.SearchScope ?? new Mem0ProviderScope();
 
         string queryText = string.Join(
             Environment.NewLine,
-            context.RequestMessages
+            (inputContext.Messages ?? [])
                 .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
                 .Where(m => !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
@@ -155,7 +156,9 @@ public sealed class Mem0Provider : AIContextProvider
 
             return new AIContext
             {
-                Messages = [new ChatMessage(ChatRole.User, outputMessageText)]
+                Instructions = inputContext.Instructions,
+                Messages = (inputContext.Messages ?? []).Concat([new ChatMessage(ChatRole.User, outputMessageText)]).ToList(),
+                Tools = inputContext.Tools
             };
         }
         catch (ArgumentException)
@@ -174,7 +177,7 @@ public sealed class Mem0Provider : AIContextProvider
                     searchScope.ThreadId,
                     this.SanitizeLogData(searchScope.UserId));
             }
-            return new AIContext();
+            return inputContext;
         }
     }
 

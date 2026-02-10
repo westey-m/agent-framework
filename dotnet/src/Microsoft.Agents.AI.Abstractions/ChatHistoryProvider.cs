@@ -37,23 +37,23 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public abstract class ChatHistoryProvider
 {
-    private readonly string _sourceName;
+    private readonly string _sourceId;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class.
     /// </summary>
     protected ChatHistoryProvider()
     {
-        this._sourceName = this.GetType().FullName!;
+        this._sourceId = this.GetType().FullName!;
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class with the specified source name.
+    /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class with the specified source id.
     /// </summary>
-    /// <param name="sourceName">The source name to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="ChatHistoryProvider"/>.</param>
-    protected ChatHistoryProvider(string sourceName)
+    /// <param name="sourceId">The source id to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="ChatHistoryProvider"/>.</param>
+    protected ChatHistoryProvider(string sourceId)
     {
-        this._sourceName = sourceName;
+        this._sourceId = sourceId;
     }
 
     /// <summary>
@@ -92,22 +92,19 @@ public abstract class ChatHistoryProvider
         return messages.Select(message =>
         {
             if (message.AdditionalProperties != null
-                // Check if the message was already tagged with this provider's source type
-                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceType.AdditionalPropertiesKey, out var messageSourceType)
-                && messageSourceType is AgentRequestMessageSourceType typedMessageSourceType
-                && typedMessageSourceType == AgentRequestMessageSourceType.ChatHistory
-                // Check if the message was already tagged with this provider's source
-                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSource.AdditionalPropertiesKey, out var messageSource)
-                && messageSource is string typedMessageSource
-                && typedMessageSource == this._sourceName)
+                // Check if the message was already tagged with this provider's source type and source id
+                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out var messageSourceAttribution)
+                && messageSourceAttribution is AgentRequestMessageSourceAttribution typedMessageSourceAttribution
+                && typedMessageSourceAttribution.SourceType == AgentRequestMessageSourceType.ChatHistory
+                && typedMessageSourceAttribution.SourceId == this._sourceId)
             {
                 return message;
             }
 
             message = message.Clone();
             message.AdditionalProperties ??= new();
-            message.AdditionalProperties[AgentRequestMessageSourceType.AdditionalPropertiesKey] = AgentRequestMessageSourceType.ChatHistory;
-            message.AdditionalProperties[AgentRequestMessageSource.AdditionalPropertiesKey] = this._sourceName;
+            message.AdditionalProperties[AgentRequestMessageSourceAttribution.AdditionalPropertiesKey] =
+                new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, this._sourceId);
             return message;
         });
     }

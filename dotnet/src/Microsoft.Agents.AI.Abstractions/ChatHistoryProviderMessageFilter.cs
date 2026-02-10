@@ -48,6 +48,9 @@ public sealed class ChatHistoryProviderMessageFilter : ChatHistoryProvider
     }
 
     /// <inheritdoc />
+    public override string StateKey => this._innerProvider.StateKey;
+
+    /// <inheritdoc />
     protected override async ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         var messages = await this._innerProvider.InvokingAsync(context, cancellationToken).ConfigureAwait(false);

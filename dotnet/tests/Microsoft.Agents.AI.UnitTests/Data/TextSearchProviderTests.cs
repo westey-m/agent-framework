@@ -38,6 +38,28 @@ public sealed class TextSearchProviderTests
             .Returns(true);
     }
 
+    [Fact]
+    public void StateKey_ReturnsDefaultKey_WhenNoOptionsProvided()
+    {
+        // Arrange & Act
+        var provider = new TextSearchProvider((_, _) => Task.FromResult<IEnumerable<TextSearchProvider.TextSearchResult>>([]));
+
+        // Assert
+        Assert.Equal("TextSearchProvider", provider.StateKey);
+    }
+
+    [Fact]
+    public void StateKey_ReturnsCustomKey_WhenSetViaOptions()
+    {
+        // Arrange & Act
+        var provider = new TextSearchProvider(
+            (_, _) => Task.FromResult<IEnumerable<TextSearchProvider.TextSearchResult>>([]),
+            new TextSearchProviderOptions { StateKey = "custom-key" });
+
+        // Assert
+        Assert.Equal("custom-key", provider.StateKey);
+    }
+
     [Theory]
     [InlineData(null, null, true)]
     [InlineData("Custom context prompt", "Custom citations prompt", false)]
@@ -523,7 +545,7 @@ public sealed class TextSearchProviderTests
 
         // Assert - State should be in the session's StateBag
         var stateBagSerialized = session.StateBag.Serialize();
-        Assert.True(stateBagSerialized.TryGetProperty("TextSearchProvider.RecentMessagesText", out var stateProperty));
+        Assert.True(stateBagSerialized.TryGetProperty("TextSearchProvider", out var stateProperty));
         Assert.True(stateProperty.TryGetProperty("recentMessagesText", out var recentProperty));
         Assert.Equal(JsonValueKind.Array, recentProperty.ValueKind);
         var list = recentProperty.EnumerateArray().Select(e => e.GetString()).ToList();

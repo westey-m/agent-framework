@@ -21,8 +21,6 @@ namespace Microsoft.Agents.AI;
 [RequiresDynamicCode("The CosmosChatHistoryProvider uses JSON serialization which is incompatible with NativeAOT.")]
 public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
 {
-    private const string DefaultStateBagKey = "CosmosChatHistoryProvider.State";
-
     private readonly CosmosClient _cosmosClient;
     private readonly Container _container;
     private readonly bool _ownsClient;
@@ -44,6 +42,9 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
 #endif
         return options;
     }
+
+    /// <inheritdoc />
+    public override string StateKey => this._stateKey;
 
     /// <summary>
     /// Gets or sets the maximum number of messages to return in a single query batch.
@@ -105,7 +106,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
         this._container = this._cosmosClient.GetContainer(databaseId, containerId);
         this._stateInitializer = Throw.IfNull(stateInitializer);
         this._ownsClient = ownsClient;
-        this._stateKey = stateKey ?? DefaultStateBagKey;
+        this._stateKey = stateKey ?? base.StateKey;
     }
 
     /// <summary>

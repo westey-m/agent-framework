@@ -22,6 +22,6 @@ public sealed class Mem0ProviderOptions
     /// <summary>
     /// Gets or sets the key used to store the provider state in the session's <see cref="AgentSessionStateBag"/>.
     /// </summary>
-    /// <value>Defaults to "Mem0Provider.State".</value>
+    /// <value>Defaults to the provider's type name.</value>
     public string? StateKey { get; set; }
 }

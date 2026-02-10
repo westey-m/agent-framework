@@ -51,6 +51,16 @@ public abstract class AIContextProvider
     }
 
     /// <summary>
+    /// Gets the key used to store the provider state in the <see cref="AgentSession.StateBag"/>.
+    /// </summary>
+    /// <remarks>
+    /// The default value is the name of the concrete type (e.g. <c>"TextSearchProvider"</c>).
+    /// Implementations may override this to provide a custom key, for example when multiple
+    /// instances of the same provider type are used in the same session.
+    /// </remarks>
+    public virtual string StateKey => this.GetType().Name;
+
+    /// <summary>
     /// Called at the start of agent invocation to provide additional context.
     /// </summary>
     /// <param name="context">Contains the request context including the caller provided messages that will be used by the agent for this invocation.</param>

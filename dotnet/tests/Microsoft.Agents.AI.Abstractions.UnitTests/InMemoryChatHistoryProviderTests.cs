@@ -43,6 +43,26 @@ public class InMemoryChatHistoryProviderTests
     }
 
     [Fact]
+    public void StateKey_ReturnsDefaultKey_WhenNoOptionsProvided()
+    {
+        // Arrange & Act
+        var provider = new InMemoryChatHistoryProvider();
+
+        // Assert
+        Assert.Equal("InMemoryChatHistoryProvider", provider.StateKey);
+    }
+
+    [Fact]
+    public void StateKey_ReturnsCustomKey_WhenSetViaOptions()
+    {
+        // Arrange & Act
+        var provider = new InMemoryChatHistoryProvider(new() { StateKey = "custom-key" });
+
+        // Assert
+        Assert.Equal("custom-key", provider.StateKey);
+    }
+
+    [Fact]
     public async Task InvokedAsyncAddsMessagesAsync()
     {
         var session = CreateMockSession();

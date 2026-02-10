@@ -11,7 +11,6 @@ namespace Microsoft.Agents.AI.Workflows;
 
 internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
 {
-    private const string DefaultStateBagKey = "WorkflowChatHistoryProvider.State";
     private readonly JsonSerializerOptions _jsonSerializerOptions;
 
     /// <summary>
@@ -35,7 +34,7 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
 
     private StoreState GetOrInitializeState(AgentSession? session)
     {
-        if (session?.StateBag.TryGetValue<StoreState>(DefaultStateBagKey, out var state, this._jsonSerializerOptions) is true && state is not null)
+        if (session?.StateBag.TryGetValue<StoreState>(this.StateKey, out var state, this._jsonSerializerOptions) is true && state is not null)
         {
             return state;
         }
@@ -43,7 +42,7 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
         state = new();
         if (session is not null)
         {
-            session.StateBag.SetValue(DefaultStateBagKey, state, this._jsonSerializerOptions);
+            session.StateBag.SetValue(this.StateKey, state, this._jsonSerializerOptions);
         }
 
         return state;

@@ -150,6 +150,35 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
 
     [SkippableFact]
     [Trait("Category", "CosmosDB")]
+    public void StateKey_ReturnsDefaultKey_WhenNoStateKeyProvided()
+    {
+        // Arrange & Act
+        this.SkipIfEmulatorNotAvailable();
+
+        using var provider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
+            _ => new CosmosChatHistoryProvider.State("test-conversation"));
+
+        // Assert
+        Assert.Equal("CosmosChatHistoryProvider", provider.StateKey);
+    }
+
+    [SkippableFact]
+    [Trait("Category", "CosmosDB")]
+    public void StateKey_ReturnsCustomKey_WhenSetViaConstructor()
+    {
+        // Arrange & Act
+        this.SkipIfEmulatorNotAvailable();
+
+        using var provider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
+            _ => new CosmosChatHistoryProvider.State("test-conversation"),
+            stateKey: "custom-key");
+
+        // Assert
+        Assert.Equal("custom-key", provider.StateKey);
+    }
+
+    [SkippableFact]
+    [Trait("Category", "CosmosDB")]
     public void Constructor_WithConnectionString_ShouldCreateInstance()
     {
         // Arrange & Act
@@ -273,7 +302,7 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
             new ChatMessage(ChatRole.User, "First message"),
             new ChatMessage(ChatRole.Assistant, "Second message"),
             new ChatMessage(ChatRole.User, "Third message"),
-            new ChatMessage(ChatRole.System, "System context message") { AdditionalProperties = new() { { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.AIContextProvider } } }
+            new ChatMessage(ChatRole.System, "System context message") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "TestSource") } } }
         };
         var responseMessages = new[]
         {

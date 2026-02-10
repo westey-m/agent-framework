@@ -38,7 +38,6 @@ public sealed class TextSearchProvider : AIContextProvider
     private const string DefaultPluginSearchFunctionDescription = "Allows searching for additional information to help answer the user question.";
     private const string DefaultContextPrompt = "## Additional Context\nConsider the following information from source documents when responding to the user:";
     private const string DefaultCitationsPrompt = "Include citations to the source document with document name and link if document name and link is available.";
-    private const string DefaultStateBagKey = "TextSearchProvider.RecentMessagesText";
 
     private readonly Func<string, CancellationToken, Task<IEnumerable<TextSearchResult>>> _searchAsync;
     private readonly ILogger<TextSearchProvider>? _logger;
@@ -71,7 +70,7 @@ public sealed class TextSearchProvider : AIContextProvider
         this._searchTime = options?.SearchTime ?? TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke;
         this._contextPrompt = options?.ContextPrompt ?? DefaultContextPrompt;
         this._citationsPrompt = options?.CitationsPrompt ?? DefaultCitationsPrompt;
-        this._stateKey = options?.StateKey ?? DefaultStateBagKey;
+        this._stateKey = options?.StateKey ?? base.StateKey;
         this._contextFormatter = options?.ContextFormatter;
 
         // Create the on-demand search tool (only used if behavior is OnDemandFunctionCalling)
@@ -83,6 +82,9 @@ public sealed class TextSearchProvider : AIContextProvider
                 description: options?.FunctionToolDescription ?? DefaultPluginSearchFunctionDescription)
         ];
     }
+
+    /// <inheritdoc />
+    public override string StateKey => this._stateKey;
 
     /// <inheritdoc />
     protected override async ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
@@ -107,7 +109,7 @@ public sealed class TextSearchProvider : AIContextProvider
         // Aggregate text from memory + current request messages.
         var sbInput = new StringBuilder();
         var requestMessagesText = (inputContext.Messages ?? [])
-            .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+            .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
             .Where(x => !string.IsNullOrWhiteSpace(x?.Text)).Select(x => x.Text);
         foreach (var messageText in recentMessagesText.Concat(requestMessagesText))
         {
@@ -182,7 +184,7 @@ public sealed class TextSearchProvider : AIContextProvider
             ?? [];
 
         var newMessagesText = context.RequestMessages
-            .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+            .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
             .Concat(context.ResponseMessages ?? [])
             .Where(m =>
                 this._recentMessageRolesIncluded.Contains(m.Role) &&

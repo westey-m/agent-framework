@@ -56,6 +56,35 @@ public class ChatHistoryMemoryProviderTests
     }
 
     [Fact]
+    public void StateKey_ReturnsDefaultKey_WhenNoOptionsProvided()
+    {
+        // Arrange & Act
+        var provider = new ChatHistoryMemoryProvider(
+            this._vectorStoreMock.Object,
+            TestCollectionName,
+            1,
+            _ => new ChatHistoryMemoryProvider.State(new ChatHistoryMemoryProviderScope { UserId = "UID" }));
+
+        // Assert
+        Assert.Equal("ChatHistoryMemoryProvider", provider.StateKey);
+    }
+
+    [Fact]
+    public void StateKey_ReturnsCustomKey_WhenSetViaOptions()
+    {
+        // Arrange & Act
+        var provider = new ChatHistoryMemoryProvider(
+            this._vectorStoreMock.Object,
+            TestCollectionName,
+            1,
+            _ => new ChatHistoryMemoryProvider.State(new ChatHistoryMemoryProviderScope { UserId = "UID" }),
+            new ChatHistoryMemoryProviderOptions { StateKey = "custom-key" });
+
+        // Assert
+        Assert.Equal("custom-key", provider.StateKey);
+    }
+
+    [Fact]
     public void Constructor_Throws_ForNullVectorStore()
     {
         // Act & Assert

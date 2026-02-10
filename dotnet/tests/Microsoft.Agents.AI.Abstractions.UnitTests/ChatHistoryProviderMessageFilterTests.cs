@@ -53,6 +53,20 @@ public sealed class ChatHistoryProviderMessageFilterTests
     }
 
     [Fact]
+    public void StateKey_DelegatesToInnerProvider()
+    {
+        // Arrange
+        var innerProviderMock = new Mock<ChatHistoryProvider>();
+        innerProviderMock.Setup(p => p.StateKey).Returns("inner-state-key");
+
+        // Act
+        var filter = new ChatHistoryProviderMessageFilter(innerProviderMock.Object, x => x);
+
+        // Assert
+        Assert.Equal("inner-state-key", filter.StateKey);
+    }
+
+    [Fact]
     public async Task InvokingAsync_WithNoOpFilters_ReturnsInnerProviderMessagesAsync()
     {
         // Arrange
@@ -156,7 +170,7 @@ public sealed class ChatHistoryProviderMessageFilterTests
         var innerProviderMock = new Mock<ChatHistoryProvider>();
         List<ChatMessage> requestMessages =
         [
-            new(ChatRole.System, "System") { AdditionalProperties = new() { { AgentRequestMessageSourceType.AdditionalPropertiesKey, AgentRequestMessageSourceType.ChatHistory } } },
+            new(ChatRole.System, "System") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "TestSource") } } },
             new(ChatRole.User, "Hello"),
         ];
         var responseMessages = new List<ChatMessage> { new(ChatRole.Assistant, "Response") };
@@ -175,7 +189,7 @@ public sealed class ChatHistoryProviderMessageFilterTests
         // Filter that modifies the context
         ChatHistoryProvider.InvokedContext InvokedFilter(ChatHistoryProvider.InvokedContext ctx)
         {
-            var modifiedRequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External).Select(m => new ChatMessage(m.Role, $"[FILTERED] {m.Text}")).ToList();
+            var modifiedRequestMessages = ctx.RequestMessages.Where(x => x.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External).Select(m => new ChatMessage(m.Role, $"[FILTERED] {m.Text}")).ToList();
             return new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, modifiedRequestMessages)
             {
                 ResponseMessages = ctx.ResponseMessages,

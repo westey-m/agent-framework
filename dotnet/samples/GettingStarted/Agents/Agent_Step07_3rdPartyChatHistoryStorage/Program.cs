@@ -75,11 +75,12 @@ namespace SampleApp
     /// </summary>
     internal sealed class VectorChatHistoryProvider : ChatHistoryProvider
     {
-        private const string DefaultStateBagKey = "VectorChatHistoryProvider.State";
-
         private readonly VectorStore _vectorStore;
         private readonly Func<AgentSession?, State> _stateInitializer;
         private readonly string _stateKey;
+
+        /// <inheritdoc />
+        public override string StateKey => this._stateKey;
 
         public VectorChatHistoryProvider(
             VectorStore vectorStore,
@@ -88,7 +89,7 @@ namespace SampleApp
         {
             this._vectorStore = vectorStore ?? throw new ArgumentNullException(nameof(vectorStore));
             this._stateInitializer = stateInitializer ?? (_ => new State(Guid.NewGuid().ToString("N")));
-            this._stateKey = stateKey ?? DefaultStateBagKey;
+            this._stateKey = stateKey ?? base.StateKey;
         }
 
         public string GetSessionDbKey(AgentSession session)

@@ -25,7 +25,6 @@ namespace Microsoft.Agents.AI.Mem0;
 public sealed class Mem0Provider : AIContextProvider
 {
     private const string DefaultContextPrompt = "## Memories\nConsider the following memories when answering user questions:";
-    private const string DefaultStateBagKey = "Mem0Provider.State";
 
     private readonly string _contextPrompt;
     private readonly bool _enableSensitiveTelemetryData;
@@ -67,8 +66,11 @@ public sealed class Mem0Provider : AIContextProvider
 
         this._contextPrompt = options?.ContextPrompt ?? DefaultContextPrompt;
         this._enableSensitiveTelemetryData = options?.EnableSensitiveTelemetryData ?? false;
-        this._stateKey = options?.StateKey ?? DefaultStateBagKey;
+        this._stateKey = options?.StateKey ?? base.StateKey;
     }
+
+    /// <inheritdoc />
+    public override string StateKey => this._stateKey;
 
     /// <summary>
     /// Gets the state from the session's StateBag, or initializes it using the StateInitializer if not present.
@@ -113,7 +115,7 @@ public sealed class Mem0Provider : AIContextProvider
         string queryText = string.Join(
             Environment.NewLine,
             (inputContext.Messages ?? [])
-                .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+                .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                 .Where(m => !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
 
@@ -198,7 +200,7 @@ public sealed class Mem0Provider : AIContextProvider
             await this.PersistMessagesAsync(
                 storageScope,
                 context.RequestMessages
-                    .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+                    .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                     .Concat(context.ResponseMessages ?? []),
                 cancellationToken).ConfigureAwait(false);
         }

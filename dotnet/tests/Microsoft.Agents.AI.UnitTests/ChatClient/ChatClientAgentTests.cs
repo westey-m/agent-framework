@@ -349,8 +349,8 @@ public partial class ChatClientAgentTests
                 new ValueTask<AIContext>(new AIContext
                 {
                     Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages).ToList(),
-                    Instructions = "context provider instructions",
-                    Tools = [AIFunctionFactory.Create(() => { }, "context provider function")]
+                    Instructions = ctx.AIContext.Instructions + "\ncontext provider instructions",
+                    Tools = (ctx.AIContext.Tools ?? []).Concat(new[] { AIFunctionFactory.Create(() => { }, "context provider function") }).ToList()
                 }));
         mockProvider
             .Protected()
@@ -477,7 +477,9 @@ public partial class ChatClientAgentTests
             .Returns((AIContextProvider.InvokingContext ctx, CancellationToken _) =>
                 new ValueTask<AIContext>(new AIContext
                 {
-                    Messages = ctx.AIContext.Messages?.ToList()
+                    Instructions = ctx.AIContext.Instructions,
+                    Messages = ctx.AIContext.Messages?.ToList(),
+                    Tools = ctx.AIContext.Tools
                 }));
 
         ChatClientAgent agent = new(mockService.Object, options: new() { AIContextProvider = mockProvider.Object, ChatOptions = new() { Instructions = "base instructions", Tools = [AIFunctionFactory.Create(() => { }, "base function")] } });
@@ -1433,8 +1435,8 @@ public partial class ChatClientAgentTests
                 new ValueTask<AIContext>(new AIContext
                 {
                     Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages).ToList(),
-                    Instructions = "context provider instructions",
-                    Tools = [AIFunctionFactory.Create(() => { }, "context provider function")]
+                    Instructions = ctx.AIContext.Instructions + "\ncontext provider instructions",
+                    Tools = (ctx.AIContext.Tools ?? []).Concat(new[] { AIFunctionFactory.Create(() => { }, "context provider function") }).ToList()
                 }));
         mockProvider
             .Protected()

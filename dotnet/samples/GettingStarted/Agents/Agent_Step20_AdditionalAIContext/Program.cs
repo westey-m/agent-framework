@@ -79,13 +79,11 @@ namespace SampleApp
     /// </summary>
     internal sealed class TodoListAIContextProvider : AIContextProvider
     {
-        private const string StateKey = nameof(TodoListAIContextProvider);
-
         private static List<string> GetTodoItems(AgentSession? session)
-            => session?.StateBag.GetValue<List<string>>(StateKey) ?? new List<string>();
+            => session?.StateBag.GetValue<List<string>>(nameof(TodoListAIContextProvider)) ?? new List<string>();
 
         private static void SetTodoItems(AgentSession? session, List<string> items)
-            => session?.StateBag.SetValue(StateKey, items);
+            => session?.StateBag.SetValue(nameof(TodoListAIContextProvider), items);
 
         protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {

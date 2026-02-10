@@ -53,6 +53,20 @@ public sealed class ChatHistoryProviderMessageFilterTests
     }
 
     [Fact]
+    public void StateKey_DelegatesToInnerProvider()
+    {
+        // Arrange
+        var innerProviderMock = new Mock<ChatHistoryProvider>();
+        innerProviderMock.Setup(p => p.StateKey).Returns("inner-state-key");
+
+        // Act
+        var filter = new ChatHistoryProviderMessageFilter(innerProviderMock.Object, x => x);
+
+        // Assert
+        Assert.Equal("inner-state-key", filter.StateKey);
+    }
+
+    [Fact]
     public async Task InvokingAsync_WithNoOpFilters_ReturnsInnerProviderMessagesAsync()
     {
         // Arrange

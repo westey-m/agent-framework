@@ -48,7 +48,7 @@ public class ChatClientAgentSessionTests
         var json = JsonSerializer.Deserialize("""
             {
                 "stateBag": {
-                    "InMemoryChatHistoryProvider.State": {
+                    "InMemoryChatHistoryProvider": {
                         "messages": [{"authorName": "testAuthor"}]
                     }
                 }
@@ -164,7 +164,7 @@ public class ChatClientAgentSessionTests
         // Messages should be stored in the stateBag
         Assert.True(json.TryGetProperty("stateBag", out var stateBagProperty));
         Assert.Equal(JsonValueKind.Object, stateBagProperty.ValueKind);
-        Assert.True(stateBagProperty.TryGetProperty("InMemoryChatHistoryProvider.State", out var providerStateProperty));
+        Assert.True(stateBagProperty.TryGetProperty("InMemoryChatHistoryProvider", out var providerStateProperty));
         Assert.Equal(JsonValueKind.Object, providerStateProperty.ValueKind);
         Assert.True(providerStateProperty.TryGetProperty("messages", out var messagesProperty));
         Assert.Equal(JsonValueKind.Array, messagesProperty.ValueKind);

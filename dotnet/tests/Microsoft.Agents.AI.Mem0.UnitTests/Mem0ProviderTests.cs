@@ -67,6 +67,29 @@ public sealed class Mem0ProviderTests : IDisposable
     }
 
     [Fact]
+    public void StateKey_ReturnsDefaultKey_WhenNoOptionsProvided()
+    {
+        // Arrange & Act
+        var provider = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(new Mem0ProviderScope { ThreadId = "tid" }));
+
+        // Assert
+        Assert.Equal("Mem0Provider", provider.StateKey);
+    }
+
+    [Fact]
+    public void StateKey_ReturnsCustomKey_WhenSetViaOptions()
+    {
+        // Arrange & Act
+        var provider = new Mem0Provider(
+            this._httpClient,
+            _ => new Mem0Provider.State(new Mem0ProviderScope { ThreadId = "tid" }),
+            new Mem0ProviderOptions { StateKey = "custom-key" });
+
+        // Assert
+        Assert.Equal("custom-key", provider.StateKey);
+    }
+
+    [Fact]
     public async Task InvokingAsync_PerformsSearch_AndReturnsContextMessageAsync()
     {
         // Arrange

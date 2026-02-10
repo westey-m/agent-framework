@@ -27,8 +27,6 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
 {
-    private const string DefaultStateBagKey = "InMemoryChatHistoryProvider.State";
-
     private readonly string _stateKey;
     private readonly Func<AgentSession?, State> _stateInitializer;
     private readonly JsonSerializerOptions _jsonSerializerOptions;
@@ -45,9 +43,12 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         this._stateInitializer = options?.StateInitializer ?? (_ => new State());
         this.ChatReducer = options?.ChatReducer;
         this.ReducerTriggerEvent = options?.ReducerTriggerEvent ?? InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval;
-        this._stateKey = options?.StateKey ?? DefaultStateBagKey;
+        this._stateKey = options?.StateKey ?? base.StateKey;
         this._jsonSerializerOptions = options?.JsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
     }
+
+    /// <inheritdoc />
+    public override string StateKey => this._stateKey;
 
     /// <summary>
     /// Gets the chat reducer used to process or reduce chat messages. If null, no reduction logic will be applied.

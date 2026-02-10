@@ -40,7 +40,6 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     private const int DefaultMaxResults = 3;
     private const string DefaultFunctionToolName = "Search";
     private const string DefaultFunctionToolDescription = "Allows searching for related previous chat history to help answer the user question.";
-    private const string DefaultStateBagKey = "ChatHistoryMemoryProvider.State";
 
 #pragma warning disable CA2213 // VectorStore is not owned by this class - caller is responsible for disposal
     private readonly VectorStore _vectorStore;
@@ -86,7 +85,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         this._contextPrompt = options.ContextPrompt ?? DefaultContextPrompt;
         this._enableSensitiveTelemetryData = options.EnableSensitiveTelemetryData;
         this._searchTime = options.SearchTime;
-        this._stateKey = options.StateKey ?? DefaultStateBagKey;
+        this._stateKey = options.StateKey ?? base.StateKey;
         this._logger = loggerFactory?.CreateLogger<ChatHistoryMemoryProvider>();
         this._toolName = options.FunctionToolName ?? DefaultFunctionToolName;
         this._toolDescription = options.FunctionToolDescription ?? DefaultFunctionToolDescription;
@@ -112,6 +111,9 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 
         this._collection = this._vectorStore.GetDynamicCollection(Throw.IfNullOrWhitespace(collectionName), definition);
     }
+
+    /// <inheritdoc />
+    public override string StateKey => this._stateKey;
 
     /// <summary>
     /// Gets the state from the session's StateBag, or initializes it using the StateInitializer if not present.

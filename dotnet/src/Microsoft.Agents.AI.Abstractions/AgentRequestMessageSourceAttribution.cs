@@ -19,7 +19,7 @@ public readonly struct AgentRequestMessageSourceAttribution : IEquatable<AgentRe
     /// Provides the key used in <see cref="ChatMessage.AdditionalProperties"/> to store the <see cref="AgentRequestMessageSourceAttribution"/>
     /// associated with the agent request message.
     /// </summary>
-    public static readonly string AdditionalPropertiesKey = "attribution";
+    public static readonly string AdditionalPropertiesKey = "_attribution";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AgentRequestMessageSourceAttribution"/> struct with the specified source type and identifier.

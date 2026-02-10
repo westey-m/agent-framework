@@ -25,7 +25,7 @@ public sealed class AgentRequestMessageSourceAttributionTests
     }
 
     [Fact]
-    public void Constructor_WithNullSourceId_ReturnsNull()
+    public void Constructor_WithNullSourceId_SetsNullSourceId()
     {
         // Arrange
         AgentRequestMessageSourceType sourceType = AgentRequestMessageSourceType.ChatHistory;

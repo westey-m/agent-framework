@@ -340,4 +340,186 @@ public sealed class ChatMessageExtensionsTests
     }
 
     #endregion
+
+    #region AsAgentRequestMessageSourcedMessage Tests
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithNoAdditionalProperties_ReturnsClonesMessageWithAttribution()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello");
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.External, "TestSourceId");
+
+        // Assert
+        Assert.NotSame(message, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result.GetAgentRequestMessageSourceType());
+        Assert.Equal("TestSourceId", result.GetAgentRequestMessageSourceId());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithNullAdditionalProperties_ReturnsClonesMessageWithAttribution()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello")
+        {
+            AdditionalProperties = null
+        };
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, "ProviderSourceId");
+
+        // Assert
+        Assert.NotSame(message, result);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, result.GetAgentRequestMessageSourceType());
+        Assert.Equal("ProviderSourceId", result.GetAgentRequestMessageSourceId());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithMatchingSourceTypeAndSourceId_ReturnsSameInstance()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistoryId") }
+            }
+        };
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.ChatHistory, "HistoryId");
+
+        // Assert
+        Assert.Same(message, result);
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithDifferentSourceType_ReturnsClonesMessageWithNewAttribution()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.External, "SourceId") }
+            }
+        };
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, "SourceId");
+
+        // Assert
+        Assert.NotSame(message, result);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, result.GetAgentRequestMessageSourceType());
+        Assert.Equal("SourceId", result.GetAgentRequestMessageSourceId());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithDifferentSourceId_ReturnsClonesMessageWithNewAttribution()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.External, "OriginalId") }
+            }
+        };
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.External, "NewId");
+
+        // Assert
+        Assert.NotSame(message, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result.GetAgentRequestMessageSourceType());
+        Assert.Equal("NewId", result.GetAgentRequestMessageSourceId());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithDefaultNullSourceId_ReturnsClonesMessageWithNullSourceId()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello");
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.ChatHistory);
+
+        // Assert
+        Assert.NotSame(message, result);
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, result.GetAgentRequestMessageSourceType());
+        Assert.Null(result.GetAgentRequestMessageSourceId());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithMatchingSourceTypeAndNullSourceId_ReturnsSameInstance()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.External, null) }
+            }
+        };
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.External);
+
+        // Assert
+        Assert.Same(message, result);
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_DoesNotModifyOriginalMessage()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello");
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, "ProviderId");
+
+        // Assert
+        Assert.Null(message.AdditionalProperties);
+        Assert.NotNull(result.AdditionalProperties);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, result.GetAgentRequestMessageSourceType());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_WithWrongAttributionType_ReturnsClonesMessageWithNewAttribution()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.User, "Hello")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, "NotAnAttribution" }
+            }
+        };
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.External, "SourceId");
+
+        // Assert
+        Assert.NotSame(message, result);
+        Assert.Equal(AgentRequestMessageSourceType.External, result.GetAgentRequestMessageSourceType());
+        Assert.Equal("SourceId", result.GetAgentRequestMessageSourceId());
+    }
+
+    [Fact]
+    public void AsAgentRequestMessageSourcedMessage_PreservesMessageContent()
+    {
+        // Arrange
+        ChatMessage message = new(ChatRole.Assistant, "Test content");
+
+        // Act
+        ChatMessage result = message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.ChatHistory, "HistoryId");
+
+        // Assert
+        Assert.Equal(ChatRole.Assistant, result.Role);
+        Assert.Equal("Test content", result.Text);
+    }
+
+    #endregion
 }

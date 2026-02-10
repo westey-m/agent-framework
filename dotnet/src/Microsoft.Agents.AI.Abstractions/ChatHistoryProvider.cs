@@ -89,24 +89,7 @@ public abstract class ChatHistoryProvider
     {
         var messages = await this.InvokingCoreAsync(context, cancellationToken).ConfigureAwait(false);
 
-        return messages.Select(message =>
-        {
-            if (message.AdditionalProperties != null
-                // Check if the message was already tagged with this provider's source type and source id
-                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out var messageSourceAttribution)
-                && messageSourceAttribution is AgentRequestMessageSourceAttribution typedMessageSourceAttribution
-                && typedMessageSourceAttribution.SourceType == AgentRequestMessageSourceType.ChatHistory
-                && typedMessageSourceAttribution.SourceId == this._sourceId)
-            {
-                return message;
-            }
-
-            message = message.Clone();
-            message.AdditionalProperties ??= new();
-            message.AdditionalProperties[AgentRequestMessageSourceAttribution.AdditionalPropertiesKey] =
-                new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, this._sourceId);
-            return message;
-        });
+        return messages.Select(message => message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.ChatHistory, this._sourceId));
     }
 
     /// <summary>

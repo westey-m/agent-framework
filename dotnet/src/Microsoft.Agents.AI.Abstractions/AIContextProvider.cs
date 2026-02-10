@@ -76,24 +76,9 @@ public abstract class AIContextProvider
             return aiContext;
         }
 
-        aiContext.Messages = aiContext.Messages.Select(message =>
-        {
-            if (message.AdditionalProperties != null
-                // Check if the message was already tagged with this provider's source type and source id
-                && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out var messageSourceAttribution)
-                && messageSourceAttribution is AgentRequestMessageSourceAttribution typedMessageSourceAttribution
-                && typedMessageSourceAttribution.SourceType == AgentRequestMessageSourceType.AIContextProvider
-                && typedMessageSourceAttribution.SourceId == this._sourceId)
-            {
-                return message;
-            }
-
-            message = message.Clone();
-            message.AdditionalProperties ??= new();
-            message.AdditionalProperties[AgentRequestMessageSourceAttribution.AdditionalPropertiesKey] =
-                new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, this._sourceId);
-            return message;
-        }).ToList();
+        aiContext.Messages = aiContext.Messages
+            .Select(message => message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this._sourceId))
+            .ToList();
 
         return aiContext;
     }

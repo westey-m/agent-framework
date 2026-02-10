@@ -42,4 +42,34 @@ public static class ChatMessageExtensions
 
         return null;
     }
+
+    /// <summary>
+    /// Ensure that the provided message is tagged with the provided source type and source id in the context of a specific agent run.
+    /// </summary>
+    /// <param name="message">The message to tag.</param>
+    /// <param name="sourceType">The source type to tag the message with.</param>
+    /// <param name="sourceId">The source id to tag the message with.</param>
+    /// <returns>The tagged message.</returns>
+    /// <remarks>
+    /// If the message is already tagged with the provided source type and source id, it is returned as is.
+    /// Otherwise, a cloned message is returned with the appropriate tagging in the AdditionalProperties.
+    /// </remarks>
+    public static ChatMessage AsAgentRequestMessageSourcedMessage(this ChatMessage message, AgentRequestMessageSourceType sourceType, string? sourceId = null)
+    {
+        if (message.AdditionalProperties != null
+            // Check if the message was already tagged with the required source type and source id
+            && message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out var messageSourceAttribution)
+            && messageSourceAttribution is AgentRequestMessageSourceAttribution typedMessageSourceAttribution
+            && typedMessageSourceAttribution.SourceType == sourceType
+            && typedMessageSourceAttribution.SourceId == sourceId)
+        {
+            return message;
+        }
+
+        message = message.Clone();
+        message.AdditionalProperties ??= new();
+        message.AdditionalProperties[AgentRequestMessageSourceAttribution.AdditionalPropertiesKey] =
+            new AgentRequestMessageSourceAttribution(sourceType, sourceId);
+        return message;
+    }
 }

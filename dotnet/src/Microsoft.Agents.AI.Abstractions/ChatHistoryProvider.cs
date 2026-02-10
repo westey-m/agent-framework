@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -27,8 +26,12 @@ namespace Microsoft.Agents.AI;
 /// <item><description>Storing chat messages with proper ordering and metadata preservation</description></item>
 /// <item><description>Retrieving messages in chronological order for agent context</description></item>
 /// <item><description>Managing storage limits through truncation, summarization, or other strategies</description></item>
-/// <item><description>Supporting serialization for thread persistence and migration</description></item>
 /// </list>
+/// </para>
+/// <para>
+/// The <see cref="ChatHistoryProvider"/> is passed a reference to the <see cref="AgentSession"/> via <see cref="InvokingContext"/> and <see cref="InvokedContext"/>
+/// allowing it to store state in the <see cref="AgentSession.StateBag"/>. Since a <see cref="ChatHistoryProvider"/> is used with many different sessions, it should
+/// not store any session-specific information within its own instance fields. Instead, any session-specific state should be stored in the associated <see cref="AgentSession.StateBag"/>.
 /// </para>
 /// <para>
 /// A <see cref="ChatHistoryProvider"/> is only relevant for scenarios where the underlying AI service that the agent is using
@@ -79,10 +82,6 @@ public abstract class ChatHistoryProvider
     /// <item><description>Implementing sliding window approaches for message retention</description></item>
     /// <item><description>Archiving old messages while keeping active conversation context</description></item>
     /// </list>
-    /// </para>
-    /// <para>
-    /// Each <see cref="ChatHistoryProvider"/> instance should be associated with a single <see cref="AgentSession"/> to ensure proper message isolation
-    /// and context management.
     /// </para>
     /// </remarks>
     public async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
@@ -197,13 +196,6 @@ public abstract class ChatHistoryProvider
     /// </para>
     /// </remarks>
     protected abstract ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Serializes the current object's state to a <see cref="JsonElement"/> using the specified serialization options.
-    /// </summary>
-    /// <param name="jsonSerializerOptions">The JSON serialization options to use.</param>
-    /// <returns>A <see cref="JsonElement"/> representation of the object's state.</returns>
-    public abstract JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>Asks the <see cref="ChatHistoryProvider"/> for an object of the specified type <paramref name="serviceType"/>.</summary>
     /// <param name="serviceType">The type of object being requested.</param>

@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -376,9 +375,6 @@ public class ChatHistoryProviderTests
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
             => default;
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-            => default;
     }
 
     private sealed class TestChatHistoryProviderWithCustomSource : ChatHistoryProvider
@@ -391,9 +387,6 @@ public class ChatHistoryProviderTests
             => new([new ChatMessage(ChatRole.User, "Test Message")]);
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
-            => default;
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
             => default;
     }
 
@@ -412,9 +405,6 @@ public class ChatHistoryProviderTests
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
             => default;
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-            => default;
     }
 
     private sealed class TestChatHistoryProviderWithMultipleMessages : ChatHistoryProvider
@@ -427,9 +417,6 @@ public class ChatHistoryProviderTests
             ]);
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
-            => default;
-
-        public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
             => default;
     }
 }

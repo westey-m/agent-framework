@@ -137,19 +137,6 @@ public class AIContextProviderTests
     }
 
     [Fact]
-    public void Serialize_ReturnsEmptyElement()
-    {
-        // Arrange
-        var provider = new TestAIContextProvider();
-
-        // Act
-        var actual = provider.Serialize();
-
-        // Assert
-        Assert.Equal(default, actual);
-    }
-
-    [Fact]
     public void InvokingContext_Constructor_ThrowsForNullMessages()
     {
         // Act & Assert

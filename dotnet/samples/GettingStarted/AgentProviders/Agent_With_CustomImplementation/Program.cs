@@ -6,6 +6,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using SampleApp;
@@ -28,6 +29,8 @@ namespace SampleApp
     {
         public override string? Name => "UpperCaseParrotAgent";
 
+        public readonly ChatHistoryProvider ChatHistoryProvider = new InMemoryChatHistoryProvider();
+
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
             => new(new CustomAgentSession());
 
@@ -38,11 +41,11 @@ namespace SampleApp
                 throw new ArgumentException($"The provided session is not of type {nameof(CustomAgentSession)}.", nameof(session));
             }
 
-            return typedSession.Serialize(jsonSerializerOptions);
+            return JsonSerializer.SerializeToElement(typedSession, jsonSerializerOptions);
         }
 
         protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
-            => new(new CustomAgentSession(serializedState, jsonSerializerOptions));
+            => new(serializedState.Deserialize<CustomAgentSession>(jsonSerializerOptions)!);
 
         protected override async Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
         {
@@ -56,7 +59,7 @@ namespace SampleApp
 
             // Get existing messages from the store
             var invokingContext = new ChatHistoryProvider.InvokingContext(this, session, messages);
-            var storeMessages = await typedSession.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken);
+            var storeMessages = await this.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken);
 
             // Clone the input messages and turn them into response messages with upper case text.
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.Name).ToList();
@@ -66,7 +69,7 @@ namespace SampleApp
             {
                 ResponseMessages = responseMessages
             };
-            await typedSession.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
+            await this.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
 
             return new AgentResponse
             {
@@ -88,7 +91,7 @@ namespace SampleApp
 
             // Get existing messages from the store
             var invokingContext = new ChatHistoryProvider.InvokingContext(this, session, messages);
-            var storeMessages = await typedSession.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken);
+            var storeMessages = await this.ChatHistoryProvider.InvokingAsync(invokingContext, cancellationToken);
 
             // Clone the input messages and turn them into response messages with upper case text.
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.Name).ToList();
@@ -98,7 +101,7 @@ namespace SampleApp
             {
                 ResponseMessages = responseMessages
             };
-            await typedSession.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
+            await this.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
 
             foreach (var message in responseMessages)
             {
@@ -140,15 +143,16 @@ namespace SampleApp
         /// <summary>
         /// A session type for our custom agent that only supports in memory storage of messages.
         /// </summary>
-        internal sealed class CustomAgentSession : InMemoryAgentSession
+        internal sealed class CustomAgentSession : AgentSession
         {
-            internal CustomAgentSession() { }
+            internal CustomAgentSession()
+            {
+            }
 
-            internal CustomAgentSession(JsonElement serializedSessionState, JsonSerializerOptions? jsonSerializerOptions = null)
-                : base(serializedSessionState, jsonSerializerOptions) { }
-
-            internal new JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-                => base.Serialize(jsonSerializerOptions);
+            [JsonConstructor]
+            internal CustomAgentSession(AgentSessionStateBag stateBag) : base(stateBag)
+            {
+            }
         }
     }
 }

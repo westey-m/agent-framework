@@ -730,7 +730,7 @@ public sealed class AgentSessionStateBagTests
         Assert.Null(stateBag);
     }
 
-#if NET
+#if NET10_0_OR_GREATER
     [Fact]
     public void JsonSerializerSerialize_WithUnknownType_Throws()
     {
@@ -739,7 +739,7 @@ public sealed class AgentSessionStateBagTests
         stateBag.SetValue("key", new { Name = "Test" }); // Anonymous type which cannot be deserialized
 
         // Act & Assert
-        Assert.Throws<JsonException>(() => JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions));
+        Assert.Throws<NotSupportedException>(() => JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions));
     }
 #endif
 

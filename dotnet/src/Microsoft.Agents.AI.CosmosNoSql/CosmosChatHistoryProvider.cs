@@ -157,8 +157,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
     /// <returns>The provider state, or null if no session is available.</returns>
     private State GetOrInitializeState(AgentSession? session)
     {
-        var state = session?.StateBag.GetValue<State>(this._stateKey, AgentAbstractionsJsonUtilities.DefaultOptions);
-        if (state is not null)
+        if (session?.StateBag.TryGetValue<State>(this._stateKey, out var state, AgentAbstractionsJsonUtilities.DefaultOptions) is true && state is not null)
         {
             return state;
         }

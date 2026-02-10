@@ -35,8 +35,7 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
 
     private StoreState GetOrInitializeState(AgentSession? session)
     {
-        var state = session?.StateBag.GetValue<StoreState>(DefaultStateBagKey, this._jsonSerializerOptions);
-        if (state is not null)
+        if (session?.StateBag.TryGetValue<StoreState>(DefaultStateBagKey, out var state, this._jsonSerializerOptions) is true && state is not null)
         {
             return state;
         }

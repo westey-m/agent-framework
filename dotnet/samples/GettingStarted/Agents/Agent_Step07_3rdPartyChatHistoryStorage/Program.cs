@@ -96,9 +96,7 @@ namespace SampleApp
 
         private State GetOrInitializeState(AgentSession? session)
         {
-            var state = session?.StateBag.GetValue<State>(this._stateKey);
-
-            if (state is not null)
+            if (session?.StateBag.TryGetValue<State>(this._stateKey, out var state) is true && state is not null)
             {
                 return state;
             }

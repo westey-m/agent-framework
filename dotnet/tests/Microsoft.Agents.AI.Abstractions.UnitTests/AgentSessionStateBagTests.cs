@@ -730,5 +730,18 @@ public sealed class AgentSessionStateBagTests
         Assert.Null(stateBag);
     }
 
+#if NET
+    [Fact]
+    public void JsonSerializerSerialize_WithUnknownType_Throws()
+    {
+        // Arrange
+        var stateBag = new AgentSessionStateBag();
+        stateBag.SetValue("key", new { Name = "Test" }); // Anonymous type which cannot be deserialized
+
+        // Act & Assert
+        Assert.Throws<JsonException>(() => JsonSerializer.Serialize(stateBag, AgentAbstractionsJsonUtilities.DefaultOptions));
+    }
+#endif
+
     #endregion
 }

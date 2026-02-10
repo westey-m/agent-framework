@@ -46,7 +46,7 @@ public sealed class AgentRequestMessageSourceAttributionTests
     public void AdditionalPropertiesKey_IsAttribution()
     {
         // Assert
-        Assert.Equal("attribution", AgentRequestMessageSourceAttribution.AdditionalPropertiesKey);
+        Assert.Equal("_attribution", AgentRequestMessageSourceAttribution.AdditionalPropertiesKey);
     }
 
     #endregion

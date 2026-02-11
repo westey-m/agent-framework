@@ -61,7 +61,9 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
             return default;
         }
 
-        var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
+        var allNewMessages = context.RequestMessages
+            .Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory)
+            .Concat(context.ResponseMessages ?? []);
         this.GetOrInitializeState(context.Session).Messages.AddRange(allNewMessages);
 
         return default;

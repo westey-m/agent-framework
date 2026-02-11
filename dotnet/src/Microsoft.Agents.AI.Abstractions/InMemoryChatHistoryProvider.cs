@@ -27,9 +27,14 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
 {
+    private static IEnumerable<ChatMessage> DefaultExcludeChatHistoryFilter(IEnumerable<ChatMessage> messages)
+        => messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory);
+
     private readonly string _stateKey;
     private readonly Func<AgentSession?, State> _stateInitializer;
     private readonly JsonSerializerOptions _jsonSerializerOptions;
+    private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> _storageInputMessageFilter;
+    private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? _retrievalOutputMessageFilter;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InMemoryChatHistoryProvider"/> class.
@@ -45,6 +50,8 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         this.ReducerTriggerEvent = options?.ReducerTriggerEvent ?? InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.BeforeMessagesRetrieval;
         this._stateKey = options?.StateKey ?? base.StateKey;
         this._jsonSerializerOptions = options?.JsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
+        this._storageInputMessageFilter = options?.StorageInputMessageFilter ?? DefaultExcludeChatHistoryFilter;
+        this._retrievalOutputMessageFilter = options?.RetrievalOutputMessageFilter;
     }
 
     /// <inheritdoc />
@@ -115,7 +122,13 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
             state.Messages = (await this.ChatReducer.ReduceAsync(state.Messages, cancellationToken).ConfigureAwait(false)).ToList();
         }
 
-        return state.Messages;
+        IEnumerable<ChatMessage> output = state.Messages;
+        if (this._retrievalOutputMessageFilter is not null)
+        {
+            output = this._retrievalOutputMessageFilter(output);
+        }
+
+        return output;
     }
 
     /// <inheritdoc />
@@ -131,7 +144,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         var state = this.GetOrInitializeState(context.Session);
 
         // Add request and response messages to the provider
-        var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
+        var allNewMessages = this._storageInputMessageFilter(context.RequestMessages).Concat(context.ResponseMessages ?? []);
         state.Messages.AddRange(allNewMessages);
 
         if (this.ReducerTriggerEvent is InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded && this.ChatReducer is not null)

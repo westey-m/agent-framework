@@ -21,6 +21,9 @@ namespace Microsoft.Agents.AI;
 [RequiresDynamicCode("The CosmosChatHistoryProvider uses JSON serialization which is incompatible with NativeAOT.")]
 public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
 {
+    private static IEnumerable<ChatMessage> DefaultExcludeChatHistoryFilter(IEnumerable<ChatMessage> messages)
+        => messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory);
+
     private readonly CosmosClient _cosmosClient;
     private readonly Container _container;
     private readonly bool _ownsClient;
@@ -80,6 +83,25 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
     /// Gets the container ID associated with this provider.
     /// </summary>
     public string ContainerId { get; init; }
+
+    /// <summary>
+    /// A filter function applied to request messages before they are stored
+    /// during <see cref="ChatHistoryProvider.InvokedAsync"/>. The default filter excludes messages with the
+    /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> source type.
+    /// </summary>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> StorageInputMessageFilter { get; set; } = DefaultExcludeChatHistoryFilter;
+
+    /// <summary>
+    /// Gets or sets an optional filter function applied to messages produced by this provider
+    /// during <see cref="ChatHistoryProvider.InvokingAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// This filter is only applied to the messages that the provider itself produces (from its internal storage).
+    /// </remarks>
+    /// <value>
+    /// When <see langword="null"/>, no filtering is applied to the output messages.
+    /// </value>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? RetrievalOutputMessageFilter { get; set; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CosmosChatHistoryProvider"/> class.
@@ -257,7 +279,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
             messages.Reverse();
         }
 
-        return messages;
+        return this.RetrievalOutputMessageFilter is not null ? this.RetrievalOutputMessageFilter(messages) : messages;
     }
 
     /// <inheritdoc />
@@ -279,7 +301,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
 #pragma warning restore CA1513
 
         var state = this.GetOrInitializeState(context.Session);
-        var messageList = context.RequestMessages.Concat(context.ResponseMessages ?? []).ToList();
+        var messageList = this.StorageInputMessageFilter(context.RequestMessages).Concat(context.ResponseMessages ?? []).ToList();
         if (messageList.Count == 0)
         {
             return;

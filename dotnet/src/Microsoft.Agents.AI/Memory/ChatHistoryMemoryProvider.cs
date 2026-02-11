@@ -41,6 +41,9 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     private const string DefaultFunctionToolName = "Search";
     private const string DefaultFunctionToolDescription = "Allows searching for related previous chat history to help answer the user question.";
 
+    private static IEnumerable<ChatMessage> DefaultExternalOnlyFilter(IEnumerable<ChatMessage> messages)
+        => messages.Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External);
+
 #pragma warning disable CA2213 // VectorStore is not owned by this class - caller is responsible for disposal
     private readonly VectorStore _vectorStore;
 #pragma warning restore CA2213
@@ -54,6 +57,8 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     private readonly ILogger<ChatHistoryMemoryProvider>? _logger;
     private readonly string _stateKey;
     private readonly Func<AgentSession?, State> _stateInitializer;
+    private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> _searchInputMessageFilter;
+    private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> _storageInputMessageFilter;
 
     private bool _collectionInitialized;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
@@ -89,6 +94,8 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         this._logger = loggerFactory?.CreateLogger<ChatHistoryMemoryProvider>();
         this._toolName = options.FunctionToolName ?? DefaultFunctionToolName;
         this._toolDescription = options.FunctionToolDescription ?? DefaultFunctionToolDescription;
+        this._searchInputMessageFilter = options.SearchInputMessageFilter ?? DefaultExternalOnlyFilter;
+        this._storageInputMessageFilter = options.StorageInputMessageFilter ?? DefaultExternalOnlyFilter;
 
         // Create a definition so that we can use the dimensions provided at runtime.
         var definition = new VectorStoreCollectionDefinition
@@ -165,8 +172,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
         try
         {
             // Get the text from the current request messages
-            var requestText = string.Join("\n", context.RequestMessages
-                .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
+            var requestText = string.Join("\n", this._searchInputMessageFilter(context.RequestMessages)
                 .Where(m => m != null && !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
 
@@ -224,8 +230,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             // Ensure the collection is initialized
             var collection = await this.EnsureCollectionExistsAsync(cancellationToken).ConfigureAwait(false);
 
-            List<Dictionary<string, object?>> itemsToStore = context.RequestMessages
-                .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
+            List<Dictionary<string, object?>> itemsToStore = this._storageInputMessageFilter(context.RequestMessages)
                 .Concat(context.ResponseMessages ?? [])
                 .Select(message => new Dictionary<string, object?>
                 {

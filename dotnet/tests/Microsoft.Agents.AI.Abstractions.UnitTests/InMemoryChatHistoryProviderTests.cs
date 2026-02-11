@@ -83,19 +83,20 @@ public class InMemoryChatHistoryProviderTests
         };
 
         var provider = new InMemoryChatHistoryProvider();
-        provider.SetMessages(session, [providerMessages[0]]);
+        provider.SetMessages(session, providerMessages);
         var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, requestMessages)
         {
             ResponseMessages = responseMessages
         };
         await provider.InvokedAsync(context, CancellationToken.None);
 
-        // Assert - the ChatHistory-sourced message is excluded by the default filter
+        // Assert
         var messages = provider.GetMessages(session);
-        Assert.Equal(3, messages.Count);
+        Assert.Equal(4, messages.Count);
         Assert.Equal("original instructions", messages[0].Text);
         Assert.Equal("Hello", messages[1].Text);
-        Assert.Equal("Hi there!", messages[2].Text);
+        Assert.Equal("additional context", messages[2].Text);
+        Assert.Equal("Hi there!", messages[3].Text);
     }
 
     [Fact]

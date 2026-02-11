@@ -368,7 +368,7 @@ public class ChatClientAgent_BackgroundResponsesTests
         ChatClientAgent agent = new(mockChatClient.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            AIContextProvider = mockContextProvider.Object
+            AIContextProviders = [mockContextProvider.Object]
         });
 
         // Create a session
@@ -435,7 +435,7 @@ public class ChatClientAgent_BackgroundResponsesTests
         ChatClientAgent agent = new(mockChatClient.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            AIContextProvider = mockContextProvider.Object
+            AIContextProviders = [mockContextProvider.Object]
         });
 
         // Create a session
@@ -652,7 +652,7 @@ public class ChatClientAgent_BackgroundResponsesTests
         ChatClientAgent agent = new(mockChatClient.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            AIContextProvider = mockContextProvider.Object
+            AIContextProviders = [mockContextProvider.Object]
         });
 
         ChatClientAgentSession? session = new();
@@ -714,7 +714,7 @@ public class ChatClientAgent_BackgroundResponsesTests
         ChatClientAgent agent = new(mockChatClient.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            AIContextProvider = mockContextProvider.Object
+            AIContextProviders = [mockContextProvider.Object]
         });
 
         ChatClientAgentSession? session = new();

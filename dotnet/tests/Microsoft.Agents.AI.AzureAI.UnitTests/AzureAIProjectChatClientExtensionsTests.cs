@@ -2321,7 +2321,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
         {
             Name = "test-agent",
             ChatOptions = new ChatOptions { Instructions = "Test" },
-            AIContextProvider = new TestAIContextProvider()
+            AIContextProviders = [new TestAIContextProvider()]
         };
 
         // Act

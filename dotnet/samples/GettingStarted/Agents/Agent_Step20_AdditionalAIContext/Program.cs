@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-// This sample shows how to inject additional AI context into a ChatClientAgent using a custom AIContextProvider component that is attached to the agent.
-// The sample also shows how to combine the results from multiple providers into a single class, in order to attach multiple of these to an agent.
+// This sample shows how to inject additional AI context into a ChatClientAgent using custom AIContextProvider components that are attached to the agent.
+// Multiple providers can be attached to an agent, and they will be called in sequence, each receiving the accumulated context from the previous one.
 // This mechanism can be used for various purposes, such as injecting RAG search results or memories into the agent's context.
 // Also note that Agent Framework already provides built-in AIContextProviders for many of these scenarios.
 
@@ -48,12 +48,12 @@ AIAgent agent = new AzureOpenAIClient(
             // Use WithAIContextProviderMessageRemoval, so that we don't store the messages from the AI context provider in the chat history.
             // You may want to store these messages, depending on their content and your requirements.
             .WithAIContextProviderMessageRemoval(),
-        // Add an AI context provider that maintains a todo list for the agent and one that provides upcoming calendar entries.
-        // Wrap these in an AI context provider that aggregates the other two.
-        AIContextProvider = new AggregatingAIContextProvider([
+        // Add multiple AI context providers: one that maintains a todo list and one that provides upcoming calendar entries.
+        // The agent will call each provider in sequence, accumulating context from each.
+        AIContextProviders = [
             new TodoListAIContextProvider(),
             new CalendarSearchAIContextProvider(loadNextThreeCalendarEvents)
-        ]),
+        ],
     });
 
 // Invoke the agent and output the text result.
@@ -172,32 +172,6 @@ namespace SampleApp
                     .ToList(),
                 Tools = inputContext.Tools
             };
-        }
-    }
-
-    /// <summary>
-    /// An <see cref="AIContextProvider"/> which aggregates multiple AI context providers into one.
-    /// Tools and messages from all providers are combined, and instructions are concatenated.
-    /// </summary>
-    internal sealed class AggregatingAIContextProvider : AIContextProvider
-    {
-        private readonly List<AIContextProvider> _providers;
-
-        public AggregatingAIContextProvider(List<AIContextProvider> providers)
-        {
-            this._providers = providers;
-        }
-
-        protected override async ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-        {
-            // Invoke all the sub providers.
-            var currentAIContext = context.AIContext;
-            foreach (var provider in this._providers)
-            {
-                currentAIContext = await provider.InvokingAsync(new InvokingContext(context.Agent, context.Session, currentAIContext), cancellationToken);
-            }
-
-            return currentAIContext;
         }
     }
 }

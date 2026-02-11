@@ -36,7 +36,7 @@ AIAgent agent = new AzureOpenAIClient(
         // If each session should have its own Mem0 scope, you can create a new id per session via the stateInitializer, e.g.:
         // new Mem0Provider(mem0HttpClient, stateInitializer: _ => new(new Mem0ProviderScope() { ThreadId = Guid.NewGuid().ToString() }))
         // In our case we are storing memories scoped by application and user instead so that memories are retained across threads.
-        AIContextProvider = new Mem0Provider(mem0HttpClient, stateInitializer: _ => new(new Mem0ProviderScope() { ApplicationId = "getting-started-agents", UserId = "sample-user" }))
+        AIContextProviders = [new Mem0Provider(mem0HttpClient, stateInitializer: _ => new(new Mem0ProviderScope() { ApplicationId = "getting-started-agents", UserId = "sample-user" }))]
     });
 
 AgentSession session = await agent.CreateSessionAsync();

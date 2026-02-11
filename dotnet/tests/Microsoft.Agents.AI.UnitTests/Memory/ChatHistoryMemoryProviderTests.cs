@@ -381,10 +381,10 @@ public class ChatHistoryMemoryProviderTests
             options: providerOptions);
 
         var requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [requestMsg]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { requestMsg } });
 
         // Act
-        await provider.InvokingAsync(invokingContext, CancellationToken.None);
+        var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
         this._vectorStoreCollectionMock.Verify(
@@ -394,6 +394,11 @@ public class ChatHistoryMemoryProviderTests
                 It.IsAny<VectorSearchOptions<Dictionary<string, object?>>>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+
+        Assert.NotNull(aiContext.Messages);
+        Assert.Equal(2, aiContext.Messages.Count);
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages[0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, aiContext.Messages[1].GetAgentRequestMessageSourceType());
     }
 
     [Fact]
@@ -437,7 +442,7 @@ public class ChatHistoryMemoryProviderTests
             options: providerOptions);
 
         var requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [requestMsg]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { requestMsg } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -500,7 +505,7 @@ public class ChatHistoryMemoryProviderTests
             options: options,
             loggerFactory: this._loggerFactoryMock.Object);
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "requesting relevant history")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "requesting relevant history") } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);

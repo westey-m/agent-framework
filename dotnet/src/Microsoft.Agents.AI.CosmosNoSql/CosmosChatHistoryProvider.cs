@@ -257,7 +257,9 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
             messages.Reverse();
         }
 
-        return messages;
+        return messages
+            .Select(message => message.WithAgentRequestMessageSource(AgentRequestMessageSourceType.ChatHistory, this.GetType().FullName!))
+            .Concat(context.RequestMessages);
     }
 
     /// <inheritdoc />

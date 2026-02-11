@@ -189,7 +189,8 @@ public class ChatClientAgent_ChatHistoryManagementTests
         mockChatHistoryProvider
             .Protected()
             .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync([new ChatMessage(ChatRole.User, "Existing Chat History")]);
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(new List<ChatMessage> { new(ChatRole.User, "Existing Chat History") }.Concat(ctx.RequestMessages).ToList()));
         mockChatHistoryProvider
             .Protected()
             .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
@@ -221,7 +222,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
         mockChatHistoryProvider
             .Protected()
             .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
-                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 1 && x.ResponseMessages!.Count() == 1),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 2 && x.ResponseMessages!.Count() == 1),
                 ItExpr.IsAny<CancellationToken>());
     }
 
@@ -240,6 +241,11 @@ public class ChatClientAgent_ChatHistoryManagementTests
                 It.IsAny<CancellationToken>())).Throws(new InvalidOperationException("Test Error"));
 
         Mock<ChatHistoryProvider> mockChatHistoryProvider = new();
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
 
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
@@ -309,7 +315,8 @@ public class ChatClientAgent_ChatHistoryManagementTests
         mockOverrideChatHistoryProvider
             .Protected()
             .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync([new ChatMessage(ChatRole.User, "Existing Chat History")]);
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(new List<ChatMessage> { new(ChatRole.User, "Existing Chat History") }.Concat(ctx.RequestMessages).ToList()));
         mockOverrideChatHistoryProvider
             .Protected()
             .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
@@ -355,7 +362,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
         mockOverrideChatHistoryProvider
             .Protected()
             .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
-                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 1 && x.ResponseMessages!.Count() == 1),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x => x.RequestMessages.Count() == 2 && x.ResponseMessages!.Count() == 1),
                 ItExpr.IsAny<CancellationToken>());
 
         mockAgentOptionsChatHistoryProvider

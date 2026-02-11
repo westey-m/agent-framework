@@ -3135,7 +3135,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     {
         protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
-            return new ValueTask<AIContext>(new AIContext());
+            return new ValueTask<AIContext>(context.AIContext);
         }
     }
 
@@ -3146,7 +3146,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     {
         protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
-            return new ValueTask<IEnumerable<ChatMessage>>(Array.Empty<ChatMessage>());
+            return new ValueTask<IEnumerable<ChatMessage>>(context.RequestMessages);
         }
 
         protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)

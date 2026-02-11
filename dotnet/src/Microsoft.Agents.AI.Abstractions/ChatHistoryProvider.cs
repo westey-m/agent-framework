@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -40,25 +39,6 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public abstract class ChatHistoryProvider
 {
-    private readonly string _sourceId;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class.
-    /// </summary>
-    protected ChatHistoryProvider()
-    {
-        this._sourceId = this.GetType().FullName!;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ChatHistoryProvider"/> class with the specified source id.
-    /// </summary>
-    /// <param name="sourceId">The source id to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="ChatHistoryProvider"/>.</param>
-    protected ChatHistoryProvider(string sourceId)
-    {
-        this._sourceId = sourceId;
-    }
-
     /// <summary>
     /// Gets the key used to store the provider state in the <see cref="AgentSession.StateBag"/>.
     /// </summary>
@@ -94,12 +74,8 @@ public abstract class ChatHistoryProvider
     /// </list>
     /// </para>
     /// </remarks>
-    public async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
-    {
-        var messages = await this.InvokingCoreAsync(context, cancellationToken).ConfigureAwait(false);
-
-        return messages.Select(message => message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.ChatHistory, this._sourceId));
-    }
+    public ValueTask<IEnumerable<ChatMessage>> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
+        => this.InvokingCoreAsync(context, cancellationToken);
 
     /// <summary>
     /// Called at the start of agent invocation to provide messages from the chat history as context for the next agent invocation.
@@ -231,7 +207,7 @@ public abstract class ChatHistoryProvider
         /// </summary>
         /// <param name="agent">The agent being invoked.</param>
         /// <param name="session">The session associated with the agent invocation.</param>
-        /// <param name="requestMessages">The new messages to be used by the agent for this invocation.</param>
+        /// <param name="requestMessages">The messages to be used by the agent for this invocation.</param>
         /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
         public InvokingContext(
             AIAgent agent,
@@ -254,11 +230,22 @@ public abstract class ChatHistoryProvider
         public AgentSession? Session { get; }
 
         /// <summary>
-        /// Gets the caller provided messages that will be used by the agent for this invocation.
+        /// Gets the messages that will be used by the agent for this invocation. <see cref="ChatHistoryProvider"/> instances can modify
+        /// and return or return a new message list to add additional messages for the invocation.
         /// </summary>
         /// <value>
-        /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
+        /// A collection of <see cref="ChatMessage"/> instances representing the messages that will be used by the agent for this invocation.
         /// </value>
+        /// <remarks>
+        /// <para>
+        /// If multiple <see cref="ChatHistoryProvider"/> instances are used in the same invocation, each <see cref="ChatHistoryProvider"/>
+        /// will receive the messages returned by the previous <see cref="ChatHistoryProvider"/> allowing them to build on top of each other's context.
+        /// </para>
+        /// <para>
+        /// The first <see cref="ChatHistoryProvider"/> in the invocation pipeline will receive the
+        /// caller provided messages.
+        /// </para>
+        /// </remarks>
         public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
     }
 

@@ -87,6 +87,7 @@ namespace SampleApp
 
         protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
+            var inputContext = context.AIContext;
             var todoItems = GetTodoItems(context.Session);
 
             StringBuilder outputMessageBuilder = new();
@@ -106,12 +107,19 @@ namespace SampleApp
 
             return new ValueTask<AIContext>(new AIContext
             {
-                Tools =
-                [
+                Instructions = inputContext.Instructions,
+                Tools = (inputContext.Tools ?? []).Concat(new AITool[]
+                {
                     AIFunctionFactory.Create((string item) => AddTodoItem(context.Session, item), "AddTodoItem", "Adds an item to the todo list."),
                     AIFunctionFactory.Create((int index) => RemoveTodoItem(context.Session, index), "RemoveTodoItem", "Removes an item from the todo list. Index is zero based.")
-                ],
-                Messages = [new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString())]
+                }).ToList(),
+                Messages =
+                    (inputContext.Messages ?? [])
+                    .Concat(
+                    [
+                        new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                    ])
+                    .ToList()
             });
         }
 
@@ -142,6 +150,7 @@ namespace SampleApp
     {
         protected override async ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
+            var inputContext = context.AIContext;
             var events = await loadNextThreeCalendarEvents();
 
             StringBuilder outputMessageBuilder = new();
@@ -153,10 +162,15 @@ namespace SampleApp
 
             return new()
             {
+                Instructions = inputContext.Instructions,
                 Messages =
-                [
-                    new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()),
-                ]
+                    (inputContext.Messages ?? [])
+                    .Concat(
+                    [
+                        new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                    ])
+                    .ToList(),
+                Tools = inputContext.Tools
             };
         }
     }
@@ -177,16 +191,13 @@ namespace SampleApp
         protected override async ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
             // Invoke all the sub providers.
-            var tasks = this._providers.Select(provider => provider.InvokingAsync(context, cancellationToken).AsTask());
-            var results = await Task.WhenAll(tasks);
-
-            // Combine the results from each sub provider.
-            return new AIContext
+            var currentAIContext = context.AIContext;
+            foreach (var provider in this._providers)
             {
-                Tools = results.SelectMany(r => r.Tools ?? []).ToList(),
-                Messages = results.SelectMany(r => r.Messages ?? []).ToList(),
-                Instructions = string.Join("\n", results.Select(r => r.Instructions).Where(s => !string.IsNullOrEmpty(s)))
-            };
+                currentAIContext = await provider.InvokingAsync(new InvokingContext(context.Agent, context.Session, currentAIContext), cancellationToken);
+            }
+
+            return currentAIContext;
         }
     }
 }

@@ -125,10 +125,15 @@ namespace SampleApp
 
         protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         {
+            var inputContext = context.AIContext;
             var userInfo = context.Session?.StateBag.GetValue<UserInfo>(nameof(UserInfoMemory))
                 ?? this._stateInitializer.Invoke(context.Session);
 
             StringBuilder instructions = new();
+            if (!string.IsNullOrEmpty(inputContext.Instructions))
+            {
+                instructions.AppendLine(inputContext.Instructions);
+            }
 
             // If we don't already know the user's name and age, add instructions to ask for them, otherwise just provide what we have to the context.
             instructions
@@ -143,7 +148,9 @@ namespace SampleApp
 
             return new ValueTask<AIContext>(new AIContext
             {
-                Instructions = instructions.ToString()
+                Instructions = instructions.ToString(),
+                Messages = inputContext.Messages,
+                Tools = inputContext.Tools
             });
         }
     }

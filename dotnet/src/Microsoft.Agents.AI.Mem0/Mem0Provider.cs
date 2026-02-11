@@ -108,12 +108,13 @@ public sealed class Mem0Provider : AIContextProvider
     {
         Throw.IfNull(context);
 
+        var inputContext = context.AIContext;
         var state = this.GetOrInitializeState(context.Session);
         var searchScope = state?.SearchScope ?? new Mem0ProviderScope();
 
         string queryText = string.Join(
             Environment.NewLine,
-            context.RequestMessages
+            (inputContext.Messages ?? [])
                 .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                 .Where(m => !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
@@ -131,6 +132,9 @@ public sealed class Mem0Provider : AIContextProvider
             var outputMessageText = memories.Count == 0
                 ? null
                 : $"{this._contextPrompt}\n{string.Join(Environment.NewLine, memories)}";
+            var outputMessage = memories.Count == 0
+                ? null
+                : new ChatMessage(ChatRole.User, outputMessageText!).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!);
 
             if (this._logger?.IsEnabled(LogLevel.Information) is true)
             {
@@ -157,7 +161,12 @@ public sealed class Mem0Provider : AIContextProvider
 
             return new AIContext
             {
-                Messages = [new ChatMessage(ChatRole.User, outputMessageText)]
+                Instructions = inputContext.Instructions,
+                Messages =
+                    (inputContext.Messages ?? [])
+                    .Concat(outputMessage is not null ? [outputMessage] : [])
+                    .ToList(),
+                Tools = inputContext.Tools
             };
         }
         catch (ArgumentException)
@@ -176,7 +185,7 @@ public sealed class Mem0Provider : AIContextProvider
                     searchScope.ThreadId,
                     this.SanitizeLogData(searchScope.UserId));
             }
-            return new AIContext();
+            return inputContext;
         }
     }
 

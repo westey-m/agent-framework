@@ -279,7 +279,8 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
             messages.Reverse();
         }
 
-        return this.RetrievalOutputMessageFilter is not null ? this.RetrievalOutputMessageFilter(messages) : messages;
+        return (this.RetrievalOutputMessageFilter is not null ? this.RetrievalOutputMessageFilter(messages) : messages)
+            .Concat(context.RequestMessages);
     }
 
     /// <inheritdoc />

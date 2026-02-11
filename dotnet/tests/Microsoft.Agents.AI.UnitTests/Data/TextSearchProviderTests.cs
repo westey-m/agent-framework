@@ -90,10 +90,14 @@ public sealed class TextSearchProviderTests
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
             new TestAgentSession(),
-            [
-                new ChatMessage(ChatRole.User, "Sample user question?"),
-                new ChatMessage(ChatRole.User, "Additional part")
-            ]);
+            new AIContext
+            {
+                Messages = new List<ChatMessage>
+                {
+                    new(ChatRole.User, "Sample user question?"),
+                    new(ChatRole.User, "Additional part")
+                }
+            });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -102,9 +106,14 @@ public sealed class TextSearchProviderTests
         Assert.Equal("Sample user question?\nAdditional part", capturedInput);
         Assert.Null(aiContext.Instructions); // TextSearchProvider uses a user message for context injection.
         Assert.NotNull(aiContext.Messages);
-        Assert.Single(aiContext.Messages!);
-        var message = aiContext.Messages!.Single();
+        Assert.Equal(3, aiContext.Messages!.Count); // 2 input messages + 1 search result message
+        Assert.Equal("Sample user question?", aiContext.Messages![0].Text);
+        Assert.Equal("Additional part", aiContext.Messages![1].Text);
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![1].GetAgentRequestMessageSourceType());
+        var message = aiContext.Messages!.Last();
         Assert.Equal(ChatRole.User, message.Role);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, message.GetAgentRequestMessageSourceType());
         string text = message.Text!;
 
         if (overrideContextPrompt is null)
@@ -165,13 +174,15 @@ public sealed class TextSearchProviderTests
             FunctionToolDescription = overrideDescription
         };
         var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
-        Assert.Null(aiContext.Messages); // No automatic injection.
+        Assert.NotNull(aiContext.Messages); // Input messages are preserved.
+        Assert.Single(aiContext.Messages!);
+        Assert.Equal("Q?", aiContext.Messages![0].Text);
         Assert.NotNull(aiContext.Tools);
         Assert.Single(aiContext.Tools);
         var tool = aiContext.Tools.Single();
@@ -184,13 +195,15 @@ public sealed class TextSearchProviderTests
     {
         // Arrange
         var provider = new TextSearchProvider(this.FailingSearchAsync, loggerFactory: this._loggerFactoryMock.Object);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
-        Assert.Null(aiContext.Messages);
+        Assert.NotNull(aiContext.Messages); // Input messages are preserved on error.
+        Assert.Single(aiContext.Messages!);
+        Assert.Equal("Q?", aiContext.Messages![0].Text);
         Assert.Null(aiContext.Tools);
         this._loggerMock.Verify(
             l => l.Log(
@@ -277,15 +290,16 @@ public sealed class TextSearchProviderTests
             ContextFormatter = r => $"Custom formatted context with {r.Count} results."
         };
         var provider = new TextSearchProvider(SearchDelegateAsync, options);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Custom formatted context with 2 results.", aiContext.Messages![0].Text);
+        Assert.Equal(2, aiContext.Messages!.Count); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        Assert.Equal("Custom formatted context with 2 results.", aiContext.Messages![1].Text);
     }
 
     [Fact]
@@ -311,15 +325,16 @@ public sealed class TextSearchProviderTests
             ContextFormatter = r => string.Join(",", r.Select(x => ((RawPayload)x.RawRepresentation!).Id))
         };
         var provider = new TextSearchProvider(SearchDelegateAsync, options);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("R1,R2", aiContext.Messages![0].Text);
+        Assert.Equal(2, aiContext.Messages!.Count); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        Assert.Equal("R1,R2", aiContext.Messages![1].Text);
     }
 
     [Fact]
@@ -328,13 +343,15 @@ public sealed class TextSearchProviderTests
         // Arrange
         var options = new TextSearchProviderOptions { SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke };
         var provider = new TextSearchProvider(this.NoResultSearchAsync, options);
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), [new ChatMessage(ChatRole.User, "Q?")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Q?") } });
 
         // Act
         var aiContext = await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert
-        Assert.Null(aiContext.Messages);
+        Assert.NotNull(aiContext.Messages); // Input messages are preserved when no results found.
+        Assert.Single(aiContext.Messages!);
+        Assert.Equal("Q?", aiContext.Messages![0].Text);
         Assert.Null(aiContext.Instructions);
         Assert.Null(aiContext.Tools);
     }
@@ -507,9 +524,7 @@ public sealed class TextSearchProviderTests
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
             session,
-            [
-                new ChatMessage(ChatRole.User, "E")
-            ]);
+            new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "E") } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -550,9 +565,7 @@ public sealed class TextSearchProviderTests
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
             session,
-            [
-                new ChatMessage(ChatRole.User, "E")
-            ]);
+            new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "E") } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -599,7 +612,7 @@ public sealed class TextSearchProviderTests
                 new ChatMessage(ChatRole.User, "E"),
             ]));
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "F")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "F") } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -640,9 +653,7 @@ public sealed class TextSearchProviderTests
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
             session,
-            [
-                new ChatMessage(ChatRole.User, "Question?") // Current request message always appended.
-            ]);
+            new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "Question?") } }); // Current request message always appended.
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -723,8 +734,7 @@ public sealed class TextSearchProviderTests
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 4
         });
-        var emptyMessages = Array.Empty<ChatMessage>();
-        await newProvider.InvokingAsync(new(s_mockAgent, restoredSession, emptyMessages), CancellationToken.None); // Trigger search to read memory.
+        await newProvider.InvokingAsync(new(s_mockAgent, restoredSession, new AIContext()), CancellationToken.None); // Trigger search to read memory.
 
         // Assert
         Assert.NotNull(capturedInput);
@@ -750,8 +760,7 @@ public sealed class TextSearchProviderTests
             SearchTime = TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke,
             RecentMessageMemoryLimit = 3
         });
-        var emptyMessages = Array.Empty<ChatMessage>();
-        await provider.InvokingAsync(new(s_mockAgent, session, emptyMessages), CancellationToken.None);
+        await provider.InvokingAsync(new(s_mockAgent, session, new AIContext()), CancellationToken.None);
 
         // Assert
         Assert.NotNull(capturedInput);

@@ -127,8 +127,9 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
         {
             output = this._retrievalOutputMessageFilter(output);
         }
-
-        return output;
+        return output
+            .Select(message => message.WithAgentRequestMessageSource(AgentRequestMessageSourceType.ChatHistory, this.GetType().FullName!))
+            .Concat(context.RequestMessages);
     }
 
     /// <inheritdoc />

@@ -387,6 +387,8 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         Assert.Single(messageList2);
         Assert.Equal("Message for conversation 1", messageList1[0].Text);
         Assert.Equal("Message for conversation 2", messageList2[0].Text);
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, messageList1[0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, messageList2[0].GetAgentRequestMessageSourceType());
     }
 
     #endregion

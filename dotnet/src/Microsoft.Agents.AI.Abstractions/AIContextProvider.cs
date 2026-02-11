@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -31,25 +30,6 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public abstract class AIContextProvider
 {
-    private readonly string _sourceId;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AIContextProvider"/> class.
-    /// </summary>
-    protected AIContextProvider()
-    {
-        this._sourceId = this.GetType().FullName!;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AIContextProvider"/> class with the specified source id.
-    /// </summary>
-    /// <param name="sourceId">The source id to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="AIContextProvider"/>.</param>
-    protected AIContextProvider(string sourceId)
-    {
-        this._sourceId = sourceId;
-    }
-
     /// <summary>
     /// Gets the key used to store the provider state in the <see cref="AgentSession.StateBag"/>.
     /// </summary>
@@ -77,20 +57,8 @@ public abstract class AIContextProvider
     /// </list>
     /// </para>
     /// </remarks>
-    public async ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
-    {
-        var aiContext = await this.InvokingCoreAsync(context, cancellationToken).ConfigureAwait(false);
-        if (aiContext.Messages is null)
-        {
-            return aiContext;
-        }
-
-        aiContext.Messages = aiContext.Messages
-            .Select(message => message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this._sourceId))
-            .ToList();
-
-        return aiContext;
-    }
+    public ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
+        => this.InvokingCoreAsync(context, cancellationToken);
 
     /// <summary>
     /// Called at the start of agent invocation to provide additional context.
@@ -205,20 +173,20 @@ public abstract class AIContextProvider
     public sealed class InvokingContext
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="InvokingContext"/> class with the specified request messages.
+        /// Initializes a new instance of the <see cref="InvokingContext"/> class.
         /// </summary>
         /// <param name="agent">The agent being invoked.</param>
         /// <param name="session">The session associated with the agent invocation.</param>
-        /// <param name="requestMessages">The messages to be used by the agent for this invocation.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
+        /// <param name="aiContext">The AI context to be used by the agent for this invocation.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="agent"/> or <paramref name="aiContext"/> is <see langword="null"/>.</exception>
         public InvokingContext(
             AIAgent agent,
             AgentSession? session,
-            IEnumerable<ChatMessage> requestMessages)
+            AIContext aiContext)
         {
             this.Agent = Throw.IfNull(agent);
             this.Session = session;
-            this.RequestMessages = Throw.IfNull(requestMessages);
+            this.AIContext = Throw.IfNull(aiContext);
         }
 
         /// <summary>
@@ -232,12 +200,23 @@ public abstract class AIContextProvider
         public AgentSession? Session { get; }
 
         /// <summary>
-        /// Gets the caller provided messages that will be used by the agent for this invocation.
+        /// Gets the <see cref="AIContext"/> being built for the current invocation. Context providers can modify
+        /// and return or return a new <see cref="AIContext"/> instance to provide additional context for the invocation.
         /// </summary>
-        /// <value>
-        /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
-        /// </value>
-        public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
+        /// <remarks>
+        /// <para>
+        /// If multiple <see cref="AIContextProvider"/> instances are used in the same invocation, each <see cref="AIContextProvider"/>
+        /// will receive the context returned by the previous <see cref="AIContextProvider"/> allowing them to build on top of each other's context.
+        /// </para>
+        /// <para>
+        /// The first <see cref="AIContextProvider"/> in the invocation pipeline will receive an <see cref="AIContext"/> instance
+        /// that already contains the caller provided messages that will be used by the agent for this invocation.
+        /// </para>
+        /// <para>
+        /// It may also contain messages from chat history, if a <see cref="ChatHistoryProvider"/> is being used.
+        /// </para>
+        /// </remarks>
+        public AIContext AIContext { get; }
     }
 
     /// <summary>
@@ -255,7 +234,7 @@ public abstract class AIContextProvider
         /// </summary>
         /// <param name="agent">The agent being invoked.</param>
         /// <param name="session">The session associated with the agent invocation.</param>
-        /// <param name="requestMessages">The caller provided messages that were used by the agent for this invocation.</param>
+        /// <param name="requestMessages">The messages that were used by the agent for this invocation.</param>
         /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
         public InvokedContext(
             AIAgent agent,
@@ -278,11 +257,10 @@ public abstract class AIContextProvider
         public AgentSession? Session { get; }
 
         /// <summary>
-        /// Gets the caller provided messages that were used by the agent for this invocation.
+        /// Gets the messages that were used by the agent for this invocation.
         /// </summary>
         /// <value>
-        /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
-        /// This does not include any <see cref="AIContextProvider"/> supplied messages.
+        /// A collection of <see cref="ChatMessage"/> instances representing all messages that were used by the agent for this invocation.
         /// </value>
         public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
 

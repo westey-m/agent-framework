@@ -96,10 +96,17 @@ public sealed class TextSearchProvider : AIContextProvider
     /// <inheritdoc />
     protected override async ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
+        var inputContext = context.AIContext;
+
         if (this._searchTime != TextSearchProviderOptions.TextSearchBehavior.BeforeAIInvoke)
         {
-            // Expose the search tool for on-demand invocation.
-            return new AIContext { Tools = this._tools }; // No automatic message injection.
+            // Expose the search tool for on-demand invocation, accumulated with the input context.
+            return new AIContext
+            {
+                Instructions = inputContext.Instructions,
+                Messages = inputContext.Messages,
+                Tools = (inputContext.Tools ?? []).Concat(this._tools).ToList()
+            };
         }
 
         // Retrieve recent messages from the session state bag.
@@ -108,7 +115,8 @@ public sealed class TextSearchProvider : AIContextProvider
 
         // Aggregate text from memory + current request messages.
         var sbInput = new StringBuilder();
-        var requestMessagesText = this._searchInputMessageFilter(context.RequestMessages)
+        var requestMessagesText =
+            this._searchInputMessageFilter(inputContext.Messages ?? [])
             .Where(x => !string.IsNullOrWhiteSpace(x?.Text)).Select(x => x.Text);
         foreach (var messageText in recentMessagesText.Concat(requestMessagesText))
         {
@@ -134,7 +142,7 @@ public sealed class TextSearchProvider : AIContextProvider
 
             if (materialized.Count == 0)
             {
-                return new AIContext();
+                return inputContext;
             }
 
             // Format search results
@@ -147,13 +155,21 @@ public sealed class TextSearchProvider : AIContextProvider
 
             return new AIContext
             {
-                Messages = [new ChatMessage(ChatRole.User, formatted) { AdditionalProperties = new AdditionalPropertiesDictionary() { ["IsTextSearchProviderOutput"] = true } }]
+                Instructions = inputContext.Instructions,
+                Messages =
+                    (inputContext.Messages ?? [])
+                    .Concat(
+                    [
+                        new ChatMessage(ChatRole.User, formatted).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                    ])
+                    .ToList(),
+                Tools = inputContext.Tools
             };
         }
         catch (Exception ex)
         {
             this._logger?.LogError(ex, "TextSearchProvider: Failed to search for data due to error");
-            return new AIContext();
+            return inputContext;
         }
     }
 
@@ -184,10 +200,7 @@ public sealed class TextSearchProvider : AIContextProvider
             .Concat(context.ResponseMessages ?? [])
             .Where(m =>
                 this._recentMessageRolesIncluded.Contains(m.Role) &&
-                !string.IsNullOrWhiteSpace(m.Text) &&
-                // Filter out any messages that were added by this class in InvokingAsync, since we don't want
-                // a feedback loop where previous search results are used to find new search results.
-                (m.AdditionalProperties == null || m.AdditionalProperties.TryGetValue("IsTextSearchProviderOutput", out bool isTextSearchProviderOutput) == false || !isTextSearchProviderOutput))
+                !string.IsNullOrWhiteSpace(m.Text))
             .Select(m => m.Text);
 
         // Combine existing messages with new messages, then take the most recent up to the limit.

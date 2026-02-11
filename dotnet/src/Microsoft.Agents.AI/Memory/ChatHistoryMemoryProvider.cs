@@ -148,6 +148,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
     {
         _ = Throw.IfNull(context);
 
+        var inputContext = context.AIContext;
         var state = this.GetOrInitializeState(context.Session);
         var searchScope = state?.SearchScope ?? new ChatHistoryMemoryProviderScope();
 
@@ -165,20 +166,26 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
                     description: this._toolDescription)
             ];
 
-            // Expose search tool for on-demand invocation by the model
-            return new AIContext { Tools = tools };
+            // Expose search tool for on-demand invocation by the model, accumulated with the input context
+            return new AIContext
+            {
+                Instructions = inputContext.Instructions,
+                Messages = inputContext.Messages,
+                Tools = (inputContext.Tools ?? []).Concat(tools).ToList()
+            };
         }
 
         try
         {
             // Get the text from the current request messages
-            var requestText = string.Join("\n", this._searchInputMessageFilter(context.RequestMessages)
+            var requestText = string.Join("\n",
+                this._searchInputMessageFilter(inputContext.Messages ?? [])
                 .Where(m => m != null && !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
 
             if (string.IsNullOrWhiteSpace(requestText))
             {
-                return new AIContext();
+                return inputContext;
             }
 
             // Search for relevant chat history
@@ -186,12 +193,20 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
 
             if (string.IsNullOrWhiteSpace(contextText))
             {
-                return new AIContext();
+                return inputContext;
             }
 
             return new AIContext
             {
-                Messages = [new ChatMessage(ChatRole.User, contextText)]
+                Instructions = inputContext.Instructions,
+                Messages =
+                    (inputContext.Messages ?? [])
+                    .Concat(
+                    [
+                        new ChatMessage(ChatRole.User, contextText).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                    ])
+                    .ToList(),
+                Tools = inputContext.Tools
             };
         }
         catch (Exception ex)
@@ -207,7 +222,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
                     this.SanitizeLogData(searchScope.UserId));
             }
 
-            return new AIContext();
+            return inputContext;
         }
     }
 

@@ -71,7 +71,7 @@ public class InMemoryChatHistoryProviderTests
         var requestMessages = new List<ChatMessage>
         {
             new(ChatRole.User, "Hello"),
-            new(ChatRole.System, "additional context") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "TestSource") } } },
+            new(ChatRole.System, "additional context") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "TestSource") } } },
         };
         var responseMessages = new List<ChatMessage>
         {
@@ -119,6 +119,11 @@ public class InMemoryChatHistoryProviderTests
         var session = CreateMockSession();
 
         // Arrange
+        var requestMessages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Hello"),
+        };
+
         var provider = new InMemoryChatHistoryProvider();
         provider.SetMessages(session,
         [
@@ -126,13 +131,18 @@ public class InMemoryChatHistoryProviderTests
             new ChatMessage(ChatRole.Assistant, "Test2")
         ]);
 
-        var context = new ChatHistoryProvider.InvokingContext(s_mockAgent, session, []);
+        var context = new ChatHistoryProvider.InvokingContext(s_mockAgent, session, requestMessages);
         var result = (await provider.InvokingAsync(context, CancellationToken.None)).ToList();
 
         // Assert
-        Assert.Equal(2, result.Count);
+        Assert.Equal(3, result.Count);
         Assert.Contains(result, m => m.Text == "Test1");
         Assert.Contains(result, m => m.Text == "Test2");
+        Assert.Contains(result, m => m.Text == "Hello");
+
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, result[0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.ChatHistory, result[1].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.External, result[2].GetAgentRequestMessageSourceType());
     }
 
     [Fact]

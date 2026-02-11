@@ -132,6 +132,9 @@ public sealed class Mem0Provider : AIContextProvider
             var outputMessageText = memories.Count == 0
                 ? null
                 : $"{this._contextPrompt}\n{string.Join(Environment.NewLine, memories)}";
+            var outputMessage = memories.Count == 0
+                ? null
+                : new ChatMessage(ChatRole.User, outputMessageText!).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!);
 
             if (this._logger?.IsEnabled(LogLevel.Information) is true)
             {
@@ -161,10 +164,7 @@ public sealed class Mem0Provider : AIContextProvider
                 Instructions = inputContext.Instructions,
                 Messages =
                     (inputContext.Messages ?? [])
-                    .Concat(
-                    [
-                        new ChatMessage(ChatRole.User, outputMessageText).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
-                    ])
+                    .Concat(outputMessage is not null ? [outputMessage] : [])
                     .ToList(),
                 Tools = inputContext.Tools
             };

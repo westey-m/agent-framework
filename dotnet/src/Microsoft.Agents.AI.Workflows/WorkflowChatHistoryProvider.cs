@@ -54,7 +54,6 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
     protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
         => new(this.GetOrInitializeState(context.Session)
             .Messages
-            .AsReadOnly()
             .Select(message => message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.ChatHistory, this.GetType().FullName!))
             .Concat(context.RequestMessages));
 

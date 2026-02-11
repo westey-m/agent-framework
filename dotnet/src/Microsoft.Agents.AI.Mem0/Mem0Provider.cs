@@ -134,7 +134,7 @@ public sealed class Mem0Provider : AIContextProvider
                 : $"{this._contextPrompt}\n{string.Join(Environment.NewLine, memories)}";
             var outputMessage = memories.Count == 0
                 ? null
-                : new ChatMessage(ChatRole.User, outputMessageText!).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!);
+                : new ChatMessage(ChatRole.User, outputMessageText!).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!);
 
             if (this._logger?.IsEnabled(LogLevel.Information) is true)
             {

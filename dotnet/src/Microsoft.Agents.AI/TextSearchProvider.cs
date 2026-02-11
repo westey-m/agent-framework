@@ -153,7 +153,7 @@ public sealed class TextSearchProvider : AIContextProvider
                     (inputContext.Messages ?? [])
                     .Concat(
                     [
-                        new ChatMessage(ChatRole.User, formatted).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                        new ChatMessage(ChatRole.User, formatted).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
                     ])
                     .ToList(),
                 Tools = inputContext.Tools

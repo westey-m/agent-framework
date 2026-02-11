@@ -117,7 +117,7 @@ namespace SampleApp
                     (inputContext.Messages ?? [])
                     .Concat(
                     [
-                        new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                        new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
                     ])
                     .ToList()
             });
@@ -167,7 +167,7 @@ namespace SampleApp
                     (inputContext.Messages ?? [])
                     .Concat(
                     [
-                        new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                        new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
                     ])
                     .ToList(),
                 Tools = inputContext.Tools

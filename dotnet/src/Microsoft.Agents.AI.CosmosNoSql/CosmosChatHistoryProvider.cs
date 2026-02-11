@@ -89,7 +89,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
     /// during <see cref="ChatHistoryProvider.InvokedAsync"/>. The default filter excludes messages with the
     /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> source type.
     /// </summary>
-    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> StorageInputMessageFilter { get; set; } = DefaultExcludeChatHistoryFilter;
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> StorageInputMessageFilter { get; set { field = Throw.IfNull(value); } } = DefaultExcludeChatHistoryFilter;
 
     /// <summary>
     /// Gets or sets an optional filter function applied to messages produced by this provider

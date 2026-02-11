@@ -574,7 +574,7 @@ public class ChatHistoryMemoryProviderTests
             new(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
         };
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), requestMessages);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = requestMessages });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -616,7 +616,7 @@ public class ChatHistoryMemoryProviderTests
             new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
         };
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), requestMessages);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = requestMessages });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);

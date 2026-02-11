@@ -452,7 +452,7 @@ public sealed class Mem0ProviderTests : IDisposable
             new(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
         };
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, requestMessages);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = requestMessages });
 
         // Act
         await sut.InvokingAsync(invokingContext, CancellationToken.None);
@@ -481,7 +481,7 @@ public sealed class Mem0ProviderTests : IDisposable
             new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
         };
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, requestMessages);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = requestMessages });
 
         // Act
         await sut.InvokingAsync(invokingContext, CancellationToken.None);

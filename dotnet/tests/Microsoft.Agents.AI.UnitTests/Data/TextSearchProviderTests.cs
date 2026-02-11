@@ -377,7 +377,7 @@ public sealed class TextSearchProviderTests
             new(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
         };
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), requestMessages);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = requestMessages });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -407,7 +407,7 @@ public sealed class TextSearchProviderTests
             new(ChatRole.System, "System message"),
         };
 
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), requestMessages);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = requestMessages });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
@@ -445,7 +445,7 @@ public sealed class TextSearchProviderTests
         await provider.InvokedAsync(new(s_mockAgent, session, requestMessages));
 
         // Now invoke to read stored memory
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "Next")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Next")] });
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert - Only "External message" was stored in memory, so search input = "External message" + "Next"
@@ -481,7 +481,7 @@ public sealed class TextSearchProviderTests
         await provider.InvokedAsync(new(s_mockAgent, session, requestMessages));
 
         // Now invoke to read stored memory
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, [new ChatMessage(ChatRole.User, "Next")]);
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Next")] });
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert - Both messages stored (identity filter), so search input includes all + current

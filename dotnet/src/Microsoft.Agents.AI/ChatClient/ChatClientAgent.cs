@@ -323,7 +323,7 @@ public sealed partial class ChatClientAgent : AIAgent
         : serviceType == typeof(IChatClient) ? this.ChatClient
         : serviceType == typeof(ChatOptions) ? this._agentOptions?.ChatOptions
         : serviceType == typeof(ChatClientAgentOptions) ? this._agentOptions
-        : this.AIContextProviders?.Select(provider => provider.GetService(serviceType, serviceKey)).FirstOrDefault()
+        : this.AIContextProviders?.Select(provider => provider.GetService(serviceType, serviceKey)).FirstOrDefault(s => s is not null)
         ?? this.ChatHistoryProvider?.GetService(serviceType, serviceKey)
         ?? this.ChatClient.GetService(serviceType, serviceKey));
 

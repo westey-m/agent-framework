@@ -149,7 +149,13 @@ public sealed class TextSearchProvider : AIContextProvider
             return new AIContext
             {
                 Instructions = inputContext.Instructions,
-                Messages = (inputContext.Messages ?? []).Concat([new ChatMessage(ChatRole.User, formatted) { AdditionalProperties = new AdditionalPropertiesDictionary() { ["IsTextSearchProviderOutput"] = true } }]).ToList(),
+                Messages =
+                    (inputContext.Messages ?? [])
+                    .Concat(
+                    [
+                        new ChatMessage(ChatRole.User, formatted).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                    ])
+                    .ToList(),
                 Tools = inputContext.Tools
             };
         }
@@ -188,10 +194,7 @@ public sealed class TextSearchProvider : AIContextProvider
             .Concat(context.ResponseMessages ?? [])
             .Where(m =>
                 this._recentMessageRolesIncluded.Contains(m.Role) &&
-                !string.IsNullOrWhiteSpace(m.Text) &&
-                // Filter out any messages that were added by this class in InvokingAsync, since we don't want
-                // a feedback loop where previous search results are used to find new search results.
-                (m.AdditionalProperties == null || m.AdditionalProperties.TryGetValue("IsTextSearchProviderOutput", out bool isTextSearchProviderOutput) == false || !isTextSearchProviderOutput))
+                !string.IsNullOrWhiteSpace(m.Text))
             .Select(m => m.Text);
 
         // Combine existing messages with new messages, then take the most recent up to the limit.

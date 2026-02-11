@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -31,25 +30,6 @@ namespace Microsoft.Agents.AI;
 /// </remarks>
 public abstract class AIContextProvider
 {
-    private readonly string _sourceId;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AIContextProvider"/> class.
-    /// </summary>
-    protected AIContextProvider()
-    {
-        this._sourceId = this.GetType().FullName!;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AIContextProvider"/> class with the specified source id.
-    /// </summary>
-    /// <param name="sourceId">The source id to stamp on <see cref="ChatMessage.AdditionalProperties"/> for each messages produced by the <see cref="AIContextProvider"/>.</param>
-    protected AIContextProvider(string sourceId)
-    {
-        this._sourceId = sourceId;
-    }
-
     /// <summary>
     /// Gets the key used to store the provider state in the <see cref="AgentSession.StateBag"/>.
     /// </summary>
@@ -77,20 +57,8 @@ public abstract class AIContextProvider
     /// </list>
     /// </para>
     /// </remarks>
-    public async ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
-    {
-        var aiContext = await this.InvokingCoreAsync(context, cancellationToken).ConfigureAwait(false);
-        if (aiContext.Messages is null)
-        {
-            return aiContext;
-        }
-
-        aiContext.Messages = aiContext.Messages
-            .Select(message => message.AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this._sourceId))
-            .ToList();
-
-        return aiContext;
-    }
+    public ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
+        => this.InvokingCoreAsync(context, cancellationToken);
 
     /// <summary>
     /// Called at the start of agent invocation to provide additional context.

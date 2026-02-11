@@ -159,7 +159,13 @@ public sealed class Mem0Provider : AIContextProvider
             return new AIContext
             {
                 Instructions = inputContext.Instructions,
-                Messages = (inputContext.Messages ?? []).Concat([new ChatMessage(ChatRole.User, outputMessageText)]).ToList(),
+                Messages =
+                    (inputContext.Messages ?? [])
+                    .Concat(
+                    [
+                        new ChatMessage(ChatRole.User, outputMessageText).AsAgentRequestMessageSourcedMessage(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
+                    ])
+                    .ToList(),
                 Tools = inputContext.Tools
             };
         }

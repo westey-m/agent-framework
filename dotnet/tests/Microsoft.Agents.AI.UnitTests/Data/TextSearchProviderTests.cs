@@ -109,8 +109,11 @@ public sealed class TextSearchProviderTests
         Assert.Equal(3, aiContext.Messages!.Count); // 2 input messages + 1 search result message
         Assert.Equal("Sample user question?", aiContext.Messages![0].Text);
         Assert.Equal("Additional part", aiContext.Messages![1].Text);
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![1].GetAgentRequestMessageSourceType());
         var message = aiContext.Messages!.Last();
         Assert.Equal(ChatRole.User, message.Role);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, message.GetAgentRequestMessageSourceType());
         string text = message.Text!;
 
         if (overrideContextPrompt is null)

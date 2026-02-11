@@ -119,9 +119,11 @@ public sealed class Mem0ProviderTests : IDisposable
 
         Assert.NotNull(aiContext.Messages);
         Assert.Equal(2, aiContext.Messages.Count);
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages[0].GetAgentRequestMessageSourceType());
         var contextMessage = aiContext.Messages[1];
         Assert.Equal(ChatRole.User, contextMessage.Role);
         Assert.Contains("Name is Caoimhe", contextMessage.Text);
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, contextMessage.GetAgentRequestMessageSourceType());
 
         this._loggerMock.Verify(
             l => l.Log(

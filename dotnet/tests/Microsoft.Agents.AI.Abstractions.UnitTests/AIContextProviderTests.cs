@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -15,110 +14,6 @@ public class AIContextProviderTests
 {
     private static readonly AIAgent s_mockAgent = new Mock<AIAgent>().Object;
     private static readonly AgentSession s_mockSession = new Mock<AgentSession>().Object;
-
-    #region InvokingAsync Message Stamping Tests
-
-    [Fact]
-    public async Task InvokingAsync_StampsMessagesWithSourceTypeAndSourceIdAsync()
-    {
-        // Arrange
-        var provider = new TestAIContextProviderWithMessages();
-        var context = new AIContextProvider.InvokingContext(s_mockAgent, s_mockSession, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Request")] });
-
-        // Act
-        AIContext aiContext = await provider.InvokingAsync(context);
-
-        // Assert
-        Assert.NotNull(aiContext.Messages);
-        ChatMessage message = aiContext.Messages.Single();
-        Assert.NotNull(message.AdditionalProperties);
-        Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out object? attribution));
-        var typedAttribution = Assert.IsType<AgentRequestMessageSourceAttribution>(attribution);
-        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, typedAttribution.SourceType);
-        Assert.Equal(typeof(TestAIContextProviderWithMessages).FullName, typedAttribution.SourceId);
-    }
-
-    [Fact]
-    public async Task InvokingAsync_WithCustomSourceId_StampsMessagesWithCustomSourceIdAsync()
-    {
-        // Arrange
-        const string CustomSourceId = "CustomContextSource";
-        var provider = new TestAIContextProviderWithCustomSource(CustomSourceId);
-        var context = new AIContextProvider.InvokingContext(s_mockAgent, s_mockSession, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Request")] });
-
-        // Act
-        AIContext aiContext = await provider.InvokingAsync(context);
-
-        // Assert
-        Assert.NotNull(aiContext.Messages);
-        ChatMessage message = aiContext.Messages.Single();
-        Assert.NotNull(message.AdditionalProperties);
-        Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out object? attribution));
-        var typedAttribution = Assert.IsType<AgentRequestMessageSourceAttribution>(attribution);
-        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, typedAttribution.SourceType);
-        Assert.Equal(CustomSourceId, typedAttribution.SourceId);
-    }
-
-    [Fact]
-    public async Task InvokingAsync_DoesNotReStampAlreadyStampedMessagesAsync()
-    {
-        // Arrange
-        var provider = new TestAIContextProviderWithPreStampedMessages();
-        var context = new AIContextProvider.InvokingContext(s_mockAgent, s_mockSession, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Request")] });
-
-        // Act
-        AIContext aiContext = await provider.InvokingAsync(context);
-
-        // Assert
-        Assert.NotNull(aiContext.Messages);
-        ChatMessage message = aiContext.Messages.Single();
-        Assert.NotNull(message.AdditionalProperties);
-        Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out object? attribution));
-        var typedAttribution = Assert.IsType<AgentRequestMessageSourceAttribution>(attribution);
-        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, typedAttribution.SourceType);
-        Assert.Equal(typeof(TestAIContextProviderWithPreStampedMessages).FullName, typedAttribution.SourceId);
-    }
-
-    [Fact]
-    public async Task InvokingAsync_StampsMultipleMessagesAsync()
-    {
-        // Arrange
-        var provider = new TestAIContextProviderWithMultipleMessages();
-        var context = new AIContextProvider.InvokingContext(s_mockAgent, s_mockSession, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Request")] });
-
-        // Act
-        AIContext aiContext = await provider.InvokingAsync(context);
-
-        // Assert
-        Assert.NotNull(aiContext.Messages);
-        List<ChatMessage> messageList = aiContext.Messages.ToList();
-        Assert.Equal(3, messageList.Count);
-
-        foreach (ChatMessage message in messageList)
-        {
-            Assert.NotNull(message.AdditionalProperties);
-            Assert.True(message.AdditionalProperties.TryGetValue(AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, out object? attribution));
-            var typedAttribution = Assert.IsType<AgentRequestMessageSourceAttribution>(attribution);
-            Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, typedAttribution.SourceType);
-            Assert.Equal(typeof(TestAIContextProviderWithMultipleMessages).FullName, typedAttribution.SourceId);
-        }
-    }
-
-    [Fact]
-    public async Task InvokingAsync_WithNullMessages_ReturnsContextWithoutStampingAsync()
-    {
-        // Arrange
-        var provider = new TestAIContextProvider();
-        var context = new AIContextProvider.InvokingContext(s_mockAgent, s_mockSession, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Request")] });
-
-        // Act
-        AIContext aiContext = await provider.InvokingAsync(context);
-
-        // Assert
-        Assert.Null(aiContext.Messages);
-    }
-
-    #endregion
 
     #region Basic Tests
 
@@ -454,56 +349,5 @@ public class AIContextProviderTests
     {
         protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
             => new(new AIContext());
-    }
-
-    private sealed class TestAIContextProviderWithMessages : AIContextProvider
-    {
-        protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-            => new(new AIContext
-            {
-                Messages = [new ChatMessage(ChatRole.System, "Context Message")]
-            });
-    }
-
-    private sealed class TestAIContextProviderWithCustomSource : AIContextProvider
-    {
-        public TestAIContextProviderWithCustomSource(string sourceId) : base(sourceId)
-        {
-        }
-
-        protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-            => new(new AIContext
-            {
-                Messages = [new ChatMessage(ChatRole.System, "Context Message")]
-            });
-    }
-
-    private sealed class TestAIContextProviderWithPreStampedMessages : AIContextProvider
-    {
-        protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-        {
-            var message = new ChatMessage(ChatRole.System, "Pre-stamped Message");
-            message.AdditionalProperties = new AdditionalPropertiesDictionary
-            {
-                [AgentRequestMessageSourceAttribution.AdditionalPropertiesKey] = new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
-            };
-            return new(new AIContext
-            {
-                Messages = [message]
-            });
-        }
-    }
-
-    private sealed class TestAIContextProviderWithMultipleMessages : AIContextProvider
-    {
-        protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
-            => new(new AIContext
-            {
-                Messages = [
-                    new ChatMessage(ChatRole.System, "Message 1"),
-                    new ChatMessage(ChatRole.User, "Message 2"),
-                    new ChatMessage(ChatRole.Assistant, "Message 3")
-                ]
-            });
     }
 }

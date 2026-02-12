@@ -118,9 +118,10 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.Equal("What is my name?", doc.RootElement.GetProperty("query").GetString());
 
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages.Count);
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages[0].GetAgentRequestMessageSourceType());
-        var contextMessage = aiContext.Messages[1];
+        var messages = aiContext.Messages.ToList();
+        Assert.Equal(2, messages.Count);
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[0].GetAgentRequestMessageSourceType());
+        var contextMessage = messages[1];
         Assert.Equal(ChatRole.User, contextMessage.Role);
         Assert.Contains("Name is Caoimhe", contextMessage.Text);
         Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, contextMessage.GetAgentRequestMessageSourceType());

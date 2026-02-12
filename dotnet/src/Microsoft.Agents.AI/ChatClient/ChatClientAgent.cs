@@ -677,7 +677,7 @@ public sealed partial class ChatClientAgent : AIAgent
             throw new InvalidOperationException("Input messages are not allowed when continuing a background response using a continuation token.");
         }
 
-        List<ChatMessage> inputMessagesForChatClient = [];
+        IEnumerable<ChatMessage> inputMessagesForChatClient = inputMessages;
 
         // Populate the session messages only if we are not continuing an existing response as it's not allowed
         if (chatOptions?.ContinuationToken is null)
@@ -688,13 +688,8 @@ public sealed partial class ChatClientAgent : AIAgent
             // The ChatHistoryProvider returns the merged result (history + input messages).
             if (chatHistoryProvider is not null)
             {
-                var invokingContext = new ChatHistoryProvider.InvokingContext(this, typedSession, inputMessages);
-                var providerMessages = await chatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
-                inputMessagesForChatClient.AddRange(providerMessages);
-            }
-            else
-            {
-                inputMessagesForChatClient.AddRange(inputMessages);
+                var invokingContext = new ChatHistoryProvider.InvokingContext(this, typedSession, inputMessagesForChatClient);
+                inputMessagesForChatClient = await chatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
             }
 
             // If we have an AIContextProvider, we should get context from it, and update our
@@ -705,8 +700,8 @@ public sealed partial class ChatClientAgent : AIAgent
                 var aiContext = new AIContext
                 {
                     Instructions = chatOptions?.Instructions,
-                    Messages = inputMessagesForChatClient.ToList(),
-                    Tools = chatOptions?.Tools as List<AITool> ?? chatOptions?.Tools?.ToList()
+                    Messages = inputMessagesForChatClient,
+                    Tools = chatOptions?.Tools
                 };
 
                 foreach (var aiContextProvider in aiContextProviders)
@@ -715,13 +710,14 @@ public sealed partial class ChatClientAgent : AIAgent
                     aiContext = await aiContextProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
                 }
 
-                // Use the returned messages, tools and instructions directly since the provider accumulated them.
-                inputMessagesForChatClient = aiContext.Messages as List<ChatMessage> ?? aiContext.Messages?.ToList() ?? [];
+                // Materialize the accumulated messages and tools once at the end of the provider pipeline.
+                inputMessagesForChatClient = aiContext.Messages ?? [];
 
-                if (chatOptions?.Tools is { Count: > 0 } || aiContext.Tools is { Count: > 0 })
+                var tools = aiContext.Tools as IList<AITool> ?? aiContext.Tools?.ToList();
+                if (chatOptions?.Tools is { Count: > 0 } || tools is { Count: > 0 })
                 {
                     chatOptions ??= new();
-                    chatOptions.Tools = aiContext.Tools;
+                    chatOptions.Tools = tools;
                 }
 
                 if (chatOptions?.Instructions is not null || aiContext.Instructions is not null)
@@ -750,7 +746,10 @@ public sealed partial class ChatClientAgent : AIAgent
             chatOptions.ConversationId = typedSession.ConversationId;
         }
 
-        return (typedSession, chatOptions, inputMessagesForChatClient, continuationToken);
+        // Materialize the accumulated messages once at the end of the provider pipeline, reusing the existing list if possible.
+        List<ChatMessage> messagesList = inputMessagesForChatClient as List<ChatMessage> ?? inputMessagesForChatClient.ToList();
+
+        return (typedSession, chatOptions, messagesList, continuationToken);
     }
 
     private void UpdateSessionConversationId(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)

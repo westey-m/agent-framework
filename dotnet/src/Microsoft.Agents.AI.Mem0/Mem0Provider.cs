@@ -170,8 +170,7 @@ public sealed class Mem0Provider : AIContextProvider
                 Instructions = inputContext.Instructions,
                 Messages =
                     (inputContext.Messages ?? [])
-                    .Concat(outputMessage is not null ? [outputMessage] : [])
-                    .ToList(),
+                    .Concat(outputMessage is not null ? [outputMessage] : []),
                 Tools = inputContext.Tools
             };
         }

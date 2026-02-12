@@ -396,9 +396,10 @@ public class ChatHistoryMemoryProviderTests
             Times.Once);
 
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages.Count);
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages[0].GetAgentRequestMessageSourceType());
-        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, aiContext.Messages[1].GetAgentRequestMessageSourceType());
+        var messages = aiContext.Messages.ToList();
+        Assert.Equal(2, messages.Count);
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, messages[1].GetAgentRequestMessageSourceType());
     }
 
     [Fact]

@@ -677,7 +677,7 @@ public sealed partial class ChatClientAgent : AIAgent
             throw new InvalidOperationException("Input messages are not allowed when continuing a background response using a continuation token.");
         }
 
-        List<ChatMessage> inputMessagesForChatClient = [];
+        IEnumerable<ChatMessage> inputMessagesForChatClient = inputMessages;
 
         // Populate the session messages only if we are not continuing an existing response as it's not allowed
         if (chatOptions?.ContinuationToken is null)
@@ -688,13 +688,8 @@ public sealed partial class ChatClientAgent : AIAgent
             // The ChatHistoryProvider returns the merged result (history + input messages).
             if (chatHistoryProvider is not null)
             {
-                var invokingContext = new ChatHistoryProvider.InvokingContext(this, typedSession, inputMessages);
-                var providerMessages = await chatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
-                inputMessagesForChatClient.AddRange(providerMessages);
-            }
-            else
-            {
-                inputMessagesForChatClient.AddRange(inputMessages);
+                var invokingContext = new ChatHistoryProvider.InvokingContext(this, typedSession, inputMessagesForChatClient);
+                inputMessagesForChatClient = await chatHistoryProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
             }
 
             // If we have an AIContextProvider, we should get context from it, and update our
@@ -716,9 +711,9 @@ public sealed partial class ChatClientAgent : AIAgent
                 }
 
                 // Materialize the accumulated messages and tools once at the end of the provider pipeline.
-                inputMessagesForChatClient = aiContext.Messages?.ToList() ?? [];
+                inputMessagesForChatClient = aiContext.Messages ?? [];
 
-                var tools = aiContext.Tools?.ToList();
+                var tools = aiContext.Tools as IList<AITool> ?? aiContext.Tools?.ToList();
                 if (chatOptions?.Tools is { Count: > 0 } || tools is { Count: > 0 })
                 {
                     chatOptions ??= new();
@@ -751,7 +746,7 @@ public sealed partial class ChatClientAgent : AIAgent
             chatOptions.ConversationId = typedSession.ConversationId;
         }
 
-        return (typedSession, chatOptions, inputMessagesForChatClient, continuationToken);
+        return (typedSession, chatOptions, inputMessagesForChatClient as List<ChatMessage> ?? inputMessagesForChatClient.ToList(), continuationToken);
     }
 
     private void UpdateSessionConversationId(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)

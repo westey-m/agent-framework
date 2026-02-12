@@ -106,12 +106,13 @@ public sealed class TextSearchProviderTests
         Assert.Equal("Sample user question?\nAdditional part", capturedInput);
         Assert.Null(aiContext.Instructions); // TextSearchProvider uses a user message for context injection.
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(3, aiContext.Messages!.Count()); // 2 input messages + 1 search result message
-        Assert.Equal("Sample user question?", aiContext.Messages!.ElementAt(0).Text);
-        Assert.Equal("Additional part", aiContext.Messages!.ElementAt(1).Text);
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages!.ElementAt(0).GetAgentRequestMessageSourceType());
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages!.ElementAt(1).GetAgentRequestMessageSourceType());
-        var message = aiContext.Messages!.Last();
+        var messages = aiContext.Messages!.ToList();
+        Assert.Equal(3, messages.Count); // 2 input messages + 1 search result message
+        Assert.Equal("Sample user question?", messages[0].Text);
+        Assert.Equal("Additional part", messages[1].Text);
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[1].GetAgentRequestMessageSourceType());
+        var message = messages.Last();
         Assert.Equal(ChatRole.User, message.Role);
         Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, message.GetAgentRequestMessageSourceType());
         string text = message.Text!;
@@ -181,11 +182,13 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved.
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal("Q?", messages[0].Text);
         Assert.NotNull(aiContext.Tools);
-        Assert.Single(aiContext.Tools);
-        var tool = aiContext.Tools.Single();
+        var tools = aiContext.Tools!.ToList();
+        Assert.Single(tools);
+        var tool = tools[0];
         Assert.Equal(expectedName, tool.Name);
         Assert.Equal(expectedDescription, tool.Description);
     }
@@ -202,8 +205,9 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved on error.
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal("Q?", messages[0].Text);
         Assert.Null(aiContext.Tools);
         this._loggerMock.Verify(
             l => l.Log(
@@ -297,9 +301,10 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages!.Count()); // 1 input message + 1 formatted result message
-        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
-        Assert.Equal("Custom formatted context with 2 results.", aiContext.Messages!.ElementAt(1).Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Equal(2, messages.Count); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", messages[0].Text);
+        Assert.Equal("Custom formatted context with 2 results.", messages[1].Text);
     }
 
     [Fact]
@@ -332,9 +337,10 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages!.Count()); // 1 input message + 1 formatted result message
-        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
-        Assert.Equal("R1,R2", aiContext.Messages!.ElementAt(1).Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Equal(2, messages.Count); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", messages[0].Text);
+        Assert.Equal("R1,R2", messages[1].Text);
     }
 
     [Fact]
@@ -350,8 +356,9 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved when no results found.
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal("Q?", messages[0].Text);
         Assert.Null(aiContext.Instructions);
         Assert.Null(aiContext.Tools);
     }

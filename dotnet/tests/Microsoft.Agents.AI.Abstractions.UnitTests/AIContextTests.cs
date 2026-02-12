@@ -34,9 +34,10 @@ public class AIContextTests
         };
 
         Assert.NotNull(context.Messages);
-        Assert.Equal(2, context.Messages.Count());
-        Assert.Equal("Hello", context.Messages.ElementAt(0).Text);
-        Assert.Equal("Hi there!", context.Messages.ElementAt(1).Text);
+        var messages = context.Messages.ToList();
+        Assert.Equal(2, messages.Count);
+        Assert.Equal("Hello", messages[0].Text);
+        Assert.Equal("Hi there!", messages[1].Text);
     }
 
     [Fact]
@@ -52,8 +53,9 @@ public class AIContextTests
         };
 
         Assert.NotNull(context.Tools);
-        Assert.Equal(2, context.Tools.Count());
-        Assert.Equal("Function1", context.Tools.ElementAt(0).Name);
-        Assert.Equal("Function2", context.Tools.ElementAt(1).Name);
+        var tools = context.Tools.ToList();
+        Assert.Equal(2, tools.Count);
+        Assert.Equal("Function1", tools[0].Name);
+        Assert.Equal("Function2", tools[1].Name);
     }
 }

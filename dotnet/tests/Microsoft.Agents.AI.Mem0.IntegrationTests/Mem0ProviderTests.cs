@@ -55,7 +55,7 @@ public sealed class Mem0ProviderTests : IDisposable
 
         await sut.ClearStoredMemoriesAsync(mockSession);
         var ctxBefore = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
-        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.FirstOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Act
         await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [input]));
@@ -64,8 +64,8 @@ public sealed class Mem0ProviderTests : IDisposable
         var ctxAfterClearing = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
 
         // Assert
-        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?.FirstOrDefault()?.Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?.FirstOrDefault()?.Text ?? string.Empty);
+        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?.LastOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?.LastOrDefault()?.Text ?? string.Empty);
     }
 
     [Fact(Skip = SkipReason)]
@@ -80,7 +80,7 @@ public sealed class Mem0ProviderTests : IDisposable
 
         await sut.ClearStoredMemoriesAsync(mockSession);
         var ctxBefore = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
-        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.FirstOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Act
         await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [assistantIntro]));
@@ -89,8 +89,8 @@ public sealed class Mem0ProviderTests : IDisposable
         var ctxAfterClearing = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
 
         // Assert
-        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?.FirstOrDefault()?.Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?.FirstOrDefault()?.Text ?? string.Empty);
+        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?.LastOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?.LastOrDefault()?.Text ?? string.Empty);
     }
 
     [Fact(Skip = SkipReason)]
@@ -111,8 +111,8 @@ public sealed class Mem0ProviderTests : IDisposable
 
         var ctxBefore1 = await sut1.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession1, new AIContext { Messages = new List<ChatMessage> { question } }));
         var ctxBefore2 = await sut2.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession2, new AIContext { Messages = new List<ChatMessage> { question } }));
-        Assert.DoesNotContain("Caoimhe", ctxBefore1.Messages?.FirstOrDefault()?.Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxBefore2.Messages?.FirstOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore1.Messages?.LastOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore2.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Act
         await sut1.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession1, [assistantIntro]));
@@ -120,8 +120,8 @@ public sealed class Mem0ProviderTests : IDisposable
         var ctxAfterAdding2 = await GetContextWithRetryAsync(sut2, mockSession2, question);
 
         // Assert
-        Assert.Contains("Caoimhe", ctxAfterAdding1.Messages?.FirstOrDefault()?.Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxAfterAdding2.Messages?.FirstOrDefault()?.Text ?? string.Empty);
+        Assert.Contains("Caoimhe", ctxAfterAdding1.Messages?.LastOrDefault()?.Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxAfterAdding2.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Cleanup
         await sut1.ClearStoredMemoriesAsync(mockSession1);
@@ -134,7 +134,7 @@ public sealed class Mem0ProviderTests : IDisposable
         for (int i = 0; i < attempts; i++)
         {
             ctx = await provider.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = new List<ChatMessage> { question } }), CancellationToken.None);
-            var text = ctx.Messages?.FirstOrDefault()?.Text;
+            var text = ctx.Messages?.LastOrDefault()?.Text;
             if (!string.IsNullOrEmpty(text) && text.IndexOf("Caoimhe", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 break;

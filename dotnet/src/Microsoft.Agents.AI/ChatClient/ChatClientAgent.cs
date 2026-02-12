@@ -746,7 +746,10 @@ public sealed partial class ChatClientAgent : AIAgent
             chatOptions.ConversationId = typedSession.ConversationId;
         }
 
-        return (typedSession, chatOptions, inputMessagesForChatClient as List<ChatMessage> ?? inputMessagesForChatClient.ToList(), continuationToken);
+        // Materialize the accumulated messages once at the end of the provider pipeline, reusing the existing list if possible.
+        List<ChatMessage> messagesList = inputMessagesForChatClient as List<ChatMessage> ?? inputMessagesForChatClient.ToList();
+
+        return (typedSession, chatOptions, messagesList, continuationToken);
     }
 
     private void UpdateSessionConversationId(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)

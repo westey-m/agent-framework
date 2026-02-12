@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
@@ -46,6 +47,31 @@ public sealed class InMemoryChatHistoryProviderOptions
     /// and source generated serializers are required, or Native AOT / Trimming is required.
     /// </summary>
     public JsonSerializerOptions? JsonSerializerOptions { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional filter function applied to request messages before they are added to storage
+    /// during <see cref="ChatHistoryProvider.InvokedAsync"/>.
+    /// </summary>
+    /// <value>
+    /// When <see langword="null"/>, the provider defaults to excluding messages with
+    /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> source type to avoid
+    /// storing messages that came from chat history in the first place.
+    /// Depending on your requirements, you could provide a different filter, that also excludes
+    /// messages from e.g. AI context providers.
+    /// </value>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputMessageFilter { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional filter function applied to messages produced by this provider
+    /// during <see cref="ChatHistoryProvider.InvokingAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// This filter is only applied to the messages that the provider itself produces (from its internal storage).
+    /// </remarks>
+    /// <value>
+    /// When <see langword="null"/>, no filtering is applied to the output messages.
+    /// </value>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? RetrievalOutputMessageFilter { get; set; }
 
     /// <summary>
     /// Defines the events that can trigger a reducer in the <see cref="InMemoryChatHistoryProvider"/>.

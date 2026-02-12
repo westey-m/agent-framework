@@ -63,11 +63,15 @@ AIAgent agent = azureOpenAIClient
     {
         ChatOptions = new() { Instructions = "You are a helpful support specialist for Contoso Outdoors. Answer questions using the provided context and cite the source document when available." },
         AIContextProviders = [new TextSearchProvider(SearchAdapter, textSearchOptions)],
-        // Since we are using ChatCompletion which stores chat history locally, we can also add a message removal policy
+        // Since we are using ChatCompletion which stores chat history locally, we can also add a message filter
         // that removes messages produced by the TextSearchProvider before they are added to the chat history, so that
         // we don't bloat chat history with all the search result messages.
-        ChatHistoryProvider = new InMemoryChatHistoryProvider()
-            .WithAIContextProviderMessageRemoval(),
+        // By default the chat history provider will store all messages, except for those that came from chat history in the first place.
+        // We also want to maintain that exclusion here.
+        ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+        {
+            StorageInputMessageFilter = messages => messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.AIContextProvider && m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory)
+        }),
     });
 
 AgentSession session = await agent.CreateSessionAsync();

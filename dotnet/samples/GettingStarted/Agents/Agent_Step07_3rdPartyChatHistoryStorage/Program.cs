@@ -144,9 +144,11 @@ namespace SampleApp
             var collection = this._vectorStore.GetCollection<string, ChatHistoryItem>("ChatHistory");
             await collection.EnsureCollectionExistsAsync(cancellationToken);
 
-            // Add both request and response messages to the store
+            // Add both request and response messages to the store, excluding messages that came from chat history.
             // Optionally messages produced by the AIContextProvider can also be persisted (not shown).
-            var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
+            var allNewMessages = context.RequestMessages
+                .Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory)
+                .Concat(context.ResponseMessages ?? []);
 
             await collection.UpsertAsync(allNewMessages.Select(x => new ChatHistoryItem()
             {

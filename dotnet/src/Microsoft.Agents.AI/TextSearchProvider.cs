@@ -39,6 +39,9 @@ public sealed class TextSearchProvider : AIContextProvider
     private const string DefaultContextPrompt = "## Additional Context\nConsider the following information from source documents when responding to the user:";
     private const string DefaultCitationsPrompt = "Include citations to the source document with document name and link if document name and link is available.";
 
+    private static IEnumerable<ChatMessage> DefaultExternalOnlyFilter(IEnumerable<ChatMessage> messages)
+        => messages.Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External);
+
     private readonly Func<string, CancellationToken, Task<IEnumerable<TextSearchResult>>> _searchAsync;
     private readonly ILogger<TextSearchProvider>? _logger;
     private readonly AITool[] _tools;
@@ -49,6 +52,8 @@ public sealed class TextSearchProvider : AIContextProvider
     private readonly string _citationsPrompt;
     private readonly string _stateKey;
     private readonly Func<IList<TextSearchResult>, string>? _contextFormatter;
+    private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> _searchInputMessageFilter;
+    private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> _storageInputMessageFilter;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TextSearchProvider"/> class.
@@ -72,6 +77,8 @@ public sealed class TextSearchProvider : AIContextProvider
         this._citationsPrompt = options?.CitationsPrompt ?? DefaultCitationsPrompt;
         this._stateKey = options?.StateKey ?? base.StateKey;
         this._contextFormatter = options?.ContextFormatter;
+        this._searchInputMessageFilter = options?.SearchInputMessageFilter ?? DefaultExternalOnlyFilter;
+        this._storageInputMessageFilter = options?.StorageInputMessageFilter ?? DefaultExternalOnlyFilter;
 
         // Create the on-demand search tool (only used if behavior is OnDemandFunctionCalling)
         this._tools =
@@ -108,8 +115,8 @@ public sealed class TextSearchProvider : AIContextProvider
 
         // Aggregate text from memory + current request messages.
         var sbInput = new StringBuilder();
-        var requestMessagesText = (inputContext.Messages ?? [])
-            .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
+        var requestMessagesText =
+            this._searchInputMessageFilter(inputContext.Messages ?? [])
             .Where(x => !string.IsNullOrWhiteSpace(x?.Text)).Select(x => x.Text);
         foreach (var messageText in recentMessagesText.Concat(requestMessagesText))
         {
@@ -189,8 +196,7 @@ public sealed class TextSearchProvider : AIContextProvider
         var recentMessagesText = context.Session.StateBag.GetValue<TextSearchProviderState>(this._stateKey, AgentJsonUtilities.DefaultOptions)?.RecentMessagesText
             ?? [];
 
-        var newMessagesText = context.RequestMessages
-            .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
+        var newMessagesText = this._storageInputMessageFilter(context.RequestMessages)
             .Concat(context.ResponseMessages ?? [])
             .Where(m =>
                 this._recentMessageRolesIncluded.Contains(m.Role) &&

@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System.Collections.Generic;
 using Microsoft.Extensions.AI;
 
 namespace Microsoft.Agents.AI;
@@ -40,9 +41,9 @@ public sealed class ChatClientAgentOptions
     public ChatHistoryProvider? ChatHistoryProvider { get; set; }
 
     /// <summary>
-    /// Gets or sets the <see cref="AIContextProvider"/> instance to use for providing additional context for each agent run.
+    /// Gets or sets the list of <see cref="AIContextProvider"/> instances to use for providing additional context for each agent run.
     /// </summary>
-    public AIContextProvider? AIContextProvider { get; set; }
+    public IEnumerable<AIContextProvider>? AIContextProviders { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to use the provided <see cref="IChatClient"/> instance as is,
@@ -69,6 +70,6 @@ public sealed class ChatClientAgentOptions
             Description = this.Description,
             ChatOptions = this.ChatOptions?.Clone(),
             ChatHistoryProvider = this.ChatHistoryProvider,
-            AIContextProvider = this.AIContextProvider,
+            AIContextProviders = this.AIContextProviders is null ? null : new List<AIContextProvider>(this.AIContextProviders),
         };
 }

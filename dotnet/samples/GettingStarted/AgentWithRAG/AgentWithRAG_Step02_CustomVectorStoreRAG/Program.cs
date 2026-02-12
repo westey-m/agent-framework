@@ -71,7 +71,7 @@ AIAgent agent = azureOpenAIClient
     .AsAIAgent(new ChatClientAgentOptions
     {
         ChatOptions = new() { Instructions = "You are a helpful support specialist for the Microsoft Agent Framework. Answer questions using the provided context and cite the source document when available. Keep responses brief." },
-        AIContextProvider = new TextSearchProvider(SearchAdapter, textSearchOptions)
+        AIContextProviders = [new TextSearchProvider(SearchAdapter, textSearchOptions)]
     });
 
 AgentSession session = await agent.CreateSessionAsync();

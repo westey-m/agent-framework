@@ -170,10 +170,7 @@ public class ChatHistoryMemoryProviderTests
         var requestMsgWithNulls = new ChatMessage(ChatRole.User, "request text nulls");
         var responseMsg = new ChatMessage(ChatRole.Assistant, "response text") { MessageId = "resp-1", AuthorName = "assistant" };
 
-        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsgWithValues, requestMsgWithNulls])
-        {
-            ResponseMessages = [responseMsg]
-        };
+        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsgWithValues, requestMsgWithNulls], [responseMsg]);
 
         // Act
         await provider.InvokedAsync(invokedContext, CancellationToken.None);
@@ -228,10 +225,7 @@ public class ChatHistoryMemoryProviderTests
             1,
             _ => new ChatHistoryMemoryProvider.State(new ChatHistoryMemoryProviderScope { UserId = "UID" }));
         var requestMsg = new ChatMessage(ChatRole.User, "request text") { MessageId = "req-1" };
-        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsg])
-        {
-            InvokeException = new InvalidOperationException("Invoke failed")
-        };
+        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsg], new InvalidOperationException("Invoke failed"));
 
         // Act
         await provider.InvokedAsync(invokedContext, CancellationToken.None);
@@ -257,7 +251,7 @@ public class ChatHistoryMemoryProviderTests
             _ => new ChatHistoryMemoryProvider.State(new ChatHistoryMemoryProviderScope { UserId = "UID" }),
             loggerFactory: this._loggerFactoryMock.Object);
         var requestMsg = new ChatMessage(ChatRole.User, "request text") { MessageId = "req-1" };
-        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsg]);
+        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsg], []);
 
         // Act
         await provider.InvokedAsync(invokedContext, CancellationToken.None);
@@ -308,7 +302,7 @@ public class ChatHistoryMemoryProviderTests
             loggerFactory: this._loggerFactoryMock.Object);
 
         var requestMsg = new ChatMessage(ChatRole.User, "request text");
-        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsg]);
+        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), [requestMsg], []);
 
         // Act
         await provider.InvokedAsync(invokedContext, CancellationToken.None);
@@ -657,10 +651,7 @@ public class ChatHistoryMemoryProviderTests
             new(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
         };
 
-        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), requestMessages)
-        {
-            ResponseMessages = [new ChatMessage(ChatRole.Assistant, "Response")]
-        };
+        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), requestMessages, [new ChatMessage(ChatRole.Assistant, "Response")]);
 
         // Act
         await provider.InvokedAsync(invokedContext, CancellationToken.None);
@@ -704,10 +695,7 @@ public class ChatHistoryMemoryProviderTests
             new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
         };
 
-        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), requestMessages)
-        {
-            ResponseMessages = [new ChatMessage(ChatRole.Assistant, "Response")]
-        };
+        var invokedContext = new AIContextProvider.InvokedContext(s_mockAgent, new TestAgentSession(), requestMessages, [new ChatMessage(ChatRole.Assistant, "Response")]);
 
         // Act
         await provider.InvokedAsync(invokedContext, CancellationToken.None);

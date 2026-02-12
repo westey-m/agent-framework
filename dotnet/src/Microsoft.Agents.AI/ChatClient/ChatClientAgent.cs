@@ -455,7 +455,7 @@ public sealed partial class ChatClientAgent : AIAgent
     {
         if (this.AIContextProviders is { Count: > 0 } contextProviders)
         {
-            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages) { ResponseMessages = responseMessages };
+            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages, responseMessages);
 
             foreach (var contextProvider in contextProviders)
             {
@@ -475,7 +475,7 @@ public sealed partial class ChatClientAgent : AIAgent
     {
         if (this.AIContextProviders is { Count: > 0 } contextProviders)
         {
-            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages) { InvokeException = ex };
+            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages, ex);
 
             foreach (var contextProvider in contextProviders)
             {
@@ -798,10 +798,7 @@ public sealed partial class ChatClientAgent : AIAgent
         // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
         if (provider is not null)
         {
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages)
-            {
-                InvokeException = ex
-            };
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, ex);
 
             return provider.InvokedAsync(invokedContext, cancellationToken).AsTask();
         }
@@ -822,10 +819,7 @@ public sealed partial class ChatClientAgent : AIAgent
         // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
         if (provider is not null)
         {
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages)
-            {
-                ResponseMessages = responseMessages
-            };
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, responseMessages);
             return provider.InvokedAsync(invokedContext, cancellationToken).AsTask();
         }
 

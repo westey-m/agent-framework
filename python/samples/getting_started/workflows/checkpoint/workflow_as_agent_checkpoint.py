@@ -20,18 +20,21 @@ Key concepts:
 - These are complementary: threads track conversation, checkpoints track workflow state
 
 Prerequisites:
-- OpenAI environment variables configured for OpenAIChatClient
+- AZURE_AI_PROJECT_ENDPOINT must be your Azure AI Foundry Agent Service (V2) project endpoint.
+- Environment variables configured for AzureOpenAIResponsesClient
 """
 
 import asyncio
+import os
 
 from agent_framework import (
     AgentThread,
     ChatMessageStore,
     InMemoryCheckpointStorage,
 )
-from agent_framework.openai import OpenAIChatClient
+from agent_framework.azure import AzureOpenAIResponsesClient
 from agent_framework.orchestrations import SequentialBuilder
+from azure.identity import AzureCliCredential
 
 
 async def basic_checkpointing() -> None:
@@ -40,7 +43,11 @@ async def basic_checkpointing() -> None:
     print("Basic Checkpointing with Workflow as Agent")
     print("=" * 60)
 
-    client = OpenAIChatClient()
+    client = AzureOpenAIResponsesClient(
+        project_endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+        deployment_name=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
+        credential=AzureCliCredential(),
+    )
 
     assistant = client.as_agent(
         name="assistant",
@@ -69,7 +76,7 @@ async def basic_checkpointing() -> None:
         print(f"[{speaker}]: {msg.text}")
 
     # Show checkpoints that were created
-    checkpoints = await checkpoint_storage.list_checkpoints(workflow.id)
+    checkpoints = await checkpoint_storage.list_checkpoints(workflow_name=workflow.name)
     print(f"\nCheckpoints created: {len(checkpoints)}")
     for i, cp in enumerate(checkpoints[:5], 1):
         print(f"  {i}. {cp.checkpoint_id}")
@@ -81,7 +88,11 @@ async def checkpointing_with_thread() -> None:
     print("Checkpointing with Thread Conversation History")
     print("=" * 60)
 
-    client = OpenAIChatClient()
+    client = AzureOpenAIResponsesClient(
+        project_endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+        deployment_name=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
+        credential=AzureCliCredential(),
+    )
 
     assistant = client.as_agent(
         name="memory_assistant",
@@ -110,7 +121,7 @@ async def checkpointing_with_thread() -> None:
         print(f"[assistant]: {response2.messages[0].text}")
 
     # Show accumulated state
-    checkpoints = await checkpoint_storage.list_checkpoints(workflow.id)
+    checkpoints = await checkpoint_storage.list_checkpoints(workflow_name=workflow.name)
     print(f"\nTotal checkpoints across both turns: {len(checkpoints)}")
 
     if thread.message_store:
@@ -124,7 +135,11 @@ async def streaming_with_checkpoints() -> None:
     print("Streaming with Checkpointing")
     print("=" * 60)
 
-    client = OpenAIChatClient()
+    client = AzureOpenAIResponsesClient(
+        project_endpoint=os.environ["AZURE_AI_PROJECT_ENDPOINT"],
+        deployment_name=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
+        credential=AzureCliCredential(),
+    )
 
     assistant = client.as_agent(
         name="streaming_assistant",
@@ -147,7 +162,7 @@ async def streaming_with_checkpoints() -> None:
 
     print()  # Newline after streaming
 
-    checkpoints = await checkpoint_storage.list_checkpoints(workflow.id)
+    checkpoints = await checkpoint_storage.list_checkpoints(workflow_name=workflow.name)
     print(f"\nCheckpoints created during stream: {len(checkpoints)}")
 
 

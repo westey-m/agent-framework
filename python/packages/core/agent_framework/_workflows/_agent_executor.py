@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -13,9 +14,7 @@ from .._agents import SupportsAgentRun
 from .._threads import AgentThread
 from .._types import AgentResponse, AgentResponseUpdate, Message
 from ._agent_utils import resolve_agent_id
-from ._checkpoint_encoding import decode_checkpoint_value, encode_checkpoint_value
 from ._const import WORKFLOW_RUN_KWARGS_KEY
-from ._conversation_state import encode_chat_messages
 from ._executor import Executor, handler
 from ._message_utils import normalize_messages_input
 from ._request_info_mixin import response_handler
@@ -232,11 +231,11 @@ class AgentExecutor(Executor):
         serialized_thread = await self._agent_thread.serialize()
 
         return {
-            "cache": encode_chat_messages(self._cache),
-            "full_conversation": encode_chat_messages(self._full_conversation),
+            "cache": self._cache,
+            "full_conversation": self._full_conversation,
             "agent_thread": serialized_thread,
-            "pending_agent_requests": encode_checkpoint_value(self._pending_agent_requests),
-            "pending_responses_to_agent": encode_checkpoint_value(self._pending_responses_to_agent),
+            "pending_agent_requests": self._pending_agent_requests,
+            "pending_responses_to_agent": self._pending_responses_to_agent,
         }
 
     @override
@@ -246,27 +245,11 @@ class AgentExecutor(Executor):
         Args:
             state: Checkpoint data dict
         """
-        from ._conversation_state import decode_chat_messages
-
         cache_payload = state.get("cache")
-        if cache_payload:
-            try:
-                self._cache = decode_chat_messages(cache_payload)
-            except Exception as exc:
-                logger.warning("Failed to restore cache: %s", exc)
-                self._cache = []
-        else:
-            self._cache = []
+        self._cache = cache_payload or []
 
         full_conversation_payload = state.get("full_conversation")
-        if full_conversation_payload:
-            try:
-                self._full_conversation = decode_chat_messages(full_conversation_payload)
-            except Exception as exc:
-                logger.warning("Failed to restore full conversation: %s", exc)
-                self._full_conversation = []
-        else:
-            self._full_conversation = []
+        self._full_conversation = full_conversation_payload or []
 
         thread_payload = state.get("agent_thread")
         if thread_payload:
@@ -282,11 +265,11 @@ class AgentExecutor(Executor):
 
         pending_requests_payload = state.get("pending_agent_requests")
         if pending_requests_payload:
-            self._pending_agent_requests = decode_checkpoint_value(pending_requests_payload)
+            self._pending_agent_requests = pending_requests_payload
 
         pending_responses_payload = state.get("pending_responses_to_agent")
         if pending_responses_payload:
-            self._pending_responses_to_agent = decode_checkpoint_value(pending_responses_payload)
+            self._pending_responses_to_agent = pending_responses_payload
 
     def reset(self) -> None:
         """Reset the internal cache of the executor."""
@@ -310,10 +293,10 @@ class AgentExecutor(Executor):
             # Non-streaming mode: use run() and emit single event
             response = await self._run_agent(cast(WorkflowContext[Never, AgentResponse], ctx))
 
-        # Always extend full conversation with cached messages plus agent outputs
-        # (agent_response.messages) after each run. This is to avoid losing context
-        # when agent did not complete and the cache is cleared when responses come back.
-        self._full_conversation.extend(list(self._cache) + (list(response.messages) if response else []))
+        # Snapshot current conversation as cache + latest agent outputs.
+        # Do not append to prior snapshots: callers may provide full-history messages
+        # in request.messages, and extending would duplicate prior turns.
+        self._full_conversation = list(self._cache) + (list(response.messages) if response else [])
 
         if response is None:
             # Agent did not complete (e.g., waiting for user input); do not emit response
@@ -333,12 +316,7 @@ class AgentExecutor(Executor):
         Returns:
             The complete AgentResponse, or None if waiting for user input.
         """
-        run_kwargs: dict[str, Any] = ctx.get_state(WORKFLOW_RUN_KWARGS_KEY, {})
-
-        # Build options dict with additional_function_arguments for tool kwargs propagation
-        options: dict[str, Any] | None = None
-        if run_kwargs:
-            options = {"additional_function_arguments": run_kwargs}
+        run_kwargs, options = self._prepare_agent_run_args(ctx.get_state(WORKFLOW_RUN_KWARGS_KEY, {}))
 
         response = await self._agent.run(
             self._cache,
@@ -367,12 +345,7 @@ class AgentExecutor(Executor):
         Returns:
             The complete AgentResponse, or None if waiting for user input.
         """
-        run_kwargs: dict[str, Any] = ctx.get_state(WORKFLOW_RUN_KWARGS_KEY) or {}
-
-        # Build options dict with additional_function_arguments for tool kwargs propagation
-        options: dict[str, Any] | None = None
-        if run_kwargs:
-            options = {"additional_function_arguments": run_kwargs}
+        run_kwargs, options = self._prepare_agent_run_args(ctx.get_state(WORKFLOW_RUN_KWARGS_KEY) or {})
 
         updates: list[AgentResponseUpdate] = []
         user_input_requests: list[Content] = []
@@ -407,3 +380,55 @@ class AgentExecutor(Executor):
             return None
 
         return response
+
+    @staticmethod
+    def _prepare_agent_run_args(raw_run_kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """Prepare kwargs and options for agent.run(), avoiding duplicate option passing.
+
+        Workflow-level kwargs are propagated to tool calls through
+        `options.additional_function_arguments`. If workflow kwargs include an
+        `options` key, merge it into the final options object and remove it from
+        kwargs before spreading `**run_kwargs`.
+        """
+        run_kwargs = dict(raw_run_kwargs)
+        options_from_workflow = run_kwargs.pop("options", None)
+        workflow_additional_args = run_kwargs.pop("additional_function_arguments", None)
+
+        options: dict[str, Any] = {}
+        if options_from_workflow is not None:
+            if isinstance(options_from_workflow, Mapping):
+                for key, value in options_from_workflow.items():
+                    if isinstance(key, str):
+                        options[key] = value
+            else:
+                logger.warning(
+                    "Ignoring non-mapping workflow 'options' kwarg of type %s for AgentExecutor %s.",
+                    type(options_from_workflow).__name__,
+                    AgentExecutor.__name__,
+                )
+
+        existing_additional_args = options.get("additional_function_arguments")
+        if isinstance(existing_additional_args, Mapping):
+            additional_args = {key: value for key, value in existing_additional_args.items() if isinstance(key, str)}
+        else:
+            additional_args = {}
+
+        if workflow_additional_args is not None:
+            if isinstance(workflow_additional_args, Mapping):
+                additional_args.update({
+                    key: value for key, value in workflow_additional_args.items() if isinstance(key, str)
+                })
+            else:
+                logger.warning(
+                    "Ignoring non-mapping workflow 'additional_function_arguments' kwarg of type %s for AgentExecutor %s.",  # noqa: E501
+                    type(workflow_additional_args).__name__,
+                    AgentExecutor.__name__,
+                )
+
+        if run_kwargs:
+            additional_args.update(run_kwargs)
+
+        if additional_args:
+            options["additional_function_arguments"] = additional_args
+
+        return run_kwargs, options or None

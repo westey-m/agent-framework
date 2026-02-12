@@ -287,7 +287,7 @@ internal sealed class FakeChatClientAgent : AIAgent
     protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
         new(serializedState.Deserialize<FakeAgentSession>(jsonSerializerOptions)!);
 
-    protected override JsonElement SerializeSessionCore(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+    protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
         => throw new NotImplementedException();
 
     protected override async Task<AgentResponse> RunCoreAsync(
@@ -353,14 +353,14 @@ internal sealed class FakeMultiMessageAgent : AIAgent
     protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default) =>
         new(serializedState.Deserialize<FakeAgentSession>(jsonSerializerOptions)!);
 
-    protected override JsonElement SerializeSessionCore(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+    protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
         if (session is not FakeAgentSession fakeSession)
         {
             throw new InvalidOperationException("The provided session is not compatible with the agent. Only sessions created by the agent can be serialized.");
         }
 
-        return JsonSerializer.SerializeToElement(fakeSession, jsonSerializerOptions);
+        return new(JsonSerializer.SerializeToElement(fakeSession, jsonSerializerOptions));
     }
 
     protected override async Task<AgentResponse> RunCoreAsync(

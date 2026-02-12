@@ -34,14 +34,14 @@ namespace SampleApp
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
             => new(new CustomAgentSession());
 
-        protected override JsonElement SerializeSessionCore(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+        protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
         {
             if (session is not CustomAgentSession typedSession)
             {
                 throw new ArgumentException($"The provided session is not of type {nameof(CustomAgentSession)}.", nameof(session));
             }
 
-            return JsonSerializer.SerializeToElement(typedSession, jsonSerializerOptions);
+            return new(JsonSerializer.SerializeToElement(typedSession, jsonSerializerOptions));
         }
 
         protected override ValueTask<AgentSession> DeserializeSessionCoreAsync(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)

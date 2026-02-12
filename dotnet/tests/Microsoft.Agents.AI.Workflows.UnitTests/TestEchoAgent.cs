@@ -24,14 +24,14 @@ internal class TestEchoAgent(string? id = null, string? name = null, string? pre
         return serializedState.Deserialize<EchoAgentSession>(jsonSerializerOptions) ?? await this.CreateSessionAsync(cancellationToken);
     }
 
-    protected override JsonElement SerializeSessionCore(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null)
+    protected override ValueTask<JsonElement> SerializeSessionCoreAsync(AgentSession session, JsonSerializerOptions? jsonSerializerOptions = null, CancellationToken cancellationToken = default)
     {
         if (session is not EchoAgentSession typedSession)
         {
             throw new InvalidOperationException("The provided session is not compatible with the agent. Only sessions created by the agent can be serialized.");
         }
 
-        return JsonSerializer.SerializeToElement(typedSession, jsonSerializerOptions);
+        return new(JsonSerializer.SerializeToElement(typedSession, jsonSerializerOptions));
     }
 
     protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default) =>

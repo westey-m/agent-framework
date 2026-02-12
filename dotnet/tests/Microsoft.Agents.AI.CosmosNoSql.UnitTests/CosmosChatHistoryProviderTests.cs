@@ -841,4 +841,128 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
     }
 
     #endregion
+
+    #region Message Filter Tests
+
+    [SkippableFact]
+    [Trait("Category", "CosmosDB")]
+    public async Task InvokedAsync_DefaultFilter_ExcludesChatHistoryMessagesFromStorageAsync()
+    {
+        // Arrange
+        this.SkipIfEmulatorNotAvailable();
+        var session = CreateMockSession();
+        var conversationId = Guid.NewGuid().ToString();
+        using var provider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
+            _ => new CosmosChatHistoryProvider.State(conversationId));
+
+        var requestMessages = new[]
+        {
+            new ChatMessage(ChatRole.User, "External message"),
+            new ChatMessage(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
+            new ChatMessage(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
+        };
+
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, requestMessages)
+        {
+            ResponseMessages = [new ChatMessage(ChatRole.Assistant, "Response")]
+        };
+
+        // Act
+        await provider.InvokedAsync(context);
+
+        // Wait for eventual consistency
+        await Task.Delay(100);
+
+        // Assert - ChatHistory message excluded, External + AIContextProvider + Response stored
+        var invokingContext = new ChatHistoryProvider.InvokingContext(s_mockAgent, session, []);
+        var messages = (await provider.InvokingAsync(invokingContext)).ToList();
+        Assert.Equal(3, messages.Count);
+        Assert.Equal("External message", messages[0].Text);
+        Assert.Equal("From context provider", messages[1].Text);
+        Assert.Equal("Response", messages[2].Text);
+    }
+
+    [SkippableFact]
+    [Trait("Category", "CosmosDB")]
+    public async Task InvokedAsync_CustomStorageInputFilter_OverridesDefaultAsync()
+    {
+        // Arrange
+        this.SkipIfEmulatorNotAvailable();
+        var session = CreateMockSession();
+        var conversationId = Guid.NewGuid().ToString();
+        using var provider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
+            _ => new CosmosChatHistoryProvider.State(conversationId))
+        {
+            // Custom filter: only store External messages (also exclude AIContextProvider)
+            StorageInputMessageFilter = messages => messages.Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
+        };
+
+        var requestMessages = new[]
+        {
+            new ChatMessage(ChatRole.User, "External message"),
+            new ChatMessage(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
+            new ChatMessage(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
+        };
+
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, requestMessages)
+        {
+            ResponseMessages = [new ChatMessage(ChatRole.Assistant, "Response")]
+        };
+
+        // Act
+        await provider.InvokedAsync(context);
+
+        // Wait for eventual consistency
+        await Task.Delay(100);
+
+        // Assert - Custom filter: only External + Response stored (both ChatHistory and AIContextProvider excluded)
+        var invokingContext = new ChatHistoryProvider.InvokingContext(s_mockAgent, session, []);
+        var messages = (await provider.InvokingAsync(invokingContext)).ToList();
+        Assert.Equal(2, messages.Count);
+        Assert.Equal("External message", messages[0].Text);
+        Assert.Equal("Response", messages[1].Text);
+    }
+
+    [SkippableFact]
+    [Trait("Category", "CosmosDB")]
+    public async Task InvokingAsync_RetrievalOutputFilter_FiltersRetrievedMessagesAsync()
+    {
+        // Arrange
+        this.SkipIfEmulatorNotAvailable();
+        var session = CreateMockSession();
+        var conversationId = Guid.NewGuid().ToString();
+        using var provider = new CosmosChatHistoryProvider(this._connectionString, s_testDatabaseId, TestContainerId,
+            _ => new CosmosChatHistoryProvider.State(conversationId))
+        {
+            // Only return User messages when retrieving
+            RetrievalOutputMessageFilter = messages => messages.Where(m => m.Role == ChatRole.User)
+        };
+
+        var requestMessages = new[]
+        {
+            new ChatMessage(ChatRole.User, "User message"),
+            new ChatMessage(ChatRole.System, "System message"),
+        };
+
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, session, requestMessages)
+        {
+            ResponseMessages = [new ChatMessage(ChatRole.Assistant, "Assistant response")]
+        };
+
+        await provider.InvokedAsync(context);
+
+        // Wait for eventual consistency
+        await Task.Delay(100);
+
+        // Act
+        var invokingContext = new ChatHistoryProvider.InvokingContext(s_mockAgent, session, []);
+        var messages = (await provider.InvokingAsync(invokingContext)).ToList();
+
+        // Assert - Only User messages returned (System and Assistant filtered by RetrievalOutputMessageFilter)
+        Assert.Single(messages);
+        Assert.Equal("User message", messages[0].Text);
+        Assert.Equal(ChatRole.User, messages[0].Role);
+    }
+
+    #endregion
 }

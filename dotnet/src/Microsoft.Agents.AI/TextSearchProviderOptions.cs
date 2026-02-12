@@ -69,6 +69,26 @@ public sealed class TextSearchProviderOptions
     public string? StateKey { get; set; }
 
     /// <summary>
+    /// Gets or sets an optional filter function applied to request messages when constructing the search input
+    /// text during <see cref="AIContextProvider.InvokingAsync"/>.
+    /// </summary>
+    /// <value>
+    /// When <see langword="null"/>, the provider defaults to including only
+    /// <see cref="AgentRequestMessageSourceType.External"/> messages.
+    /// </value>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? SearchInputMessageFilter { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional filter function applied to request messages when updating the recent message
+    /// memory during <see cref="AIContextProvider.InvokedAsync"/>.
+    /// </summary>
+    /// <value>
+    /// When <see langword="null"/>, the provider defaults to including only
+    /// <see cref="AgentRequestMessageSourceType.External"/> messages.
+    /// </value>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputMessageFilter { get; set; }
+
+    /// <summary>
     /// Gets or sets the list of <see cref="ChatRole"/> types to filter recent messages to
     /// when deciding which recent messages to include when constructing the search input.
     /// </summary>

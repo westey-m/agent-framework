@@ -436,6 +436,116 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.NotNull(state);
     }
 
+    [Fact]
+    public async Task InvokingAsync_DefaultFilter_ExcludesNonExternalMessagesFromSearchAsync()
+    {
+        // Arrange
+        this._handler.EnqueueJsonResponse("[]"); // Empty search results
+        var storageScope = new Mem0ProviderScope { ApplicationId = "app", AgentId = "agent", ThreadId = "session", UserId = "user" };
+        var mockSession = new TestAgentSession();
+        var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope));
+
+        var requestMessages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "External message"),
+            new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
+            new(ChatRole.System, "From context provider") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.AIContextProvider, "ContextSource") } } },
+        };
+
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = requestMessages });
+
+        // Act
+        await sut.InvokingAsync(invokingContext, CancellationToken.None);
+
+        // Assert - Search query should only contain the External message
+        var searchRequest = Assert.Single(this._handler.Requests, r => r.RequestMessage.Method == HttpMethod.Post);
+        using JsonDocument doc = JsonDocument.Parse(searchRequest.RequestBody);
+        Assert.Equal("External message", doc.RootElement.GetProperty("query").GetString());
+    }
+
+    [Fact]
+    public async Task InvokingAsync_CustomSearchInputFilter_OverridesDefaultAsync()
+    {
+        // Arrange
+        this._handler.EnqueueJsonResponse("[]"); // Empty search results
+        var storageScope = new Mem0ProviderScope { ApplicationId = "app", AgentId = "agent", ThreadId = "session", UserId = "user" };
+        var mockSession = new TestAgentSession();
+        var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), options: new Mem0ProviderOptions
+        {
+            SearchInputMessageFilter = messages => messages // No filtering
+        });
+
+        var requestMessages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "External message"),
+            new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
+        };
+
+        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = requestMessages });
+
+        // Act
+        await sut.InvokingAsync(invokingContext, CancellationToken.None);
+
+        // Assert - Search query should contain all messages (custom identity filter)
+        var searchRequest = Assert.Single(this._handler.Requests, r => r.RequestMessage.Method == HttpMethod.Post);
+        using JsonDocument doc = JsonDocument.Parse(searchRequest.RequestBody);
+        var queryText = doc.RootElement.GetProperty("query").GetString();
+        Assert.Contains("External message", queryText);
+        Assert.Contains("From history", queryText);
+    }
+
+    [Fact]
+    public async Task InvokedAsync_DefaultFilter_ExcludesNonExternalMessagesFromStorageAsync()
+    {
+        // Arrange
+        this._handler.EnqueueEmptyOk(); // For the one message that should be stored
+        var storageScope = new Mem0ProviderScope { ApplicationId = "a", AgentId = "b", ThreadId = "c", UserId = "d" };
+        var mockSession = new TestAgentSession();
+        var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope));
+
+        var requestMessages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "External message"),
+            new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
+        };
+
+        // Act
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages));
+
+        // Assert - Only the External message should be persisted
+        var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();
+        Assert.Single(memoryPosts);
+        Assert.Contains("External message", memoryPosts[0].RequestBody);
+        Assert.DoesNotContain(memoryPosts, r => ContainsOrdinal(r.RequestBody, "From history"));
+    }
+
+    [Fact]
+    public async Task InvokedAsync_CustomStorageInputFilter_OverridesDefaultAsync()
+    {
+        // Arrange
+        this._handler.EnqueueEmptyOk(); // For first CreateMemory
+        this._handler.EnqueueEmptyOk(); // For second CreateMemory
+        var storageScope = new Mem0ProviderScope { ApplicationId = "a", AgentId = "b", ThreadId = "c", UserId = "d" };
+        var mockSession = new TestAgentSession();
+        var sut = new Mem0Provider(this._httpClient, _ => new Mem0Provider.State(storageScope), options: new Mem0ProviderOptions
+        {
+            StorageInputMessageFilter = messages => messages // No filtering - store everything
+        });
+
+        var requestMessages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "External message"),
+            new(ChatRole.System, "From history") { AdditionalProperties = new() { { AgentRequestMessageSourceAttribution.AdditionalPropertiesKey, new AgentRequestMessageSourceAttribution(AgentRequestMessageSourceType.ChatHistory, "HistorySource") } } },
+        };
+
+        // Act
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages));
+
+        // Assert - Both messages should be persisted (identity filter overrides default)
+        var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();
+        Assert.Equal(2, memoryPosts.Count);
+    }
+
     private static bool ContainsOrdinal(string source, string value) => source.IndexOf(value, StringComparison.Ordinal) >= 0;
 
     public void Dispose()

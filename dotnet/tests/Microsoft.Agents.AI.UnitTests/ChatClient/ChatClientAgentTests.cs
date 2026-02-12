@@ -67,6 +67,27 @@ public partial class ChatClientAgentTests
     }
 
     /// <summary>
+    /// Verify that the constructor throws when an AIContextProvider uses the same StateKey as the default InMemoryChatHistoryProvider
+    /// and no explicit ChatHistoryProvider is configured.
+    /// </summary>
+    [Fact]
+    public void Constructor_ThrowsWhenAIContextProviderStateKeyClashesWithDefaultInMemoryChatHistoryProvider()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var contextProvider = new TestAIContextProvider(nameof(InMemoryChatHistoryProvider));
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new ChatClientAgent(chatClient, options: new()
+            {
+                AIContextProviders = [contextProvider]
+            }));
+
+        Assert.Contains(nameof(InMemoryChatHistoryProvider), ex.Message);
+    }
+
+    /// <summary>
     /// Verify that the constructor throws when a ChatHistoryProvider uses the same StateKey as an AIContextProvider.
     /// </summary>
     [Fact]

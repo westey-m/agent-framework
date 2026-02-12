@@ -110,6 +110,7 @@ public sealed partial class ChatClientAgent : AIAgent
         // If one was not provided, and we later find out that the underlying service does not manage chat history server-side,
         // we will use the default InMemoryChatHistoryProvider at that time.
         this.ChatHistoryProvider = options?.ChatHistoryProvider;
+        this.AIContextProviders = this._agentOptions?.AIContextProviders as IReadOnlyList<AIContextProvider> ?? this._agentOptions?.AIContextProviders?.ToList();
 
         // Validate that no two providers share the same StateKey, since they would overwrite each other's state in the session.
         this._aiContextProviderStateKeys = ValidateAndCollectStateKeys(this._agentOptions?.AIContextProviders, this.ChatHistoryProvider);
@@ -143,8 +144,7 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <remarks>
     /// This property may be null in case no additional context providers were configured.
     /// </remarks>
-    public IReadOnlyList<AIContextProvider>? AIContextProviders =>
-        this._agentOptions?.AIContextProviders as IReadOnlyList<AIContextProvider> ?? this._agentOptions?.AIContextProviders?.ToList();
+    public IReadOnlyList<AIContextProvider>? AIContextProviders { get; }
 
     /// <inheritdoc/>
     protected override string? IdCore => this._agentOptions?.Id;
@@ -925,11 +925,18 @@ public sealed partial class ChatClientAgent : AIAgent
             }
         }
 
+        if (chatHistoryProvider is null
+            && stateKeys.Contains(nameof(InMemoryChatHistoryProvider)))
+        {
+            throw new InvalidOperationException(
+                $"The default {nameof(InMemoryChatHistoryProvider)} uses the state key '{nameof(InMemoryChatHistoryProvider)}', which is already used by one of the configured AIContextProviders. Each provider must use a unique state key to avoid overwriting each other's state. To resolve this, either configure a different state key for the AIContextProvider that is using '{nameof(InMemoryChatHistoryProvider)}' as its state key, or provide a custom ChatHistoryProvider with a unique state key.");
+        }
+
         if (chatHistoryProvider is not null
             && stateKeys.Contains(chatHistoryProvider.StateKey))
         {
             throw new InvalidOperationException(
-                $"The ChatHistoryProvider '{chatHistoryProvider.GetType().Name}' uses the state key '{chatHistoryProvider.StateKey}' which is already used by one of the configured AIContextProviders. Each provider must use a unique state key to avoid overwriting each other's state.");
+                $"The ChatHistoryProvider '{chatHistoryProvider.GetType().Name}' uses the state key '{chatHistoryProvider.StateKey}' which is already used by one of the configured AIContextProviders. Each provider must use a unique state key to avoid overwriting each other's state. To resolve this, either configure a different state key for the AIContextProvider that is using '{chatHistoryProvider.StateKey}' as its state key, or reconfigure the custom ChatHistoryProvider with a unique state key.");
         }
 
         return stateKeys;

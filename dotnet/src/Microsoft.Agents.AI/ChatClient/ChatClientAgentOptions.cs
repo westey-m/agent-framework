@@ -70,6 +70,6 @@ public sealed class ChatClientAgentOptions
             Description = this.Description,
             ChatOptions = this.ChatOptions?.Clone(),
             ChatHistoryProvider = this.ChatHistoryProvider,
-            AIContextProviders = this.AIContextProviders,
+            AIContextProviders = this.AIContextProviders is null ? null : new List<AIContextProvider>(this.AIContextProviders),
         };
 }

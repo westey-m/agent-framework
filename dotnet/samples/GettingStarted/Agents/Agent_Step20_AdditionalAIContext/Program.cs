@@ -116,14 +116,13 @@ namespace SampleApp
                 {
                     AIFunctionFactory.Create((string item) => AddTodoItem(context.Session, item), "AddTodoItem", "Adds an item to the todo list."),
                     AIFunctionFactory.Create((int index) => RemoveTodoItem(context.Session, index), "RemoveTodoItem", "Removes an item from the todo list. Index is zero based.")
-                }).ToList(),
+                }),
                 Messages =
                     (inputContext.Messages ?? [])
                     .Concat(
                     [
                         new MEAI.ChatMessage(ChatRole.User, outputMessageBuilder.ToString()).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
                     ])
-                    .ToList()
             });
         }
 

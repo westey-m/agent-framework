@@ -106,11 +106,11 @@ public sealed class TextSearchProviderTests
         Assert.Equal("Sample user question?\nAdditional part", capturedInput);
         Assert.Null(aiContext.Instructions); // TextSearchProvider uses a user message for context injection.
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(3, aiContext.Messages!.Count); // 2 input messages + 1 search result message
-        Assert.Equal("Sample user question?", aiContext.Messages![0].Text);
-        Assert.Equal("Additional part", aiContext.Messages![1].Text);
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![0].GetAgentRequestMessageSourceType());
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![1].GetAgentRequestMessageSourceType());
+        Assert.Equal(3, aiContext.Messages!.Count()); // 2 input messages + 1 search result message
+        Assert.Equal("Sample user question?", aiContext.Messages!.ElementAt(0).Text);
+        Assert.Equal("Additional part", aiContext.Messages!.ElementAt(1).Text);
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages!.ElementAt(0).GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages!.ElementAt(1).GetAgentRequestMessageSourceType());
         var message = aiContext.Messages!.Last();
         Assert.Equal(ChatRole.User, message.Role);
         Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, message.GetAgentRequestMessageSourceType());
@@ -182,7 +182,7 @@ public sealed class TextSearchProviderTests
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved.
         Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
         Assert.NotNull(aiContext.Tools);
         Assert.Single(aiContext.Tools);
         var tool = aiContext.Tools.Single();
@@ -203,7 +203,7 @@ public sealed class TextSearchProviderTests
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved on error.
         Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
         Assert.Null(aiContext.Tools);
         this._loggerMock.Verify(
             l => l.Log(
@@ -297,9 +297,9 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages!.Count); // 1 input message + 1 formatted result message
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
-        Assert.Equal("Custom formatted context with 2 results.", aiContext.Messages![1].Text);
+        Assert.Equal(2, aiContext.Messages!.Count()); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
+        Assert.Equal("Custom formatted context with 2 results.", aiContext.Messages!.ElementAt(1).Text);
     }
 
     [Fact]
@@ -332,9 +332,9 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages!.Count); // 1 input message + 1 formatted result message
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
-        Assert.Equal("R1,R2", aiContext.Messages![1].Text);
+        Assert.Equal(2, aiContext.Messages!.Count()); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
+        Assert.Equal("R1,R2", aiContext.Messages!.ElementAt(1).Text);
     }
 
     [Fact]
@@ -351,7 +351,7 @@ public sealed class TextSearchProviderTests
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved when no results found.
         Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        Assert.Equal("Q?", aiContext.Messages!.ElementAt(0).Text);
         Assert.Null(aiContext.Instructions);
         Assert.Null(aiContext.Tools);
     }

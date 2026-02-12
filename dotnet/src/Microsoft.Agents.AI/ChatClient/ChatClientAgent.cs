@@ -684,19 +684,20 @@ public sealed partial class ChatClientAgent : AIAgent
                 var aiContext = new AIContext
                 {
                     Instructions = chatOptions?.Instructions,
-                    Messages = inputMessagesForChatClient.ToList(),
-                    Tools = chatOptions?.Tools as List<AITool> ?? chatOptions?.Tools?.ToList()
+                    Messages = inputMessagesForChatClient,
+                    Tools = chatOptions?.Tools
                 };
                 var invokingContext = new AIContextProvider.InvokingContext(this, typedSession, aiContext);
                 aiContext = await aiContextProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
 
-                // Use the returned messages, tools and instructions directly since the provider accumulated them.
-                inputMessagesForChatClient = aiContext.Messages as List<ChatMessage> ?? aiContext.Messages?.ToList() ?? [];
+                // Materialize the accumulated messages and tools once at the end of the provider pipeline.
+                inputMessagesForChatClient = aiContext.Messages?.ToList() ?? [];
 
-                if (chatOptions?.Tools is { Count: > 0 } || aiContext.Tools is { Count: > 0 })
+                var tools = aiContext.Tools?.ToList();
+                if (chatOptions?.Tools is { Count: > 0 } || tools is { Count: > 0 })
                 {
                     chatOptions ??= new();
-                    chatOptions.Tools = aiContext.Tools;
+                    chatOptions.Tools = tools;
                 }
 
                 if (chatOptions?.Instructions is not null || aiContext.Instructions is not null)

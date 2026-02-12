@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -54,7 +55,7 @@ public sealed class Mem0ProviderTests : IDisposable
 
         await sut.ClearStoredMemoriesAsync(mockSession);
         var ctxBefore = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
-        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?[0].Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.ElementAt(0).Text ?? string.Empty);
 
         // Act
         await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [input]));
@@ -63,8 +64,8 @@ public sealed class Mem0ProviderTests : IDisposable
         var ctxAfterClearing = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
 
         // Assert
-        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?[0].Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?[0].Text ?? string.Empty);
+        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?.ElementAt(0).Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?.ElementAt(0).Text ?? string.Empty);
     }
 
     [Fact(Skip = SkipReason)]
@@ -79,7 +80,7 @@ public sealed class Mem0ProviderTests : IDisposable
 
         await sut.ClearStoredMemoriesAsync(mockSession);
         var ctxBefore = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
-        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?[0].Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.ElementAt(0).Text ?? string.Empty);
 
         // Act
         await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [assistantIntro]));
@@ -88,8 +89,8 @@ public sealed class Mem0ProviderTests : IDisposable
         var ctxAfterClearing = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
 
         // Assert
-        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?[0].Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?[0].Text ?? string.Empty);
+        Assert.Contains("Caoimhe", ctxAfterAdding.Messages?.ElementAt(0).Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxAfterClearing.Messages?.ElementAt(0).Text ?? string.Empty);
     }
 
     [Fact(Skip = SkipReason)]
@@ -110,8 +111,8 @@ public sealed class Mem0ProviderTests : IDisposable
 
         var ctxBefore1 = await sut1.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession1, new AIContext { Messages = new List<ChatMessage> { question } }));
         var ctxBefore2 = await sut2.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession2, new AIContext { Messages = new List<ChatMessage> { question } }));
-        Assert.DoesNotContain("Caoimhe", ctxBefore1.Messages?[0].Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxBefore2.Messages?[0].Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore1.Messages?.ElementAt(0).Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxBefore2.Messages?.ElementAt(0).Text ?? string.Empty);
 
         // Act
         await sut1.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession1, [assistantIntro]));
@@ -119,8 +120,8 @@ public sealed class Mem0ProviderTests : IDisposable
         var ctxAfterAdding2 = await GetContextWithRetryAsync(sut2, mockSession2, question);
 
         // Assert
-        Assert.Contains("Caoimhe", ctxAfterAdding1.Messages?[0].Text ?? string.Empty);
-        Assert.DoesNotContain("Caoimhe", ctxAfterAdding2.Messages?[0].Text ?? string.Empty);
+        Assert.Contains("Caoimhe", ctxAfterAdding1.Messages?.ElementAt(0).Text ?? string.Empty);
+        Assert.DoesNotContain("Caoimhe", ctxAfterAdding2.Messages?.ElementAt(0).Text ?? string.Empty);
 
         // Cleanup
         await sut1.ClearStoredMemoriesAsync(mockSession1);
@@ -133,7 +134,7 @@ public sealed class Mem0ProviderTests : IDisposable
         for (int i = 0; i < attempts; i++)
         {
             ctx = await provider.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = new List<ChatMessage> { question } }), CancellationToken.None);
-            var text = ctx.Messages?[0].Text;
+            var text = ctx.Messages?.ElementAt(0).Text;
             if (!string.IsNullOrEmpty(text) && text.IndexOf("Caoimhe", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 break;

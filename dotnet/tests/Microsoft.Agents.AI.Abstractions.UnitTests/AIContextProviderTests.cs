@@ -25,7 +25,7 @@ public class AIContextProviderTests
         var messages = new ReadOnlyCollection<ChatMessage>([]);
 
         // Act
-        ValueTask task = provider.InvokedAsync(new(s_mockAgent, s_mockSession, messages));
+        ValueTask task = provider.InvokedAsync(new(s_mockAgent, s_mockSession, messages, []));
 
         // Assert
         Assert.Equal(default, task);
@@ -42,7 +42,7 @@ public class AIContextProviderTests
     public void InvokedContext_Constructor_ThrowsForNullMessages()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, null!));
+        Assert.Throws<ArgumentNullException>(() => new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, null!, []));
     }
 
     #endregion
@@ -239,41 +239,14 @@ public class AIContextProviderTests
     #region InvokedContext Tests
 
     [Fact]
-    public void InvokedContext_RequestMessages_SetterThrowsForNull()
-    {
-        // Arrange
-        var messages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, messages);
-
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => context.RequestMessages = null!);
-    }
-
-    [Fact]
-    public void InvokedContext_RequestMessages_SetterRoundtrips()
-    {
-        // Arrange
-        var initialMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
-        var newMessages = new List<ChatMessage> { new(ChatRole.User, "New message") };
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, initialMessages);
-
-        // Act
-        context.RequestMessages = newMessages;
-
-        // Assert
-        Assert.Same(newMessages, context.RequestMessages);
-    }
-
-    [Fact]
     public void InvokedContext_ResponseMessages_Roundtrips()
     {
         // Arrange
         var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
         var responseMessages = new List<ChatMessage> { new(ChatRole.Assistant, "Response message") };
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
 
         // Act
-        context.ResponseMessages = responseMessages;
+        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, responseMessages);
 
         // Assert
         Assert.Same(responseMessages, context.ResponseMessages);
@@ -285,10 +258,9 @@ public class AIContextProviderTests
         // Arrange
         var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
         var exception = new InvalidOperationException("Test exception");
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
 
         // Act
-        context.InvokeException = exception;
+        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, exception);
 
         // Assert
         Assert.Same(exception, context.InvokeException);
@@ -301,7 +273,7 @@ public class AIContextProviderTests
         var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
 
         // Act
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
+        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, []);
 
         // Assert
         Assert.Same(s_mockAgent, context.Agent);
@@ -314,7 +286,7 @@ public class AIContextProviderTests
         var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
 
         // Act
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
+        var context = new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, []);
 
         // Assert
         Assert.Same(s_mockSession, context.Session);
@@ -327,7 +299,7 @@ public class AIContextProviderTests
         var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
 
         // Act
-        var context = new AIContextProvider.InvokedContext(s_mockAgent, null, requestMessages);
+        var context = new AIContextProvider.InvokedContext(s_mockAgent, null, requestMessages, []);
 
         // Assert
         Assert.Null(context.Session);
@@ -340,7 +312,27 @@ public class AIContextProviderTests
         var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
 
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new AIContextProvider.InvokedContext(null!, s_mockSession, requestMessages));
+        Assert.Throws<ArgumentNullException>(() => new AIContextProvider.InvokedContext(null!, s_mockSession, requestMessages, []));
+    }
+
+    [Fact]
+    public void InvokedContext_SuccessConstructor_ThrowsForNullResponseMessages()
+    {
+        // Arrange
+        var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, (IEnumerable<ChatMessage>)null!));
+    }
+
+    [Fact]
+    public void InvokedContext_FailureConstructor_ThrowsForNullException()
+    {
+        // Arrange
+        var requestMessages = new ReadOnlyCollection<ChatMessage>([new(ChatRole.User, "Hello")]);
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new AIContextProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, (Exception)null!));
     }
 
     #endregion

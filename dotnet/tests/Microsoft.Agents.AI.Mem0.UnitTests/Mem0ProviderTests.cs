@@ -228,7 +228,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = responseMessages });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, responseMessages));
 
         // Assert
         var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();
@@ -256,7 +256,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = null, InvokeException = new InvalidOperationException("Request Failed") });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, new InvalidOperationException("Request Failed")));
 
         // Assert
         Assert.Empty(this._handler.Requests);
@@ -283,7 +283,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = responseMessages });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, responseMessages));
 
         // Assert
         this._loggerMock.Verify(
@@ -334,7 +334,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = responseMessages });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, responseMessages));
 
         // Assert
         Assert.Equal(expectedLogCount, this._loggerMock.Invocations.Count);
@@ -511,7 +511,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages));
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, []));
 
         // Assert - Only the External message should be persisted
         var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();
@@ -540,7 +540,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages));
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, []));
 
         // Assert - Both messages should be persisted (identity filter overrides default)
         var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();

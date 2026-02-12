@@ -58,7 +58,7 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [input]));
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [input], []));
         var ctxAfterAdding = await GetContextWithRetryAsync(sut, mockSession, question);
         await sut.ClearStoredMemoriesAsync(mockSession);
         var ctxAfterClearing = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
@@ -83,7 +83,7 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.DoesNotContain("Caoimhe", ctxBefore.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [assistantIntro]));
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, [assistantIntro], []));
         var ctxAfterAdding = await GetContextWithRetryAsync(sut, mockSession, question);
         await sut.ClearStoredMemoriesAsync(mockSession);
         var ctxAfterClearing = await sut.InvokingAsync(new AIContextProvider.InvokingContext(s_mockAgent, mockSession, new AIContext { Messages = new List<ChatMessage> { question } }));
@@ -115,7 +115,7 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.DoesNotContain("Caoimhe", ctxBefore2.Messages?.LastOrDefault()?.Text ?? string.Empty);
 
         // Act
-        await sut1.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession1, [assistantIntro]));
+        await sut1.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession1, [assistantIntro], []));
         var ctxAfterAdding1 = await GetContextWithRetryAsync(sut1, mockSession1, question);
         var ctxAfterAdding2 = await GetContextWithRetryAsync(sut2, mockSession2, question);
 

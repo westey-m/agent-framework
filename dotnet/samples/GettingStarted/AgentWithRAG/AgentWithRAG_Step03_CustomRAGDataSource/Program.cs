@@ -29,7 +29,7 @@ AIAgent agent = new AzureOpenAIClient(
     .AsAIAgent(new ChatClientAgentOptions
     {
         ChatOptions = new() { Instructions = "You are a helpful support specialist for Contoso Outdoors. Answer questions using the provided context and cite the source document when available." },
-        AIContextProvider = new TextSearchProvider(MockSearchAsync, textSearchOptions)
+        AIContextProviders = [new TextSearchProvider(MockSearchAsync, textSearchOptions)]
     });
 
 AgentSession session = await agent.CreateSessionAsync();

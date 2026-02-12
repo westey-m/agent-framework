@@ -33,7 +33,7 @@ ChatClient chatClient = new AzureOpenAIClient(
 AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions()
 {
     ChatOptions = new() { Instructions = "You are a friendly assistant. Always address the user by their name." },
-    AIContextProvider = new UserInfoMemory(chatClient.AsIChatClient())
+    AIContextProviders = [new UserInfoMemory(chatClient.AsIChatClient())]
 });
 
 // Create a new session for the conversation.

@@ -2310,10 +2310,10 @@ public sealed class AzureAIProjectChatClientExtensionsTests
     #region CreateChatClientAgentOptions - Options Preservation Tests
 
     /// <summary>
-    /// Verify that CreateChatClientAgentOptions preserves AIContextProvider.
+    /// Verify that CreateChatClientAgentOptions preserves AIContextProviders.
     /// </summary>
     [Fact]
-    public async Task GetAIAgentAsync_WithAIContextProvider_PreservesProviderAsync()
+    public async Task GetAIAgentAsync_WithAIContextProviders_PreservesProviderAsync()
     {
         // Arrange
         AIProjectClient client = this.CreateTestAgentClient();
@@ -2321,7 +2321,7 @@ public sealed class AzureAIProjectChatClientExtensionsTests
         {
             Name = "test-agent",
             ChatOptions = new ChatOptions { Instructions = "Test" },
-            AIContextProvider = new TestAIContextProvider()
+            AIContextProviders = [new TestAIContextProvider()]
         };
 
         // Act

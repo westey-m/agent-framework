@@ -20,6 +20,7 @@ namespace Microsoft.Agents.AI;
 public sealed partial class ChatClientAgent : AIAgent
 {
     private readonly ChatClientAgentOptions? _agentOptions;
+    private readonly HashSet<string> _aiContextProviderStateKeys;
     private readonly AIAgentMetadata _agentMetadata;
     private readonly ILogger _logger;
     private readonly Type _chatClientType;
@@ -109,6 +110,10 @@ public sealed partial class ChatClientAgent : AIAgent
         // If one was not provided, and we later find out that the underlying service does not manage chat history server-side,
         // we will use the default InMemoryChatHistoryProvider at that time.
         this.ChatHistoryProvider = options?.ChatHistoryProvider;
+        this.AIContextProviders = this._agentOptions?.AIContextProviders as IReadOnlyList<AIContextProvider> ?? this._agentOptions?.AIContextProviders?.ToList();
+
+        // Validate that no two providers share the same StateKey, since they would overwrite each other's state in the session.
+        this._aiContextProviderStateKeys = ValidateAndCollectStateKeys(this._agentOptions?.AIContextProviders, this.ChatHistoryProvider);
 
         this._logger = (loggerFactory ?? chatClient.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger<ChatClientAgent>();
     }
@@ -132,6 +137,14 @@ public sealed partial class ChatClientAgent : AIAgent
     /// This property may be null in case the agent stores messages in the underlying agent service.
     /// </remarks>
     public ChatHistoryProvider? ChatHistoryProvider { get; private set; }
+
+    /// <summary>
+    /// Gets the list of <see cref="AIContextProvider"/> instances used by this agent, to support cases where additional context is needed for each agent run.
+    /// </summary>
+    /// <remarks>
+    /// This property may be null in case no additional context providers were configured.
+    /// </remarks>
+    public IReadOnlyList<AIContextProvider>? AIContextProviders { get; }
 
     /// <inheritdoc/>
     protected override string? IdCore => this._agentOptions?.Id;
@@ -310,7 +323,7 @@ public sealed partial class ChatClientAgent : AIAgent
         : serviceType == typeof(IChatClient) ? this.ChatClient
         : serviceType == typeof(ChatOptions) ? this._agentOptions?.ChatOptions
         : serviceType == typeof(ChatClientAgentOptions) ? this._agentOptions
-        : this._agentOptions?.AIContextProvider?.GetService(serviceType, serviceKey)
+        : this.AIContextProviders?.Select(provider => provider.GetService(serviceType, serviceKey)).FirstOrDefault(s => s is not null)
         ?? this.ChatHistoryProvider?.GetService(serviceType, serviceKey)
         ?? this.ChatClient.GetService(serviceType, serviceKey));
 
@@ -440,10 +453,14 @@ public sealed partial class ChatClientAgent : AIAgent
         IEnumerable<ChatMessage> responseMessages,
         CancellationToken cancellationToken)
     {
-        if (this._agentOptions?.AIContextProvider is { } contextProvider)
+        if (this.AIContextProviders is { Count: > 0 } contextProviders)
         {
-            await contextProvider.InvokedAsync(new(this, session, inputMessages) { ResponseMessages = responseMessages },
-                cancellationToken).ConfigureAwait(false);
+            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages) { ResponseMessages = responseMessages };
+
+            foreach (var contextProvider in contextProviders)
+            {
+                await contextProvider.InvokedAsync(invokedContext, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -456,10 +473,14 @@ public sealed partial class ChatClientAgent : AIAgent
         IEnumerable<ChatMessage> inputMessages,
         CancellationToken cancellationToken)
     {
-        if (this._agentOptions?.AIContextProvider is { } contextProvider)
+        if (this.AIContextProviders is { Count: > 0 } contextProviders)
         {
-            await contextProvider.InvokedAsync(new(this, session, inputMessages) { InvokeException = ex },
-                cancellationToken).ConfigureAwait(false);
+            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages) { InvokeException = ex };
+
+            foreach (var contextProvider in contextProviders)
+            {
+                await contextProvider.InvokedAsync(invokedContext, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -679,7 +700,7 @@ public sealed partial class ChatClientAgent : AIAgent
             // If we have an AIContextProvider, we should get context from it, and update our
             // messages and options with the additional context.
             // The AIContextProvider returns the accumulated AIContext (original + new contributions).
-            if (this._agentOptions?.AIContextProvider is { } aiContextProvider)
+            if (this.AIContextProviders is { Count: > 0 } aiContextProviders)
             {
                 var aiContext = new AIContext
                 {
@@ -687,8 +708,12 @@ public sealed partial class ChatClientAgent : AIAgent
                     Messages = inputMessagesForChatClient,
                     Tools = chatOptions?.Tools
                 };
-                var invokingContext = new AIContextProvider.InvokingContext(this, typedSession, aiContext);
-                aiContext = await aiContextProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
+
+                foreach (var aiContextProvider in aiContextProviders)
+                {
+                    var invokingContext = new AIContextProvider.InvokingContext(this, typedSession, aiContext);
+                    aiContext = await aiContextProvider.InvokingAsync(invokingContext, cancellationToken).ConfigureAwait(false);
+                }
 
                 // Materialize the accumulated messages and tools once at the end of the provider pipeline.
                 inputMessagesForChatClient = aiContext.Messages?.ToList() ?? [];
@@ -827,6 +852,13 @@ public sealed partial class ChatClientAgent : AIAgent
                     $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but an override {nameof(this.ChatHistoryProvider)} was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");
             }
 
+            // Validate that the override provider's StateKey does not clash with any AIContextProvider's StateKey.
+            if (overrideProvider is not null && this._aiContextProviderStateKeys.Contains(overrideProvider.StateKey))
+            {
+                throw new InvalidOperationException(
+                    $"The ChatHistoryProvider '{overrideProvider.GetType().Name}' uses the state key '{overrideProvider.StateKey}' which is already used by one of the configured AIContextProviders. Each provider must use a unique state key to avoid overwriting each other's state.");
+            }
+
             provider = overrideProvider;
         }
 
@@ -873,5 +905,43 @@ public sealed partial class ChatClientAgent : AIAgent
     }
 
     private string GetLoggingAgentName() => this.Name ?? "UnnamedAgent";
+
+    /// <summary>
+    /// Validates that all configured providers have unique <see cref="AIContextProvider.StateKey"/> values
+    /// and returns a <see cref="HashSet{T}"/> of the AIContextProvider state keys.
+    /// </summary>
+    private static HashSet<string> ValidateAndCollectStateKeys(IEnumerable<AIContextProvider>? aiContextProviders, ChatHistoryProvider? chatHistoryProvider)
+    {
+        HashSet<string> stateKeys = new(StringComparer.Ordinal);
+
+        if (aiContextProviders is not null)
+        {
+            foreach (var provider in aiContextProviders)
+            {
+                if (!stateKeys.Add(provider.StateKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Multiple providers use the same state key '{provider.StateKey}'. Each provider must use a unique state key to avoid overwriting each other's state.");
+                }
+            }
+        }
+
+        if (chatHistoryProvider is null
+            && stateKeys.Contains(nameof(InMemoryChatHistoryProvider)))
+        {
+            throw new InvalidOperationException(
+                $"The default {nameof(InMemoryChatHistoryProvider)} uses the state key '{nameof(InMemoryChatHistoryProvider)}', which is already used by one of the configured AIContextProviders. Each provider must use a unique state key to avoid overwriting each other's state. To resolve this, either configure a different state key for the AIContextProvider that is using '{nameof(InMemoryChatHistoryProvider)}' as its state key, or provide a custom ChatHistoryProvider with a unique state key.");
+        }
+
+        if (chatHistoryProvider is not null
+            && stateKeys.Contains(chatHistoryProvider.StateKey))
+        {
+            throw new InvalidOperationException(
+                $"The ChatHistoryProvider '{chatHistoryProvider.GetType().Name}' uses the state key '{chatHistoryProvider.StateKey}' which is already used by one of the configured AIContextProviders. Each provider must use a unique state key to avoid overwriting each other's state. To resolve this, either configure a different state key for the AIContextProvider that is using '{chatHistoryProvider.StateKey}' as its state key, or reconfigure the custom ChatHistoryProvider with a unique state key.");
+        }
+
+        return stateKeys;
+    }
+
     #endregion
 }

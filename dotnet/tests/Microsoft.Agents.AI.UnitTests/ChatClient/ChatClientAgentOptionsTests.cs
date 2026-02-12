@@ -22,7 +22,7 @@ public class ChatClientAgentOptionsTests
         Assert.Null(options.Description);
         Assert.Null(options.ChatOptions);
         Assert.Null(options.ChatHistoryProvider);
-        Assert.Null(options.AIContextProvider);
+        Assert.Null(options.AIContextProviders);
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class ChatClientAgentOptionsTests
         // Assert
         Assert.Null(options.Name);
         Assert.Null(options.Description);
-        Assert.Null(options.AIContextProvider);
+        Assert.Null(options.AIContextProviders);
         Assert.Null(options.ChatHistoryProvider);
         Assert.NotNull(options.ChatOptions);
         Assert.Null(options.ChatOptions.Instructions);
@@ -125,7 +125,7 @@ public class ChatClientAgentOptionsTests
             ChatOptions = new() { Tools = tools },
             Id = "test-id",
             ChatHistoryProvider = mockChatHistoryProvider,
-            AIContextProvider = mockAIContextProvider
+            AIContextProviders = [mockAIContextProvider]
         };
 
         // Act
@@ -137,7 +137,7 @@ public class ChatClientAgentOptionsTests
         Assert.Equal(original.Name, clone.Name);
         Assert.Equal(original.Description, clone.Description);
         Assert.Same(original.ChatHistoryProvider, clone.ChatHistoryProvider);
-        Assert.Same(original.AIContextProvider, clone.AIContextProvider);
+        Assert.Equal(original.AIContextProviders, clone.AIContextProviders);
 
         // ChatOptions should be cloned, not the same reference
         Assert.NotSame(original.ChatOptions, clone.ChatOptions);
@@ -158,7 +158,7 @@ public class ChatClientAgentOptionsTests
             Name = "Test name",
             Description = "Test description",
             ChatHistoryProvider = mockChatHistoryProvider,
-            AIContextProvider = mockAIContextProvider
+            AIContextProviders = [mockAIContextProvider]
         };
 
         // Act
@@ -171,7 +171,7 @@ public class ChatClientAgentOptionsTests
         Assert.Equal(original.Description, clone.Description);
         Assert.Null(original.ChatOptions);
         Assert.Same(original.ChatHistoryProvider, clone.ChatHistoryProvider);
-        Assert.Same(original.AIContextProvider, clone.AIContextProvider);
+        Assert.Equal(original.AIContextProviders, clone.AIContextProviders);
     }
 
     private static void AssertSameTools(IList<AITool>? expected, IList<AITool>? actual)

@@ -12,7 +12,7 @@ description: >
 
 We should only support verifying samples that:
 1. Use environment variables for configuration.
-2. Have no complex setup requirements, e.g. where multiple applications need to be run together, or where we need to launch of browser, etc.
+2. Have no complex setup requirements, e.g., where multiple applications need to be run together, or where we need to launch a browser, etc.
 
 Always report to the user which samples were run and which were not, and why.
 

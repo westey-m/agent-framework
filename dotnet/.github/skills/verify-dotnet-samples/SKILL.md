@@ -65,7 +65,7 @@ export AZURE_OPENAI_ENDPOINT="https://my-openai-instance.openai.azure.com/"
 export AZURE_OPENAI_DEPLOYMENT_NAME="gpt-4o-mini"
 ```
 
-To check if a variables has a value use e.g.:
+To check if a variable has a value use e.g.:
 
 ```bash
 echo $AZURE_OPENAI_ENDPOINT
@@ -78,7 +78,7 @@ cd dotnet/samples/<category>/<sample-dir>
 dotnet run
 ```
 
-For multi-targeted projects (e.g. Durable console apps), specify the framework:
+For multi-targeted projects (e.g., Durable console apps), specify the framework:
 
 ```bash
 dotnet run --framework net10.0

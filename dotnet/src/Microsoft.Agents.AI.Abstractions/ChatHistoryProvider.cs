@@ -285,7 +285,8 @@ public abstract class ChatHistoryProvider
         /// </summary>
         /// <param name="agent">The agent that was invoked.</param>
         /// <param name="session">The session associated with the agent invocation.</param>
-        /// <param name="requestMessages">The caller provided messages that were used by the agent for this invocation.</param>
+        /// <param name="requestMessages">The accumulated request messages (user input, chat history and any others provided by AI context providers)
+        /// that were used by the agent for this invocation.</param>
         /// <param name="invokeException">The exception that caused the invocation to fail.</param>
         /// <exception cref="ArgumentNullException"><paramref name="agent"/>, <paramref name="requestMessages"/>, or <paramref name="invokeException"/> is <see langword="null"/>.</exception>
         public InvokedContext(
@@ -311,7 +312,8 @@ public abstract class ChatHistoryProvider
         public AgentSession? Session { get; }
 
         /// <summary>
-        /// Gets the caller provided messages that were used by the agent for this invocation.
+        /// Gets the accumulated request messages (user input, chat history and any others provided by AI context providers)
+        /// that were used by the agent for this invocation.
         /// </summary>
         /// <value>
         /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.

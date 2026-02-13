@@ -80,6 +80,9 @@ internal class AgentSessionStateBagValue
         {
             switch (this._cache)
             {
+                case DeserializedCache { Value: null, ValueType: Type cacheValueType } when cacheValueType == typeof(T):
+                    value = null;
+                    return true;
                 case DeserializedCache { Value: T cacheValue, ValueType: Type cacheValueType } when cacheValueType == typeof(T):
                     value = cacheValue;
                     return true;
@@ -124,6 +127,8 @@ internal class AgentSessionStateBagValue
         {
             switch (this._cache)
             {
+                case DeserializedCache { Value: null, ValueType: Type cacheValueType } when cacheValueType == typeof(T):
+                    return null;
                 case DeserializedCache { Value: T cacheValue, ValueType: Type cacheValueType } when cacheValueType == typeof(T):
                     return cacheValue;
                 case DeserializedCache { ValueType: Type cacheValueType } when cacheValueType != typeof(T):

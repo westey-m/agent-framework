@@ -10,6 +10,7 @@ namespace Microsoft.Agents.AI;
 /// <summary>
 /// Provides an abstract base class for components that enhance AI context during agent invocations with support for maintaining provider state of type <typeparamref name="TState"/>.
 /// </summary>
+/// <typeparam name="TState">The type of the state to be maintained by the context provider. Must be a reference type.</typeparam>
 /// <remarks>
 /// This class extends <see cref="AIContextProvider"/> by introducing a strongly-typed state management mechanism, allowing derived classes to maintain and persist custom state information across invocations.
 /// The state is stored in the session's StateBag using a configurable key and JSON serialization options, enabling seamless integration with the agent session lifecycle.

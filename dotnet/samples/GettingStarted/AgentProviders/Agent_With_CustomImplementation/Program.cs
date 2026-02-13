@@ -65,10 +65,7 @@ namespace SampleApp
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.Name).ToList();
 
             // Notify the session of the input and output messages.
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, userAndChatHistoryMessages)
-            {
-                ResponseMessages = responseMessages
-            };
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, userAndChatHistoryMessages, responseMessages);
             await this.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
 
             return new AgentResponse
@@ -97,10 +94,7 @@ namespace SampleApp
             List<ChatMessage> responseMessages = CloneAndToUpperCase(messages, this.Name).ToList();
 
             // Notify the session of the input and output messages.
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, userAndChatHistoryMessages)
-            {
-                ResponseMessages = responseMessages
-            };
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, userAndChatHistoryMessages, responseMessages);
             await this.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
 
             foreach (var message in responseMessages)

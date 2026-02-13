@@ -118,9 +118,10 @@ public sealed class Mem0ProviderTests : IDisposable
         Assert.Equal("What is my name?", doc.RootElement.GetProperty("query").GetString());
 
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages.Count);
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages[0].GetAgentRequestMessageSourceType());
-        var contextMessage = aiContext.Messages[1];
+        var messages = aiContext.Messages.ToList();
+        Assert.Equal(2, messages.Count);
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[0].GetAgentRequestMessageSourceType());
+        var contextMessage = messages[1];
         Assert.Equal(ChatRole.User, contextMessage.Role);
         Assert.Contains("Name is Caoimhe", contextMessage.Text);
         Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, contextMessage.GetAgentRequestMessageSourceType());
@@ -227,7 +228,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = responseMessages });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, responseMessages));
 
         // Assert
         var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();
@@ -255,7 +256,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = null, InvokeException = new InvalidOperationException("Request Failed") });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, new InvalidOperationException("Request Failed")));
 
         // Assert
         Assert.Empty(this._handler.Requests);
@@ -282,7 +283,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = responseMessages });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, responseMessages));
 
         // Assert
         this._loggerMock.Verify(
@@ -333,7 +334,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages) { ResponseMessages = responseMessages });
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, responseMessages));
 
         // Assert
         Assert.Equal(expectedLogCount, this._loggerMock.Invocations.Count);
@@ -510,7 +511,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages));
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, []));
 
         // Assert - Only the External message should be persisted
         var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();
@@ -539,7 +540,7 @@ public sealed class Mem0ProviderTests : IDisposable
         };
 
         // Act
-        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages));
+        await sut.InvokedAsync(new AIContextProvider.InvokedContext(s_mockAgent, mockSession, requestMessages, []));
 
         // Assert - Both messages should be persisted (identity filter overrides default)
         var memoryPosts = this._handler.Requests.Where(r => r.RequestMessage.RequestUri!.AbsolutePath == "/v1/memories/" && r.RequestMessage.Method == HttpMethod.Post).ToList();

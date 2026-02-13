@@ -106,12 +106,13 @@ public sealed class TextSearchProviderTests
         Assert.Equal("Sample user question?\nAdditional part", capturedInput);
         Assert.Null(aiContext.Instructions); // TextSearchProvider uses a user message for context injection.
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(3, aiContext.Messages!.Count); // 2 input messages + 1 search result message
-        Assert.Equal("Sample user question?", aiContext.Messages![0].Text);
-        Assert.Equal("Additional part", aiContext.Messages![1].Text);
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![0].GetAgentRequestMessageSourceType());
-        Assert.Equal(AgentRequestMessageSourceType.External, aiContext.Messages![1].GetAgentRequestMessageSourceType());
-        var message = aiContext.Messages!.Last();
+        var messages = aiContext.Messages!.ToList();
+        Assert.Equal(3, messages.Count); // 2 input messages + 1 search result message
+        Assert.Equal("Sample user question?", messages[0].Text);
+        Assert.Equal("Additional part", messages[1].Text);
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[0].GetAgentRequestMessageSourceType());
+        Assert.Equal(AgentRequestMessageSourceType.External, messages[1].GetAgentRequestMessageSourceType());
+        var message = messages.Last();
         Assert.Equal(ChatRole.User, message.Role);
         Assert.Equal(AgentRequestMessageSourceType.AIContextProvider, message.GetAgentRequestMessageSourceType());
         string text = message.Text!;
@@ -181,11 +182,13 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved.
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal("Q?", messages[0].Text);
         Assert.NotNull(aiContext.Tools);
-        Assert.Single(aiContext.Tools);
-        var tool = aiContext.Tools.Single();
+        var tools = aiContext.Tools!.ToList();
+        Assert.Single(tools);
+        var tool = tools[0];
         Assert.Equal(expectedName, tool.Name);
         Assert.Equal(expectedDescription, tool.Description);
     }
@@ -202,8 +205,9 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved on error.
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal("Q?", messages[0].Text);
         Assert.Null(aiContext.Tools);
         this._loggerMock.Verify(
             l => l.Log(
@@ -297,9 +301,10 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages!.Count); // 1 input message + 1 formatted result message
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
-        Assert.Equal("Custom formatted context with 2 results.", aiContext.Messages![1].Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Equal(2, messages.Count); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", messages[0].Text);
+        Assert.Equal("Custom formatted context with 2 results.", messages[1].Text);
     }
 
     [Fact]
@@ -332,9 +337,10 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages);
-        Assert.Equal(2, aiContext.Messages!.Count); // 1 input message + 1 formatted result message
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
-        Assert.Equal("R1,R2", aiContext.Messages![1].Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Equal(2, messages.Count); // 1 input message + 1 formatted result message
+        Assert.Equal("Q?", messages[0].Text);
+        Assert.Equal("R1,R2", messages[1].Text);
     }
 
     [Fact]
@@ -350,8 +356,9 @@ public sealed class TextSearchProviderTests
 
         // Assert
         Assert.NotNull(aiContext.Messages); // Input messages are preserved when no results found.
-        Assert.Single(aiContext.Messages!);
-        Assert.Equal("Q?", aiContext.Messages![0].Text);
+        var messages = aiContext.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal("Q?", messages[0].Text);
         Assert.Null(aiContext.Instructions);
         Assert.Null(aiContext.Tools);
     }
@@ -442,7 +449,7 @@ public sealed class TextSearchProviderTests
         };
 
         // Store messages via InvokedAsync
-        await provider.InvokedAsync(new(s_mockAgent, session, requestMessages));
+        await provider.InvokedAsync(new(s_mockAgent, session, requestMessages, []));
 
         // Now invoke to read stored memory
         var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Next")] });
@@ -478,7 +485,7 @@ public sealed class TextSearchProviderTests
         };
 
         // Store messages via InvokedAsync
-        await provider.InvokedAsync(new(s_mockAgent, session, requestMessages));
+        await provider.InvokedAsync(new(s_mockAgent, session, requestMessages, []));
 
         // Now invoke to read stored memory
         var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = [new ChatMessage(ChatRole.User, "Next")] });
@@ -519,7 +526,7 @@ public sealed class TextSearchProviderTests
         };
 
         var session = new TestAgentSession();
-        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages) { InvokeException = new InvalidOperationException("Request Failed") });
+        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages, new InvalidOperationException("Request Failed")));
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -560,7 +567,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "C"),
             new ChatMessage(ChatRole.Assistant, "D"),
         };
-        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages));
+        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages, []));
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -600,7 +607,8 @@ public sealed class TextSearchProviderTests
             [
                 new ChatMessage(ChatRole.User, "A"),
                 new ChatMessage(ChatRole.Assistant, "B"),
-            ]));
+            ],
+            []));
 
         // Second memory update (C,D,E)
         await provider.InvokedAsync(new(
@@ -610,7 +618,8 @@ public sealed class TextSearchProviderTests
                 new ChatMessage(ChatRole.User, "C"),
                 new ChatMessage(ChatRole.Assistant, "D"),
                 new ChatMessage(ChatRole.User, "E"),
-            ]));
+            ],
+            []));
 
         var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, session, new AIContext { Messages = new List<ChatMessage> { new(ChatRole.User, "F") } });
 
@@ -648,7 +657,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "U2"),
             new ChatMessage(ChatRole.Assistant, "A2"),
         };
-        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages));
+        await provider.InvokedAsync(new(s_mockAgent, session, initialMessages, []));
 
         var invokingContext = new AIContextProvider.InvokingContext(
             s_mockAgent,
@@ -686,7 +695,7 @@ public sealed class TextSearchProviderTests
         };
 
         // Act
-        await provider.InvokedAsync(new(s_mockAgent, session, messages)); // Populate recent memory.
+        await provider.InvokedAsync(new(s_mockAgent, session, messages, [])); // Populate recent memory.
 
         // Assert - State should be in the session's StateBag
         var stateBagSerialized = session.StateBag.Serialize();
@@ -717,7 +726,7 @@ public sealed class TextSearchProviderTests
             new ChatMessage(ChatRole.User, "C"),
             new ChatMessage(ChatRole.Assistant, "D"),
         };
-        await provider.InvokedAsync(new(s_mockAgent, session, messages));
+        await provider.InvokedAsync(new(s_mockAgent, session, messages, []));
 
         // Act - Serialize and deserialize the StateBag
         var serializedStateBag = session.StateBag.Serialize();

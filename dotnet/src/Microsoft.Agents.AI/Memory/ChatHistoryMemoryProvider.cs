@@ -171,7 +171,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
             {
                 Instructions = inputContext.Instructions,
                 Messages = inputContext.Messages,
-                Tools = (inputContext.Tools ?? []).Concat(tools).ToList()
+                Tools = (inputContext.Tools ?? []).Concat(tools)
             };
         }
 
@@ -204,8 +204,7 @@ public sealed class ChatHistoryMemoryProvider : AIContextProvider, IDisposable
                     .Concat(
                     [
                         new ChatMessage(ChatRole.User, contextText).WithAgentRequestMessageSource(AgentRequestMessageSourceType.AIContextProvider, this.GetType().FullName!)
-                    ])
-                    .ToList(),
+                    ]),
                 Tools = inputContext.Tools
             };
         }

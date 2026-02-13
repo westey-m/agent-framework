@@ -172,33 +172,7 @@ public class ChatHistoryProviderTests
     public void InvokedContext_Constructor_ThrowsForNullRequestMessages()
     {
         // Arrange & Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, null!));
-    }
-
-    [Fact]
-    public void InvokedContext_RequestMessages_SetterThrowsForNull()
-    {
-        // Arrange
-        var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
-
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => context.RequestMessages = null!);
-    }
-
-    [Fact]
-    public void InvokedContext_RequestMessages_SetterRoundtrips()
-    {
-        // Arrange
-        var initialMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
-        var newMessages = new List<ChatMessage> { new(ChatRole.User, "New message") };
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, initialMessages);
-
-        // Act
-        context.RequestMessages = newMessages;
-
-        // Assert
-        Assert.Same(newMessages, context.RequestMessages);
+        Assert.Throws<ArgumentNullException>(() => new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, null!, []));
     }
 
     [Fact]
@@ -207,10 +181,9 @@ public class ChatHistoryProviderTests
         // Arrange
         var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
         var responseMessages = new List<ChatMessage> { new(ChatRole.Assistant, "Response message") };
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
 
         // Act
-        context.ResponseMessages = responseMessages;
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, responseMessages);
 
         // Assert
         Assert.Same(responseMessages, context.ResponseMessages);
@@ -222,10 +195,9 @@ public class ChatHistoryProviderTests
         // Arrange
         var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
         var exception = new InvalidOperationException("Test exception");
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
 
         // Act
-        context.InvokeException = exception;
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, exception);
 
         // Assert
         Assert.Same(exception, context.InvokeException);
@@ -238,7 +210,7 @@ public class ChatHistoryProviderTests
         var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
 
         // Act
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, []);
 
         // Assert
         Assert.Same(s_mockAgent, context.Agent);
@@ -251,7 +223,7 @@ public class ChatHistoryProviderTests
         var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
 
         // Act
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages);
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, []);
 
         // Assert
         Assert.Same(s_mockSession, context.Session);
@@ -264,7 +236,7 @@ public class ChatHistoryProviderTests
         var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
 
         // Act
-        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, null, requestMessages);
+        var context = new ChatHistoryProvider.InvokedContext(s_mockAgent, null, requestMessages, []);
 
         // Assert
         Assert.Null(context.Session);
@@ -277,7 +249,27 @@ public class ChatHistoryProviderTests
         var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
 
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new ChatHistoryProvider.InvokedContext(null!, s_mockSession, requestMessages));
+        Assert.Throws<ArgumentNullException>(() => new ChatHistoryProvider.InvokedContext(null!, s_mockSession, requestMessages, []));
+    }
+
+    [Fact]
+    public void InvokedContext_SuccessConstructor_ThrowsForNullResponseMessages()
+    {
+        // Arrange
+        var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, (IEnumerable<ChatMessage>)null!));
+    }
+
+    [Fact]
+    public void InvokedContext_FailureConstructor_ThrowsForNullException()
+    {
+        // Arrange
+        var requestMessages = new List<ChatMessage> { new(ChatRole.User, "Hello") };
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new ChatHistoryProvider.InvokedContext(s_mockAgent, s_mockSession, requestMessages, (Exception)null!));
     }
 
     #endregion

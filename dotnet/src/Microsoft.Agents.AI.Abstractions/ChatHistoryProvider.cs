@@ -260,21 +260,44 @@ public abstract class ChatHistoryProvider
     public sealed class InvokedContext
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="InvokedContext"/> class with the specified request messages.
+        /// Initializes a new instance of the <see cref="InvokedContext"/> class for a successful invocation.
         /// </summary>
-        /// <param name="agent">The agent being invoked.</param>
+        /// <param name="agent">The agent that was invoked.</param>
         /// <param name="session">The session associated with the agent invocation.</param>
         /// <param name="requestMessages">The accumulated request messages (user input, chat history and any others provided by AI context providers)
         /// that were used by the agent for this invocation.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="requestMessages"/> is <see langword="null"/>.</exception>
+        /// <param name="responseMessages">The response messages generated during this invocation.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="agent"/>, <paramref name="requestMessages"/>, or <paramref name="responseMessages"/> is <see langword="null"/>.</exception>
         public InvokedContext(
             AIAgent agent,
             AgentSession? session,
-            IEnumerable<ChatMessage> requestMessages)
+            IEnumerable<ChatMessage> requestMessages,
+            IEnumerable<ChatMessage> responseMessages)
         {
             this.Agent = Throw.IfNull(agent);
             this.Session = session;
             this.RequestMessages = Throw.IfNull(requestMessages);
+            this.ResponseMessages = Throw.IfNull(responseMessages);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InvokedContext"/> class for a failed invocation.
+        /// </summary>
+        /// <param name="agent">The agent that was invoked.</param>
+        /// <param name="session">The session associated with the agent invocation.</param>
+        /// <param name="requestMessages">The caller provided messages that were used by the agent for this invocation.</param>
+        /// <param name="invokeException">The exception that caused the invocation to fail.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="agent"/>, <paramref name="requestMessages"/>, or <paramref name="invokeException"/> is <see langword="null"/>.</exception>
+        public InvokedContext(
+            AIAgent agent,
+            AgentSession? session,
+            IEnumerable<ChatMessage> requestMessages,
+            Exception invokeException)
+        {
+            this.Agent = Throw.IfNull(agent);
+            this.Session = session;
+            this.RequestMessages = Throw.IfNull(requestMessages);
+            this.InvokeException = Throw.IfNull(invokeException);
         }
 
         /// <summary>
@@ -294,16 +317,16 @@ public abstract class ChatHistoryProvider
         /// A collection of <see cref="ChatMessage"/> instances representing new messages that were provided by the caller.
         /// This does not include any <see cref="ChatHistoryProvider"/> supplied messages.
         /// </value>
-        public IEnumerable<ChatMessage> RequestMessages { get; set { field = Throw.IfNull(value); } }
+        public IEnumerable<ChatMessage> RequestMessages { get; }
 
         /// <summary>
         /// Gets the collection of response messages generated during this invocation if the invocation succeeded.
         /// </summary>
         /// <value>
         /// A collection of <see cref="ChatMessage"/> instances representing the response,
-        /// or <see langword="null"/> if the invocation failed or did not produce response messages.
+        /// or <see langword="null"/> if the invocation failed.
         /// </value>
-        public IEnumerable<ChatMessage>? ResponseMessages { get; set; }
+        public IEnumerable<ChatMessage>? ResponseMessages { get; }
 
         /// <summary>
         /// Gets the <see cref="Exception"/> that was thrown during the invocation, if the invocation failed.
@@ -311,6 +334,6 @@ public abstract class ChatHistoryProvider
         /// <value>
         /// The exception that caused the invocation to fail, or <see langword="null"/> if the invocation succeeded.
         /// </value>
-        public Exception? InvokeException { get; set; }
+        public Exception? InvokeException { get; }
     }
 }

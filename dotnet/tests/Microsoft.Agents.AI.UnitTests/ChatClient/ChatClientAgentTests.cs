@@ -496,9 +496,9 @@ public partial class ChatClientAgentTests
             .Returns((AIContextProvider.InvokingContext ctx, CancellationToken _) =>
                 new ValueTask<AIContext>(new AIContext
                 {
-                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages).ToList(),
+                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages),
                     Instructions = ctx.AIContext.Instructions + "\ncontext provider instructions",
-                    Tools = (ctx.AIContext.Tools ?? []).Concat(new[] { AIFunctionFactory.Create(() => { }, "context provider function") }).ToList()
+                    Tools = (ctx.AIContext.Tools ?? []).Concat(new[] { AIFunctionFactory.Create(() => { }, "context provider function") })
                 }));
         mockProvider
             .Protected()
@@ -567,7 +567,7 @@ public partial class ChatClientAgentTests
             .Returns((AIContextProvider.InvokingContext ctx, CancellationToken _) =>
                 new ValueTask<AIContext>(new AIContext
                 {
-                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages).ToList(),
+                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages),
                 }));
         mockProvider
             .Protected()
@@ -626,7 +626,7 @@ public partial class ChatClientAgentTests
                 new ValueTask<AIContext>(new AIContext
                 {
                     Instructions = ctx.AIContext.Instructions,
-                    Messages = ctx.AIContext.Messages?.ToList(),
+                    Messages = ctx.AIContext.Messages,
                     Tools = ctx.AIContext.Tools
                 }));
 
@@ -1875,9 +1875,9 @@ public partial class ChatClientAgentTests
             .Returns((AIContextProvider.InvokingContext ctx, CancellationToken _) =>
                 new ValueTask<AIContext>(new AIContext
                 {
-                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages).ToList(),
+                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages),
                     Instructions = ctx.AIContext.Instructions + "\ncontext provider instructions",
-                    Tools = (ctx.AIContext.Tools ?? []).Concat(new[] { AIFunctionFactory.Create(() => { }, "context provider function") }).ToList()
+                    Tools = (ctx.AIContext.Tools ?? []).Concat(new[] { AIFunctionFactory.Create(() => { }, "context provider function") })
                 }));
         mockProvider
             .Protected()
@@ -1954,7 +1954,7 @@ public partial class ChatClientAgentTests
             .Returns((AIContextProvider.InvokingContext ctx, CancellationToken _) =>
                 new ValueTask<AIContext>(new AIContext
                 {
-                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages).ToList(),
+                    Messages = (ctx.AIContext.Messages ?? []).Concat(aiContextProviderMessages),
                 }));
         mockProvider
             .Protected()

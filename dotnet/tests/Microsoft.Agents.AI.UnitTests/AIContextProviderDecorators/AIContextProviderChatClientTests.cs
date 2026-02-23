@@ -12,7 +12,7 @@ namespace Microsoft.Agents.AI.UnitTests;
 
 /// <summary>
 /// Unit tests for the <see cref="AIContextProviderChatClient"/> class and
-/// the <see cref="AIContextProviderChatClientBuilderExtensions.Use(ChatClientBuilder, AIContextProvider[])"/> builder extension.
+/// the <see cref="AIContextProviderChatClientBuilderExtensions.UseAIContextProviders(ChatClientBuilder, AIContextProvider[])"/> builder extension.
 /// </summary>
 public class AIContextProviderChatClientTests
 {
@@ -260,7 +260,7 @@ public class AIContextProviderChatClientTests
 
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            AIContextProviderChatClientBuilderExtensions.Use(null!, provider));
+            AIContextProviderChatClientBuilderExtensions.UseAIContextProviders(null!, provider));
     }
 
     [Fact]
@@ -278,7 +278,7 @@ public class AIContextProviderChatClientTests
         var provider = new TestAIContextProvider("key1", provideMessages: [new ChatMessage(ChatRole.System, "Pipeline context")]);
 
         var pipeline = new ChatClientBuilder(innerClient)
-            .Use(provider)
+            .UseAIContextProviders(provider)
             .Build();
 
         // Act — wrap in an agent to set CurrentRunContext

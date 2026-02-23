@@ -34,7 +34,7 @@ public static class AIContextProviderChatClientBuilderExtensions
     /// is thrown at invocation time if no run context is available.
     /// </para>
     /// </remarks>
-    public static ChatClientBuilder Use(this ChatClientBuilder builder, params AIContextProvider[] providers)
+    public static ChatClientBuilder UseAIContextProviders(this ChatClientBuilder builder, params AIContextProvider[] providers)
     {
         _ = Throw.IfNull(builder);
 

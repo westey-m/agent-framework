@@ -105,7 +105,7 @@ Console.WriteLine("\n\n=== Example 5: MessageAIContextProvider middleware ===");
 
 var contextProviderAgent = originalAgent
     .AsBuilder()
-    .Use([new DateTimeContextProvider()])
+    .UseAIContextProviders(new DateTimeContextProvider())
     .Build();
 
 var contextResponse = await contextProviderAgent.RunAsync("Is it almost time for lunch?");
@@ -119,7 +119,7 @@ Console.WriteLine("\n\n=== Example 6: AIContextProvider on chat client pipeline 
 
 var chatClientProviderAgent = azureOpenAIClient.AsIChatClient()
     .AsBuilder()
-    .Use(new DateTimeContextProvider())
+    .UseAIContextProviders(new DateTimeContextProvider())
     .BuildAIAgent(
         instructions: "You are an AI assistant that helps people find information.");
 
@@ -293,7 +293,7 @@ async Task<ChatResponse> PerRequestChatClientMiddleware(IEnumerable<ChatMessage>
 /// <summary>
 /// A <see cref="MessageAIContextProvider"/> that injects the current date and time into the agent's context.
 /// This is a simple example of how to use a MessageAIContextProvider to enrich agent messages
-/// via the <see cref="AIAgentBuilder.Use(MessageAIContextProvider[])"/> extension method.
+/// via the <see cref="AIAgentBuilder.UseAIContextProviders(MessageAIContextProvider[])"/> extension method.
 /// </summary>
 internal sealed class DateTimeContextProvider : MessageAIContextProvider
 {

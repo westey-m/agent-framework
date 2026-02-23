@@ -11,7 +11,7 @@
     <UserSecretsId>b7762d10-e29b-4bb1-8b74-b6d69a667dd4</UserSecretsId>
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <NoWarn>$(NoWarn);Moq1410;xUnit1051</NoWarn>
+    <NoWarn>$(NoWarn);Moq1410;xUnit1051;MAAI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

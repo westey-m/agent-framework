@@ -96,7 +96,7 @@ public class OpenAIResponseFixture(bool store) : IChatClientAgentFixture
         // Chat Completion does not require/support deleting threads, so this is a no-op.
         Task.CompletedTask;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         this._openAIResponseClient = new OpenAIClient(s_config.ApiKey)
             .GetResponsesClient(s_config.ChatModelId);
@@ -104,5 +104,9 @@ public class OpenAIResponseFixture(bool store) : IChatClientAgentFixture
         this._agent = await this.CreateChatClientAgentAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        return default;
+    }
 }

@@ -8,20 +8,35 @@ namespace AnthropicChatCompletion.IntegrationTests;
 
 public abstract class SkipAllRunStreaming(Func<AnthropicChatCompletionFixture> func) : RunStreamingTests<AnthropicChatCompletionFixture>(func)
 {
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
-    public override Task RunWithChatMessageReturnsExpectedResultAsync() => base.RunWithChatMessageReturnsExpectedResultAsync();
+    public override Task RunWithChatMessageReturnsExpectedResultAsync()
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.RunWithChatMessageReturnsExpectedResultAsync();
+    }
 
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
-    public override Task RunWithNoMessageDoesNotFailAsync() => base.RunWithNoMessageDoesNotFailAsync();
+    public override Task RunWithNoMessageDoesNotFailAsync()
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.RunWithNoMessageDoesNotFailAsync();
+    }
 
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
-    public override Task RunWithChatMessagesReturnsExpectedResultAsync() => base.RunWithChatMessagesReturnsExpectedResultAsync();
+    public override Task RunWithChatMessagesReturnsExpectedResultAsync()
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.RunWithChatMessagesReturnsExpectedResultAsync();
+    }
 
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
-    public override Task RunWithStringReturnsExpectedResultAsync() => base.RunWithStringReturnsExpectedResultAsync();
+    public override Task RunWithStringReturnsExpectedResultAsync()
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.RunWithStringReturnsExpectedResultAsync();
+    }
 
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
-    public override Task SessionMaintainsHistoryAsync() => base.SessionMaintainsHistoryAsync();
+    public override Task SessionMaintainsHistoryAsync()
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.SessionMaintainsHistoryAsync();
+    }
 }
 
 public class AnthropicBetaChatCompletionRunStreamingTests()

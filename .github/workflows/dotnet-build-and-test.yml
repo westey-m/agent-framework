@@ -152,9 +152,7 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                echo "Current working directory: $(pwd)"
-                test -f ./tests/coverage.runsettings && echo "coverage.runsettings exists" || echo "coverage.runsettings not found"
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --coverage --coverage-output-format cobertura --coverage-settings ./tests/coverage.runsettings --results-directory TestResults/Coverage/
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory TestResults/Coverage/
               else
                 dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx
               fi
@@ -200,7 +198,7 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled" --coverage --coverage-output-format cobertura --coverage-settings ./tests/coverage.runsettings --results-directory TestResults/Coverage/
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled" --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory TestResults/Coverage/
               else
                 dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled"
               fi

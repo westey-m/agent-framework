@@ -836,7 +836,7 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         Assert.Equal("Message 10", messageList[9].Text);
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "CosmosDB")]
     public async Task GetMessageCountAsync_WithMessages_ShouldReturnCorrectCountAsync()
     {
@@ -868,7 +868,7 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         Assert.Equal(5, count);
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "CosmosDB")]
     public async Task GetMessageCountAsync_WithNoMessages_ShouldReturnZeroAsync()
     {
@@ -887,7 +887,7 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         Assert.Equal(0, count);
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "CosmosDB")]
     public async Task ClearMessagesAsync_WithMessages_ShouldDeleteAndReturnCountAsync()
     {
@@ -935,7 +935,7 @@ public sealed class CosmosChatHistoryProviderTests : IAsyncLifetime, IDisposable
         Assert.Empty(retrievedMessages);
     }
 
-    [SkippableFact]
+    [Fact]
     [Trait("Category", "CosmosDB")]
     public async Task ClearMessagesAsync_WithNoMessages_ShouldReturnZeroAsync()
     {

@@ -94,7 +94,7 @@ Tests use the [Microsoft Testing Platform](https://learn.microsoft.com/dotnet/co
 - **`dotnet test` requires `--project`** to specify a test project directly (positional arguments are no longer supported).
 - **Test output** uses the MTP format (e.g., `[✓112/x0/↓0]` progress and `Test run summary: Passed!`).
 - **TRX reports** use `--report-xunit-trx` instead of `--logger trx`.
-- **Code coverage** still uses `--collect:"XPlat Code Coverage"` via `coverlet.collector`.
+- **Code coverage** uses `Microsoft.Testing.Extensions.CodeCoverage` with `--coverage --coverage-output-format cobertura`.
 - **Running a test project directly** is supported via `dotnet run --project <test-project>`. This bypasses the `dotnet test` infrastructure and runs the test executable directly with the MTP command line.
 
 - **Running tests across the solution** with a filter may cause some projects to match zero tests, which MTP treats as a failure (exit code 8). Use `--ignore-exit-code 8` to suppress this:
@@ -107,6 +107,9 @@ dotnet test --solution ./agent-framework-dotnet.slnx --no-build -f net10.0
 ```bash
 # Run tests via dotnet test (uses MTP under the hood)
 dotnet test --project ./tests/Microsoft.Agents.AI.UnitTests -f net10.0
+
+# Run tests with code coverage (Cobertura format)
+dotnet test --project ./tests/Microsoft.Agents.AI.UnitTests -f net10.0 --coverage --coverage-output-format cobertura --coverage-settings ./tests/coverage.runsettings
 
 # Run tests directly via dotnet run (MTP native command line)
 dotnet run --project ./tests/Microsoft.Agents.AI.UnitTests -f net10.0

@@ -161,9 +161,11 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                dotnet test -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --project $project --no-build -v Normal --report-xunit-trx --collect:"XPlat Code Coverage" --results-directory TestResults/Coverage/ -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --coverage --coverage-output-format cobertura --coverage-settings ./dotnet/tests/coverage.runsettings --results-directory TestResults/Coverage/
+              elif [[ "${{ matrix.targetFramework }}" == "net472" ]]; then
+                dotnet test $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --logger trx
               else
-                dotnet test -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --project $project --no-build -v Normal --report-xunit-trx
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx
               fi
             else
               echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"
@@ -205,7 +207,13 @@ jobs:
 
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
-              dotnet test -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --project $project --no-build -v Normal --report-xunit-trx --filter "Category!=IntegrationDisabled"
+              if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter "Category!=IntegrationDisabled" --coverage --coverage-output-format cobertura --coverage-settings ./dotnet/tests/coverage.runsettings --results-directory TestResults/Coverage/
+              elif [[ "${{ matrix.targetFramework }}" == "net472" ]]; then
+                dotnet test $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --logger trx --filter "Category!=IntegrationDisabled"
+              else
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter "Category!=IntegrationDisabled"
+              fi
             else
               echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"
             fi
@@ -235,7 +243,7 @@ jobs:
         if: matrix.targetFramework == env.COVERAGE_FRAMEWORK
         uses: danielpalme/ReportGenerator-GitHub-Action@5.5.1
         with:
-          reports: "./TestResults/Coverage/**/coverage.cobertura.xml"
+          reports: "./TestResults/Coverage/**/*.cobertura.xml"
           targetdir: "./TestResults/Reports"
           reporttypes: "HtmlInline;JsonSummary"
 

@@ -152,9 +152,10 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory TestResults/Coverage/
+                # --ignore-exit-code 8: ignore failures due to finding no matching tests to run in a single project.
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory TestResults/Coverage/
               else
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8
               fi
             else
               echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"

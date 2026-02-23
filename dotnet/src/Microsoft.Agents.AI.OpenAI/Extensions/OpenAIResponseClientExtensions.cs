@@ -102,6 +102,7 @@ public static class OpenAIResponseClientExtensions
     /// <param name="responseClient">The client.</param>
     /// <returns>An <see cref="IChatClient"/> that can be used to converse via the <see cref="ResponsesClient"/> that does not store responses for later retrieval.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="responseClient"/> is <see langword="null"/>.</exception>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public static IChatClient AsIChatClientWithStoredOutputDisabled(this ResponsesClient responseClient)
     {
         return Throw.IfNull(responseClient)

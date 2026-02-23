@@ -152,9 +152,9 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
+                echo "Current working directory: $(pwd)"
+                test -f ./tests/coverage.runsettings && echo "coverage.runsettings exists" || echo "coverage.runsettings not found"
                 dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --coverage --coverage-output-format cobertura --coverage-settings ./tests/coverage.runsettings --results-directory TestResults/Coverage/
-              elif [[ "${{ matrix.targetFramework }}" == "net472" ]]; then
-                dotnet test $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --logger trx
               else
                 dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx
               fi
@@ -200,11 +200,9 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter "Category!=IntegrationDisabled" --coverage --coverage-output-format cobertura --coverage-settings ./tests/coverage.runsettings --results-directory TestResults/Coverage/
-              elif [[ "${{ matrix.targetFramework }}" == "net472" ]]; then
-                dotnet test $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --logger trx --filter "Category!=IntegrationDisabled"
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled" --coverage --coverage-output-format cobertura --coverage-settings ./tests/coverage.runsettings --results-directory TestResults/Coverage/
               else
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter "Category!=IntegrationDisabled"
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled"
               fi
             else
               echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"

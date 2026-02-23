@@ -12,6 +12,10 @@ namespace SampleApp;
 /// (via <see cref="ChatHistoryMemoryProvider"/>). When providing chat history, it searches the vector
 /// store for relevant older messages and prepends them as a memory context message.
 /// </summary>
+/// <remarks>
+/// Only non-system messages are counted towards the session state limit and overflow mechanism. System messages are always retained in session state and are not included in the vector store.
+/// Function calls and function results are also dropped when truncation happens, both from in-memory state, and they are also not persisted to the vector store.
+/// </remarks>
 internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposable
 {
     private readonly InMemoryChatHistoryProvider _inMemoryProvider;
@@ -36,6 +40,11 @@ internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposa
         Func<AgentSession?, ChatHistoryMemoryProvider.State> stateInitializer,
         string? contextPrompt = null)
     {
+        if (maxSessionMessages < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxSessionMessages), "maxSessionMessages must be non-negative.");
+        }
+
         this._reducer = new TruncatingChatReducer(maxSessionMessages);
         this._inMemoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
         {

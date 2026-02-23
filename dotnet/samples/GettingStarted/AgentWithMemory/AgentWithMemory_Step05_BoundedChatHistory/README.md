@@ -34,7 +34,7 @@ dotnet run
 
 ## How it Works
 
-1. The agent starts a conversation with a bounded session window of 4 messages.
+1. The agent starts a conversation with a bounded session window of 4 non-system, non-function messages (i.e., user/assistant turns). System messages are always preserved, and function call/result messages are truncated and not preserved.
 2. As messages accumulate beyond the limit, the `TruncatingChatReducer` removes the oldest messages.
 3. The `BoundedChatHistoryProvider` detects the removed messages and stores them in a vector store via `ChatHistoryMemoryProvider`.
 4. On subsequent invocations, the provider searches the vector store for relevant older messages and prepends them as memory context, allowing the agent to recall information from earlier in the conversation.

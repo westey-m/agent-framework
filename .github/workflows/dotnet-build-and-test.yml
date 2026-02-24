@@ -152,18 +152,19 @@ jobs:
 
       - name: Run Unit Tests
         shell: pwsh
+        working-directory: dotnet
         run: |
           $coverageArgs = @()
           if ("${{ matrix.targetFramework }}" -eq "${{ env.COVERAGE_FRAMEWORK }}") {
             $coverageArgs = @(
               "--coverage",
               "--coverage-output-format", "cobertura",
-              "--coverage-settings", "dotnet/tests/coverage.runsettings",
-              "--results-directory", "TestResults/Coverage/"
+              "--coverage-settings", "tests/coverage.runsettings",
+              "--results-directory", "../TestResults/Coverage/"
             )
           }
 
-          dotnet test --solution dotnet/filtered.slnx `
+          dotnet test --solution ./filtered.slnx `
             -f ${{ matrix.targetFramework }} `
             -c ${{ matrix.configuration }} `
             --no-build -v Normal `
@@ -198,9 +199,10 @@ jobs:
 
       - name: Run Integration Tests
         shell: pwsh
+        working-directory: dotnet
         if: github.event_name != 'pull_request' && matrix.integration-tests
         run: |
-          dotnet test --solution dotnet/filtered.slnx `
+          dotnet test --solution ./filtered.slnx `
             -f ${{ matrix.targetFramework }} `
             -c ${{ matrix.configuration }} `
             --no-build -v Normal `

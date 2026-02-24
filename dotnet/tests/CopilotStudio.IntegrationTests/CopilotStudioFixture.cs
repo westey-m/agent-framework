@@ -31,8 +31,17 @@ public class CopilotStudioFixture : IAgentFixture
     {
         const string CopilotStudioHttpClientName = nameof(CopilotStudioAgent);
 
-        var config = TestConfiguration.LoadSection<CopilotStudioAgentConfiguration>();
-        var settings = new CopilotStudioConnectionSettings(config.TenantId, config.AppClientId)
+        CopilotStudioAgentConfiguration? config = null;
+        try
+        {
+            config = TestConfiguration.LoadSection<CopilotStudioAgentConfiguration>();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.Skip("CopilotStudio configuration could not be loaded. Error:" + ex.Message);
+        }
+
+        var settings = new CopilotStudioConnectionSettings(config!.TenantId, config.AppClientId)
         {
             DirectConnectUrl = config.DirectConnectUrl,
         };

@@ -18,25 +18,25 @@ public class CopilotStudioRunTests() : RunTests<CopilotStudioFixture>(() => new(
 
     public override Task RunWithChatMessageReturnsExpectedResultAsync()
     {
-        Assert.SkipWhen(ManualVerification is not null, ManualVerification!);
+        Assert.SkipWhen(ManualVerification is not null, ManualVerification ?? string.Empty);
         return base.RunWithChatMessageReturnsExpectedResultAsync();
     }
 
     public override Task RunWithChatMessagesReturnsExpectedResultAsync()
     {
-        Assert.SkipWhen(ManualVerification is not null, ManualVerification!);
+        Assert.SkipWhen(ManualVerification is not null, ManualVerification ?? string.Empty);
         return base.RunWithChatMessagesReturnsExpectedResultAsync();
     }
 
     public override Task RunWithNoMessageDoesNotFailAsync()
     {
-        Assert.SkipWhen(ManualVerification is not null, ManualVerification!);
+        Assert.SkipWhen(ManualVerification is not null, ManualVerification ?? string.Empty);
         return base.RunWithNoMessageDoesNotFailAsync();
     }
 
     public override Task RunWithStringReturnsExpectedResultAsync()
     {
-        Assert.SkipWhen(ManualVerification is not null, ManualVerification!);
+        Assert.SkipWhen(ManualVerification is not null, ManualVerification ?? string.Empty);
         return base.RunWithStringReturnsExpectedResultAsync();
     }
 }

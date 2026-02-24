@@ -11,19 +11,19 @@ public class AzureAIAgentsPersistentStructuredOutputRunTests() : StructuredOutpu
 
     public override Task RunWithResponseFormatReturnsExpectedResultAsync()
     {
-        Assert.SkipWhen(SkipReason is not null, SkipReason!);
+        Assert.SkipWhen(SkipReason is not null, SkipReason ?? string.Empty);
         return base.RunWithResponseFormatReturnsExpectedResultAsync();
     }
 
     public override Task RunWithGenericTypeReturnsExpectedResultAsync()
     {
-        Assert.SkipWhen(SkipReason is not null, SkipReason!);
+        Assert.SkipWhen(SkipReason is not null, SkipReason ?? string.Empty);
         return base.RunWithGenericTypeReturnsExpectedResultAsync();
     }
 
     public override Task RunWithPrimitiveTypeReturnsExpectedResultAsync()
     {
-        Assert.SkipWhen(SkipReason is not null, SkipReason!);
+        Assert.SkipWhen(SkipReason is not null, SkipReason ?? string.Empty);
         return base.RunWithPrimitiveTypeReturnsExpectedResultAsync();
     }
 }

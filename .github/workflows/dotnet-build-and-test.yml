@@ -140,27 +140,37 @@ jobs:
           popd
           rm -rf "$TEMP_DIR"
 
-      - name: Run Unit Tests
-        shell: bash
+      - name: Generate filtered solution
+        shell: pwsh
         run: |
-          cd dotnet
-          export UT_PROJECTS=$(find ./ -type f -name "*.UnitTests.csproj" | tr '\n' ' ')
-          for project in $UT_PROJECTS; do
-            # Query the project's target frameworks using MSBuild with the current configuration
-            target_frameworks=$(dotnet msbuild $project -getProperty:TargetFrameworks -p:Configuration=${{ matrix.configuration }} -nologo 2>/dev/null | tr -d '\r')
+          .github/workflows/New-FrameworkFilteredSolution.ps1 `
+            -Solution dotnet/agent-framework-dotnet.slnx `
+            -TargetFramework ${{ matrix.targetFramework }} `
+            -Configuration ${{ matrix.configuration }} `
+            -OutputPath dotnet/filtered.slnx `
+            -Verbose
 
-            # Check if the project supports the target framework
-            if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
-              if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                # --ignore-exit-code 8: ignore failures due to finding no matching tests to run in a single project.
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory "$(pwd)/../TestResults/Coverage/"
-              else
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8
-              fi
-            else
-              echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"
-            fi
-          done
+      - name: Run Unit Tests
+        shell: pwsh
+        run: |
+          $coverageArgs = @()
+          if ("${{ matrix.targetFramework }}" -eq "${{ env.COVERAGE_FRAMEWORK }}") {
+            $coverageArgs = @(
+              "--coverage",
+              "--coverage-output-format", "cobertura",
+              "--coverage-settings", "dotnet/tests/coverage.runsettings",
+              "--results-directory", "TestResults/Coverage/"
+            )
+          }
+
+          dotnet test --solution dotnet/filtered.slnx `
+            -f ${{ matrix.targetFramework }} `
+            -c ${{ matrix.configuration }} `
+            --no-build -v Normal `
+            --report-xunit-trx `
+            --ignore-exit-code 8 `
+            --filter-query "/*UnitTests*/*/*/*" `
+            @coverageArgs
         env:
           # Cosmos DB Emulator connection settings
           COSMOSDB_ENDPOINT: https://localhost:8081
@@ -187,22 +197,17 @@ jobs:
         id: azure-functions-setup
 
       - name: Run Integration Tests
-        shell: bash
+        shell: pwsh
         if: github.event_name != 'pull_request' && matrix.integration-tests
         run: |
-          cd dotnet
-          export INTEGRATION_TEST_PROJECTS=$(find ./ -type f -name "*IntegrationTests.csproj" | tr '\n' ' ')
-          for project in $INTEGRATION_TEST_PROJECTS; do
-            # Query the project's target frameworks using MSBuild with the current configuration
-            target_frameworks=$(dotnet msbuild $project -getProperty:TargetFrameworks -p:Configuration=${{ matrix.configuration }} -nologo 2>/dev/null | tr -d '\r')
-
-            # Check if the project supports the target framework
-            if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
-                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled"
-            else
-              echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"
-            fi
-          done
+          dotnet test --solution dotnet/filtered.slnx `
+            -f ${{ matrix.targetFramework }} `
+            -c ${{ matrix.configuration }} `
+            --no-build -v Normal `
+            --report-xunit-trx `
+            --ignore-exit-code 8 `
+            --filter-query "/*IntegrationTests*/*/*/*" `
+            --filter-not-trait "Category=IntegrationDisabled"
         env:
           # Cosmos DB Emulator connection settings
           COSMOSDB_ENDPOINT: https://localhost:8081

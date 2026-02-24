@@ -140,15 +140,21 @@ jobs:
           popd
           rm -rf "$TEMP_DIR"
 
-      - name: Generate filtered solution
+      - name: Generate filtered solutions
         shell: pwsh
         run: |
-          .github/workflows/New-FrameworkFilteredSolution.ps1 `
-            -Solution dotnet/agent-framework-dotnet.slnx `
-            -TargetFramework ${{ matrix.targetFramework }} `
-            -Configuration ${{ matrix.configuration }} `
-            -OutputPath dotnet/filtered.slnx `
-            -Verbose
+          $commonArgs = @{
+            Solution       = "dotnet/agent-framework-dotnet.slnx"
+            TargetFramework = "${{ matrix.targetFramework }}"
+            Configuration   = "${{ matrix.configuration }}"
+            Verbose         = $true
+          }
+          .github/workflows/New-FrameworkFilteredSolution.ps1 @commonArgs `
+            -ProjectNameFilter "*UnitTests*" `
+            -OutputPath dotnet/filtered-unit.slnx
+          .github/workflows/New-FrameworkFilteredSolution.ps1 @commonArgs `
+            -ProjectNameFilter "*IntegrationTests*" `
+            -OutputPath dotnet/filtered-integration.slnx
 
       - name: Run Unit Tests
         shell: pwsh
@@ -165,13 +171,12 @@ jobs:
             )
           }
 
-          dotnet test --solution ./filtered.slnx `
+          dotnet test --solution ./filtered-unit.slnx `
             -f ${{ matrix.targetFramework }} `
             -c ${{ matrix.configuration }} `
             --no-build -v Normal `
             --report-xunit-trx `
             --ignore-exit-code 8 `
-            --filter-query "/*UnitTests*/*/*/*" `
             @coverageArgs
         env:
           # Cosmos DB Emulator connection settings
@@ -203,13 +208,13 @@ jobs:
         working-directory: dotnet
         if: github.event_name != 'pull_request' && matrix.integration-tests
         run: |
-          dotnet test --solution ./filtered.slnx `
+          dotnet test --solution ./filtered-integration.slnx `
             -f ${{ matrix.targetFramework }} `
             -c ${{ matrix.configuration }} `
             --no-build -v Normal `
             --report-xunit-trx `
             --ignore-exit-code 8 `
-            --filter-query "/*IntegrationTests*/*/*/*[Category!=IntegrationDisabled]"
+            --filter-not-trait "Category=IntegrationDisabled"
         env:
           # Cosmos DB Emulator connection settings
           COSMOSDB_ENDPOINT: https://localhost:8081

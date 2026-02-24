@@ -8,7 +8,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using Xunit.Abstractions;
 
 namespace Microsoft.Agents.AI.Hosting.AzureFunctions.IntegrationTests;
 
@@ -36,7 +35,7 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
 
     private readonly ITestOutputHelper _outputHelper = outputHelper;
 
-    async Task IAsyncLifetime.InitializeAsync()
+    async ValueTask IAsyncLifetime.InitializeAsync()
     {
         if (!s_infrastructureStarted)
         {
@@ -45,7 +44,7 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
         }
     }
 
-    async Task IAsyncLifetime.DisposeAsync()
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
         // Nothing to clean up
         await Task.CompletedTask;

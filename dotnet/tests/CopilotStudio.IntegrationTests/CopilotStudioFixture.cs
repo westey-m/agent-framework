@@ -27,7 +27,7 @@ public class CopilotStudioFixture : IAgentFixture
         // Chat Completion does not require/support deleting threads, so this is a no-op.
         Task.CompletedTask;
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         const string CopilotStudioHttpClientName = nameof(CopilotStudioAgent);
 
@@ -54,8 +54,12 @@ public class CopilotStudioFixture : IAgentFixture
 
         this.Agent = new CopilotStudioAgent(client);
 
-        return Task.CompletedTask;
+        return default;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        return default;
+    }
 }

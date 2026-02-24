@@ -143,7 +143,8 @@ jobs:
       - name: Run Unit Tests
         shell: bash
         run: |
-          export UT_PROJECTS=$(find ./dotnet -type f -name "*.UnitTests.csproj" | tr '\n' ' ')
+          cd dotnet
+          export UT_PROJECTS=$(find ./ -type f -name "*.UnitTests.csproj" | tr '\n' ' ')
           for project in $UT_PROJECTS; do
             # Query the project's target frameworks using MSBuild with the current configuration
             target_frameworks=$(dotnet msbuild $project -getProperty:TargetFrameworks -p:Configuration=${{ matrix.configuration }} -nologo 2>/dev/null | tr -d '\r')
@@ -151,9 +152,10 @@ jobs:
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
               if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
-                dotnet test -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} $project --no-build -v Normal --logger trx --collect:"XPlat Code Coverage" --results-directory:"TestResults/Coverage/" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
+                # --ignore-exit-code 8: ignore failures due to finding no matching tests to run in a single project.
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory "$(pwd)/../TestResults/Coverage/"
               else
-                dotnet test -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} $project --no-build -v Normal --logger trx
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8
               fi
             else
               echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"
@@ -188,14 +190,19 @@ jobs:
         shell: bash
         if: github.event_name != 'pull_request' && matrix.integration-tests
         run: |
-          export INTEGRATION_TEST_PROJECTS=$(find ./dotnet -type f -name "*IntegrationTests.csproj" | tr '\n' ' ')
+          cd dotnet
+          export INTEGRATION_TEST_PROJECTS=$(find ./ -type f -name "*IntegrationTests.csproj" | tr '\n' ' ')
           for project in $INTEGRATION_TEST_PROJECTS; do
             # Query the project's target frameworks using MSBuild with the current configuration
             target_frameworks=$(dotnet msbuild $project -getProperty:TargetFrameworks -p:Configuration=${{ matrix.configuration }} -nologo 2>/dev/null | tr -d '\r')
 
             # Check if the project supports the target framework
             if [[ "$target_frameworks" == *"${{ matrix.targetFramework }}"* ]]; then
-              dotnet test -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} $project --no-build -v Normal --logger trx --filter "Category!=IntegrationDisabled"
+              if [[ "${{ matrix.targetFramework }}" == "${{ env.COVERAGE_FRAMEWORK }}" ]]; then
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled" --coverage --coverage-output-format cobertura --coverage-settings "$(pwd)/tests/coverage.runsettings" --results-directory "$(pwd)/../TestResults/Coverage/"
+              else
+                dotnet test --project $project -f ${{ matrix.targetFramework }} -c ${{ matrix.configuration }} --no-build -v Normal --report-xunit-trx --ignore-exit-code 8 --filter-not-trait "Category=IntegrationDisabled"
+              fi
             else
               echo "Skipping $project - does not support target framework ${{ matrix.targetFramework }} (supports: $target_frameworks)"
             fi
@@ -225,7 +232,7 @@ jobs:
         if: matrix.targetFramework == env.COVERAGE_FRAMEWORK
         uses: danielpalme/ReportGenerator-GitHub-Action@5.5.1
         with:
-          reports: "./TestResults/Coverage/**/coverage.cobertura.xml"
+          reports: "./TestResults/Coverage/**/*.cobertura.xml"
           targetdir: "./TestResults/Reports"
           reporttypes: "HtmlInline;JsonSummary"
 

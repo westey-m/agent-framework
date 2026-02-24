@@ -6,7 +6,6 @@ using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Xunit.Abstractions;
 
 namespace Microsoft.Agents.AI.DurableTask.IntegrationTests;
 
@@ -30,7 +29,7 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
 
     private readonly ITestOutputHelper _outputHelper = outputHelper;
 
-    async Task IAsyncLifetime.InitializeAsync()
+    async ValueTask IAsyncLifetime.InitializeAsync()
     {
         if (!s_infrastructureStarted)
         {
@@ -39,7 +38,7 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
         }
     }
 
-    async Task IAsyncLifetime.DisposeAsync()
+    async ValueTask IAsyncDisposable.DisposeAsync()
     {
         // Nothing to clean up
         await Task.CompletedTask;

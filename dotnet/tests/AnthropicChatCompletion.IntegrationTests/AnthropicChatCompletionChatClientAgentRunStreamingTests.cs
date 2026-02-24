@@ -8,13 +8,17 @@ namespace AnthropicChatCompletion.IntegrationTests;
 
 public abstract class SkipAllChatClientRunStreaming(Func<AnthropicChatCompletionFixture> func) : ChatClientAgentRunStreamingTests<AnthropicChatCompletionFixture>(func)
 {
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
     public override Task RunWithFunctionsInvokesFunctionsAndReturnsExpectedResultsAsync()
-        => base.RunWithFunctionsInvokesFunctionsAndReturnsExpectedResultsAsync();
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.RunWithFunctionsInvokesFunctionsAndReturnsExpectedResultsAsync();
+    }
 
-    [Fact(Skip = AnthropicChatCompletionFixture.SkipReason)]
     public override Task RunWithInstructionsAndNoMessageReturnsExpectedResultAsync()
-        => base.RunWithInstructionsAndNoMessageReturnsExpectedResultAsync();
+    {
+        Assert.SkipWhen(AnthropicChatCompletionFixture.SkipReason is not null, AnthropicChatCompletionFixture.SkipReason!);
+        return base.RunWithInstructionsAndNoMessageReturnsExpectedResultAsync();
+    }
 }
 
 public class AnthropicBetaChatCompletionChatClientAgentReasoningRunStreamingTests() : SkipAllChatClientRunStreaming(() => new(useReasoningChatModel: true, useBeta: true));

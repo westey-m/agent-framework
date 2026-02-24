@@ -22,6 +22,10 @@
 .PARAMETER Configuration
     Optional MSBuild configuration used when querying TargetFrameworks. Defaults to Debug.
 
+.PARAMETER ProjectNameFilter
+    Optional wildcard pattern to filter test project names (e.g., *UnitTests*, *IntegrationTests*).
+    When specified, only test projects whose filename matches this pattern are kept.
+
 .PARAMETER OutputPath
     Optional output path for the filtered .slnx file. If not specified, a temp file is created.
 
@@ -29,6 +33,10 @@
     # Generate a filtered solution and run tests
     $filtered = ./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net472
     dotnet test --solution $filtered --no-build -f net472
+
+.EXAMPLE
+    # Generate a solution with only unit test projects
+    ./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net10.0 -ProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
 
 .EXAMPLE
     # Inline usage with dotnet test (PowerShell)
@@ -44,6 +52,8 @@ param(
     [string]$TargetFramework,
 
     [string]$Configuration = "Debug",
+
+    [string]$ProjectNameFilter,
 
     [string]$OutputPath
 )
@@ -70,6 +80,15 @@ $kept = @()
 foreach ($proj in $testProjects) {
     $projRelPath = $proj.GetAttribute("Path")
     $projFullPath = Join-Path $solutionDir $projRelPath
+    $projFileName = Split-Path $projRelPath -Leaf
+
+    # Filter by project name pattern if specified
+    if ($ProjectNameFilter -and ($projFileName -notlike $ProjectNameFilter)) {
+        Write-Verbose "Removing (name filter): $projRelPath"
+        $removed += $projRelPath
+        $proj.ParentNode.RemoveChild($proj) | Out-Null
+        continue
+    }
 
     if (-not (Test-Path $projFullPath)) {
         Write-Verbose "Project not found, keeping in solution: $projRelPath"

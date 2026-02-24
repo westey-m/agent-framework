@@ -154,12 +154,13 @@ jobs:
         shell: pwsh
         working-directory: dotnet
         run: |
+          $coverageSettings = Join-Path $PWD "tests/coverage.runsettings"
           $coverageArgs = @()
           if ("${{ matrix.targetFramework }}" -eq "${{ env.COVERAGE_FRAMEWORK }}") {
             $coverageArgs = @(
               "--coverage",
               "--coverage-output-format", "cobertura",
-              "--coverage-settings", "tests/coverage.runsettings",
+              "--coverage-settings", $coverageSettings,
               "--results-directory", "../TestResults/Coverage/"
             )
           }
@@ -208,8 +209,7 @@ jobs:
             --no-build -v Normal `
             --report-xunit-trx `
             --ignore-exit-code 8 `
-            --filter-query "/*IntegrationTests*/*/*/*" `
-            --filter-not-trait "Category=IntegrationDisabled"
+            --filter-query "/*IntegrationTests*/*/*/*[Category!=IntegrationDisabled]"
         env:
           # Cosmos DB Emulator connection settings
           COSMOSDB_ENDPOINT: https://localhost:8081

@@ -735,6 +735,9 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
 
     private async Task RunSampleTestAsync(string samplePath, Func<Process, BlockingCollection<OutputLog>, Task> testAction)
     {
+        // Build the sample project first (it may not have been built as part of the solution)
+        await this.BuildSampleAsync(samplePath);
+
         // Generate a unique TaskHub name for this sample test to prevent cross-test interference
         // when multiple tests run together and share the same DTS emulator.
         string uniqueTaskHubName = $"sample-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
@@ -813,12 +816,39 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
         return null;
     }
 
+    private async Task BuildSampleAsync(string samplePath)
+    {
+        this._outputHelper.WriteLine($"Building sample at {samplePath}...");
+
+        ProcessStartInfo buildInfo = new()
+        {
+            FileName = "dotnet",
+            Arguments = $"build --framework {s_dotnetTargetFramework}",
+            WorkingDirectory = samplePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using Process buildProcess = new() { StartInfo = buildInfo };
+        buildProcess.Start();
+        await buildProcess.WaitForExitAsync();
+
+        if (buildProcess.ExitCode != 0)
+        {
+            string stderr = await buildProcess.StandardError.ReadToEndAsync();
+            throw new InvalidOperationException($"Failed to build sample at {samplePath}: {stderr}");
+        }
+
+        this._outputHelper.WriteLine($"Build completed for {samplePath}.");
+    }
+
     private Process StartConsoleApp(string samplePath, BlockingCollection<OutputLog> logs, string taskHubName)
     {
         ProcessStartInfo startInfo = new()
         {
             FileName = "dotnet",
-            Arguments = $"run --framework {s_dotnetTargetFramework}",
+            Arguments = $"run --no-build --framework {s_dotnetTargetFramework}",
             WorkingDirectory = samplePath,
             UseShellExecute = false,
             RedirectStandardOutput = true,

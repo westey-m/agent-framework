@@ -216,7 +216,7 @@ jobs:
             --ignore-exit-code 8 `
             --filter-not-trait "Category=IntegrationDisabled" `
             --parallel-algorithm aggressive `
-            --max-threads 2.0x
+            --max-threads 4.0x
         env:
           # Cosmos DB Emulator connection settings
           COSMOSDB_ENDPOINT: https://localhost:8081

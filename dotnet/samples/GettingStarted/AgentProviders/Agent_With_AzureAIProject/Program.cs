@@ -13,7 +13,10 @@ var deploymentName = Environment.GetEnvironmentVariable("AZURE_FOUNDRY_PROJECT_D
 const string JokerName = "JokerAgent";
 
 // Get a client to create/retrieve/delete server side agents with Azure Foundry Agents.
-var aiProjectClient = new AIProjectClient(new Uri(endpoint), new AzureCliCredential());
+// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
+var aiProjectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
 
 // Define the agent you want to create. (Prompt Agent in this case)
 var agentVersionCreationOptions = new AgentVersionCreationOptions(new PromptAgentDefinition(model: deploymentName) { Instructions = "You are good at telling jokes." });
@@ -40,11 +43,11 @@ var latestAgentVersion = jokerAgentLatest.GetService<AgentVersion>()!;
 Console.WriteLine($"Latest agent version id: {latestAgentVersion.Id}");
 
 // Once you have the AIAgent, you can invoke it like any other AIAgent.
-AgentThread thread = await jokerAgentLatest.GetNewThreadAsync();
-Console.WriteLine(await jokerAgentLatest.RunAsync("Tell me a joke about a pirate.", thread));
+AgentSession session = await jokerAgentLatest.CreateSessionAsync();
+Console.WriteLine(await jokerAgentLatest.RunAsync("Tell me a joke about a pirate.", session));
 
-// This will use the same thread to continue the conversation.
-Console.WriteLine(await jokerAgentLatest.RunAsync("Now tell me a joke about a cat and a dog using last joke as the anchor.", thread));
+// This will use the same session to continue the conversation.
+Console.WriteLine(await jokerAgentLatest.RunAsync("Now tell me a joke about a cat and a dog using last joke as the anchor.", session));
 
 // Cleanup by agent name removes both agent versions created.
 aiProjectClient.Agents.DeleteAgent(existingJokerAgent.Name);

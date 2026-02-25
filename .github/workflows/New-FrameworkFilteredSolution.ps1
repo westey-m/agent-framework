@@ -22,9 +22,12 @@
 .PARAMETER Configuration
     Optional MSBuild configuration used when querying TargetFrameworks. Defaults to Debug.
 
-.PARAMETER ProjectNameFilter
+.PARAMETER TestProjectNameFilter
     Optional wildcard pattern to filter test project names (e.g., *UnitTests*, *IntegrationTests*).
     When specified, only test projects whose filename matches this pattern are kept.
+
+.PARAMETER ExcludeSamples
+    When specified, removes all projects under the samples/ directory from the solution.
 
 .PARAMETER OutputPath
     Optional output path for the filtered .slnx file. If not specified, a temp file is created.
@@ -36,7 +39,7 @@
 
 .EXAMPLE
     # Generate a solution with only unit test projects
-    ./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net10.0 -ProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
+    ./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net10.0 -TestProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
 
 .EXAMPLE
     # Inline usage with dotnet test (PowerShell)
@@ -53,7 +56,9 @@ param(
 
     [string]$Configuration = "Debug",
 
-    [string]$ProjectNameFilter,
+    [string]$TestProjectNameFilter,
+
+    [switch]$ExcludeSamples,
 
     [string]$OutputPath
 )
@@ -71,11 +76,23 @@ if (-not $OutputPath) {
 # Parse the .slnx XML
 [xml]$slnx = Get-Content $solutionPath -Raw
 
-# Find all Project elements with paths containing "tests/"
-$testProjects = $slnx.SelectNodes("//Project[contains(@Path, 'tests/')]")
-
 $removed = @()
 $kept = @()
+
+# Remove sample projects if requested
+if ($ExcludeSamples) {
+    $sampleProjects = $slnx.SelectNodes("//Project[contains(@Path, 'samples/')]")
+    foreach ($proj in $sampleProjects) {
+        $projRelPath = $proj.GetAttribute("Path")
+        Write-Verbose "Removing (sample): $projRelPath"
+        $removed += $projRelPath
+        $proj.ParentNode.RemoveChild($proj) | Out-Null
+    }
+    Write-Host "Removed $($sampleProjects.Count) sample project(s)." -ForegroundColor Yellow
+}
+
+# Find all Project elements with paths containing "tests/"
+$testProjects = $slnx.SelectNodes("//Project[contains(@Path, 'tests/')]")
 
 foreach ($proj in $testProjects) {
     $projRelPath = $proj.GetAttribute("Path")
@@ -83,7 +100,7 @@ foreach ($proj in $testProjects) {
     $projFileName = Split-Path $projRelPath -Leaf
 
     # Filter by project name pattern if specified
-    if ($ProjectNameFilter -and ($projFileName -notlike $ProjectNameFilter)) {
+    if ($TestProjectNameFilter -and ($projFileName -notlike $TestProjectNameFilter)) {
         Write-Verbose "Removing (name filter): $projRelPath"
         $removed += $projRelPath
         $proj.ParentNode.RemoveChild($proj) | Out-Null
@@ -117,7 +134,7 @@ $slnx.Save($OutputPath)
 # Report results to stderr so stdout is clean for piping
 Write-Host "Filtered solution written to: $OutputPath" -ForegroundColor Green
 if ($removed.Count -gt 0) {
-    Write-Host "Removed $($removed.Count) test project(s) not targeting ${TargetFramework}:" -ForegroundColor Yellow
+    Write-Host "Removed $($removed.Count) project(s):" -ForegroundColor Yellow
     foreach ($r in $removed) {
         Write-Host "  - $r" -ForegroundColor Yellow
     }

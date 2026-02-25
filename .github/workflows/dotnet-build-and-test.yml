@@ -59,20 +59,20 @@ jobs:
         if: steps.filter.outputs.dotnet != 'true'
         run: echo "NOT dotnet file"
 
-  dotnet-build-and-test:
+  # Build the full solution (including samples) on all TFMs. No tests.
+  dotnet-build:
     needs: paths-filter
     if: needs.paths-filter.outputs.dotnetChanges == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { targetFramework: "net10.0", os: "ubuntu-latest", configuration: Release, integration-tests: true, environment: "integration" }
+          - { targetFramework: "net10.0", os: "ubuntu-latest", configuration: Release }
           - { targetFramework: "net9.0", os: "windows-latest", configuration: Debug }
           - { targetFramework: "net8.0", os: "ubuntu-latest", configuration: Release }
-          - { targetFramework: "net472", os: "windows-latest", configuration: Release, integration-tests: true, environment: "integration" }
+          - { targetFramework: "net472", os: "windows-latest", configuration: Release }
 
     runs-on: ${{ matrix.os }}
-    environment: ${{ matrix.environment }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -83,16 +83,6 @@ jobs:
               dotnet
               python
               workflow-samples
-
-      # Start Cosmos DB Emulator for all integration tests and only for unit tests when CosmosDB changes happened)
-      - name: Start Azure Cosmos DB Emulator
-        if: ${{ runner.os == 'Windows' && (needs.paths-filter.outputs.cosmosDbChanges == 'true' || (github.event_name != 'pull_request' && matrix.integration-tests)) }}
-        shell: pwsh
-        run: |
-          Write-Host "Launching Azure Cosmos DB Emulator"
-          Import-Module "$env:ProgramFiles\Azure Cosmos DB Emulator\PSModules\Microsoft.Azure.CosmosDB.Emulator"
-          Start-CosmosDbEmulator -NoUI -Key "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
-          echo "COSMOS_EMULATOR_AVAILABLE=true" >> $env:GITHUB_ENV
 
       - name: Setup dotnet
         uses: actions/setup-dotnet@v5.1.0
@@ -140,20 +130,74 @@ jobs:
           popd
           rm -rf "$TEMP_DIR"
 
-      - name: Generate filtered solutions
+  # Build src+tests only (no samples) for a single TFM and run tests.
+  dotnet-test:
+    needs: paths-filter
+    if: needs.paths-filter.outputs.dotnetChanges == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { targetFramework: "net10.0", os: "ubuntu-latest", configuration: Release, integration-tests: true, environment: "integration" }
+          - { targetFramework: "net472", os: "windows-latest", configuration: Release, integration-tests: true, environment: "integration" }
+
+    runs-on: ${{ matrix.os }}
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+            persist-credentials: false
+            sparse-checkout: |
+              .
+              .github
+              dotnet
+              python
+              workflow-samples
+
+      # Start Cosmos DB Emulator for all integration tests and only for unit tests when CosmosDB changes happened)
+      - name: Start Azure Cosmos DB Emulator
+        if: ${{ runner.os == 'Windows' && (needs.paths-filter.outputs.cosmosDbChanges == 'true' || (github.event_name != 'pull_request' && matrix.integration-tests)) }}
+        shell: pwsh
+        run: |
+          Write-Host "Launching Azure Cosmos DB Emulator"
+          Import-Module "$env:ProgramFiles\Azure Cosmos DB Emulator\PSModules\Microsoft.Azure.CosmosDB.Emulator"
+          Start-CosmosDbEmulator -NoUI -Key "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+          echo "COSMOS_EMULATOR_AVAILABLE=true" >> $env:GITHUB_ENV
+
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v5.1.0
+        with:
+          global-json-file: ${{ github.workspace }}/dotnet/global.json
+
+      - name: Generate test solution (no samples)
+        shell: pwsh
+        run: |
+          .github/workflows/New-FrameworkFilteredSolution.ps1 `
+            -Solution dotnet/agent-framework-dotnet.slnx `
+            -TargetFramework ${{ matrix.targetFramework }} `
+            -Configuration ${{ matrix.configuration }} `
+            -ExcludeSamples `
+            -OutputPath dotnet/filtered.slnx `
+            -Verbose
+
+      - name: Build src and tests
+        shell: bash
+        run: dotnet build dotnet/filtered.slnx -c ${{ matrix.configuration }} -f ${{ matrix.targetFramework }} --warnaserror
+
+      - name: Generate test-type filtered solutions
         shell: pwsh
         run: |
           $commonArgs = @{
-            Solution       = "dotnet/agent-framework-dotnet.slnx"
+            Solution       = "dotnet/filtered.slnx"
             TargetFramework = "${{ matrix.targetFramework }}"
             Configuration   = "${{ matrix.configuration }}"
             Verbose         = $true
           }
           .github/workflows/New-FrameworkFilteredSolution.ps1 @commonArgs `
-            -ProjectNameFilter "*UnitTests*" `
+            -TestProjectNameFilter "*UnitTests*" `
             -OutputPath dotnet/filtered-unit.slnx
           .github/workflows/New-FrameworkFilteredSolution.ps1 @commonArgs `
-            -ProjectNameFilter "*IntegrationTests*" `
+            -TestProjectNameFilter "*IntegrationTests*" `
             -OutputPath dotnet/filtered-integration.slnx
 
       - name: Run Unit Tests
@@ -262,7 +306,7 @@ jobs:
   dotnet-build-and-test-check:
     if: always()
     runs-on: ubuntu-latest
-    needs: [dotnet-build-and-test]
+    needs: [dotnet-build, dotnet-test]
     steps:
       - name: Get Date
         shell: bash

@@ -830,12 +830,17 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
 
         using Process buildProcess = new() { StartInfo = buildInfo };
         buildProcess.Start();
+
+        // Read both streams asynchronously to avoid deadlocks from filled pipe buffers
+        Task<string> stdoutTask = buildProcess.StandardOutput.ReadToEndAsync();
+        Task<string> stderrTask = buildProcess.StandardError.ReadToEndAsync();
         await buildProcess.WaitForExitAsync();
 
+        string stderr = await stderrTask;
         if (buildProcess.ExitCode != 0)
         {
-            string stderr = await buildProcess.StandardError.ReadToEndAsync();
-            throw new InvalidOperationException($"Failed to build sample at {samplePath}: {stderr}");
+            string stdout = await stdoutTask;
+            throw new InvalidOperationException($"Failed to build sample at {samplePath}:\n{stdout}\n{stderr}");
         }
 
         this._outputHelper.WriteLine($"Build completed for {samplePath}.");

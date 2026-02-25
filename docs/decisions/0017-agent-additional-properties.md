@@ -7,7 +7,7 @@ consulted:
 informed:
 ---
 
-# AdditionalProperties on AIAgent and AgentSession
+# AdditionalProperties for AIAgent and AgentSession
 
 ## Context and Problem Statement
 
@@ -47,12 +47,12 @@ The chosen option is **Option D + Option 1**: an external container/wrapper obje
 
 ### Consequences
 
-- Good, because agents and sessions gain an extensible metadata surface without breaking any existing code.
-- Good, because the get/set nullable shape is consistent with the existing `AdditionalProperties` pattern on `AgentRunOptions`, `AgentResponse`, and `AgentResponseUpdate`.
+- Good, because `AIAgent` and `AgentSession` remain unchanged, avoiding any increase to the core framework surface area while still enabling extensible metadata.
+- Good, because an external wrapper (owned by hosting/protocol libraries or user code, not the `AIAgent` / `AgentSession` base classes) can internally use `AdditionalPropertiesDictionary` to stay consistent with existing patterns on `AgentRunOptions`, `AgentResponse`, and `AgentResponseUpdate`.
 - Good, because metadata-only semantics keep a clean separation from per-run extensibility (`AgentRunOptions.AdditionalProperties`) and avoid unexpected side effects during agent execution.
-- Good, because no allocation occurs when no metadata is needed.
-- Bad, because every consumer must null-check before reading or writing.
-- Bad, because the entire dictionary can be replaced, risking accidental loss of metadata set by other components.
+- Good, because no additional allocation occurs on `AIAgent` or `AgentSession` when no metadata is needed; external wrappers can be created only when metadata is required.
+- Bad, because callers and libraries must manage and pass around both the agent/session instance and its associated metadata wrapper, keeping them correctly associated.
+- Bad, because different hosting or protocol layers may define their own wrapper types, which can fragment the ecosystem unless conventions are agreed upon.
 
 ## Pros and Cons of the Options
 

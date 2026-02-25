@@ -172,7 +172,7 @@ jobs:
       - name: Generate test solution (no samples)
         shell: pwsh
         run: |
-          .github/workflows/New-FrameworkFilteredSolution.ps1 `
+          .github/workflows/New-FilteredSolution.ps1 `
             -Solution dotnet/agent-framework-dotnet.slnx `
             -TargetFramework ${{ matrix.targetFramework }} `
             -Configuration ${{ matrix.configuration }} `
@@ -193,10 +193,10 @@ jobs:
             Configuration   = "${{ matrix.configuration }}"
             Verbose         = $true
           }
-          .github/workflows/New-FrameworkFilteredSolution.ps1 @commonArgs `
+          .github/workflows/New-FilteredSolution.ps1 @commonArgs `
             -TestProjectNameFilter "*UnitTests*" `
             -OutputPath dotnet/filtered-unit.slnx
-          .github/workflows/New-FrameworkFilteredSolution.ps1 @commonArgs `
+          .github/workflows/New-FilteredSolution.ps1 @commonArgs `
             -TestProjectNameFilter "*IntegrationTests*" `
             -OutputPath dotnet/filtered-integration.slnx
 

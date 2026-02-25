@@ -3,15 +3,14 @@
 
 <#
 .SYNOPSIS
-    Generates a filtered .slnx solution file that only includes test projects supporting a given target framework.
+    Generates a filtered .slnx solution file by removing projects that don't match the specified criteria.
 
 .DESCRIPTION
-    Parses a .slnx solution file and queries each test project's TargetFrameworks using MSBuild.
-    Removes test projects that don't support the specified target framework, writes the result
-    to a temporary or specified output path, and prints the output path.
-
-    This is useful for running `dotnet test --solution` with MTP (Microsoft Testing Platform),
-    which requires all test projects in the solution to support the requested target framework.
+    Parses a .slnx solution file and applies one or more filters:
+    - Removes projects that don't support the specified target framework (via MSBuild query).
+    - Optionally removes all sample projects (under samples/).
+    - Optionally filters test projects by name pattern (e.g., only *UnitTests*).
+    Writes the filtered solution to the specified output path and prints the path.
 
 .PARAMETER Solution
     Path to the source .slnx solution file.
@@ -34,16 +33,16 @@
 
 .EXAMPLE
     # Generate a filtered solution and run tests
-    $filtered = ./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net472
+    $filtered = .github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472
     dotnet test --solution $filtered --no-build -f net472
 
 .EXAMPLE
     # Generate a solution with only unit test projects
-    ./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net10.0 -TestProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
+    .github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net10.0 -TestProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
 
 .EXAMPLE
     # Inline usage with dotnet test (PowerShell)
-    dotnet test --solution (./eng/New-FilteredSolution.ps1 -Solution ./agent-framework-dotnet.slnx -TargetFramework net472) --no-build -f net472
+    dotnet test --solution (.github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472) --no-build -f net472
 #>
 
 [CmdletBinding()]
@@ -91,16 +90,17 @@ if ($ExcludeSamples) {
     Write-Host "Removed $($sampleProjects.Count) sample project(s)." -ForegroundColor Yellow
 }
 
-# Find all Project elements with paths containing "tests/"
-$testProjects = $slnx.SelectNodes("//Project[contains(@Path, 'tests/')]")
+# Filter all remaining projects by target framework
+$allProjects = $slnx.SelectNodes("//Project")
 
-foreach ($proj in $testProjects) {
+foreach ($proj in $allProjects) {
     $projRelPath = $proj.GetAttribute("Path")
     $projFullPath = Join-Path $solutionDir $projRelPath
     $projFileName = Split-Path $projRelPath -Leaf
+    $isTestProject = $projRelPath -like "*tests/*"
 
-    # Filter by project name pattern if specified
-    if ($TestProjectNameFilter -and ($projFileName -notlike $TestProjectNameFilter)) {
+    # Filter test projects by name pattern if specified
+    if ($isTestProject -and $TestProjectNameFilter -and ($projFileName -notlike $TestProjectNameFilter)) {
         Write-Verbose "Removing (name filter): $projRelPath"
         $removed += $projRelPath
         $proj.ParentNode.RemoveChild($proj) | Out-Null
@@ -139,7 +139,7 @@ if ($removed.Count -gt 0) {
         Write-Host "  - $r" -ForegroundColor Yellow
     }
 }
-Write-Host "Kept $($kept.Count) test project(s)." -ForegroundColor Green
+Write-Host "Kept $($kept.Count) project(s)." -ForegroundColor Green
 
 # Output the path for piping
 Write-Output $OutputPath

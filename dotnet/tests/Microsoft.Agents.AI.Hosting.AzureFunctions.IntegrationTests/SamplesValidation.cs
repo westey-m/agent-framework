@@ -792,6 +792,9 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
 
     private async Task RunSampleTestAsync(string samplePath, Func<IReadOnlyList<OutputLog>, Task> testAction)
     {
+        // Build the sample project first (it may not have been built as part of the solution)
+        await this.BuildSampleAsync(samplePath);
+
         // Start the Azure Functions app
         List<OutputLog> logsContainer = [];
         using Process funcProcess = this.StartFunctionApp(samplePath, logsContainer);
@@ -811,12 +814,39 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
 
     private sealed record OutputLog(DateTime Timestamp, LogLevel Level, string Message);
 
+    private async Task BuildSampleAsync(string samplePath)
+    {
+        this._outputHelper.WriteLine($"Building sample at {samplePath}...");
+
+        ProcessStartInfo buildInfo = new()
+        {
+            FileName = "dotnet",
+            Arguments = $"build -f {s_dotnetTargetFramework}",
+            WorkingDirectory = samplePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using Process buildProcess = new() { StartInfo = buildInfo };
+        buildProcess.Start();
+        await buildProcess.WaitForExitAsync();
+
+        if (buildProcess.ExitCode != 0)
+        {
+            string stderr = await buildProcess.StandardError.ReadToEndAsync();
+            throw new InvalidOperationException($"Failed to build sample at {samplePath}: {stderr}");
+        }
+
+        this._outputHelper.WriteLine($"Build completed for {samplePath}.");
+    }
+
     private Process StartFunctionApp(string samplePath, List<OutputLog> logs)
     {
         ProcessStartInfo startInfo = new()
         {
             FileName = "dotnet",
-            Arguments = $"run -f {s_dotnetTargetFramework} --port {AzureFunctionsPort}",
+            Arguments = $"run --no-build -f {s_dotnetTargetFramework} --port {AzureFunctionsPort}",
             WorkingDirectory = samplePath,
             UseShellExecute = false,
             RedirectStandardOutput = true,

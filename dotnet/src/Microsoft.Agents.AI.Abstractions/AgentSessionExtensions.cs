@@ -24,7 +24,7 @@ public static class AgentSessionExtensions
     /// <param name="stateKey">An optional key used to identify the chat history state in the session's state bag. If null, the default key for
     /// in-memory chat history is used.</param>
     /// <param name="jsonSerializerOptions">Optional JSON serializer options to use when accessing the session state. If null, default options are used.</param>
-    /// <returns><see langword="true"/> if the in-memory chat history messages were found and retrieved; <see langword="true"/> otherwise.</returns>
+    /// <returns><see langword="true"/> if the in-memory chat history messages were found and retrieved; <see langword="false"/> otherwise.</returns>
     public static bool TryGetInMemoryChatHistory(this AgentSession session, [MaybeNullWhen(false)] out List<ChatMessage> messages, string? stateKey = null, JsonSerializerOptions? jsonSerializerOptions = null)
     {
         _ = Throw.IfNull(session);

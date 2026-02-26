@@ -172,7 +172,7 @@ jobs:
       - name: Generate test solution (no samples)
         shell: pwsh
         run: |
-          .github/workflows/New-FilteredSolution.ps1 `
+          ./dotnet/eng/scripts/New-FilteredSolution.ps1 `
             -Solution dotnet/agent-framework-dotnet.slnx `
             -TargetFramework ${{ matrix.targetFramework }} `
             -Configuration ${{ matrix.configuration }} `
@@ -193,10 +193,10 @@ jobs:
             Configuration   = "${{ matrix.configuration }}"
             Verbose         = $true
           }
-          .github/workflows/New-FilteredSolution.ps1 @commonArgs `
+          ./dotnet/eng/scripts/New-FilteredSolution.ps1 @commonArgs `
             -TestProjectNameFilter "*UnitTests*" `
             -OutputPath dotnet/filtered-unit.slnx
-          .github/workflows/New-FilteredSolution.ps1 @commonArgs `
+          ./dotnet/eng/scripts/New-FilteredSolution.ps1 @commonArgs `
             -TestProjectNameFilter "*IntegrationTests*" `
             -OutputPath dotnet/filtered-integration.slnx
 
@@ -297,7 +297,7 @@ jobs:
       - name: Check coverage
         if: matrix.targetFramework == env.COVERAGE_FRAMEWORK
         shell: pwsh
-        run: .github/workflows/dotnet-check-coverage.ps1 -JsonReportPath "TestResults/Reports/Summary.json" -CoverageThreshold $env:COVERAGE_THRESHOLD
+        run: ./dotnet/eng/scripts/dotnet-check-coverage.ps1 -JsonReportPath "TestResults/Reports/Summary.json" -CoverageThreshold $env:COVERAGE_THRESHOLD
 
   # This final job is required to satisfy the merge queue. It must only run (or succeed) if no tests failed
   dotnet-build-and-test-check:

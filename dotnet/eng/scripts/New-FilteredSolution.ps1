@@ -33,16 +33,16 @@
 
 .EXAMPLE
     # Generate a filtered solution and run tests
-    $filtered = .github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472
+    $filtered = ./dotnet/eng/scripts/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472
     dotnet test --solution $filtered --no-build -f net472
 
 .EXAMPLE
     # Generate a solution with only unit test projects
-    .github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net10.0 -TestProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
+    ./dotnet/eng/scripts/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net10.0 -TestProjectNameFilter "*UnitTests*" -OutputPath filtered-unit.slnx
 
 .EXAMPLE
     # Inline usage with dotnet test (PowerShell)
-    dotnet test --solution (.github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472) --no-build -f net472
+    dotnet test --solution (./dotnet/eng/scripts/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472) --no-build -f net472
 #>
 
 [CmdletBinding()]

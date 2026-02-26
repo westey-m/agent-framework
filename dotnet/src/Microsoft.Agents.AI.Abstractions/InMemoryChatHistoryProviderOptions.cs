@@ -59,7 +59,20 @@ public sealed class InMemoryChatHistoryProviderOptions
     /// Depending on your requirements, you could provide a different filter, that also excludes
     /// messages from e.g. AI context providers.
     /// </value>
-    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputMessageFilter { get; set; }
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputRequestMessageFilter { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional filter function applied to response messages before they are added to storage
+    /// during <see cref="ChatHistoryProvider.InvokedAsync"/>.
+    /// </summary>
+    /// <value>
+    /// When <see langword="null"/>, the provider defaults to excluding messages with
+    /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> source type to avoid
+    /// storing messages that came from chat history in the first place.
+    /// Depending on your requirements, you could provide a different filter, that also excludes
+    /// messages from e.g. AI context providers.
+    /// </value>
+    public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputResponseMessageFilter { get; set; }
 
     /// <summary>
     /// Gets or sets an optional filter function applied to messages produced by this provider

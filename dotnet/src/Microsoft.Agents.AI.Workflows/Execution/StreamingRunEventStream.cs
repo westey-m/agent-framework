@@ -124,10 +124,6 @@ internal sealed class StreamingRunEventStream : IRunEventStream
                     runActivity.Dispose();
                     runActivity = null;
                 }
-
-                // Wait for next input from the consumer
-                // Works for both Idle (no work) and PendingRequests (waiting for responses)
-                await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)

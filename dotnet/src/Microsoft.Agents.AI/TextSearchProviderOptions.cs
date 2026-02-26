@@ -93,8 +93,7 @@ public sealed class TextSearchProviderOptions
     /// memory during <see cref="AIContextProvider.InvokedAsync"/>.
     /// </summary>
     /// <value>
-    /// When <see langword="null"/>, the provider defaults to including only
-    /// <see cref="AgentRequestMessageSourceType.External"/> messages.
+    /// When <see langword="null"/>, the provider defaults to including all messages.
     /// </value>
     public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputResponseMessageFilter { get; set; }
 

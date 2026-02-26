@@ -80,16 +80,6 @@ internal sealed class StreamingRunEventStream : IRunEventStream
 
             while (!linkedSource.Token.IsCancellationRequested)
             {
-                // If there's no work to do (e.g., the previous WaitForInputAsync timed out),
-                // keep waiting instead of creating a spurious run activity and halt signal.
-                // Without this guard, timeout iterations inflate the completion epoch,
-                // causing consumers to skip valid halt signals (epoch race condition).
-                if (!this._stepRunner.HasUnprocessedMessages)
-                {
-                    await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
-                    continue;
-                }
-
                 // Start a new run-stage activity for this input→processing→halt cycle
                 runActivity = this._stepRunner.TelemetryContext.StartWorkflowRunActivity();
                 runActivity?.SetTag(Tags.WorkflowId, this._stepRunner.StartExecutorId)
@@ -126,7 +116,14 @@ internal sealed class StreamingRunEventStream : IRunEventStream
 
                 // Wait for next input from the consumer
                 // Works for both Idle (no work) and PendingRequests (waiting for responses)
-                await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
+                // If the wait times out (no actual input), skip setting Running status and
+                // creating a new activity/halt signal. This prevents spurious iterations
+                // from inflating the completion epoch and confusing consumers.
+                bool inputReceived = await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
+                if (!inputReceived)
+                {
+                    continue;
+                }
 
                 // When signaled, resume running
                 this._runStatus = RunStatus.Running;

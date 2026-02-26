@@ -80,6 +80,17 @@ internal sealed class StreamingRunEventStream : IRunEventStream
 
             while (!linkedSource.Token.IsCancellationRequested)
             {
+                // If there are no messages to process (e.g., the previous input wait returned
+                // due to timeout rather than a signal), avoid creating a spurious run-stage
+                // activity and halt signal. Instead, re-enter the wait loop.
+                if (!this._stepRunner.HasUnprocessedMessages)
+                {
+                    await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
+                    continue;
+                }
+
+                this._runStatus = RunStatus.Running;
+
                 // Start a new run-stage activity for this input→processing→halt cycle
                 runActivity = this._stepRunner.TelemetryContext.StartWorkflowRunActivity();
                 runActivity?.SetTag(Tags.WorkflowId, this._stepRunner.StartExecutorId)
@@ -117,9 +128,6 @@ internal sealed class StreamingRunEventStream : IRunEventStream
                 // Wait for next input from the consumer
                 // Works for both Idle (no work) and PendingRequests (waiting for responses)
                 await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
-
-                // When signaled, resume running
-                this._runStatus = RunStatus.Running;
             }
         }
         catch (OperationCanceledException)

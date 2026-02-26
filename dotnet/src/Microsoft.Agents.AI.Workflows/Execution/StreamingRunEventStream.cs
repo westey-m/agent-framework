@@ -116,13 +116,20 @@ internal sealed class StreamingRunEventStream : IRunEventStream
 
                 // Wait for next input from the consumer
                 // Works for both Idle (no work) and PendingRequests (waiting for responses)
-                // If the wait times out (no actual input), skip setting Running status and
-                // creating a new activity/halt signal. This prevents spurious iterations
-                // from inflating the completion epoch and confusing consumers.
-                bool inputReceived = await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
-                if (!inputReceived)
+                // Loop until actual input arrives to prevent spurious iterations from
+                // creating unnecessary activities and inflating the completion epoch.
+                bool inputReceived;
+                do
                 {
-                    continue;
+                    inputReceived = await this._inputWaiter.WaitForInputAsync(TimeSpan.FromSeconds(1), linkedSource.Token).ConfigureAwait(false);
+                }
+                while (!inputReceived && !linkedSource.Token.IsCancellationRequested);
+
+                // Check for shutdown: StopAsync signals the input waiter after cancelling,
+                // but the signal may arrive before the linked token reflects cancellation.
+                if (this._runLoopCancellation.IsCancellationRequested)
+                {
+                    break;
                 }
 
                 // When signaled, resume running
@@ -204,8 +211,10 @@ internal sealed class StreamingRunEventStream : IRunEventStream
         bool blockOnPendingRequest,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Get the current epoch - we'll only respond to completion signals from this epoch or later
-        int myEpoch = Volatile.Read(ref this._completionEpoch) + 1;
+        // Get the current epoch - we'll only respond to completion signals from this epoch or later.
+        // Using the current value (not + 1) ensures we don't skip a halt signal that was
+        // already produced by the run loop before the consumer started reading.
+        int myEpoch = Volatile.Read(ref this._completionEpoch);
 
         // Use custom async enumerable to avoid exceptions on cancellation.
         NonThrowingChannelReaderAsyncEnumerable<WorkflowEvent> eventStream = new(this._eventChannel.Reader);

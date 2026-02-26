@@ -35,7 +35,7 @@ public abstract class MessageAIContextProvider : AIContextProvider
     /// </summary>
     /// <param name="provideInputMessageFilter">An optional filter function to apply to input messages before providing messages via <see cref="ProvideMessagesAsync"/>. If not set, defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages.</param>
     /// <param name="storeInputRequestMessageFilter">An optional filter function to apply to request messages before storing messages via <see cref="AIContextProvider.StoreAIContextAsync"/>. If not set, defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages.</param>
-    /// <param name="storeInputResponseMessageFilter">An optional filter function to apply to response messages before storing messages via <see cref="AIContextProvider.StoreAIContextAsync"/>. If not set, defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages.</param>
+    /// <param name="storeInputResponseMessageFilter">An optional filter function to apply to response messages before storing messages via <see cref="AIContextProvider.StoreAIContextAsync"/>. If not set, defaults to including all response messages (no filtering).</param>
     protected MessageAIContextProvider(
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? provideInputMessageFilter = null,
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? storeInputRequestMessageFilter = null,

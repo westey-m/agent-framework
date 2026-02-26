@@ -54,8 +54,7 @@ public sealed class Mem0ProviderOptions
     /// extract memories from during <see cref="AIContextProvider.InvokedAsync"/>.
     /// </summary>
     /// <value>
-    /// When <see langword="null"/>, the provider defaults to including only
-    /// <see cref="AgentRequestMessageSourceType.External"/> messages.
+    /// When <see langword="null"/>, the provider applies no filtering and includes all response messages.
     /// </value>
     public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputResponseMessageFilter { get; set; }
 }

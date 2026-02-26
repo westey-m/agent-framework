@@ -41,7 +41,7 @@ public abstract class AIContextProvider
     /// </summary>
     /// <param name="provideInputMessageFilter">An optional filter function to apply to input messages before providing context via <see cref="ProvideAIContextAsync"/>. If not set, defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages.</param>
     /// <param name="storeInputRequestMessageFilter">An optional filter function to apply to request messages before storing context via <see cref="StoreAIContextAsync"/>. If not set, defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages.</param>
-    /// <param name="storeInputResponseMessageFilter">An optional filter function to apply to response messages before storing context via <see cref="StoreAIContextAsync"/>. If not set, defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages.</param>
+    /// <param name="storeInputResponseMessageFilter">An optional filter function to apply to response messages before storing context via <see cref="StoreAIContextAsync"/>. If not set, defaults to a no-op filter that includes all response messages.</param>
     protected AIContextProvider(
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? provideInputMessageFilter = null,
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? storeInputRequestMessageFilter = null,
@@ -258,7 +258,7 @@ public abstract class AIContextProvider
     /// filters the request messages using the configured store-input request message filter
     /// (which defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages),
     /// filters the response messages using the configured store-input response message filter
-    /// (which defaults to including only <see cref="AgentRequestMessageSourceType.External"/> messages),
+    /// (which defaults to a no-op, so all response messages are processed),
     /// and calls <see cref="StoreAIContextAsync"/> to process the invocation results.
     /// For most scenarios, overriding <see cref="StoreAIContextAsync"/> is sufficient to process invocation results,
     /// while still benefiting from the default error handling and filtering behavior.

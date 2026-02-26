@@ -66,11 +66,10 @@ public sealed class InMemoryChatHistoryProviderOptions
     /// during <see cref="ChatHistoryProvider.InvokedAsync"/>.
     /// </summary>
     /// <value>
-    /// When <see langword="null"/>, the provider defaults to excluding messages with
-    /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> source type to avoid
-    /// storing messages that came from chat history in the first place.
-    /// Depending on your requirements, you could provide a different filter, that also excludes
-    /// messages from e.g. AI context providers.
+    /// When <see langword="null"/>, no filtering is applied to response messages before they are stored.
+    /// If you want to avoid persisting certain messages (for example, those with
+    /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> source type or produced by AI context providers),
+    /// provide a filter that returns only the messages you want to keep.
     /// </value>
     public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputResponseMessageFilter { get; set; }
 

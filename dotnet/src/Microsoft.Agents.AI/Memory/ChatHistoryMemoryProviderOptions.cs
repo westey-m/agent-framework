@@ -82,11 +82,9 @@ public sealed class ChatHistoryMemoryProviderOptions
     /// during <see cref="AIContextProvider.InvokedAsync"/>.
     /// </summary>
     /// <value>
-    /// When <see langword="null"/>, the provider defaults to including only
-    /// <see cref="AgentRequestMessageSourceType.External"/> messages.
+    /// When <see langword="null"/>, the provider does not apply any filtering and includes all response messages.
     /// </value>
     public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StorageInputResponseMessageFilter { get; set; }
-
     /// <summary>
     /// Behavior choices for the provider.
     /// </summary>

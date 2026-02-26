@@ -104,15 +104,15 @@ Tests use the [Microsoft Testing Platform](https://learn.microsoft.com/dotnet/co
 dotnet test --solution ./agent-framework-dotnet.slnx --no-build -f net10.0 --ignore-exit-code 8
 ```
 
-- **Running tests with `--solution` for a specific TFM** requires all projects in the solution to support that TFM. Not all projects target every framework (e.g., some are `net10.0`-only). Use `.github/workflows/New-FilteredSolution.ps1` to generate a filtered solution:
+- **Running tests with `--solution` for a specific TFM** requires all projects in the solution to support that TFM. Not all projects target every framework (e.g., some are `net10.0`-only). Use `./dotnet/eng/scripts/New-FilteredSolution.ps1` to generate a filtered solution:
 
 ```powershell
 # Generate a filtered solution for net472 and run tests
-$filtered = .github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472
+$filtered = ./dotnet/eng/scripts/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net472
 dotnet test --solution $filtered --no-build -f net472 --ignore-exit-code 8
 
 # Exclude samples and keep only unit test projects
-.github/workflows/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net10.0 -ExcludeSamples -TestProjectNameFilter "*UnitTests*" -OutputPath dotnet/filtered-unit.slnx
+./dotnet/eng/scripts/New-FilteredSolution.ps1 -Solution dotnet/agent-framework-dotnet.slnx -TargetFramework net10.0 -ExcludeSamples -TestProjectNameFilter "*UnitTests*" -OutputPath dotnet/filtered-unit.slnx
 ```
 
 ```bash

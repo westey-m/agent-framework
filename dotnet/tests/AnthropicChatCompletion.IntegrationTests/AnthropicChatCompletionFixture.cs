@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
+// Copyright (c) Microsoft. All rights reserved.
 
 using System;
 using System.Collections.Generic;
@@ -52,8 +52,9 @@ public class AnthropicChatCompletionFixture : IChatClientAgentFixture
         string instructions = "You are a helpful assistant.",
         IList<AITool>? aiTools = null)
     {
-        AnthropicConfiguration config = TestConfiguration.LoadSection<AnthropicConfiguration>();
-        var anthropicClient = new AnthropicClient() { ApiKey = config.ApiKey };
+        var anthropicClient = new AnthropicClient() { ApiKey = TestConfiguration.GetRequiredValue(TestSettings.AnthropicApiKey) };
+        var chatModelName = TestConfiguration.GetRequiredValue(TestSettings.AnthropicChatModelName);
+        var reasoningModelName = TestConfiguration.GetRequiredValue(TestSettings.AnthropicReasoningModelName);
 
         IChatClient? chatClient = this._useBeta
             ? anthropicClient
@@ -64,7 +65,7 @@ public class AnthropicChatCompletionFixture : IChatClientAgentFixture
                      => options.RawRepresentationFactory = _
                      => new Anthropic.Models.Beta.Messages.MessageCreateParams()
                      {
-                         Model = options.ModelId ?? (this._useReasoningModel ? config.ChatReasoningModelId : config.ChatModelId),
+                         Model = options.ModelId ?? (this._useReasoningModel ? reasoningModelName : chatModelName),
                          MaxTokens = options.MaxOutputTokens ?? 4096,
                          Messages = [],
                          Thinking = this._useReasoningModel
@@ -79,7 +80,7 @@ public class AnthropicChatCompletionFixture : IChatClientAgentFixture
                      => options.RawRepresentationFactory = _
                      => new Anthropic.Models.Messages.MessageCreateParams()
                      {
-                         Model = options.ModelId ?? (this._useReasoningModel ? config.ChatReasoningModelId : config.ChatModelId),
+                         Model = options.ModelId ?? (this._useReasoningModel ? reasoningModelName : chatModelName),
                          MaxTokens = options.MaxOutputTokens ?? 4096,
                          Messages = [],
                          Thinking = this._useReasoningModel

@@ -123,7 +123,7 @@ internal sealed class StreamingRunEventStream : IRunEventStream
                     runActivity.AddEvent(new ActivityEvent(EventNames.WorkflowCompleted));
                     runActivity.Dispose();
                     runActivity = null;
-                }
+                } 
             }
         }
         catch (OperationCanceledException)

@@ -25,7 +25,7 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
 
     private static bool s_infrastructureStarted;
     private static readonly string s_samplesPath = Path.GetFullPath(
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", "samples", "Durable", "Agents", "ConsoleApps"));
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", "samples", "04-hosting", "DurableAgents", "ConsoleApps"));
 
     private readonly ITestOutputHelper _outputHelper = outputHelper;
 
@@ -863,8 +863,8 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
 
         string openAiEndpoint = s_configuration["AZURE_OPENAI_ENDPOINT"] ??
             throw new InvalidOperationException("The required AZURE_OPENAI_ENDPOINT env variable is not set.");
-        string openAiDeployment = s_configuration["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"] ??
-            throw new InvalidOperationException("The required AZURE_OPENAI_CHAT_DEPLOYMENT_NAME env variable is not set.");
+        string openAiDeployment = s_configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ??
+            throw new InvalidOperationException("The required AZURE_OPENAI_DEPLOYMENT_NAME env variable is not set.");
 
         void SetAndLogEnvironmentVariable(string key, string value)
         {
@@ -874,7 +874,7 @@ public sealed class ConsoleAppSamplesValidation(ITestOutputHelper outputHelper) 
 
         // Set required environment variables for the app
         SetAndLogEnvironmentVariable("AZURE_OPENAI_ENDPOINT", openAiEndpoint);
-        SetAndLogEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT", openAiDeployment);
+        SetAndLogEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME", openAiDeployment);
         SetAndLogEnvironmentVariable("DURABLE_TASK_SCHEDULER_CONNECTION_STRING",
             $"Endpoint=http://localhost:{DtsPort};TaskHub={taskHubName};Authentication=None");
         SetAndLogEnvironmentVariable("REDIS_CONNECTION_STRING", $"localhost:{RedisPort}");

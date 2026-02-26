@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
+// Copyright (c) Microsoft. All rights reserved.
 
 using System.Threading.Tasks;
 using AgentConformance.IntegrationTests.Support;
@@ -28,9 +28,8 @@ public sealed class AnthropicSkillsIntegrationTests
         Assert.SkipWhen(SkipReason is not null, SkipReason ?? string.Empty);
 
         // Arrange
-        AnthropicConfiguration config = TestConfiguration.LoadSection<AnthropicConfiguration>();
-        AnthropicClient anthropicClient = new() { ApiKey = config.ApiKey };
-        string model = config.ChatModelId;
+        AnthropicClient anthropicClient = new() { ApiKey = TestConfiguration.GetRequiredValue(TestSettings.AnthropicApiKey) };
+        string model = TestConfiguration.GetRequiredValue(TestSettings.AnthropicChatModelName);
 
         BetaSkillParams pptxSkill = new()
         {
@@ -60,8 +59,7 @@ public sealed class AnthropicSkillsIntegrationTests
         Assert.SkipWhen(SkipReason is not null, SkipReason ?? string.Empty);
 
         // Arrange
-        AnthropicConfiguration config = TestConfiguration.LoadSection<AnthropicConfiguration>();
-        AnthropicClient anthropicClient = new() { ApiKey = config.ApiKey };
+        AnthropicClient anthropicClient = new() { ApiKey = TestConfiguration.GetRequiredValue(TestSettings.AnthropicApiKey) };
 
         // Act
         SkillListPage skills = await anthropicClient.Beta.Skills.List(

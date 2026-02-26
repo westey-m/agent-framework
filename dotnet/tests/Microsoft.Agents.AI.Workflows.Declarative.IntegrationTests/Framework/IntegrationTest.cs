@@ -5,11 +5,11 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using Azure.Identity;
-using Microsoft.Agents.AI.Workflows.Declarative.IntegrationTests.Agents;
 using Microsoft.Agents.AI.Workflows.Declarative.PowerFx;
 using Microsoft.Agents.ObjectModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Shared.IntegrationTests;
 
 namespace Microsoft.Agents.AI.Workflows.Declarative.IntegrationTests.Framework;
 
@@ -29,8 +29,8 @@ public abstract class IntegrationTest : IDisposable
         this.Output = new TestOutputAdapter(output);
         this.TestEndpoint =
             new Uri(
-                this.Configuration?[AgentProvider.Settings.FoundryEndpoint] ??
-                throw new InvalidOperationException($"Undefined configuration setting: {AgentProvider.Settings.FoundryEndpoint}"));
+                this.Configuration?[TestSettings.AzureAIProjectEndpoint] ??
+                throw new InvalidOperationException($"Undefined configuration setting: {TestSettings.AzureAIProjectEndpoint}"));
         Console.SetOut(this.Output);
         SetProduct();
     }
@@ -61,6 +61,11 @@ public abstract class IntegrationTest : IDisposable
 
     protected async ValueTask<DeclarativeWorkflowOptions> CreateOptionsAsync(bool externalConversation = false, params IEnumerable<AIFunction> functionTools)
     {
+        return await this.CreateOptionsAsync(externalConversation, mcpToolProvider: null, functionTools).ConfigureAwait(false);
+    }
+
+    protected async ValueTask<DeclarativeWorkflowOptions> CreateOptionsAsync(bool externalConversation, IMcpToolHandler? mcpToolProvider, params IEnumerable<AIFunction> functionTools)
+    {
         AzureAgentProvider agentProvider =
             new(this.TestEndpoint, new AzureCliCredential())
             {
@@ -77,7 +82,8 @@ public abstract class IntegrationTest : IDisposable
             new DeclarativeWorkflowOptions(agentProvider)
             {
                 ConversationId = conversationId,
-                LoggerFactory = this.Output
+                LoggerFactory = this.Output,
+                McpToolHandler = mcpToolProvider
             };
     }
 

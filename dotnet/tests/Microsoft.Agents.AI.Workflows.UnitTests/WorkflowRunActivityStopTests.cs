@@ -10,9 +10,6 @@ using Microsoft.Agents.AI.Workflows.Observability;
 
 namespace Microsoft.Agents.AI.Workflows.UnitTests;
 
-[CollectionDefinition("ObservabilityTests", DisableParallelization = true)]
-public class NoParallelizationObservabilityTests { }
-
 /// <summary>
 /// Regression test for https://github.com/microsoft/agent-framework/issues/4155
 /// Verifies that the workflow_invoke Activity is properly stopped/disposed so it gets exported

@@ -58,14 +58,16 @@ services:
       context: ../../..
       dockerfile: samples/05-end-to-end/AuthClientServer/AuthClientServer.WebClient/Dockerfile
     container_name: auth-web-client
-    network_mode: host
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - Auth__Authority=http://localhost:5002/realms/dev
+      - Auth__Authority=http://keycloak:8080/realms/dev
+      - Auth__PublicKeycloakUrl=http://localhost:5002
       - Auth__ClientId=web-client
-      - AgentService__BaseUrl=http://localhost:5001
+      - AgentService__BaseUrl=http://agent-service:5001
       - CODESPACE_NAME=${CODESPACE_NAME:-}
       - GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN=${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}
+    ports:
+      - "8080:8080"
     volumes:
       - web-client-keys:/app/keys
     depends_on:

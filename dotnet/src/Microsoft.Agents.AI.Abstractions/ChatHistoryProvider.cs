@@ -54,7 +54,7 @@ public abstract class ChatHistoryProvider
     /// </summary>
     /// <param name="provideOutputMessageFilter">An optional filter function to apply to messages when retrieving them from the chat history.</param>
     /// <param name="storeInputRequestMessageFilter">An optional filter function to apply to request messages before storing them in the chat history. If not set, defaults to excluding messages with source type <see cref="AgentRequestMessageSourceType.ChatHistory"/>.</param>
-    /// <param name="storeInputResponseMessageFilter">An optional filter function to apply to response messages before storing them in the chat history. If not set, defaults to excluding messages with source type <see cref="AgentRequestMessageSourceType.ChatHistory"/>.</param>
+    /// <param name="storeInputResponseMessageFilter">An optional filter function to apply to response messages before storing them in the chat history. If not set, defaults to a no-op filter that includes all response messages.</param>
     protected ChatHistoryProvider(
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? provideOutputMessageFilter = null,
         Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? storeInputRequestMessageFilter = null,

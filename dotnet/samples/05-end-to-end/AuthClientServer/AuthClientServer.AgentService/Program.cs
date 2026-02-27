@@ -6,9 +6,9 @@
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 using AuthClientServer.AgentService;
+using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using OpenAI;
 

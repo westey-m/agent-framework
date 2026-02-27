@@ -16,7 +16,7 @@ public class IndexModel : PageModel
 
     public IActionResult OnGetLogout()
     {
-        return SignOut(
+        return this.SignOut(
             new AuthenticationProperties { RedirectUri = "/" },
             CookieAuthenticationDefaults.AuthenticationScheme,
             OpenIdConnectDefaults.AuthenticationScheme);

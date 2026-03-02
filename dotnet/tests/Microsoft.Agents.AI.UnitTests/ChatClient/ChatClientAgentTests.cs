@@ -192,6 +192,102 @@ public partial class ChatClientAgentTests
         await agent.RunAsync([new(ChatRole.User, "test")], session, options: new AgentRunOptions { AdditionalProperties = additionalProperties });
     }
 
+    /// <summary>
+    /// Verify that the constructor throws when two multi-key AIContextProviders have an overlapping key.
+    /// </summary>
+    [Fact]
+    public void Constructor_ThrowsWhenMultiKeyAIContextProvidersOverlap()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var provider1 = new MultiKeyTestAIContextProvider("Key1", "SharedKey");
+        var provider2 = new MultiKeyTestAIContextProvider("Key2", "SharedKey");
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new ChatClientAgent(chatClient, options: new()
+            {
+                AIContextProviders = [provider1, provider2]
+            }));
+
+        Assert.Contains("state key 'SharedKey'", ex.Message);
+    }
+
+    /// <summary>
+    /// Verify that the constructor throws when a multi-key ChatHistoryProvider has an overlapping key with an AIContextProvider.
+    /// </summary>
+    [Fact]
+    public void Constructor_ThrowsWhenMultiKeyChatHistoryProviderOverlapsWithAIContextProvider()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var contextProvider = new MultiKeyTestAIContextProvider("Key1", "SharedKey");
+        var historyProvider = new MultiKeyTestChatHistoryProvider("Key2", "SharedKey");
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new ChatClientAgent(chatClient, options: new()
+            {
+                AIContextProviders = [contextProvider],
+                ChatHistoryProvider = historyProvider
+            }));
+
+        Assert.Contains("state key 'SharedKey'", ex.Message);
+    }
+
+    /// <summary>
+    /// Verify that the constructor succeeds when multi-key providers have no overlapping keys.
+    /// </summary>
+    [Fact]
+    public void Constructor_SucceedsWithMultiKeyProvidersWithUniqueKeys()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var contextProvider1 = new MultiKeyTestAIContextProvider("Key1", "Key2");
+        var contextProvider2 = new MultiKeyTestAIContextProvider("Key3", "Key4");
+        var historyProvider = new MultiKeyTestChatHistoryProvider("Key5", "Key6");
+
+        // Act & Assert - should not throw
+        _ = new ChatClientAgent(chatClient, options: new()
+        {
+            AIContextProviders = [contextProvider1, contextProvider2],
+            ChatHistoryProvider = historyProvider
+        });
+    }
+
+    /// <summary>
+    /// Verify that RunAsync throws when a multi-key override ChatHistoryProvider has an overlapping key with an AIContextProvider.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ThrowsWhenMultiKeyOverrideChatHistoryProviderClashesWithAIContextProviderAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        var contextProvider = new MultiKeyTestAIContextProvider("Key1", "SharedKey");
+        var overrideHistoryProvider = new MultiKeyTestChatHistoryProvider("Key2", "SharedKey");
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            AIContextProviders = [contextProvider]
+        });
+
+        // Act & Assert
+        ChatClientAgentSession? session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        AdditionalPropertiesDictionary additionalProperties = new();
+        additionalProperties.Add<ChatHistoryProvider>(overrideHistoryProvider);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            agent.RunAsync([new(ChatRole.User, "test")], session, options: new AgentRunOptions { AdditionalProperties = additionalProperties }));
+
+        Assert.Contains("state key 'SharedKey'", ex.Message);
+    }
+
     #endregion
 
     #region RunAsync Tests
@@ -1976,9 +2072,28 @@ public partial class ChatClientAgentTests
             => new(context.AIContext);
     }
 
+    private sealed class MultiKeyTestAIContextProvider(params string[] stateKeys) : AIContextProvider
+    {
+        public override IReadOnlyList<string> StateKeys => stateKeys;
+
+        protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
+            => new(context.AIContext);
+    }
+
     private sealed class TestChatHistoryProvider(string stateKey) : ChatHistoryProvider
     {
         public override IReadOnlyList<string> StateKeys => [stateKey];
+
+        protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
+            => new(context.RequestMessages);
+
+        protected override ValueTask InvokedCoreAsync(InvokedContext context, CancellationToken cancellationToken = default)
+            => default;
+    }
+
+    private sealed class MultiKeyTestChatHistoryProvider(params string[] stateKeys) : ChatHistoryProvider
+    {
+        public override IReadOnlyList<string> StateKeys => stateKeys;
 
         protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
             => new(context.RequestMessages);

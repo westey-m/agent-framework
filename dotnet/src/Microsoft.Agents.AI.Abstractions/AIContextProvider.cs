@@ -34,6 +34,8 @@ public abstract class AIContextProvider
     private static IEnumerable<ChatMessage> DefaultExternalOnlyFilter(IEnumerable<ChatMessage> messages)
         => messages.Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External);
 
+    private IReadOnlyList<string>? _stateKeys;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AIContextProvider"/> class.
     /// </summary>
@@ -66,7 +68,7 @@ public abstract class AIContextProvider
     /// instances of the same provider type are used in the same session, or when a provider
     /// stores state under more than one key.
     /// </remarks>
-    public virtual IReadOnlyList<string> StateKeys => [this.GetType().Name];
+    public virtual IReadOnlyList<string> StateKeys => this._stateKeys ??= [this.GetType().Name];
 
     /// <summary>
     /// Called at the start of agent invocation to provide additional context.

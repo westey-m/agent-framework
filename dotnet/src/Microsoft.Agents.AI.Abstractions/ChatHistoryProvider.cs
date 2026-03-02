@@ -43,6 +43,7 @@ public abstract class ChatHistoryProvider
     private static IEnumerable<ChatMessage> DefaultExcludeChatHistoryFilter(IEnumerable<ChatMessage> messages)
         => messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory);
 
+    private IReadOnlyList<string>? _stateKeys;
     private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? _provideOutputMessageFilter;
     private readonly Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>> _storeInputMessageFilter;
 
@@ -68,7 +69,7 @@ public abstract class ChatHistoryProvider
     /// instances of the same provider type are used in the same session, or when a provider
     /// stores state under more than one key.
     /// </remarks>
-    public virtual IReadOnlyList<string> StateKeys => [this.GetType().Name];
+    public virtual IReadOnlyList<string> StateKeys => this._stateKeys ??= [this.GetType().Name];
 
     /// <summary>
     /// Called at the start of agent invocation to provide messages for the next agent invocation.

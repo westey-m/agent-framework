@@ -2066,7 +2066,9 @@ public partial class ChatClientAgentTests
 
     private sealed class TestAIContextProvider(string stateKey) : AIContextProvider
     {
-        public override IReadOnlyList<string> StateKeys => [stateKey];
+        private readonly IReadOnlyList<string> _stateKeys = [stateKey];
+
+        public override IReadOnlyList<string> StateKeys => this._stateKeys;
 
         protected override ValueTask<AIContext> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
             => new(context.AIContext);
@@ -2082,7 +2084,9 @@ public partial class ChatClientAgentTests
 
     private sealed class TestChatHistoryProvider(string stateKey) : ChatHistoryProvider
     {
-        public override IReadOnlyList<string> StateKeys => [stateKey];
+        private readonly IReadOnlyList<string> _stateKeys = [stateKey];
+
+        public override IReadOnlyList<string> StateKeys => this._stateKeys;
 
         protected override ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(InvokingContext context, CancellationToken cancellationToken = default)
             => new(context.RequestMessages);

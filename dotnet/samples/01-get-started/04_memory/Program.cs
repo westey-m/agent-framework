@@ -100,7 +100,7 @@ namespace SampleApp
             this._chatClient = chatClient;
         }
 
-        public override string StateKey => this._sessionState.StateKey;
+        public override IReadOnlyList<string> StateKeys => [this._sessionState.StateKey];
 
         public UserInfo GetUserInfo(AgentSession session)
             => this._sessionState.GetOrInitializeState(session);

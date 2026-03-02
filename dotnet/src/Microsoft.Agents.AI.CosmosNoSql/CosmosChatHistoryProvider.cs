@@ -112,7 +112,7 @@ public sealed class CosmosChatHistoryProvider : ChatHistoryProvider, IDisposable
     }
 
     /// <inheritdoc />
-    public override string StateKey => this._sessionState.StateKey;
+    public override IReadOnlyList<string> StateKeys => [this._sessionState.StateKey];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CosmosChatHistoryProvider"/> class using a connection string.

@@ -49,7 +49,7 @@ public sealed class InMemoryChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <inheritdoc />
-    public override string StateKey => this._sessionState.StateKey;
+    public override IReadOnlyList<string> StateKeys => [this._sessionState.StateKey];
 
     /// <summary>
     /// Gets the chat reducer used to process or reduce chat messages. If null, no reduction logic will be applied.

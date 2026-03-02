@@ -82,7 +82,7 @@ public sealed class FoundryMemoryProvider : AIContextProvider
     }
 
     /// <inheritdoc />
-    public override string StateKey => this._sessionState.StateKey;
+    public override IReadOnlyList<string> StateKeys => [this._sessionState.StateKey];
 
     private static Func<AgentSession?, State> ValidateStateInitializer(Func<AgentSession?, State> stateInitializer) =>
         session =>

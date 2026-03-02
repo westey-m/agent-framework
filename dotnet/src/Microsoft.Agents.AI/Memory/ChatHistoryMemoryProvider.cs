@@ -128,7 +128,7 @@ public sealed class ChatHistoryMemoryProvider : MessageAIContextProvider, IDispo
     }
 
     /// <inheritdoc />
-    public override string StateKey => this._sessionState.StateKey;
+    public override IReadOnlyList<string> StateKeys => [this._sessionState.StateKey];
 
     /// <inheritdoc />
     protected override async ValueTask<AIContext> ProvideAIContextAsync(AIContextProvider.InvokingContext context, CancellationToken cancellationToken = default)

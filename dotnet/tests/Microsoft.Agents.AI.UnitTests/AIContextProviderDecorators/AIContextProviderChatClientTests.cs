@@ -389,7 +389,7 @@ public class AIContextProviderChatClientTests
 
         public InvokedContext? LastInvokedContext { get; private set; }
 
-        public override string StateKey => this._stateKey;
+        public override IReadOnlyList<string> StateKeys => [this._stateKey];
 
         public TestAIContextProvider(
             string stateKey,

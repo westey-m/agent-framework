@@ -31,7 +31,7 @@ internal sealed class WorkflowChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <inheritdoc />
-    public override string StateKey => this._sessionState.StateKey;
+    public override IReadOnlyList<string> StateKeys => [this._sessionState.StateKey];
 
     internal sealed class StoreState
     {

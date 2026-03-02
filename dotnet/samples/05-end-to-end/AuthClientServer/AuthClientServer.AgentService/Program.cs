@@ -1,7 +1,8 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-// This sample demonstrates how to secure an AI agent REST API with
-// JWT Bearer authentication and policy-based scope authorization.
+// This sample demonstrates how to authorize AI agent tools using OAuth 2.0
+// scopes. The /chat endpoint requires the "agent.chat" scope, and each tool
+// checks its own scope (expenses.view, expenses.approve) at runtime.
 
 using System.Security.Claims;
 using System.Text.Json.Serialization;
@@ -68,16 +69,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Add(SampleServiceSerializerContext.Default));
 
 // ---------------------------------------------------------------------------
-// CORS: allow the WebClient origin
-// ---------------------------------------------------------------------------
-builder.Services.AddCors(options =>
-    options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:8080")
-              .AllowAnyHeader()
-              .AllowAnyMethod()));
-
-// ---------------------------------------------------------------------------
-// Create the AI agent with TODO tools, registered in DI
+// Create the AI agent with expense approval tools, registered in DI
 // ---------------------------------------------------------------------------
 string apiKey = builder.Configuration["OPENAI_API_KEY"]
     ?? throw new InvalidOperationException("Set the OPENAI_API_KEY environment variable.");
@@ -85,29 +77,28 @@ string model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, KeycloakUserContext>();
-builder.Services.AddScoped<TodoService>();
+builder.Services.AddScoped<ExpenseService>();
 builder.Services.AddScoped<AIAgent>(sp =>
 {
-    var todoService = sp.GetRequiredService<TodoService>();
+    var expenseService = sp.GetRequiredService<ExpenseService>();
 
     return new OpenAIClient(apiKey)
         .GetChatClient(model)
         .AsIChatClient()
         .AsAIAgent(
-            name: "AuthDemoAgent",
-            instructions: "You are a helpful assistant that can manage the user's TODO list. "
-                        + "Use the available tools to list and add TODO items when asked. "
+            name: "ExpenseApprovalAgent",
+            instructions: "You are an expense approval assistant. You can list pending expenses "
+                        + "and approve them if the user has the required permissions and approval limit. "
                         + "Keep responses concise.",
             tools:
             [
-                AIFunctionFactory.Create(todoService.ListTodos),
-                AIFunctionFactory.Create(todoService.AddTodo),
+                AIFunctionFactory.Create(expenseService.ListPendingExpenses),
+                AIFunctionFactory.Create(expenseService.ApproveExpense),
             ]);
 });
 
 WebApplication app = builder.Build();
 
-app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -121,15 +112,6 @@ app.MapPost("/chat", [Authorize(Policy = "AgentChat")] async (ChatRequest reques
     return Results.Ok(new ChatResponse(response.Text, userContext.DisplayName));
 });
 
-// ---------------------------------------------------------------------------
-// GET /me — returns the caller's identity (any authenticated user)
-// ---------------------------------------------------------------------------
-app.MapGet("/me", [Authorize] (ClaimsPrincipal user) =>
-{
-    var claims = user.Claims.Select(c => new ClaimInfo(c.Type, c.Value));
-    return Results.Ok(claims);
-});
-
 await app.RunAsync();
 
 // ---------------------------------------------------------------------------
@@ -137,9 +119,7 @@ await app.RunAsync();
 // ---------------------------------------------------------------------------
 internal sealed record ChatRequest(string Message);
 internal sealed record ChatResponse(string Reply, string User);
-internal sealed record ClaimInfo(string Type, string Value);
 
 [JsonSerializable(typeof(ChatRequest))]
 [JsonSerializable(typeof(ChatResponse))]
-[JsonSerializable(typeof(IEnumerable<ClaimInfo>))]
 internal sealed partial class SampleServiceSerializerContext : JsonSerializerContext;

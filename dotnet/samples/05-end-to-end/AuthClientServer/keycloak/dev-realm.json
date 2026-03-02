@@ -8,6 +8,14 @@
       {
         "name": "agent-chat-user",
         "description": "Grants access to the agent.chat scope"
+      },
+      {
+        "name": "expenses-viewer",
+        "description": "Grants access to the expenses.view scope"
+      },
+      {
+        "name": "expenses-approver",
+        "description": "Grants access to the expenses.approve scope"
       }
     ]
   },
@@ -15,6 +23,14 @@
     {
       "clientScope": "agent.chat",
       "roles": ["agent-chat-user"]
+    },
+    {
+      "clientScope": "expenses.view",
+      "roles": ["expenses-viewer"]
+    },
+    {
+      "clientScope": "expenses.approve",
+      "roles": ["expenses-approver"]
     }
   ],
   "clientScopes": [
@@ -104,6 +120,24 @@
       }
     },
     {
+      "name": "expenses.view",
+      "description": "Allows viewing pending expenses",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
+      "name": "expenses.approve",
+      "description": "Allows approving pending expenses",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      }
+    },
+    {
       "name": "agent-service-audience",
       "description": "Adds the agent-service audience to access tokens",
       "protocol": "openid-connect",
@@ -157,7 +191,9 @@
         "agent-service-audience"
       ],
       "optionalClientScopes": [
-        "agent.chat"
+        "agent.chat",
+        "expenses.view",
+        "expenses.approve"
       ]
     }
   ],
@@ -168,7 +204,7 @@
       "email": "testuser@example.com",
       "firstName": "Test",
       "lastName": "User",
-      "realmRoles": ["agent-chat-user"],
+      "realmRoles": ["agent-chat-user", "expenses-viewer", "expenses-approver"],
       "credentials": [
         {
           "type": "password",
@@ -183,6 +219,7 @@
       "email": "viewer@example.com",
       "firstName": "View",
       "lastName": "Only",
+      "realmRoles": ["agent-chat-user", "expenses-viewer"],
       "credentials": [
         {
           "type": "password",

@@ -17,14 +17,17 @@ public interface IUserContext
 
     /// <summary>Human-readable display name (e.g. "Test User").</summary>
     string DisplayName { get; }
+
+    /// <summary>OAuth scopes granted in the current access token.</summary>
+    IReadOnlySet<string> Scopes { get; }
 }
 
 /// <summary>
 /// Resolves the current user's identity from Keycloak-specific JWT claims.
 /// Keycloak uses <c>sub</c> for the user ID, <c>preferred_username</c>
-/// for the login name, and <c>given_name</c>/<c>family_name</c> for the
-/// display name. Registered as a scoped service so it is resolved once
-/// per request.
+/// for the login name, <c>given_name</c>/<c>family_name</c> for the
+/// display name, and <c>scope</c> (space-delimited) for granted scopes.
+/// Registered as a scoped service so it is resolved once per request.
 /// </summary>
 public sealed class KeycloakUserContext : IUserContext
 {
@@ -33,6 +36,8 @@ public sealed class KeycloakUserContext : IUserContext
     public string UserName { get; }
 
     public string DisplayName { get; }
+
+    public IReadOnlySet<string> Scopes { get; }
 
     public KeycloakUserContext(IHttpContextAccessor httpContextAccessor)
     {
@@ -55,5 +60,10 @@ public sealed class KeycloakUserContext : IUserContext
             (null, not null) => familyName,
             _ => this.UserName,
         };
+
+        string? scopeClaim = user?.FindFirstValue("scope");
+        this.Scopes = scopeClaim is not null
+            ? new HashSet<string>(scopeClaim.Split(' ', StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 }

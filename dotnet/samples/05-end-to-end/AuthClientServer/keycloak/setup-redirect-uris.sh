@@ -34,6 +34,10 @@ CLIENT_UUID=$(curl -sf "$KEYCLOAK_URL/admin/realms/dev/clients?clientId=web-clie
   -H "Authorization: Bearer $TOKEN" \
   | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
 
+if [ -z "$CLIENT_UUID" ]; then
+    echo "ERROR: Failed to find web-client UUID" >&2
+    exit 1
+fi
 # Update redirect URIs and web origins
 curl -sf -X PUT "$KEYCLOAK_URL/admin/realms/dev/clients/$CLIENT_UUID" \
   -H "Authorization: Bearer $TOKEN" \

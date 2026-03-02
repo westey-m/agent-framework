@@ -1,6 +1,6 @@
 # Auth Client-Server Sample
 
-This sample demonstrates how to secure an AI agent REST API with standards-based authentication and authorization using OAuth 2.0 / OpenID Connect, JWT Bearer tokens, and policy-based scope enforcement.
+This sample demonstrates how to authorize AI agents and their tools using OAuth 2.0 scopes. It shows two levels of access control: an endpoint-level scope (`agent.chat`) that gates access to the agent, and tool-level scopes (`expenses.view`, `expenses.approve`) that control what the agent can do on behalf of each user.
 
 While this sample uses Keycloak to avoid complex setup in order to run the sample, Keycloak can easily be replaced with any OIDC compatible provider, including [Microsoft Entra Id](https://www.microsoft.com/security/business/identity-access/microsoft-entra-id).
 
@@ -11,7 +11,7 @@ The sample has three components, all launched with a single `docker compose up`:
 | Service | Port | Description |
 |---------|------|-------------|
 | **WebClient** | `http://localhost:8080` | Razor Pages web app with OIDC login and a chat UI that calls the AgentService |
-| **AgentService** | `http://localhost:5001` | ASP.NET Minimal API hosting a `ChatClientAgent`, secured with JWT Bearer auth and scope-based policies |
+| **AgentService** | `http://localhost:5001` | ASP.NET Minimal API hosting an expense approval agent with scope-authorized tools |
 | **Keycloak** | `http://localhost:5002` | OIDC identity provider, auto-provisioned with realm, clients, scopes, and test users |
 
 ```
@@ -47,7 +47,7 @@ export OPENAI_MODEL="gpt-4.1-mini"
 ### Option 1: Docker Compose (Recommended)
 
 ```bash
-cd samples/AuthClientServer
+cd dotnet/samples/05-end-to-end/AuthClientServer
 docker compose up
 ```
 
@@ -96,9 +96,12 @@ Then open the Codespaces-forwarded URL for port 8080 (shown in the **Ports** tab
 1. Open `http://localhost:8080` in your browser
 2. Click **Login** — you'll be redirected to Keycloak
 3. Sign in with one of the pre-configured users:
-   - **`testuser` / `password`** — has the `agent.chat` scope, can chat with the agent
-   - **`viewer` / `password`** — lacks the `agent.chat` scope, will receive a 403 Forbidden when trying to chat
-4. Type a message and click **Send** to chat with the agent
+   - **`testuser` / `password`** — can chat, view expenses, and approve expenses (up to €1,000)
+   - **`viewer` / `password`** — can chat and view expenses, but **cannot approve** them
+4. Try asking the agent:
+   - _"Show me the pending expenses"_ — both users can do this
+   - _"Approve expense #1"_ — only `testuser` can do this; `viewer` will be denied
+   - _"Approve expense #3"_ — even `testuser` will be denied (€4,500 exceeds the €1,000 limit)
 
 ## Pre-Configured Keycloak Realm
 
@@ -110,8 +113,22 @@ The `keycloak/dev-realm.json` file auto-provisions:
 | **Client: agent-service** | Confidential client (the API audience) |
 | **Client: web-client** | Public client for the Razor app's OIDC login |
 | **Scope: agent.chat** | Required to call the `/chat` endpoint |
-| **User: testuser** | Has `agent.chat` scope |
-| **User: viewer** | Does not have `agent.chat` scope |
+| **Scope: expenses.view** | Required to list pending expenses |
+| **Scope: expenses.approve** | Required to approve expenses |
+| **User: testuser** | Has `agent.chat`, `expenses.view`, and `expenses.approve` scopes |
+| **User: viewer** | Has `agent.chat` and `expenses.view` scopes (no approval) |
+
+### Pre-Seeded Expenses
+
+The service starts with five demo expenses:
+
+| # | Description | Amount | Status |
+|---|-------------|--------|--------|
+| 1 | Conference travel — Berlin | €850 | Pending |
+| 2 | Team dinner — Q4 celebration | €320 | Pending |
+| 3 | Cloud infrastructure — annual renewal | €4,500 | Pending (over limit) |
+| 4 | Office supplies — ergonomic keyboards | €675 | Pending |
+| 5 | Client gift baskets — holiday season | €980 | Pending |
 
 Keycloak admin console: `http://localhost:5002` (login: `admin` / `admin`).
 
@@ -122,26 +139,18 @@ Keycloak admin console: `http://localhost:5002` (login: `admin` / `admin`).
 ```bash
 # Get a token for testuser
 TOKEN=$(curl -s -X POST http://localhost:5002/realms/dev/protocol/openid-connect/token \
-  -d "grant_type=password&client_id=web-client&username=testuser&password=password&scope=openid agent.chat" \
+  -d "grant_type=password&client_id=web-client&username=testuser&password=password&scope=openid agent.chat expenses.view expenses.approve" \
   | jq -r '.access_token')
 
 # Chat with the agent
 curl -X POST http://localhost:5001/chat \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you help me with?"}'
-```
-
-### GET /me (requires any valid token)
-
-```bash
-curl http://localhost:5001/me -H "Authorization: Bearer $TOKEN"
+  -d '{"message": "Show me the pending expenses"}'
 ```
 
 ## Key Concepts Demonstrated
 
-- **JWT Bearer Authentication** — The AgentService validates tokens from Keycloak using OIDC discovery
-- **Policy-Based Authorization** — The `/chat` endpoint requires the `agent.chat` scope in the token
-- **Caller Identity** — The service reads the caller's identity from `HttpContext.User` (ClaimsPrincipal)
-- **OIDC Login Flow** — The WebClient uses OpenID Connect authorization code flow with Keycloak
-- **Token Forwarding** — The WebClient stores the access token and sends it as a Bearer token to the AgentService
+- **Endpoint-Level Authorization** — The `/chat` endpoint requires the `agent.chat` scope, gating access to the agent itself
+- **Tool-Level Authorization** — Each agent tool checks its own scope (`expenses.view`, `expenses.approve`) at runtime, so different users have different capabilities within the same chat session
+- **Scope-Based Role Mapping** — Keycloak realm roles map to OAuth scopes, allowing administrators to control which users can access which agent capabilities

@@ -59,12 +59,14 @@ builder.Services
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
 
-        // Request the agent.chat scope so the access token includes it
+        // Request scopes so the access token includes them
         options.Scope.Clear();
         options.Scope.Add("openid");
         options.Scope.Add("profile");
         options.Scope.Add("email");
         options.Scope.Add("agent.chat");
+        options.Scope.Add("expenses.view");
+        options.Scope.Add("expenses.approve");
 
         // For local development with HTTP-only Keycloak
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();

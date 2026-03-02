@@ -39,7 +39,7 @@ services:
   agent-service:
     build:
       context: ../../..
-      dockerfile: samples/05-end-to-end/AuthClientServer/AuthClientServer.AgentService/Dockerfile
+      dockerfile: samples/05-end-to-end/AspNetAgentAuthorization/Service/Dockerfile
     container_name: auth-agent-service
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -56,7 +56,7 @@ services:
   web-client:
     build:
       context: ../../..
-      dockerfile: samples/05-end-to-end/AuthClientServer/AuthClientServer.WebClient/Dockerfile
+      dockerfile: samples/05-end-to-end/AspNetAgentAuthorization/RazorWebClient/Dockerfile
     container_name: auth-web-client
     environment:
       - ASPNETCORE_ENVIRONMENT=Development

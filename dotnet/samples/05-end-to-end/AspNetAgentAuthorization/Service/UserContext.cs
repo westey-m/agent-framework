@@ -2,7 +2,7 @@
 
 using System.Security.Claims;
 
-namespace AuthClientServer.AgentService;
+namespace AspNetAgentAuthorization.Service;
 
 /// <summary>
 /// Provides the authenticated user's identity for the current request.

@@ -3,7 +3,7 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 
-namespace AuthClientServer.AgentService;
+namespace AspNetAgentAuthorization.Service;
 
 /// <summary>
 /// Represents an expense awaiting approval.

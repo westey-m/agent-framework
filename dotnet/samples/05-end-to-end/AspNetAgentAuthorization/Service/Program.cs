@@ -6,7 +6,7 @@
 
 using System.Security.Claims;
 using System.Text.Json.Serialization;
-using AuthClientServer.AgentService;
+using AspNetAgentAuthorization.Service;
 using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;

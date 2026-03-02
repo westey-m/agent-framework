@@ -288,11 +288,11 @@
     <Project Path="samples/05-end-to-end/HostedAgents/AgentWithHostedMCP/AgentWithHostedMCP.csproj" />
     <Project Path="samples/05-end-to-end/HostedAgents/AgentWithTextSearchRag/AgentWithTextSearchRag.csproj" />
   </Folder>
-  <Folder Name="/Samples/05-end-to-end/AuthClientServer/">
-    <File Path="samples/05-end-to-end/AuthClientServer/docker-compose.yml" />
-    <File Path="samples/05-end-to-end/AuthClientServer/README.md" />
-    <Project Path="samples/05-end-to-end/AuthClientServer/AuthClientServer.AgentService/AuthClientServer.AgentService.csproj" />
-    <Project Path="samples/05-end-to-end/AuthClientServer/AuthClientServer.WebClient/AuthClientServer.WebClient.csproj" />
+  <Folder Name="/Samples/05-end-to-end/AspNetAgentAuthorization/">
+    <File Path="samples/05-end-to-end/AspNetAgentAuthorization/docker-compose.yml" />
+    <File Path="samples/05-end-to-end/AspNetAgentAuthorization/README.md" />
+    <Project Path="samples/05-end-to-end/AspNetAgentAuthorization/Service/Service.csproj" />
+    <Project Path="samples/05-end-to-end/AspNetAgentAuthorization/RazorWebClient/RazorWebClient.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />

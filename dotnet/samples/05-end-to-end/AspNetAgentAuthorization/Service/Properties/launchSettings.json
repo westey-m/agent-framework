@@ -1,12 +1,12 @@
 {
   "profiles": {
-    "AuthClientServer.WebClient": {
+    "Service": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:58080;http://localhost:8080"
+      "applicationUrl": "https://localhost:55001;http://localhost:5001"
     }
   }
 }

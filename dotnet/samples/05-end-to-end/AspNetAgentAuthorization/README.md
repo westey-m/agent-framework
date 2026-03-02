@@ -47,7 +47,7 @@ export OPENAI_MODEL="gpt-4.1-mini"
 ### Option 1: Docker Compose (Recommended)
 
 ```bash
-cd dotnet/samples/05-end-to-end/AuthClientServer
+cd dotnet/samples/05-end-to-end/AspNetAgentAuthorization
 docker compose up
 ```
 
@@ -81,13 +81,13 @@ Then open the Codespaces-forwarded URL for port 8080 (shown in the **Ports** tab
 
 2. In a new terminal, start the AgentService:
    ```bash
-   cd AuthClientServer.AgentService
+   cd Service
    dotnet run --urls "http://localhost:5001"
    ```
 
 3. In another terminal, start the WebClient:
    ```bash
-   cd AuthClientServer.WebClient
+   cd RazorWebClient
    dotnet run --urls "http://localhost:8080"
    ```
 

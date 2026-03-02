@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace AuthClientServer.WebClient.Pages;
+namespace AspNetAgentAuthorization.RazorWebClient.Pages;
 
 public class ChatModel : PageModel
 {

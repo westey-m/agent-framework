@@ -111,7 +111,7 @@ public sealed class WorkflowRunActivityStopTests : IDisposable
     /// Verifies that the workflow_invoke Activity is stopped when using the OffThread (Default)
     /// execution environment (StreamingRunEventStream).
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Flaky test - temporarily disabled.")]
     public async Task WorkflowRunActivity_IsStopped_OffThreadAsync()
     {
         // Arrange

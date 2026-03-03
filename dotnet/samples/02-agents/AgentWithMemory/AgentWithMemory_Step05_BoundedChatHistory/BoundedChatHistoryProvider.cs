@@ -18,10 +18,11 @@ namespace SampleApp;
 /// </remarks>
 internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposable
 {
-    private readonly InMemoryChatHistoryProvider _inMemoryProvider;
+    private readonly InMemoryChatHistoryProvider _chatHistoryProvider;
     private readonly ChatHistoryMemoryProvider _memoryProvider;
     private readonly TruncatingChatReducer _reducer;
     private readonly string _contextPrompt;
+    private IReadOnlyList<string>? _stateKeys;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BoundedChatHistoryProvider"/> class.
@@ -46,11 +47,11 @@ internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposa
         }
 
         this._reducer = new TruncatingChatReducer(maxSessionMessages);
-        this._inMemoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+        this._chatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
         {
             ChatReducer = this._reducer,
             ReducerTriggerEvent = InMemoryChatHistoryProviderOptions.ChatReducerTriggerEvent.AfterMessageAdded,
-            StorageInputMessageFilter = msgs => msgs,
+            StorageInputRequestMessageFilter = msgs => msgs,
         });
         this._memoryProvider = new ChatHistoryMemoryProvider(
             vectorStore,
@@ -60,11 +61,14 @@ internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposa
             options: new ChatHistoryMemoryProviderOptions
             {
                 SearchInputMessageFilter = msgs => msgs,
-                StorageInputMessageFilter = msgs => msgs,
+                StorageInputRequestMessageFilter = msgs => msgs,
             });
         this._contextPrompt = contextPrompt
             ?? "The following are memories from earlier in this conversation. Use them to inform your responses:";
     }
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string> StateKeys => this._stateKeys ??= this._chatHistoryProvider.StateKeys.Concat(this._memoryProvider.StateKeys).ToArray();
 
     /// <inheritdoc />
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(
@@ -72,7 +76,8 @@ internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposa
         CancellationToken cancellationToken = default)
     {
         // Delegate to the inner provider's full lifecycle (retrieve, filter, stamp, merge with request messages).
-        var allMessages = await this._inMemoryProvider.InvokingAsync(context, cancellationToken).ConfigureAwait(false);
+        var chatHistoryProviderInputContext = new InvokingContext(context.Agent, context.Session, []);
+        var allMessages = await this._chatHistoryProvider.InvokingAsync(chatHistoryProviderInputContext, cancellationToken).ConfigureAwait(false);
 
         // Search the vector store for relevant older messages.
         var aiContext = new AIContext { Messages = context.RequestMessages.ToList() };
@@ -109,7 +114,7 @@ internal sealed class BoundedChatHistoryProvider : ChatHistoryProvider, IDisposa
         // will automatically truncate to the configured maximum and expose any removed messages.
         var innerContext = new InvokedContext(
             context.Agent, context.Session, context.RequestMessages, context.ResponseMessages!);
-        await this._inMemoryProvider.InvokedAsync(innerContext, cancellationToken).ConfigureAwait(false);
+        await this._chatHistoryProvider.InvokedAsync(innerContext, cancellationToken).ConfigureAwait(false);
 
         // Archive any messages that the reducer removed to the vector store.
         if (this._reducer.RemovedMessages is { Count: > 0 })

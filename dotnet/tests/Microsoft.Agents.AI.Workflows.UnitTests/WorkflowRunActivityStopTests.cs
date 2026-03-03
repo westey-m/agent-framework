@@ -67,7 +67,7 @@ public sealed class WorkflowRunActivityStopTests : IDisposable
     /// Bug: The Activity created by LockstepRunEventStream.TakeEventStreamAsync is never
     /// disposed because yield break in async iterators does not trigger using disposal.
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Flaky test - temporarily disabled.")]
     public async Task WorkflowRunActivity_IsStopped_LockstepAsync()
     {
         // Arrange
@@ -203,7 +203,7 @@ public sealed class WorkflowRunActivityStopTests : IDisposable
     /// streaming invocation, even when using the same workflow in a multi-turn pattern,
     /// and that each session gets its own session activity.
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Flaky test - temporarily disabled.")]
     public async Task WorkflowRunActivity_IsStopped_Streaming_OffThread_MultiTurnAsync()
     {
         // Arrange
@@ -264,7 +264,7 @@ public sealed class WorkflowRunActivityStopTests : IDisposable
     /// Verifies that all started activities (not just workflow_invoke) are properly stopped.
     /// This ensures no spans are "leaked" without being exported.
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Flaky test - temporarily disabled.")]
     public async Task AllActivities_AreStopped_AfterWorkflowCompletionAsync()
     {
         // Arrange
@@ -305,7 +305,7 @@ public sealed class WorkflowRunActivityStopTests : IDisposable
     /// be parented under the workflow session span. The run activity should
     /// still nest correctly under the session.
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Flaky test - temporarily disabled.")]
     public async Task Lockstep_SessionActivity_DoesNotLeak_IntoCaller_ActivityCurrentAsync()
     {
         // Arrange

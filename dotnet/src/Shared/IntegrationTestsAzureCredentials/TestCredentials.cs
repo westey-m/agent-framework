@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+#pragma warning disable IDE0005 // This is required in some projects and not in others.
 using System;
+#pragma warning restore IDE0005
 using Azure.Identity;
 
 namespace Shared.IntegrationTests;

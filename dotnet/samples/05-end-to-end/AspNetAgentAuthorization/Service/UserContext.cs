@@ -27,43 +27,67 @@ public interface IUserContext
 /// Keycloak uses <c>sub</c> for the user ID, <c>preferred_username</c>
 /// for the login name, <c>given_name</c>/<c>family_name</c> for the
 /// display name, and <c>scope</c> (space-delimited) for granted scopes.
-/// Registered as a scoped service so it is resolved once per request.
+/// Registered as a singleton — properties are read from the current
+/// <see cref="HttpContext"/> on every access.
 /// </summary>
 public sealed class KeycloakUserContext : IUserContext
 {
-    public string UserId { get; }
-
-    public string UserName { get; }
-
-    public string DisplayName { get; }
-
-    public IReadOnlySet<string> Scopes { get; }
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public KeycloakUserContext(IHttpContextAccessor httpContextAccessor)
     {
-        ClaimsPrincipal? user = httpContextAccessor.HttpContext?.User;
-
-        this.UserId = user?.FindFirstValue(ClaimTypes.NameIdentifier)
-                   ?? user?.FindFirstValue("sub")
-                   ?? "anonymous";
-
-        this.UserName = user?.FindFirstValue("preferred_username")
-                     ?? user?.FindFirstValue(ClaimTypes.Name)
-                     ?? "unknown";
-
-        string? givenName = user?.FindFirstValue("given_name") ?? user?.FindFirstValue(ClaimTypes.GivenName);
-        string? familyName = user?.FindFirstValue("family_name") ?? user?.FindFirstValue(ClaimTypes.Surname);
-        this.DisplayName = (givenName, familyName) switch
-        {
-            (not null, not null) => $"{givenName} {familyName}",
-            (not null, null) => givenName,
-            (null, not null) => familyName,
-            _ => this.UserName,
-        };
-
-        string? scopeClaim = user?.FindFirstValue("scope");
-        this.Scopes = scopeClaim is not null
-            ? new HashSet<string>(scopeClaim.Split(' ', StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        this._httpContextAccessor = httpContextAccessor;
     }
+
+    public string UserId
+    {
+        get
+        {
+            ClaimsPrincipal? user = this.CurrentUser;
+            return user?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? user?.FindFirstValue("sub")
+                ?? "anonymous";
+        }
+    }
+
+    public string UserName
+    {
+        get
+        {
+            ClaimsPrincipal? user = this.CurrentUser;
+            return user?.FindFirstValue("preferred_username")
+                ?? user?.FindFirstValue(ClaimTypes.Name)
+                ?? "unknown";
+        }
+    }
+
+    public string DisplayName
+    {
+        get
+        {
+            ClaimsPrincipal? user = this.CurrentUser;
+            string? givenName = user?.FindFirstValue("given_name") ?? user?.FindFirstValue(ClaimTypes.GivenName);
+            string? familyName = user?.FindFirstValue("family_name") ?? user?.FindFirstValue(ClaimTypes.Surname);
+            return (givenName, familyName) switch
+            {
+                (not null, not null) => $"{givenName} {familyName}",
+                (not null, null) => givenName,
+                (null, not null) => familyName,
+                _ => this.UserName,
+            };
+        }
+    }
+
+    public IReadOnlySet<string> Scopes
+    {
+        get
+        {
+            string? scopeClaim = this.CurrentUser?.FindFirstValue("scope");
+            return scopeClaim is not null
+                ? new HashSet<string>(scopeClaim.Split(' ', StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private ClaimsPrincipal? CurrentUser => this._httpContextAccessor.HttpContext?.User;
 }

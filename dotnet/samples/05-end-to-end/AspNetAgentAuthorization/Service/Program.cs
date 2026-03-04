@@ -76,9 +76,9 @@ string apiKey = builder.Configuration["OPENAI_API_KEY"]
 string model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IUserContext, KeycloakUserContext>();
-builder.Services.AddScoped<ExpenseService>();
-builder.Services.AddScoped<AIAgent>(sp =>
+builder.Services.AddSingleton<IUserContext, KeycloakUserContext>();
+builder.Services.AddSingleton<ExpenseService>();
+builder.Services.AddSingleton<AIAgent>(sp =>
 {
     var expenseService = sp.GetRequiredService<ExpenseService>();
 

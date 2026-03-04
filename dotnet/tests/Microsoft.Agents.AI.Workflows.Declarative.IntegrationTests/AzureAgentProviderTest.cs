@@ -15,7 +15,7 @@ public sealed class AzureAgentProviderTest(ITestOutputHelper output) : Integrati
     public async Task ConversationTestAsync()
     {
         // Arrange
-        AzureAgentProvider provider = new(this.TestEndpoint, TestCredentials.CreateAzureCliCredential());
+        AzureAgentProvider provider = new(this.TestEndpoint, TestAzureCliCredentials.CreateAzureCliCredential());
         // Act
         string conversationId = await provider.CreateConversationAsync();
         // Assert

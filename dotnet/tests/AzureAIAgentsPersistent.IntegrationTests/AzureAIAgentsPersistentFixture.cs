@@ -95,7 +95,7 @@ public class AzureAIAgentsPersistentFixture : IChatClientAgentFixture
 
     public async Task InitializeAsync()
     {
-        this._persistentAgentsClient = new(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint), TestCredentials.CreateAzureCliCredential());
+        this._persistentAgentsClient = new(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint), TestAzureCliCredentials.CreateAzureCliCredential());
         this._agent = await this.CreateChatClientAgentAsync();
     }
 }

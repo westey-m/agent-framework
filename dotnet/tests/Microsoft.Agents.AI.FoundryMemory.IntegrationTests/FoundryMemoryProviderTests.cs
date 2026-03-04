@@ -40,7 +40,7 @@ public sealed class FoundryMemoryProviderTests : IDisposable
         if (!string.IsNullOrWhiteSpace(endpoint) &&
             !string.IsNullOrWhiteSpace(memoryStoreName))
         {
-            this._client = new AIProjectClient(new Uri(endpoint), TestCredentials.CreateAzureCliCredential());
+            this._client = new AIProjectClient(new Uri(endpoint), TestAzureCliCredentials.CreateAzureCliCredential());
             this._memoryStoreName = memoryStoreName;
             this._deploymentName = deploymentName ?? "gpt-4.1-mini";
         }

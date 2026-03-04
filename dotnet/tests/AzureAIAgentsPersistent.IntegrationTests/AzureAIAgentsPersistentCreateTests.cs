@@ -14,7 +14,7 @@ namespace AzureAIAgentsPersistent.IntegrationTests;
 
 public class AzureAIAgentsPersistentCreateTests
 {
-    private readonly PersistentAgentsClient _persistentAgentsClient = new(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint), TestCredentials.CreateAzureCliCredential());
+    private readonly PersistentAgentsClient _persistentAgentsClient = new(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint), TestAzureCliCredentials.CreateAzureCliCredential());
 
     [Theory]
     [InlineData("CreateWithChatClientAgentOptionsAsync")]

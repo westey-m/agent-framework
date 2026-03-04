@@ -77,7 +77,7 @@ public sealed class MediaInputTest(ITestOutputHelper output) : IntegrationTest(o
     {
         // Arrange
         byte[] fileData = ReadLocalFile(fileSource);
-        AIProjectClient client = new(this.TestEndpoint, TestCredentials.CreateAzureCliCredential());
+        AIProjectClient client = new(this.TestEndpoint, TestAzureCliCredentials.CreateAzureCliCredential());
         using MemoryStream contentStream = new(fileData);
         OpenAIFileClient fileClient = client.GetProjectOpenAIClient().GetOpenAIFileClient();
         OpenAIFile fileInfo = await fileClient.UploadFileAsync(contentStream, documentName, FileUploadPurpose.Assistants);

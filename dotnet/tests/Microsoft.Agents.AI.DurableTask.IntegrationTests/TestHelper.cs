@@ -166,7 +166,7 @@ internal sealed class TestHelper : IDisposable
 
         AzureOpenAIClient client = !string.IsNullOrEmpty(azureOpenAiKey)
             ? new AzureOpenAIClient(new Uri(azureOpenAiEndpoint), new AzureKeyCredential(azureOpenAiKey))
-            : new AzureOpenAIClient(new Uri(azureOpenAiEndpoint), TestCredentials.CreateAzureCliCredential());
+            : new AzureOpenAIClient(new Uri(azureOpenAiEndpoint), TestAzureCliCredentials.CreateAzureCliCredential());
 
         return client.GetChatClient(azureOpenAiDeploymentName);
     }

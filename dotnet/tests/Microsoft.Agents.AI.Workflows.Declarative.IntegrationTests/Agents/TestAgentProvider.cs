@@ -14,7 +14,7 @@ internal sealed class TestAgentProvider(IConfiguration configuration) : AgentPro
 {
     protected override async IAsyncEnumerable<AgentVersion> CreateAgentsAsync(Uri foundryEndpoint)
     {
-        AIProjectClient aiProjectClient = new(foundryEndpoint, TestCredentials.CreateAzureCliCredential());
+        AIProjectClient aiProjectClient = new(foundryEndpoint, TestAzureCliCredentials.CreateAzureCliCredential());
 
         yield return
             await aiProjectClient.CreateAgentAsync(

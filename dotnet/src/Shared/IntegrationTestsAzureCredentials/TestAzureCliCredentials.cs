@@ -11,7 +11,7 @@ namespace Shared.IntegrationTests;
 /// Provides credential instances for integration tests with
 /// increased timeouts to avoid CI pipeline authentication failures.
 /// </summary>
-internal static class TestCredentials
+internal static class TestAzureCliCredentials
 {
     /// <summary>
     /// The default timeout for Azure CLI credential operations.

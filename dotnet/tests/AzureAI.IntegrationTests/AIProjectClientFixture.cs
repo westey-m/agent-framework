@@ -167,13 +167,13 @@ public class AIProjectClientFixture : IChatClientAgentFixture
 
     public virtual async Task InitializeAsync()
     {
-        this._client = new(new Uri(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint)), TestCredentials.CreateAzureCliCredential());
+        this._client = new(new Uri(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint)), TestAzureCliCredentials.CreateAzureCliCredential());
         this._agent = await this.CreateChatClientAgentAsync();
     }
 
     public async Task InitializeAsync(ChatClientAgentOptions options)
     {
-        this._client = new(new Uri(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint)), TestCredentials.CreateAzureCliCredential());
+        this._client = new(new Uri(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint)), TestAzureCliCredentials.CreateAzureCliCredential());
         this._agent = await this.CreateChatClientAgentAsync(options);
     }
 }

@@ -24,7 +24,7 @@ internal sealed class FunctionToolAgentProvider(IConfiguration configuration) : 
                 AIFunctionFactory.Create(menuPlugin.GetItemPrice),
             ];
 
-        AIProjectClient aiProjectClient = new(foundryEndpoint, TestCredentials.CreateAzureCliCredential());
+        AIProjectClient aiProjectClient = new(foundryEndpoint, TestAzureCliCredentials.CreateAzureCliCredential());
 
         yield return
             await aiProjectClient.CreateAgentAsync(

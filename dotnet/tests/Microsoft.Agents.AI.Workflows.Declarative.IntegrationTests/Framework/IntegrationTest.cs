@@ -67,7 +67,7 @@ public abstract class IntegrationTest : IDisposable
     protected async ValueTask<DeclarativeWorkflowOptions> CreateOptionsAsync(bool externalConversation, IMcpToolHandler? mcpToolProvider, params IEnumerable<AIFunction> functionTools)
     {
         AzureAgentProvider agentProvider =
-            new(this.TestEndpoint, TestCredentials.CreateAzureCliCredential())
+            new(this.TestEndpoint, TestAzureCliCredentials.CreateAzureCliCredential())
             {
                 Functions = functionTools,
             };

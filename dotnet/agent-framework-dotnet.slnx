@@ -415,7 +415,7 @@
   </Folder>
   <Folder Name="/Solution Items/src/Shared/IntegrationTestsAzureCredentials/">
     <File Path="src/Shared/IntegrationTestsAzureCredentials/README.md" />
-    <File Path="src/Shared/IntegrationTestsAzureCredentials/TestCredentials.cs" />
+    <File Path="src/Shared/IntegrationTestsAzureCredentials/TestAzureCliCredentials.cs" />
   </Folder>
   <Folder Name="/Solution Items/src/Shared/Samples/">
     <File Path="src/Shared/Samples/BaseSample.cs" />

@@ -16,7 +16,7 @@ namespace AzureAI.IntegrationTests;
 
 public class AIProjectClientCreateTests
 {
-    private readonly AIProjectClient _client = new(new Uri(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint)), TestCredentials.CreateAzureCliCredential());
+    private readonly AIProjectClient _client = new(new Uri(TestConfiguration.GetRequiredValue(TestSettings.AzureAIProjectEndpoint)), TestAzureCliCredentials.CreateAzureCliCredential());
 
     [Theory]
     [InlineData("CreateWithChatClientAgentOptionsAsync")]

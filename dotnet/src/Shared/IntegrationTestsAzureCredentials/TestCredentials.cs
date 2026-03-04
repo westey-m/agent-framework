@@ -8,7 +8,7 @@ using Azure.Identity;
 namespace Shared.IntegrationTests;
 
 /// <summary>
-/// Provides shared credential instances for integration tests with
+/// Provides credential instances for integration tests with
 /// increased timeouts to avoid CI pipeline authentication failures.
 /// </summary>
 internal static class TestCredentials

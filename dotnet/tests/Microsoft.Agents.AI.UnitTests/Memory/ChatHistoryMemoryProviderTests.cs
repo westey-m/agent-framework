@@ -461,14 +461,14 @@ public class ChatHistoryMemoryProviderTests
         // This test reproduces a bug where combining multiple scope filters
         // (e.g. userId + sessionId) produces an expression tree with dangling
         // ParameterExpression references that fails at compile time.
-        var providerOptions = new ChatHistoryMemoryProviderOptions
+        ChatHistoryMemoryProviderOptions providerOptions = new ChatHistoryMemoryProviderOptions
         {
             SearchTime = ChatHistoryMemoryProviderOptions.SearchBehavior.BeforeAIInvoke,
             MaxResults = 2,
             ContextPrompt = "Here is the relevant chat history:\n"
         };
 
-        var searchScope = new ChatHistoryMemoryProviderScope
+        ChatHistoryMemoryProviderScope searchScope = new ChatHistoryMemoryProviderScope
         {
             ApplicationId = "app1",
             AgentId = "agent1",
@@ -488,24 +488,24 @@ public class ChatHistoryMemoryProviderTests
                 capturedFilter = options.Filter)
             .Returns(ToAsyncEnumerableAsync(new List<VectorSearchResult<Dictionary<string, object?>>>()));
 
-        var provider = new ChatHistoryMemoryProvider(
+        ChatHistoryMemoryProvider provider = new ChatHistoryMemoryProvider(
             this._vectorStoreMock.Object,
             TestCollectionName,
             1,
             _ => new ChatHistoryMemoryProvider.State(searchScope, searchScope),
             options: providerOptions);
 
-        var requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
-        var invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { requestMsg } });
+        ChatMessage requestMsg = new ChatMessage(ChatRole.User, "requesting relevant history");
+        AIContextProvider.InvokingContext invokingContext = new AIContextProvider.InvokingContext(s_mockAgent, new TestAgentSession(), new AIContext { Messages = new List<ChatMessage> { requestMsg } });
 
         // Act
         await provider.InvokingAsync(invokingContext, CancellationToken.None);
 
         // Assert - The filter must be compilable and executable without expression tree scoping errors
         Assert.NotNull(capturedFilter);
-        var compiledFilter = capturedFilter!.Compile();
+        Func<Dictionary<string, object?>, bool> compiledFilter = capturedFilter!.Compile();
 
-        var matchingRecord = new Dictionary<string, object?>
+        Dictionary<string, object?> matchingRecord = new Dictionary<string, object?>
         {
             ["ApplicationId"] = "app1",
             ["AgentId"] = "agent1",
@@ -513,7 +513,7 @@ public class ChatHistoryMemoryProviderTests
             ["UserId"] = "user1"
         };
 
-        var nonMatchingRecord = new Dictionary<string, object?>
+        Dictionary<string, object?> nonMatchingRecord = new Dictionary<string, object?>
         {
             ["ApplicationId"] = "app1",
             ["AgentId"] = "agent1",

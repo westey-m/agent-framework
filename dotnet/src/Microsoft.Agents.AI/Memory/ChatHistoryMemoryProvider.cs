@@ -352,7 +352,7 @@ public sealed class ChatHistoryMemoryProvider : MessageAIContextProvider, IDispo
 
         // Build a combined filter using a single shared parameter to avoid expression tree
         // scoping issues when multiple filters are combined with AndAlso.
-        var parameter = Expression.Parameter(typeof(Dictionary<string, object?>), "x");
+        ParameterExpression parameter = Expression.Parameter(typeof(Dictionary<string, object?>), "x");
         Expression? filterBody = null;
 
         if (applicationId != null)
@@ -362,19 +362,19 @@ public sealed class ChatHistoryMemoryProvider : MessageAIContextProvider, IDispo
 
         if (agentId != null)
         {
-            var body = RebindFilterBody(x => (string?)x[AgentIdField] == agentId, parameter);
+            Expression body = RebindFilterBody(x => (string?)x[AgentIdField] == agentId, parameter);
             filterBody = filterBody == null ? body : Expression.AndAlso(filterBody, body);
         }
 
         if (userId != null)
         {
-            var body = RebindFilterBody(x => (string?)x[UserIdField] == userId, parameter);
+            Expression body = RebindFilterBody(x => (string?)x[UserIdField] == userId, parameter);
             filterBody = filterBody == null ? body : Expression.AndAlso(filterBody, body);
         }
 
         if (sessionId != null)
         {
-            var body = RebindFilterBody(x => (string?)x[SessionIdField] == sessionId, parameter);
+            Expression body = RebindFilterBody(x => (string?)x[SessionIdField] == sessionId, parameter);
             filterBody = filterBody == null ? body : Expression.AndAlso(filterBody, body);
         }
 

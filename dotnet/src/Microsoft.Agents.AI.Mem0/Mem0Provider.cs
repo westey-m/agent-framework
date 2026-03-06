@@ -34,7 +34,7 @@ namespace Microsoft.Agents.AI.Mem0;
 /// <item><description><strong>Indirect prompt injection:</strong> Memories retrieved from the Mem0 service are injected into the LLM
 /// context as user messages. If the memory store is compromised, adversarial content could influence LLM behavior. The data
 /// returned from the service is accepted as-is without validation or sanitization.</description></item>
-/// <item><description><strong>Trace logging:</strong> When <see cref="LogLevel.Trace"/> is enabled,
+/// <item><description><strong>Trace logging:</strong> When <see cref="Microsoft.Extensions.Logging.LogLevel.Trace"/> is enabled,
 /// full memory content (including search queries and results) may be logged. This data may contain PII and should not be enabled
 /// in production environments.</description></item>
 /// </list>

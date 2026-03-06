@@ -45,7 +45,7 @@ namespace Microsoft.Agents.AI;
 /// <item><description><strong>On-demand search tool:</strong> When using <see cref="ChatHistoryMemoryProviderOptions.SearchBehavior.OnDemandFunctionCalling"/>,
 /// the AI model controls when and what to search for. The search query is AI-generated and should be treated as untrusted input
 /// by the vector store implementation.</description></item>
-/// <item><description><strong>Trace logging:</strong> When <see cref="LogLevel.Trace"/> is enabled,
+/// <item><description><strong>Trace logging:</strong> When <see cref="Microsoft.Extensions.Logging.LogLevel.Trace"/> is enabled,
 /// full search queries and results may be logged. This data may contain PII.</description></item>
 /// </list>
 /// </para>

@@ -13,6 +13,7 @@ using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI.Mem0;
 
+#pragma warning disable IDE0001 // Simplify Names - Microsoft.Extensions.Logging.LogLevel.Trace doesn't get found in net472 when removing the namespace.
 /// <summary>
 /// Provides a Mem0 backed <see cref="MessageAIContextProvider"/> that persists conversation messages as memories
 /// and retrieves related memories to augment the agent invocation context.
@@ -34,13 +35,14 @@ namespace Microsoft.Agents.AI.Mem0;
 /// <item><description><strong>Indirect prompt injection:</strong> Memories retrieved from the Mem0 service are injected into the LLM
 /// context as user messages. If the memory store is compromised, adversarial content could influence LLM behavior. The data
 /// returned from the service is accepted as-is without validation or sanitization.</description></item>
-/// <item><description><strong>Trace logging:</strong> When <see cref="Extensions.Logging.LogLevel.Trace"/> is enabled,
+/// <item><description><strong>Trace logging:</strong> When <see cref="Microsoft.Extensions.Logging.LogLevel.Trace"/> is enabled,
 /// full memory content (including search queries and results) may be logged. This data may contain PII and should not be enabled
 /// in production environments.</description></item>
 /// </list>
 /// </para>
 /// </remarks>
 public sealed class Mem0Provider : MessageAIContextProvider
+#pragma warning restore IDE0001 // Simplify Names
 {
     private const string DefaultContextPrompt = "## Memories\nConsider the following memories when answering user questions:";
 

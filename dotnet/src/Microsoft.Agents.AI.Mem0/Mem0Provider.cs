@@ -19,9 +19,11 @@ namespace Microsoft.Agents.AI.Mem0;
 /// and retrieves related memories to augment the agent invocation context.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The provider stores user, assistant and system messages as Mem0 memories and retrieves relevant memories
 /// for new invocations using a semantic search endpoint. Retrieved memories are injected as user messages
 /// to the model, prefixed by a configurable context prompt.
+/// </para>
 /// <para>
 /// <strong>Security considerations:</strong>
 /// <list type="bullet">

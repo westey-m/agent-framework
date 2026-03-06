@@ -13,6 +13,7 @@ using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
 
+#pragma warning disable IDE0001 // Simplify Names - Microsoft.Extensions.Logging.LogLevel.Trace doesn't get found in net472 when removing the namespace.
 /// <summary>
 /// A context provider that stores all chat history in a vector store and is able to
 /// retrieve related chat history later to augment the current conversation.
@@ -51,6 +52,7 @@ namespace Microsoft.Agents.AI;
 /// </para>
 /// </remarks>
 public sealed class ChatHistoryMemoryProvider : MessageAIContextProvider, IDisposable
+#pragma warning restore IDE0001 // Simplify Names
 {
     private const string DefaultContextPrompt = "## Memories\nConsider the following memories when answering user questions:";
     private const int DefaultMaxResults = 3;

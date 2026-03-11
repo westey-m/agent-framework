@@ -142,6 +142,7 @@ internal sealed class MessageMerger
 
         UsageDetails? usage = null;
         AdditionalPropertiesDictionary? additionalProperties = null;
+        ChatFinishReason? finishReason = null;
         HashSet<DateTimeOffset> createdTimes = [];
 
         foreach (AgentResponse response in responses.Values)
@@ -156,6 +157,7 @@ internal sealed class MessageMerger
                 createdTimes.Add(response.CreatedAt.Value);
             }
 
+            finishReason = response.FinishReason ?? finishReason;
             usage = MergeUsage(usage, response.Usage);
             additionalProperties = MergeProperties(additionalProperties, response.AdditionalProperties);
         }
@@ -182,6 +184,7 @@ internal sealed class MessageMerger
             AgentId = primaryAgentId
                    ?? primaryAgentName
                    ?? (agentIds.Count == 1 ? agentIds.First() : null),
+            FinishReason = finishReason,
             CreatedAt = DateTimeOffset.UtcNow,
             Usage = usage,
             AdditionalProperties = additionalProperties
@@ -207,6 +210,7 @@ internal sealed class MessageMerger
                 AgentId = incoming.AgentId ?? current.AgentId,
                 AdditionalProperties = MergeProperties(current.AdditionalProperties, incoming.AdditionalProperties),
                 CreatedAt = incoming.CreatedAt ?? current.CreatedAt,
+                FinishReason = incoming.FinishReason ?? current.FinishReason,
                 Messages = current.Messages.Concat(incoming.Messages).ToList(),
                 ResponseId = current.ResponseId,
                 RawRepresentation = rawRepresentation,

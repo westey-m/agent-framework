@@ -212,12 +212,17 @@ public sealed partial class ChatClientAgent : AIAgent
             await this.PrepareSessionAndMessagesAsync(session, inputMessages, options, cancellationToken).ConfigureAwait(false);
 
         var chatClient = this.ChatClient;
-
         chatClient = ApplyRunOptionsTransformations(options, chatClient);
 
         var loggingAgentName = this.GetLoggingAgentName();
-
         this._logger.LogAgentChatClientInvokingAgent(nameof(RunAsync), this.Id, loggingAgentName, this._chatClientType);
+
+        // Initialize the per-service-call message tracking if the decorator is being used.
+        if (this.PersistsChatHistoryPerServiceCall)
+        {
+            safeSession.NotifiedMessages ??= new();
+            safeSession.NotifiedMessages.Clear();
+        }
 
         // Call the IChatClient and notify the AIContextProvider of any failures.
         ChatResponse chatResponse;
@@ -227,9 +232,13 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, inputMessagesForChatClient, chatOptions, cancellationToken).ConfigureAwait(false);
-            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, inputMessagesForChatClient, cancellationToken).ConfigureAwait(false);
+            await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, inputMessagesForChatClient, chatOptions, cancellationToken).ConfigureAwait(false);
             throw;
+        }
+        finally
+        {
+            // Clear the per-service-call message tracking now that the run is complete (or failed).
+            safeSession.NotifiedMessages?.Clear();
         }
 
         this._logger.LogAgentChatClientInvokedAgent(nameof(RunAsync), this.Id, loggingAgentName, this._chatClientType, inputMessages.Count);
@@ -244,11 +253,8 @@ public sealed partial class ChatClientAgent : AIAgent
             chatResponseMessage.AuthorName ??= this.Name;
         }
 
-        // Only notify the session of new messages if the chatResponse was successful to avoid inconsistent message state in the session.
-        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, inputMessagesForChatClient, chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
-
-        // Notify the AIContextProvider of all new messages.
-        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, inputMessagesForChatClient, chatResponse.Messages, cancellationToken).ConfigureAwait(false);
+        // Notify providers of all new messages unless persistence is handled per-service-call by the decorator.
+        await this.NotifyProvidersOfNewMessagesAtEndOfRunAsync(safeSession, inputMessagesForChatClient, chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
 
         return new AgentResponse(chatResponse)
         {
@@ -304,6 +310,13 @@ public sealed partial class ChatClientAgent : AIAgent
 
         this._logger.LogAgentChatClientInvokingAgent(nameof(RunStreamingAsync), this.Id, loggingAgentName, this._chatClientType);
 
+        // Initialize the per-service-call message tracking if the decorator is being used.
+        if (this.PersistsChatHistoryPerServiceCall)
+        {
+            safeSession.NotifiedMessages ??= new();
+            safeSession.NotifiedMessages.Clear();
+        }
+
         List<ChatResponseUpdate> responseUpdates = GetResponseUpdates(continuationToken);
 
         IAsyncEnumerator<ChatResponseUpdate> responseUpdatesEnumerator;
@@ -315,8 +328,8 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
-            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), cancellationToken).ConfigureAwait(false);
+            safeSession.NotifiedMessages?.Clear();
+            await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -330,8 +343,8 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
-            await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), cancellationToken).ConfigureAwait(false);
+            safeSession.NotifiedMessages?.Clear();
+            await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -357,8 +370,8 @@ public sealed partial class ChatClientAgent : AIAgent
             }
             catch (Exception ex)
             {
-                await this.NotifyChatHistoryProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
-                await this.NotifyAIContextProviderOfFailureAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), cancellationToken).ConfigureAwait(false);
+                safeSession.NotifiedMessages?.Clear();
+                await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
@@ -369,11 +382,11 @@ public sealed partial class ChatClientAgent : AIAgent
         // so let's update it and set the conversation id for the service session case.
         this.UpdateSessionConversationId(safeSession, chatResponse.ConversationId, cancellationToken);
 
-        // To avoid inconsistent state we only notify the session of the input messages if no error occurs after the initial request.
-        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        // Notify providers of all new messages unless persistence is handled per-service-call by the decorator.
+        await this.NotifyProvidersOfNewMessagesAtEndOfRunAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
 
-        // Notify the AIContextProvider of all new messages.
-        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, cancellationToken).ConfigureAwait(false);
+        // Clear the per-service-call message tracking now that the run is complete.
+        safeSession.NotifiedMessages?.Clear();
     }
 
     /// <inheritdoc/>
@@ -441,17 +454,29 @@ public sealed partial class ChatClientAgent : AIAgent
     #region Private
 
     /// <summary>
-    /// Notify the <see cref="AIContextProvider"/> when an agent run succeeded, if there is an <see cref="AIContextProvider"/>.
+    /// Notifies the <see cref="ChatHistoryProvider"/> and all <see cref="AIContextProviders"/> of successfully completed messages.
     /// </summary>
-    private async Task NotifyAIContextProviderOfSuccessAsync(
+    /// <remarks>
+    /// This method is also called by <see cref="ChatHistoryPersistingChatClient"/> to persist messages per-service-call.
+    /// </remarks>
+    internal async Task NotifyProvidersOfNewMessagesAsync(
         ChatClientAgentSession session,
-        IEnumerable<ChatMessage> inputMessages,
+        IEnumerable<ChatMessage> requestMessages,
         IEnumerable<ChatMessage> responseMessages,
+        ChatOptions? chatOptions,
         CancellationToken cancellationToken)
     {
+        ChatHistoryProvider? chatHistoryProvider = this.ResolveChatHistoryProvider(chatOptions, session);
+
+        if (chatHistoryProvider is not null)
+        {
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, responseMessages);
+            await chatHistoryProvider.InvokedAsync(invokedContext, cancellationToken).ConfigureAwait(false);
+        }
+
         if (this.AIContextProviders is { Count: > 0 } contextProviders)
         {
-            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages, responseMessages);
+            AIContextProvider.InvokedContext invokedContext = new(this, session, requestMessages, responseMessages);
 
             foreach (var contextProvider in contextProviders)
             {
@@ -461,17 +486,29 @@ public sealed partial class ChatClientAgent : AIAgent
     }
 
     /// <summary>
-    /// Notify the <see cref="AIContextProvider"/> of any failure during an agent run, if there is an <see cref="AIContextProvider"/>.
+    /// Notifies the <see cref="ChatHistoryProvider"/> and all <see cref="AIContextProviders"/> of a failure during a service call.
     /// </summary>
-    private async Task NotifyAIContextProviderOfFailureAsync(
+    /// <remarks>
+    /// This method is also called by <see cref="ChatHistoryPersistingChatClient"/> to report failures per-service-call.
+    /// </remarks>
+    internal async Task NotifyProvidersOfFailureAsync(
         ChatClientAgentSession session,
         Exception ex,
-        IEnumerable<ChatMessage> inputMessages,
+        IEnumerable<ChatMessage> requestMessages,
+        ChatOptions? chatOptions,
         CancellationToken cancellationToken)
     {
+        ChatHistoryProvider? chatHistoryProvider = this.ResolveChatHistoryProvider(chatOptions, session);
+
+        if (chatHistoryProvider is not null)
+        {
+            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, ex);
+            await chatHistoryProvider.InvokedAsync(invokedContext, cancellationToken).ConfigureAwait(false);
+        }
+
         if (this.AIContextProviders is { Count: > 0 } contextProviders)
         {
-            AIContextProvider.InvokedContext invokedContext = new(this, session, inputMessages, ex);
+            AIContextProvider.InvokedContext invokedContext = new(this, session, requestMessages, ex);
 
             foreach (var contextProvider in contextProviders)
             {
@@ -798,46 +835,58 @@ public sealed partial class ChatClientAgent : AIAgent
         }
     }
 
-    private Task NotifyChatHistoryProviderOfFailureAsync(
-        ChatClientAgentSession session,
-        Exception ex,
-        IEnumerable<ChatMessage> requestMessages,
-        ChatOptions? chatOptions,
-        CancellationToken cancellationToken)
-    {
-        ChatHistoryProvider? provider = this.ResolveChatHistoryProvider(chatOptions, session);
-
-        // Only notify the provider if we have one.
-        // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
-        if (provider is not null)
-        {
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, ex);
-
-            return provider.InvokedAsync(invokedContext, cancellationToken).AsTask();
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private Task NotifyChatHistoryProviderOfNewMessagesAsync(
+    /// <summary>
+    /// Notifies providers of successfully completed messages at the end of an agent run.
+    /// </summary>
+    /// <remarks>
+    /// When <see cref="PersistsChatHistoryPerServiceCall"/> is <see langword="true"/>, the
+    /// <see cref="ChatHistoryPersistingChatClient"/> decorator handles per-service-call notification,
+    /// so this end-of-run notification is skipped.
+    /// </remarks>
+    private Task NotifyProvidersOfNewMessagesAtEndOfRunAsync(
         ChatClientAgentSession session,
         IEnumerable<ChatMessage> requestMessages,
         IEnumerable<ChatMessage> responseMessages,
         ChatOptions? chatOptions,
         CancellationToken cancellationToken)
     {
-        ChatHistoryProvider? provider = this.ResolveChatHistoryProvider(chatOptions, session);
-
-        // Only notify the provider if we have one.
-        // If we don't have one, it means that the chat history is service managed and the underlying service is responsible for storing messages.
-        if (provider is not null)
+        if (this.PersistsChatHistoryPerServiceCall)
         {
-            var invokedContext = new ChatHistoryProvider.InvokedContext(this, session, requestMessages, responseMessages);
-            return provider.InvokedAsync(invokedContext, cancellationToken).AsTask();
+            return Task.CompletedTask;
         }
 
-        return Task.CompletedTask;
+        return this.NotifyProvidersOfNewMessagesAsync(session, requestMessages, responseMessages, chatOptions, cancellationToken);
     }
+
+    /// <summary>
+    /// Notifies providers of a failure at the end of an agent run.
+    /// </summary>
+    /// <remarks>
+    /// When <see cref="PersistsChatHistoryPerServiceCall"/> is <see langword="true"/>, the
+    /// <see cref="ChatHistoryPersistingChatClient"/> decorator handles per-service-call notification,
+    /// so this end-of-run notification is skipped.
+    /// </remarks>
+    private Task NotifyProvidersOfFailureAtEndOfRunAsync(
+        ChatClientAgentSession session,
+        Exception ex,
+        IEnumerable<ChatMessage> requestMessages,
+        ChatOptions? chatOptions,
+        CancellationToken cancellationToken)
+    {
+        if (this.PersistsChatHistoryPerServiceCall)
+        {
+            return Task.CompletedTask;
+        }
+
+        return this.NotifyProvidersOfFailureAsync(session, ex, requestMessages, chatOptions, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the agent is configured to persist chat history after each individual service call
+    /// via a <see cref="ChatHistoryPersistingChatClient"/> decorator.
+    /// </summary>
+    private bool PersistsChatHistoryPerServiceCall =>
+        this._agentOptions?.PersistChatHistoryAfterEachServiceCall is true && this._agentOptions?.UseProvidedChatClientAsIs is not true;
 
     private ChatHistoryProvider? ResolveChatHistoryProvider(ChatOptions? chatOptions, ChatClientAgentSession session)
     {

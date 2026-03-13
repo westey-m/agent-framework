@@ -1,0 +1,733 @@
+﻿// Copyright (c) Microsoft. All rights reserved.
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Moq.Protected;
+
+namespace Microsoft.Agents.AI.UnitTests;
+
+/// <summary>
+/// Contains unit tests for the <see cref="ChatHistoryPersistingChatClient"/> decorator,
+/// verifying that it persists messages via the <see cref="ChatHistoryProvider"/> after each
+/// individual service call when the <see cref="ChatClientAgentOptions.PersistChatHistoryAfterEachServiceCall"/>
+/// option is enabled.
+/// </summary>
+public class ChatHistoryPersistingChatClientTests
+{
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled,
+    /// the ChatHistoryProvider receives messages after a successful non-streaming call.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_PersistsMessagesPerServiceCall_WhenOptionEnabledAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert — InvokedCoreAsync should be called by the decorator (per service call)
+        mockChatHistoryProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x =>
+                    x.RequestMessages.Any(m => m.Text == "test") &&
+                    x.ResponseMessages!.Any(m => m.Text == "response")),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is disabled (default),
+    /// the ChatHistoryProvider still receives messages at end-of-run as before.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_PersistsMessagesAtEndOfRun_WhenOptionDisabledAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = false,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert — InvokedCoreAsync should be called once by the agent (end of run)
+        mockChatHistoryProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x =>
+                    x.RequestMessages.Any(m => m.Text == "test") &&
+                    x.ResponseMessages!.Any(m => m.Text == "response")),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled and the service call fails,
+    /// the ChatHistoryProvider is notified with the exception.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NotifiesProviderOfFailure_WhenOptionEnabledAndServiceFailsAsync()
+    {
+        // Arrange
+        var expectedException = new InvalidOperationException("Service failed");
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ThrowsAsync(expectedException);
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync([new(ChatRole.User, "test")], session));
+
+        // Assert — the decorator should have notified the provider of the failure
+        mockChatHistoryProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x =>
+                    x.InvokeException != null &&
+                    x.InvokeException.Message == "Service failed"),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that the decorator is injected into the pipeline when the option is set
+    /// and can be discovered via GetService.
+    /// </summary>
+    [Fact]
+    public void ChatClient_ContainsDecorator_WhenOptionEnabled()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+
+        // Act
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Assert
+        var decorator = agent.ChatClient.GetService<ChatHistoryPersistingChatClient>();
+        Assert.NotNull(decorator);
+    }
+
+    /// <summary>
+    /// Verifies that the decorator is NOT injected into the pipeline when the option is not set.
+    /// </summary>
+    [Fact]
+    public void ChatClient_DoesNotContainDecorator_WhenOptionDisabled()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+
+        // Act
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            PersistChatHistoryAfterEachServiceCall = false,
+        });
+
+        // Assert
+        var decorator = agent.ChatClient.GetService<ChatHistoryPersistingChatClient>();
+        Assert.Null(decorator);
+    }
+
+    /// <summary>
+    /// Verifies that the decorator is NOT injected when UseProvidedChatClientAsIs is true,
+    /// even if PersistChatHistoryAfterEachServiceCall is also true.
+    /// </summary>
+    [Fact]
+    public void ChatClient_DoesNotContainDecorator_WhenUseProvidedChatClientAsIs()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+
+        // Act
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            PersistChatHistoryAfterEachServiceCall = true,
+            UseProvidedChatClientAsIs = true,
+        });
+
+        // Assert
+        var decorator = agent.ChatClient.GetService<ChatHistoryPersistingChatClient>();
+        Assert.Null(decorator);
+    }
+
+    /// <summary>
+    /// Verifies that the PersistChatHistoryAfterEachServiceCall option is included in Clone().
+    /// </summary>
+    [Fact]
+    public void ChatClientAgentOptions_Clone_IncludesPersistChatHistoryAfterEachServiceCall()
+    {
+        // Arrange
+        var options = new ChatClientAgentOptions
+        {
+            PersistChatHistoryAfterEachServiceCall = true,
+        };
+
+        // Act
+        var cloned = options.Clone();
+
+        // Assert
+        Assert.True(cloned.PersistChatHistoryAfterEachServiceCall);
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled and the service call
+    /// involves a function invocation loop, the ChatHistoryProvider is called after each individual
+    /// service call (not just once at the end).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_PersistsPerServiceCall_DuringFunctionInvocationLoopAsync()
+    {
+        // Arrange
+        int serviceCallCount = 0;
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                serviceCallCount++;
+                if (serviceCallCount == 1)
+                {
+                    // First call returns a tool call
+                    return Task.FromResult(new ChatResponse([new(ChatRole.Assistant, [new FunctionCallContent("call1", "myTool", new Dictionary<string, object?>())])]));
+                }
+
+                // Second call returns a final response
+                return Task.FromResult(new ChatResponse([new(ChatRole.Assistant, "final response")]));
+            });
+
+        var invokedContexts = new List<ChatHistoryProvider.InvokedContext>();
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Callback((ChatHistoryProvider.InvokedContext ctx, CancellationToken _) => invokedContexts.Add(ctx))
+            .Returns(() => new ValueTask());
+
+        // Define a simple tool
+        var tool = AIFunctionFactory.Create(() => "tool result", "myTool", "A test tool");
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatOptions = new() { Tools = [tool] },
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        }, services: new ServiceCollection().BuildServiceProvider());
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        Exception? caughtException = null;
+        try
+        {
+            await agent.RunAsync([new(ChatRole.User, "test")], session);
+        }
+        catch (Exception ex)
+        {
+            caughtException = ex;
+        }
+
+        // Diagnostic: check if there was an unexpected exception
+        Assert.Null(caughtException);
+
+        // Assert — the decorator should have been called twice (once per service call in the function invocation loop)
+        Assert.Equal(2, serviceCallCount);
+        Assert.Equal(2, invokedContexts.Count);
+
+        // First invocation should have the user message as request and tool call response
+        Assert.NotNull(invokedContexts[0].ResponseMessages);
+        var firstRequestMessages = invokedContexts[0].RequestMessages.ToList();
+        Assert.Contains(firstRequestMessages, m => m.Text == "test");
+        Assert.Contains(invokedContexts[0].ResponseMessages!, m => m.Contents.OfType<FunctionCallContent>().Any());
+
+        // Second invocation: request messages should NOT include the original user message (already notified).
+        // It should only include messages added since the first call (assistant tool call + tool result).
+        Assert.NotNull(invokedContexts[1].ResponseMessages);
+        var secondRequestMessages = invokedContexts[1].RequestMessages.ToList();
+        Assert.DoesNotContain(secondRequestMessages, m => m.Text == "test");
+        Assert.Contains(invokedContexts[1].ResponseMessages!, m => m.Text == "final response");
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled with streaming,
+    /// the ChatHistoryProvider receives messages after the stream completes.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_PersistsMessagesPerServiceCall_WhenOptionEnabledAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetStreamingResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(CreateAsyncEnumerableAsync(
+                new ChatResponseUpdate(ChatRole.Assistant, "streaming "),
+                new ChatResponseUpdate(ChatRole.Assistant, "response")));
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await foreach (var _ in agent.RunStreamingAsync([new(ChatRole.User, "test")], session))
+        {
+            // Consume stream
+        }
+
+        // Assert — InvokedCoreAsync should be called by the decorator
+        mockChatHistoryProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x =>
+                    x.RequestMessages.Any(m => m.Text == "test") &&
+                    x.ResponseMessages != null),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled,
+    /// AIContextProviders are also notified of new messages after a successful call.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NotifiesAIContextProviders_WhenOptionEnabledAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<AIContextProvider> mockContextProvider = new((object?)null, (object?)null, (object?)null);
+        mockContextProvider.SetupGet(p => p.StateKeys).Returns(["TestAIContextProvider"]);
+        mockContextProvider
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AIContext>(new AIContext()));
+        mockContextProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            AIContextProviders = [mockContextProvider.Object],
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert — InvokedCoreAsync should be called by the decorator for the AIContextProvider
+        mockContextProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                    x.ResponseMessages != null &&
+                    x.ResponseMessages.Any(m => m.Text == "response")),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled and the service fails,
+    /// AIContextProviders are notified of the failure.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NotifiesAIContextProvidersOfFailure_WhenOptionEnabledAsync()
+    {
+        // Arrange
+        var expectedException = new InvalidOperationException("Service failed");
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ThrowsAsync(expectedException);
+
+        Mock<AIContextProvider> mockContextProvider = new((object?)null, (object?)null, (object?)null);
+        mockContextProvider.SetupGet(p => p.StateKeys).Returns(["TestAIContextProvider"]);
+        mockContextProvider
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AIContext>(new AIContext()));
+        mockContextProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            AIContextProviders = [mockContextProvider.Object],
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync([new(ChatRole.User, "test")], session));
+
+        // Assert — the decorator should have notified the AIContextProvider of the failure
+        mockContextProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                    x.InvokeException != null &&
+                    x.InvokeException.Message == "Service failed"),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled,
+    /// both ChatHistoryProvider and AIContextProviders are notified together.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NotifiesBothProviders_WhenOptionEnabledAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask());
+
+        Mock<AIContextProvider> mockContextProvider = new((object?)null, (object?)null, (object?)null);
+        mockContextProvider.SetupGet(p => p.StateKeys).Returns(["TestAIContextProvider"]);
+        mockContextProvider
+            .Protected()
+            .Setup<ValueTask<AIContext>>("InvokingCoreAsync", ItExpr.IsAny<AIContextProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AIContext>(new AIContext()));
+        mockContextProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<AIContextProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            AIContextProviders = [mockContextProvider.Object],
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert — both providers should have been notified
+        mockChatHistoryProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<ChatHistoryProvider.InvokedContext>(x =>
+                    x.ResponseMessages != null &&
+                    x.ResponseMessages.Any(m => m.Text == "response")),
+                ItExpr.IsAny<CancellationToken>());
+
+        mockContextProvider
+            .Protected()
+            .Verify<ValueTask>("InvokedCoreAsync", Times.Once(),
+                ItExpr.Is<AIContextProvider.InvokedContext>(x =>
+                    x.ResponseMessages != null &&
+                    x.ResponseMessages.Any(m => m.Text == "response")),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Verifies that during a FIC loop, response messages from the first call are not
+    /// re-notified as request messages on the second call.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_DoesNotReNotifyResponseMessagesAsRequestMessages_DuringFicLoopAsync()
+    {
+        // Arrange
+        int serviceCallCount = 0;
+        var assistantToolCallMessage = new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("call1", "myTool", new Dictionary<string, object?>())]);
+
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                serviceCallCount++;
+                if (serviceCallCount == 1)
+                {
+                    return Task.FromResult(new ChatResponse([assistantToolCallMessage]));
+                }
+
+                return Task.FromResult(new ChatResponse([new(ChatRole.Assistant, "final response")]));
+            });
+
+        var invokedContexts = new List<ChatHistoryProvider.InvokedContext>();
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Callback((ChatHistoryProvider.InvokedContext ctx, CancellationToken _) => invokedContexts.Add(ctx))
+            .Returns(() => new ValueTask());
+
+        var tool = AIFunctionFactory.Create(() => "tool result", "myTool", "A test tool");
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatOptions = new() { Tools = [tool] },
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        }, services: new ServiceCollection().BuildServiceProvider());
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert
+        Assert.Equal(2, invokedContexts.Count);
+
+        // The assistant tool call message was a response in call 1
+        Assert.Contains(invokedContexts[0].ResponseMessages!, m => ReferenceEquals(m, assistantToolCallMessage));
+
+        // It should NOT appear as a request in call 2 (it was already notified as a response)
+        var secondRequestMessages = invokedContexts[1].RequestMessages.ToList();
+        Assert.DoesNotContain(secondRequestMessages, m => ReferenceEquals(m, assistantToolCallMessage));
+    }
+
+    /// <summary>
+    /// Verifies that when a failure occurs on the second call in a FIC loop,
+    /// only new request messages (not previously notified) are sent in the failure notification.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_DeduplicatesRequestMessages_OnFailureDuringFicLoopAsync()
+    {
+        // Arrange
+        int serviceCallCount = 0;
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                serviceCallCount++;
+                if (serviceCallCount == 1)
+                {
+                    return Task.FromResult(new ChatResponse([new(ChatRole.Assistant, [new FunctionCallContent("call1", "myTool", new Dictionary<string, object?>())])]));
+                }
+
+                throw new InvalidOperationException("Service failure on second call");
+            });
+
+        var invokedContexts = new List<ChatHistoryProvider.InvokedContext>();
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Callback((ChatHistoryProvider.InvokedContext ctx, CancellationToken _) => invokedContexts.Add(ctx))
+            .Returns(() => new ValueTask());
+
+        var tool = AIFunctionFactory.Create(() => "tool result", "myTool", "A test tool");
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatOptions = new() { Tools = [tool] },
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        }, services: new ServiceCollection().BuildServiceProvider());
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            agent.RunAsync([new(ChatRole.User, "test")], session));
+
+        // Assert — should have 2 notifications: success on call 1, failure on call 2
+        Assert.Equal(2, invokedContexts.Count);
+
+        // First notification: success, has user message as request
+        Assert.Null(invokedContexts[0].InvokeException);
+        Assert.Contains(invokedContexts[0].RequestMessages, m => m.Text == "test");
+
+        // Second notification: failure, should NOT include the user message (already notified)
+        Assert.NotNull(invokedContexts[1].InvokeException);
+        var failureRequestMessages = invokedContexts[1].RequestMessages.ToList();
+        Assert.DoesNotContain(failureRequestMessages, m => m.Text == "test");
+    }
+
+    /// <summary>
+    /// Verifies that the NotifiedMessages set on the session is properly cleaned up after
+    /// a successful run completes.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_CleansUpNotifiedMessages_AfterRunCompletesAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+                new ValueTask<IEnumerable<ChatMessage>>(ctx.RequestMessages.ToList()));
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert — NotifiedMessages should be empty (cleared) after the run completes
+        Assert.NotNull(session!.NotifiedMessages);
+        Assert.Empty(session.NotifiedMessages);
+    }
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> CreateAsyncEnumerableAsync(params ChatResponseUpdate[] updates)
+    {
+        foreach (var update in updates)
+        {
+            yield return update;
+        }
+
+        await Task.CompletedTask;
+    }
+}

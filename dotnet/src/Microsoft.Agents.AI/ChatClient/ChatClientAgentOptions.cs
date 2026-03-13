@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
+using Microsoft.Shared.DiagnosticIds;
 
 namespace Microsoft.Agents.AI;
 
@@ -90,6 +92,34 @@ public sealed class ChatClientAgentOptions
     public bool ThrowOnChatHistoryProviderConflict { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether to persist chat history after each individual service call
+    /// rather than only at the end of the full agent run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// By default, <see cref="ChatClientAgent"/> persists request and response messages via the
+    /// <see cref="ChatHistoryProvider"/> only after the full run completes, which may include multiple
+    /// iterations of the function invocation loop. Setting this property to <see langword="true"/> causes
+    /// messages to be persisted after each individual call to the underlying AI service, so that intermediate
+    /// messages (e.g., tool calls and results) are saved even if the process is interrupted mid-loop.
+    /// </para>
+    /// <para>
+    /// When this option is enabled, a <see cref="ChatHistoryPersistingChatClient"/> decorator is automatically
+    /// inserted into the chat client pipeline between the <see cref="FunctionInvokingChatClient"/> and the
+    /// leaf <see cref="IChatClient"/>, and the <see cref="ChatClientAgent"/> will not perform its own
+    /// end-of-run chat history persistence to avoid double-persisting messages.
+    /// </para>
+    /// <para>
+    /// This option has no effect when <see cref="UseProvidedChatClientAsIs"/> is <see langword="true"/>.
+    /// </para>
+    /// </remarks>
+    /// <value>
+    /// Default is <see langword="false"/>.
+    /// </value>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
+    public bool PersistChatHistoryAfterEachServiceCall { get; set; }
+
+    /// <summary>
     /// Creates a new instance of <see cref="ChatClientAgentOptions"/> with the same values as this instance.
     /// </summary>
     public ChatClientAgentOptions Clone()
@@ -105,5 +135,6 @@ public sealed class ChatClientAgentOptions
             ClearOnChatHistoryProviderConflict = this.ClearOnChatHistoryProviderConflict,
             WarnOnChatHistoryProviderConflict = this.WarnOnChatHistoryProviderConflict,
             ThrowOnChatHistoryProviderConflict = this.ThrowOnChatHistoryProviderConflict,
+            PersistChatHistoryAfterEachServiceCall = this.PersistChatHistoryAfterEachServiceCall,
         };
 }

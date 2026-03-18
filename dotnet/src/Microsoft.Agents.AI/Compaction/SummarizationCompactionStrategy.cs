@@ -11,8 +11,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Shared.DiagnosticIds;
 using Microsoft.Shared.Diagnostics;
 
-#pragma warning disable CA1873
-
 namespace Microsoft.Agents.AI.Compaction;
 
 /// <summary>

@@ -90,18 +90,4 @@ public sealed class ChatClientAgentSession : AgentSession
     private string DebuggerDisplay =>
         this.ConversationId is { } conversationId ? $"ConversationId = {conversationId}, StateBag Count = {this.StateBag.Count}" :
         $"StateBag Count = {this.StateBag.Count}";
-
-    /// <summary>
-    /// Gets or sets the set of <see cref="ChatMessage"/> instances that have already been notified to providers
-    /// during the current agent run. Used by <see cref="ChatHistoryPersistingChatClient"/> to avoid duplicate
-    /// notifications when <see cref="FunctionInvokingChatClient"/> loops cause the same messages to be passed
-    /// across multiple service calls.
-    /// </summary>
-    /// <remarks>
-    /// This set is cleared at the start and end of each run. It uses reference equality
-    /// to track message identity since <see cref="FunctionInvokingChatClient"/> reuses the same message objects
-    /// across loop iterations.
-    /// </remarks>
-    [JsonIgnore]
-    internal HashSet<ChatMessage>? NotifiedMessages { get; set; }
 }

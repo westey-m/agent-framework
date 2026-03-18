@@ -35,7 +35,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -82,7 +82,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -130,7 +130,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ThrowsAsync(expectedException);
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -275,7 +275,7 @@ public class ChatHistoryPersistingChatClientTests
 
         var invokedContexts = new List<ChatHistoryProvider.InvokedContext>();
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -349,7 +349,7 @@ public class ChatHistoryPersistingChatClientTests
                 new ChatResponseUpdate(ChatRole.Assistant, "streaming "),
                 new ChatResponseUpdate(ChatRole.Assistant, "response")));
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -399,7 +399,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
 
-        Mock<AIContextProvider> mockContextProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<AIContextProvider> mockContextProvider = new(null, null, null);
         mockContextProvider.SetupGet(p => p.StateKeys).Returns(["TestAIContextProvider"]);
         mockContextProvider
             .Protected()
@@ -446,7 +446,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ThrowsAsync(expectedException);
 
-        Mock<AIContextProvider> mockContextProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<AIContextProvider> mockContextProvider = new(null, null, null);
         mockContextProvider.SetupGet(p => p.StateKeys).Returns(["TestAIContextProvider"]);
         mockContextProvider
             .Protected()
@@ -492,7 +492,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -504,7 +504,7 @@ public class ChatHistoryPersistingChatClientTests
             .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
             .Returns(() => new ValueTask());
 
-        Mock<AIContextProvider> mockContextProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<AIContextProvider> mockContextProvider = new(null, null, null);
         mockContextProvider.SetupGet(p => p.StateKeys).Returns(["TestAIContextProvider"]);
         mockContextProvider
             .Protected()
@@ -574,7 +574,7 @@ public class ChatHistoryPersistingChatClientTests
 
         var invokedContexts = new List<ChatHistoryProvider.InvokedContext>();
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -639,7 +639,7 @@ public class ChatHistoryPersistingChatClientTests
 
         var invokedContexts = new List<ChatHistoryProvider.InvokedContext>();
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -680,11 +680,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that the NotifiedMessages set on the session is properly cleaned up after
-    /// a successful run completes.
+    /// Verifies that after a successful run with per-service-call persistence, the notified
+    /// messages are stamped with the persisted marker so they are not re-notified.
     /// </summary>
     [Fact]
-    public async Task RunAsync_CleansUpNotifiedMessages_AfterRunCompletesAsync()
+    public async Task RunAsync_MarksNotifiedMessages_WithPersistedMarkerAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -694,7 +694,7 @@ public class ChatHistoryPersistingChatClientTests
                 It.IsAny<ChatOptions>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
 
-        Mock<ChatHistoryProvider> mockChatHistoryProvider = new((object?)null, (object?)null, (object?)null);
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
         mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
         mockChatHistoryProvider
             .Protected()
@@ -713,12 +713,14 @@ public class ChatHistoryPersistingChatClientTests
         });
 
         // Act
+        var inputMessage = new ChatMessage(ChatRole.User, "test");
         var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
-        await agent.RunAsync([new(ChatRole.User, "test")], session);
+        await agent.RunAsync([inputMessage], session);
 
-        // Assert — NotifiedMessages should be empty (cleared) after the run completes
-        Assert.NotNull(session!.NotifiedMessages);
-        Assert.Empty(session.NotifiedMessages);
+        // Assert — input message should be marked as persisted
+        Assert.True(
+            inputMessage.AdditionalProperties?.ContainsKey(ChatHistoryPersistingChatClient.PersistedMarkerKey) == true,
+            "Input message should be marked as persisted after a successful run.");
     }
 
     private static async IAsyncEnumerable<ChatResponseUpdate> CreateAsyncEnumerableAsync(params ChatResponseUpdate[] updates)

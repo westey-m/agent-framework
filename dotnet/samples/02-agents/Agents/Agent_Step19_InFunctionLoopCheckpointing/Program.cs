@@ -8,8 +8,8 @@
 // intermediate messages (tool calls and results) are persisted after each service call,
 // allowing you to inspect or recover them even if the process is interrupted mid-loop.
 //
-// The sample uses RunStreamingAsync so that we can observe the chat history growing
-// after each service call within a single agent run.
+// The sample runs two multi-turn conversations: one using non-streaming (RunAsync) and one
+// using streaming (RunStreamingAsync), to demonstrate correct behavior in both modes.
 
 using System.ComponentModel;
 using Azure.AI.OpenAI;
@@ -34,6 +34,7 @@ static string GetWeather([Description("The city name.")] string city) =>
         "SEATTLE" => "Seattle: 55°F, cloudy with light rain.",
         "NEW YORK" => "New York: 72°F, sunny and warm.",
         "LONDON" => "London: 48°F, overcast with fog.",
+        "DUBLIN" => "Dublin: 43°F, overcast with fog.",
         _ => $"{city}: weather data not available."
     };
 
@@ -44,6 +45,7 @@ static string GetTime([Description("The city name.")] string city) =>
         "SEATTLE" => "Seattle: 9:00 AM PST",
         "NEW YORK" => "New York: 12:00 PM EST",
         "LONDON" => "London: 5:00 PM GMT",
+        "DUBLIN" => "Dublin: 5:00 PM GMT",
         _ => $"{city}: time data not available."
     };
 
@@ -62,57 +64,135 @@ AIAgent agent = chatClient.AsAIAgent(
         PersistChatHistoryAfterEachServiceCall = true,
     });
 
-AgentSession session = await agent.CreateSessionAsync();
+await RunNonStreamingAsync();
+await RunStreamingAsync();
 
-// Ask about multiple cities — the model will need to call tools for each city,
-// resulting in multiple service calls within a single agent run.
-string prompt = "What's the weather and time in Seattle, New York, and London?";
-
-Console.ForegroundColor = ConsoleColor.Cyan;
-Console.Write("\n[User] ");
-Console.ResetColor();
-Console.WriteLine(prompt);
-
-PrintChatHistory("Before run");
-
-Console.ForegroundColor = ConsoleColor.Cyan;
-Console.Write("\n[Agent] ");
-Console.ResetColor();
-
-// Use RunStreamingAsync to observe the response as it streams.
-await foreach (var update in agent.RunStreamingAsync(prompt, session))
+async Task RunNonStreamingAsync()
 {
-    Console.Write(update);
+    int lastChatHistorySize = 0;
+
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("\n=== Non-Streaming Mode ===");
+    Console.ResetColor();
+
+    AgentSession session = await agent.CreateSessionAsync();
+
+    // First turn — ask about multiple cities so the model calls tools.
+    const string Prompt = "What's the weather and time in Seattle, New York, and London?";
+    PrintUserMessage(Prompt);
+
+    var response = await agent.RunAsync(Prompt, session);
+    PrintAgentResponse(response.Text);
+    PrintChatHistory(session, "After run", ref lastChatHistorySize);
+
+    // Second turn — follow-up to verify chat history is correct.
+    const string FollowUp1 = "And Dublin?";
+    PrintUserMessage(FollowUp1);
+
+    response = await agent.RunAsync(FollowUp1, session);
+    PrintAgentResponse(response.Text);
+    PrintChatHistory(session, "After second run", ref lastChatHistorySize);
+
+    // Third turn — follow-up to verify chat history is correct.
+    const string FollowUp2 = "Which city is the warmest?";
+    PrintUserMessage(FollowUp2);
+
+    response = await agent.RunAsync(FollowUp2, session);
+    PrintAgentResponse(response.Text);
+    PrintChatHistory(session, "After third run", ref lastChatHistorySize);
 }
 
-Console.WriteLine();
-
-PrintChatHistory("After run");
-
-// Run a second turn to show that chat history accumulated correctly.
-string followUp = "Which city is the warmest?";
-Console.ForegroundColor = ConsoleColor.Cyan;
-Console.Write("\n[User] ");
-Console.ResetColor();
-Console.WriteLine(followUp);
-
-Console.ForegroundColor = ConsoleColor.Cyan;
-Console.Write("\n[Agent] ");
-Console.ResetColor();
-
-await foreach (var update in agent.RunStreamingAsync(followUp, session))
+async Task RunStreamingAsync()
 {
-    Console.Write(update);
+    int lastChatHistorySize = 0;
+
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("\n=== Streaming Mode ===");
+    Console.ResetColor();
+
+    AgentSession session = await agent.CreateSessionAsync();
+
+    // First turn — ask about multiple cities so the model calls tools.
+    const string Prompt = "What's the weather and time in Seattle, New York, and London?";
+    PrintUserMessage(Prompt);
+
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.Write("\n[Agent] ");
+    Console.ResetColor();
+
+    await foreach (var update in agent.RunStreamingAsync(Prompt, session))
+    {
+        Console.Write(update);
+
+        // During streaming we should be able to see updates to the chat history
+        // before the full run completes, as each service call is made and persisted.
+        PrintChatHistory(session, "During run", ref lastChatHistorySize);
+    }
+
+    Console.WriteLine();
+    PrintChatHistory(session, "After run", ref lastChatHistorySize);
+
+    // Second turn — follow-up to verify chat history is correct.
+    const string FollowUp1 = "And Dublin?";
+    PrintUserMessage(FollowUp1);
+
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.Write("\n[Agent] ");
+    Console.ResetColor();
+
+    await foreach (var update in agent.RunStreamingAsync(FollowUp1, session))
+    {
+        Console.Write(update);
+
+        // During streaming we should be able to see updates to the chat history
+        // before the full run completes, as each service call is made and persisted.
+        PrintChatHistory(session, "During second run", ref lastChatHistorySize);
+    }
+
+    Console.WriteLine();
+    PrintChatHistory(session, "After second run", ref lastChatHistorySize);
+
+    // Third turn — follow-up to verify chat history is correct.
+    const string FollowUp2 = "Which city is the warmest?";
+    PrintUserMessage(FollowUp2);
+
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.Write("\n[Agent] ");
+    Console.ResetColor();
+
+    await foreach (var update in agent.RunStreamingAsync(FollowUp2, session))
+    {
+        Console.Write(update);
+
+        // During streaming we should be able to see updates to the chat history
+        // before the full run completes, as each service call is made and persisted.
+        PrintChatHistory(session, "During third run", ref lastChatHistorySize);
+    }
+
+    Console.WriteLine();
+    PrintChatHistory(session, "After third run", ref lastChatHistorySize);
 }
 
-Console.WriteLine();
+void PrintUserMessage(string message)
+{
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.Write("\n[User] ");
+    Console.ResetColor();
+    Console.WriteLine(message);
+}
 
-PrintChatHistory("After second run");
+void PrintAgentResponse(string? text)
+{
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.Write("\n[Agent] ");
+    Console.ResetColor();
+    Console.WriteLine(text);
+}
 
 // Helper to print the current chat history from the session.
-void PrintChatHistory(string label)
+void PrintChatHistory(AgentSession session, string label, ref int lastChatHistorySize)
 {
-    if (session.TryGetInMemoryChatHistory(out var history))
+    if (session.TryGetInMemoryChatHistory(out var history) && history.Count != lastChatHistorySize)
     {
         Console.ForegroundColor = ConsoleColor.DarkGray;
         Console.WriteLine($"\n  [{label} — Chat history: {history.Count} message(s)]");
@@ -120,9 +200,11 @@ void PrintChatHistory(string label)
         {
             var preview = msg.Text?.Length > 80 ? msg.Text[..80] + "…" : msg.Text;
             var contentTypes = string.Join(", ", msg.Contents.Select(c => c.GetType().Name));
-            Console.WriteLine($"    {msg.Role,-12} | {preview ?? $"[{contentTypes}]"}");
+            Console.WriteLine($"    {msg.Role,-12} | {(string.IsNullOrWhiteSpace(preview) ? $"[{contentTypes}]" : preview)}");
         }
 
         Console.ResetColor();
+
+        lastChatHistorySize = history.Count;
     }
 }

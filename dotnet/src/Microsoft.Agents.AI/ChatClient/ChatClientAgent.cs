@@ -217,13 +217,6 @@ public sealed partial class ChatClientAgent : AIAgent
         var loggingAgentName = this.GetLoggingAgentName();
         this._logger.LogAgentChatClientInvokingAgent(nameof(RunAsync), this.Id, loggingAgentName, this._chatClientType);
 
-        // Initialize the per-service-call message tracking if the decorator is being used.
-        if (this.PersistsChatHistoryPerServiceCall)
-        {
-            safeSession.NotifiedMessages ??= new();
-            safeSession.NotifiedMessages.Clear();
-        }
-
         // Call the IChatClient and notify the AIContextProvider of any failures.
         ChatResponse chatResponse;
         try
@@ -234,11 +227,6 @@ public sealed partial class ChatClientAgent : AIAgent
         {
             await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, inputMessagesForChatClient, chatOptions, cancellationToken).ConfigureAwait(false);
             throw;
-        }
-        finally
-        {
-            // Clear the per-service-call message tracking now that the run is complete (or failed).
-            safeSession.NotifiedMessages?.Clear();
         }
 
         this._logger.LogAgentChatClientInvokedAgent(nameof(RunAsync), this.Id, loggingAgentName, this._chatClientType, inputMessages.Count);
@@ -310,13 +298,6 @@ public sealed partial class ChatClientAgent : AIAgent
 
         this._logger.LogAgentChatClientInvokingAgent(nameof(RunStreamingAsync), this.Id, loggingAgentName, this._chatClientType);
 
-        // Initialize the per-service-call message tracking if the decorator is being used.
-        if (this.PersistsChatHistoryPerServiceCall)
-        {
-            safeSession.NotifiedMessages ??= new();
-            safeSession.NotifiedMessages.Clear();
-        }
-
         List<ChatResponseUpdate> responseUpdates = GetResponseUpdates(continuationToken);
 
         IAsyncEnumerator<ChatResponseUpdate> responseUpdatesEnumerator;
@@ -328,7 +309,6 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            safeSession.NotifiedMessages?.Clear();
             await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -343,7 +323,6 @@ public sealed partial class ChatClientAgent : AIAgent
         }
         catch (Exception ex)
         {
-            safeSession.NotifiedMessages?.Clear();
             await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -370,7 +349,6 @@ public sealed partial class ChatClientAgent : AIAgent
             }
             catch (Exception ex)
             {
-                safeSession.NotifiedMessages?.Clear();
                 await this.NotifyProvidersOfFailureAtEndOfRunAsync(safeSession, ex, GetInputMessages(inputMessagesForChatClient, continuationToken), chatOptions, cancellationToken).ConfigureAwait(false);
                 throw;
             }
@@ -384,9 +362,6 @@ public sealed partial class ChatClientAgent : AIAgent
 
         // Notify providers of all new messages unless persistence is handled per-service-call by the decorator.
         await this.NotifyProvidersOfNewMessagesAtEndOfRunAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
-
-        // Clear the per-service-call message tracking now that the run is complete.
-        safeSession.NotifiedMessages?.Clear();
     }
 
     /// <inheritdoc/>

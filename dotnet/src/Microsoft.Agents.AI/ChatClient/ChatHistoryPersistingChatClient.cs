@@ -33,6 +33,12 @@ namespace Microsoft.Agents.AI;
 internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
 {
     /// <summary>
+    /// The key used in <see cref="ChatMessage.AdditionalProperties"/> and <see cref="AIContent.AdditionalProperties"/>
+    /// to mark messages and their content as already persisted to chat history.
+    /// </summary>
+    internal const string PersistedMarkerKey = "_chatHistoryPersisted";
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatHistoryPersistingChatClient"/> class.
     /// </summary>
     /// <param name="innerClient">The underlying chat client that will handle the core operations.</param>
@@ -56,16 +62,15 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
         }
         catch (Exception ex)
         {
-            var newRequestMessagesOnFailure = GetNewMessages(messages, session);
-            MarkAsNotified(newRequestMessagesOnFailure, session);
+            var newRequestMessagesOnFailure = GetNewRequestMessages(messages);
             await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
-        var newRequestMessages = GetNewMessages(messages, session);
-        MarkAsNotified(newRequestMessages, session);
-        MarkAsNotified(response.Messages, session);
+        var newRequestMessages = GetNewRequestMessages(messages);
         await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
+        MarkAsPersisted(newRequestMessages);
+        MarkAsPersisted(response.Messages);
 
         return response;
     }
@@ -87,8 +92,7 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
         }
         catch (Exception ex)
         {
-            var newRequestMessagesOnFailure = GetNewMessages(messages, session);
-            MarkAsNotified(newRequestMessagesOnFailure, session);
+            var newRequestMessagesOnFailure = GetNewRequestMessages(messages);
             await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -100,8 +104,7 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
         }
         catch (Exception ex)
         {
-            var newRequestMessagesOnFailure = GetNewMessages(messages, session);
-            MarkAsNotified(newRequestMessagesOnFailure, session);
+            var newRequestMessagesOnFailure = GetNewRequestMessages(messages);
             await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -118,18 +121,17 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
             }
             catch (Exception ex)
             {
-                var newRequestMessagesOnFailure = GetNewMessages(messages, session);
-                MarkAsNotified(newRequestMessagesOnFailure, session);
+                var newRequestMessagesOnFailure = GetNewRequestMessages(messages);
                 await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
 
         var chatResponse = responseUpdates.ToChatResponse();
-        var newRequestMessages = GetNewMessages(messages, session);
-        MarkAsNotified(newRequestMessages, session);
-        MarkAsNotified(chatResponse.Messages, session);
+        var newRequestMessages = GetNewRequestMessages(messages);
         await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
+        MarkAsPersisted(newRequestMessages);
+        MarkAsPersisted(chatResponse.Messages);
     }
 
     /// <summary>
@@ -160,35 +162,76 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
     }
 
     /// <summary>
-    /// Filters the given messages to return only those that have not yet been notified to providers
-    /// during the current agent run.
+    /// Returns only the request messages that have not yet been persisted to chat history.
     /// </summary>
-    /// <param name="messages">The full set of messages to filter.</param>
-    /// <param name="session">The current session containing the set of already-notified messages.</param>
-    /// <returns>A list of messages that have not yet been notified. If no tracking is available, all messages are returned.</returns>
-    private static IReadOnlyList<ChatMessage> GetNewMessages(IEnumerable<ChatMessage> messages, ChatClientAgentSession session)
+    /// <remarks>
+    /// A message is considered already persisted if any of the following is true:
+    /// <list type="bullet">
+    /// <item>It has the <see cref="PersistedMarkerKey"/> in its <see cref="ChatMessage.AdditionalProperties"/>.</item>
+    /// <item>It has an <see cref="AgentRequestMessageSourceType"/> of <see cref="AgentRequestMessageSourceType.ChatHistory"/>
+    /// (indicating it was loaded from chat history and does not need to be re-persisted).</item>
+    /// <item>It has <see cref="ChatMessage.Contents"/> and all of its <see cref="AIContent"/> items have the
+    /// <see cref="PersistedMarkerKey"/> in their <see cref="AIContent.AdditionalProperties"/>. This handles the
+    /// streaming case where <see cref="FunctionInvokingChatClient"/> reconstructs <see cref="ChatMessage"/> objects
+    /// independently via <c>ToChatResponse()</c>, producing different object references that share the same
+    /// underlying <see cref="AIContent"/> instances.</item>
+    /// </list>
+    /// </remarks>
+    /// <returns>A list of request messages that have not yet been persisted.</returns>
+    /// <param name="messages">The full set of request messages to filter.</param>
+    private static List<ChatMessage> GetNewRequestMessages(IEnumerable<ChatMessage> messages)
     {
-        HashSet<ChatMessage>? notifiedMessages = session.NotifiedMessages;
-        if (notifiedMessages is null or { Count: 0 })
-        {
-            return messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
-        }
-
-        return messages.Where(m => !notifiedMessages.Contains(m)).ToList();
+        return messages.Where(m => !IsAlreadyPersisted(m)).ToList();
     }
 
     /// <summary>
-    /// Marks the given messages as notified so they will be excluded from future notifications in the current run.
+    /// Determines whether a message has already been persisted to chat history by this decorator.
     /// </summary>
-    /// <param name="messages">The messages to mark as notified.</param>
-    /// <param name="session">The current session containing the set of already-notified messages.</param>
-    private static void MarkAsNotified(IEnumerable<ChatMessage> messages, ChatClientAgentSession session)
+    private static bool IsAlreadyPersisted(ChatMessage message)
     {
-        if (session.NotifiedMessages is { } notifiedMessages)
+        if (message.AdditionalProperties?.TryGetValue(PersistedMarkerKey, out var value) == true && value is true)
         {
-            foreach (var message in messages)
+            return true;
+        }
+
+        if (message.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.ChatHistory)
+        {
+            return true;
+        }
+
+        // In streaming mode, FunctionInvokingChatClient reconstructs ChatMessage objects via ToChatResponse()
+        // independently, producing different ChatMessage instances. However, the underlying AIContent objects
+        // (e.g., FunctionCallContent, FunctionResultContent) are shared references. Checking for markers on
+        // AIContent handles dedup in this case.
+        if (message.Contents.Count > 0 && message.Contents.All(c => c.AdditionalProperties?.TryGetValue(PersistedMarkerKey, out var value) == true && value is true))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Marks the given messages as persisted by setting a marker on both the <see cref="ChatMessage"/>
+    /// and each of its <see cref="AIContent"/> items.
+    /// </summary>
+    /// <remarks>
+    /// Both levels are marked because <see cref="FunctionInvokingChatClient"/> may reconstruct
+    /// <see cref="ChatMessage"/> objects in streaming mode (losing the message-level marker),
+    /// but the <see cref="AIContent"/> references are shared and retain their markers.
+    /// </remarks>
+    /// <param name="messages">The messages to mark as persisted.</param>
+    private static void MarkAsPersisted(IEnumerable<ChatMessage> messages)
+    {
+        foreach (var message in messages)
+        {
+            message.AdditionalProperties ??= new();
+            message.AdditionalProperties[PersistedMarkerKey] = true;
+
+            foreach (var content in message.Contents)
             {
-                notifiedMessages.Add(message);
+                content.AdditionalProperties ??= new();
+                content.AdditionalProperties[PersistedMarkerKey] = true;
             }
         }
     }

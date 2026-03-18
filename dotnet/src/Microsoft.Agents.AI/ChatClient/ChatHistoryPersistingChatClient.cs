@@ -68,6 +68,7 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
         }
 
         var newRequestMessages = GetNewRequestMessages(messages);
+        agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
         await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
         MarkAsPersisted(newRequestMessages);
         MarkAsPersisted(response.Messages);
@@ -129,6 +130,7 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
 
         var chatResponse = responseUpdates.ToChatResponse();
         var newRequestMessages = GetNewRequestMessages(messages);
+        agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
         await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
         MarkAsPersisted(newRequestMessages);
         MarkAsPersisted(chatResponse.Messages);

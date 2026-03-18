@@ -16,15 +16,16 @@ using Azure.AI.OpenAI;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using OpenAI.Responses;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
 var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-4o-mini";
+var store = Environment.GetEnvironmentVariable("AZURE_OPENAI_RESPONSES_STORE") ?? "false";
 
 // WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
 // In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
 // latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
 AzureOpenAIClient openAIClient = new(new Uri(endpoint), new DefaultAzureCredential());
-IChatClient chatClient = openAIClient.GetChatClient(deploymentName).AsIChatClient();
 
 // Define multiple tools so the model makes several tool calls in a single run.
 [Description("Get the current weather for a city.")]
@@ -50,8 +51,11 @@ static string GetTime([Description("The city name.")] string city) =>
     };
 
 // Create the agent with PersistChatHistoryAfterEachServiceCall enabled.
-// The in-memory ChatHistoryProvider is used by default when no explicit provider is set,
-// so we can inspect the chat history via session.TryGetInMemoryChatHistory().
+// The in-memory ChatHistoryProvider is used by default when the service does not require service stored chat
+// history, so for those cases, we can inspect the chat history via session.TryGetInMemoryChatHistory().
+IChatClient chatClient = string.Equals(store, "TRUE", StringComparison.OrdinalIgnoreCase) ?
+    openAIClient.GetResponsesClient(deploymentName).AsIChatClient() :
+    openAIClient.GetResponsesClient(deploymentName).AsIChatClientWithStoredOutputDisabled();
 AIAgent agent = chatClient.AsAIAgent(
     new ChatClientAgentOptions
     {
@@ -70,6 +74,7 @@ await RunStreamingAsync();
 async Task RunNonStreamingAsync()
 {
     int lastChatHistorySize = 0;
+    string lastConversationId = string.Empty;
 
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("\n=== Non-Streaming Mode ===");
@@ -83,7 +88,7 @@ async Task RunNonStreamingAsync()
 
     var response = await agent.RunAsync(Prompt, session);
     PrintAgentResponse(response.Text);
-    PrintChatHistory(session, "After run", ref lastChatHistorySize);
+    PrintChatHistory(session, "After run", ref lastChatHistorySize, ref lastConversationId);
 
     // Second turn — follow-up to verify chat history is correct.
     const string FollowUp1 = "And Dublin?";
@@ -91,7 +96,7 @@ async Task RunNonStreamingAsync()
 
     response = await agent.RunAsync(FollowUp1, session);
     PrintAgentResponse(response.Text);
-    PrintChatHistory(session, "After second run", ref lastChatHistorySize);
+    PrintChatHistory(session, "After second run", ref lastChatHistorySize, ref lastConversationId);
 
     // Third turn — follow-up to verify chat history is correct.
     const string FollowUp2 = "Which city is the warmest?";
@@ -99,12 +104,13 @@ async Task RunNonStreamingAsync()
 
     response = await agent.RunAsync(FollowUp2, session);
     PrintAgentResponse(response.Text);
-    PrintChatHistory(session, "After third run", ref lastChatHistorySize);
+    PrintChatHistory(session, "After third run", ref lastChatHistorySize, ref lastConversationId);
 }
 
 async Task RunStreamingAsync()
 {
     int lastChatHistorySize = 0;
+    string lastConversationId = string.Empty;
 
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("\n=== Streaming Mode ===");
@@ -126,11 +132,11 @@ async Task RunStreamingAsync()
 
         // During streaming we should be able to see updates to the chat history
         // before the full run completes, as each service call is made and persisted.
-        PrintChatHistory(session, "During run", ref lastChatHistorySize);
+        PrintChatHistory(session, "During run", ref lastChatHistorySize, ref lastConversationId);
     }
 
     Console.WriteLine();
-    PrintChatHistory(session, "After run", ref lastChatHistorySize);
+    PrintChatHistory(session, "After run", ref lastChatHistorySize, ref lastConversationId);
 
     // Second turn — follow-up to verify chat history is correct.
     const string FollowUp1 = "And Dublin?";
@@ -146,11 +152,11 @@ async Task RunStreamingAsync()
 
         // During streaming we should be able to see updates to the chat history
         // before the full run completes, as each service call is made and persisted.
-        PrintChatHistory(session, "During second run", ref lastChatHistorySize);
+        PrintChatHistory(session, "During second run", ref lastChatHistorySize, ref lastConversationId);
     }
 
     Console.WriteLine();
-    PrintChatHistory(session, "After second run", ref lastChatHistorySize);
+    PrintChatHistory(session, "After second run", ref lastChatHistorySize, ref lastConversationId);
 
     // Third turn — follow-up to verify chat history is correct.
     const string FollowUp2 = "Which city is the warmest?";
@@ -166,11 +172,11 @@ async Task RunStreamingAsync()
 
         // During streaming we should be able to see updates to the chat history
         // before the full run completes, as each service call is made and persisted.
-        PrintChatHistory(session, "During third run", ref lastChatHistorySize);
+        PrintChatHistory(session, "During third run", ref lastChatHistorySize, ref lastConversationId);
     }
 
     Console.WriteLine();
-    PrintChatHistory(session, "After third run", ref lastChatHistorySize);
+    PrintChatHistory(session, "After third run", ref lastChatHistorySize, ref lastConversationId);
 }
 
 void PrintUserMessage(string message)
@@ -190,7 +196,7 @@ void PrintAgentResponse(string? text)
 }
 
 // Helper to print the current chat history from the session.
-void PrintChatHistory(AgentSession session, string label, ref int lastChatHistorySize)
+void PrintChatHistory(AgentSession session, string label, ref int lastChatHistorySize, ref string lastConversationId)
 {
     if (session.TryGetInMemoryChatHistory(out var history) && history.Count != lastChatHistorySize)
     {
@@ -206,5 +212,13 @@ void PrintChatHistory(AgentSession session, string label, ref int lastChatHistor
         Console.ResetColor();
 
         lastChatHistorySize = history.Count;
+    }
+
+    if (session is ChatClientAgentSession ccaSession && ccaSession.ConversationId is not null && ccaSession.ConversationId != lastConversationId)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"  [{label} — Conversation ID: {ccaSession.ConversationId}]");
+        Console.ResetColor();
+        lastConversationId = ccaSession.ConversationId;
     }
 }

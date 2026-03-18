@@ -98,10 +98,27 @@ public sealed class ChatClientAgentOptions
     /// <remarks>
     /// <para>
     /// By default, <see cref="ChatClientAgent"/> persists request and response messages via the
-    /// <see cref="ChatHistoryProvider"/> only after the full run completes, which may include multiple
+    /// <see cref="ChatHistoryProvider"/> or <see cref="ChatClientAgent"/> persists the latest service provided
+    /// conversation id only after the full run completes, which may include multiple
     /// iterations of the function invocation loop. Setting this property to <see langword="true"/> causes
-    /// messages to be persisted after each individual call to the underlying AI service, so that intermediate
-    /// messages (e.g., tool calls and results) are saved even if the process is interrupted mid-loop.
+    /// messages or conversation ids to be persisted after each individual call to the underlying AI service, so that intermediate
+    /// progress (e.g., tool calls and results) is saved even if the process is interrupted mid-loop.
+    /// </para>
+    /// <para>
+    /// Note that when using an AI service with built in chat history storage, which uses a single threaded conversation model (e.g. OpenAI Responses with the Conversations API)
+    /// setting this setting to <see langword="false"/> will have no effect. This type of service updates the single conversation with each service call,
+    /// and there is no way to revert to a previous state.
+    /// </para>
+    /// <para>
+    /// On the other hand, when using an AI service with built in chat history storage, which supports forking, (e.g. OpenAI Responses with Response Ids)
+    /// setting this setting to <see langword="false"/> will mean that the <see cref="ChatClientAgent"/> will only persist the last returned response id at
+    /// the end of the run, whereas setting this setting to <see langword="true"/> will mean that the <see cref="ChatClientAgent"/> will persist each returned
+    /// response id after each service call. This means that the last successful response id will always be available in the <see cref="ChatClientAgentSession.ConversationId"/>.
+    /// </para>
+    /// <para>
+    /// It's important to note that enabling this setting may leave your chat history in a state where <see cref="FunctionResultContent"/> is required to start a new run.
+    /// If the last successful service call returned <see cref="FunctionCallContent"/> it is not possible to continue the session until a <see cref="FunctionResultContent"/>
+    /// is provided as input for a subsequent run.
     /// </para>
     /// <para>
     /// When this option is enabled, a <see cref="ChatHistoryPersistingChatClient"/> decorator is automatically

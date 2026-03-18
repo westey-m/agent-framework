@@ -723,6 +723,40 @@ public class ChatHistoryPersistingChatClientTests
             "Input message should be marked as persisted after a successful run.");
     }
 
+    /// <summary>
+    /// Verifies that when per-service-call persistence is enabled and the inner client returns a
+    /// conversation ID, the session's ConversationId is updated after the service call.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_UpdatesSessionConversationId_WhenPerServiceCallPersistenceEnabledAsync()
+    {
+        // Arrange
+        const string ExpectedConversationId = "conv-123";
+
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")])
+            {
+                ConversationId = ExpectedConversationId,
+            });
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            PersistChatHistoryAfterEachServiceCall = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync([new(ChatRole.User, "test")], session);
+
+        // Assert — session should have the conversation ID returned by the inner client
+        Assert.Equal(ExpectedConversationId, session!.ConversationId);
+    }
+
     private static async IAsyncEnumerable<ChatResponseUpdate> CreateAsyncEnumerableAsync(params ChatResponseUpdate[] updates)
     {
         foreach (var update in updates)

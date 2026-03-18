@@ -233,7 +233,7 @@ public sealed partial class ChatClientAgent : AIAgent
 
         // We can derive the type of supported session from whether we have a conversation id,
         // so let's update it and set the conversation id for the service session case.
-        this.UpdateSessionConversationId(safeSession, chatResponse.ConversationId, cancellationToken);
+        this.UpdateSessionConversationIdAtEndOfRun(safeSession, chatResponse.ConversationId, cancellationToken);
 
         // Ensure that the author name is set for each message in the response.
         foreach (ChatMessage chatResponseMessage in chatResponse.Messages)
@@ -358,7 +358,7 @@ public sealed partial class ChatClientAgent : AIAgent
 
         // We can derive the type of supported session from whether we have a conversation id,
         // so let's update it and set the conversation id for the service session case.
-        this.UpdateSessionConversationId(safeSession, chatResponse.ConversationId, cancellationToken);
+        this.UpdateSessionConversationIdAtEndOfRun(safeSession, chatResponse.ConversationId, cancellationToken);
 
         // Notify providers of all new messages unless persistence is handled per-service-call by the decorator.
         await this.NotifyProvidersOfNewMessagesAtEndOfRunAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
@@ -766,7 +766,7 @@ public sealed partial class ChatClientAgent : AIAgent
         return (typedSession, chatOptions, messagesList, continuationToken);
     }
 
-    private void UpdateSessionConversationId(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)
+    internal void UpdateSessionConversationId(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(responseConversationId) && !string.IsNullOrWhiteSpace(session.ConversationId))
         {
@@ -818,6 +818,24 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <see cref="ChatHistoryPersistingChatClient"/> decorator handles per-service-call notification,
     /// so this end-of-run notification is skipped.
     /// </remarks>
+    /// <summary>
+    /// Updates the session conversation ID at the end of an agent run.
+    /// </summary>
+    /// <remarks>
+    /// When <see cref="PersistsChatHistoryPerServiceCall"/> is <see langword="true"/>, the
+    /// <see cref="ChatHistoryPersistingChatClient"/> decorator handles per-service-call conversation ID updates,
+    /// so this end-of-run update is skipped.
+    /// </remarks>
+    private void UpdateSessionConversationIdAtEndOfRun(ChatClientAgentSession session, string? responseConversationId, CancellationToken cancellationToken)
+    {
+        if (this.PersistsChatHistoryPerServiceCall)
+        {
+            return;
+        }
+
+        this.UpdateSessionConversationId(session, responseConversationId, cancellationToken);
+    }
+
     private Task NotifyProvidersOfNewMessagesAtEndOfRunAsync(
         ChatClientAgentSession session,
         IEnumerable<ChatMessage> requestMessages,

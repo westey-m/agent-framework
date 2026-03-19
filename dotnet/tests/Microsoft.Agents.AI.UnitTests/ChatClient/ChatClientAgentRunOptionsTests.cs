@@ -349,6 +349,7 @@ public class ChatClientAgentRunOptionsTests
             ChatClientFactory = factory,
             AllowBackgroundResponses = true,
             ContinuationToken = ResponseContinuationToken.FromBytes(new byte[] { 1, 2, 3 }),
+            StoreFinalFunctionResultContent = true,
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
                 ["key1"] = "value1"
@@ -370,6 +371,7 @@ public class ChatClientAgentRunOptionsTests
         Assert.Same(factory, clone.ChatClientFactory);
         Assert.Equal(runOptions.AllowBackgroundResponses, clone.AllowBackgroundResponses);
         Assert.Same(runOptions.ContinuationToken, clone.ContinuationToken);
+        Assert.Equal(true, clone.StoreFinalFunctionResultContent);
         Assert.NotNull(clone.AdditionalProperties);
         Assert.NotSame(runOptions.AdditionalProperties, clone.AdditionalProperties);
         Assert.Equal("value1", clone.AdditionalProperties["key1"]);

@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
+using Microsoft.Shared.DiagnosticIds;
 
 namespace Microsoft.Agents.AI;
 
@@ -35,6 +37,7 @@ public sealed class ChatClientAgentRunOptions : AgentRunOptions
     {
         this.ChatOptions = options.ChatOptions?.Clone();
         this.ChatClientFactory = options.ChatClientFactory;
+        this.StoreFinalFunctionResultContent = options.StoreFinalFunctionResultContent;
     }
 
     /// <summary>
@@ -61,6 +64,48 @@ public sealed class ChatClientAgentRunOptions : AgentRunOptions
     /// chat client will be used without modification.
     /// </value>
     public Func<IChatClient, IChatClient>? ChatClientFactory { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to store <see cref="FunctionResultContent"/> in chat history, if it was
+    /// the last content returned from the <see cref="IChatClient"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This setting applies when the last content returned from the <see cref="IChatClient"/> is of type <see cref="FunctionResultContent"/>
+    /// rather than for example <see cref="TextContent"/>.
+    /// </para>
+    /// <para>
+    /// <see cref="FunctionResultContent"/> is typically only returned as the last content, if the function tool calling
+    /// loop was terminated. In other cases, the <see cref="FunctionResultContent"/> would have been passed to the
+    /// underlying service again as part of the next request, and new content with an answer to the user ask, for example <see cref="TextContent"/>,
+    /// or new <see cref="FunctionCallContent"/> would have been produced.
+    /// </para>
+    /// <para>
+    /// This option is only relevant if the agent does not use chat history storage in the underyling AI service. If
+    /// chat history is not stored via a <see cref="ChatHistoryProvider"/>, the setting will have no effect. For agents
+    /// that store chat history in the underlying AI service, final <see cref="FunctionResultContent"/> is never stored.
+    /// </para>
+    /// <para>
+    /// When set to <see langword="false"/>, the behavior of chat history storage via <see cref="ChatHistoryProvider"/>
+    /// matches the behavior of agents that store chat history in the underlying AI service. Note that this means that
+    /// since the last stored content would have typically been <see cref="FunctionCallContent"/>, <see cref="FunctionResultContent"/>
+    /// would need to be provided manually for the existing <see cref="FunctionCallContent"/> to continue the session.
+    /// </para>
+    /// <para>
+    /// When set to <see langword="true"/>, the behavior of chat history storage via <see cref="ChatHistoryProvider"/>
+    /// differs from the behavior of agents that store chat history in the underlying AI service.
+    /// However, this does mean that a run could potentially be restarted without manually adding <see cref="FunctionResultContent"/>,
+    /// since the <see cref="FunctionResultContent"/> would also be persisted in the chat history.
+    /// Note however that if multiple function calls needed to be made, and termination happened before all functions were called,
+    /// not all <see cref="FunctionCallContent"/> may have a corresponding <see cref="FunctionResultContent"/>, resulting in incomplete
+    /// chat history regardless of this setting's value.
+    /// </para>
+    /// </remarks>
+    /// <value>
+    /// Defaults to <see langword="false"/>.
+    /// </value>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
+    public bool? StoreFinalFunctionResultContent { get; set; }
 
     /// <inheritdoc/>
     public override AgentRunOptions Clone() => new ChatClientAgentRunOptions(this);

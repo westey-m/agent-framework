@@ -245,10 +245,11 @@ public sealed partial class ChatClientAgent : AIAgent
         }
 
         // Only notify the session of new messages if the chatResponse was successful to avoid inconsistent message state in the session.
-        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, inputMessagesForChatClient, chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        var filteredResponseMessages = FilterFinalFunctionResultContent(chatResponse.Messages, options);
+        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, inputMessagesForChatClient, filteredResponseMessages, chatOptions, cancellationToken).ConfigureAwait(false);
 
         // Notify the AIContextProvider of all new messages.
-        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, inputMessagesForChatClient, chatResponse.Messages, cancellationToken).ConfigureAwait(false);
+        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, inputMessagesForChatClient, filteredResponseMessages, cancellationToken).ConfigureAwait(false);
 
         return new AgentResponse(chatResponse)
         {
@@ -370,10 +371,11 @@ public sealed partial class ChatClientAgent : AIAgent
         this.UpdateSessionConversationId(safeSession, chatResponse.ConversationId, cancellationToken);
 
         // To avoid inconsistent state we only notify the session of the input messages if no error occurs after the initial request.
-        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, chatOptions, cancellationToken).ConfigureAwait(false);
+        var filteredResponseMessages = FilterFinalFunctionResultContent(chatResponse.Messages, options);
+        await this.NotifyChatHistoryProviderOfNewMessagesAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), filteredResponseMessages, chatOptions, cancellationToken).ConfigureAwait(false);
 
         // Notify the AIContextProvider of all new messages.
-        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), chatResponse.Messages, cancellationToken).ConfigureAwait(false);
+        await this.NotifyAIContextProviderOfSuccessAsync(safeSession, GetInputMessages(inputMessagesForChatClient, continuationToken), filteredResponseMessages, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -908,6 +910,77 @@ public sealed partial class ChatClientAgent : AIAgent
     {
         // Restore any previously received updates from the continuation token.
         return token?.ResponseUpdates?.ToList() ?? [];
+    }
+
+    /// <summary>
+    /// Filters trailing <see cref="FunctionResultContent"/> from response messages when
+    /// <see cref="ChatClientAgentRunOptions.StoreFinalFunctionResultContent"/> is not <see langword="true"/>.
+    /// </summary>
+    /// <remarks>
+    /// Walks backward through the response messages, removing consecutive trailing messages
+    /// whose role is <see cref="ChatRole.Tool"/> and whose content is entirely
+    /// <see cref="FunctionResultContent"/>. Messages with mixed content are left unchanged.
+    /// The walk stops at the first message that does not match.
+    /// </remarks>
+    private static IEnumerable<ChatMessage> FilterFinalFunctionResultContent(
+        IEnumerable<ChatMessage> responseMessages,
+        AgentRunOptions? options)
+    {
+        if (options is ChatClientAgentRunOptions { StoreFinalFunctionResultContent: true })
+        {
+            return responseMessages;
+        }
+
+        var messages = responseMessages as IList<ChatMessage> ?? responseMessages.ToList();
+
+        if (messages.Count == 0)
+        {
+            return messages;
+        }
+
+        // Walk backward, removing trailing Tool-role messages that contain only FunctionResultContent.
+        int firstKeptIndex = messages.Count;
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            ChatMessage message = messages[i];
+
+            if (message.Role != ChatRole.Tool)
+            {
+                break;
+            }
+
+            bool allFunctionResult = message.Contents.Count > 0;
+            foreach (AIContent content in message.Contents)
+            {
+                if (content is not FunctionResultContent)
+                {
+                    allFunctionResult = false;
+                    break;
+                }
+            }
+
+            if (!allFunctionResult)
+            {
+                break;
+            }
+
+            firstKeptIndex = i;
+        }
+
+        if (firstKeptIndex == messages.Count)
+        {
+            // Nothing was filtered.
+            return messages;
+        }
+
+        // Return only the messages before the filtered tail.
+        var trimmed = new List<ChatMessage>(firstKeptIndex);
+        for (int j = 0; j < firstKeptIndex; j++)
+        {
+            trimmed.Add(messages[j]);
+        }
+
+        return trimmed;
     }
 
     private string GetLoggingAgentName() => this.Name ?? "UnnamedAgent";

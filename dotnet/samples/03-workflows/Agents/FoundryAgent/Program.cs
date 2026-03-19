@@ -1,6 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using Azure.AI.Agents.Persistent;
+using Azure.AI.Projects;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
@@ -20,16 +20,16 @@ public static class Program
 {
     private static async Task Main()
     {
-        // Set up the Azure OpenAI client
+        // Set up the Azure AI Project client
         var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT")
             ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
         var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-4o-mini";
-        var persistentAgentsClient = new PersistentAgentsClient(endpoint, new AzureCliCredential());
+        var aiProjectClient = new AIProjectClient(new Uri(endpoint), new AzureCliCredential());
 
         // Create agents
-        AIAgent frenchAgent = await GetTranslationAgentAsync("French", persistentAgentsClient, deploymentName);
-        AIAgent spanishAgent = await GetTranslationAgentAsync("Spanish", persistentAgentsClient, deploymentName);
-        AIAgent englishAgent = await GetTranslationAgentAsync("English", persistentAgentsClient, deploymentName);
+        AIAgent frenchAgent = await CreateTranslationAgentAsync("French", aiProjectClient, deploymentName);
+        AIAgent spanishAgent = await CreateTranslationAgentAsync("Spanish", aiProjectClient, deploymentName);
+        AIAgent englishAgent = await CreateTranslationAgentAsync("English", aiProjectClient, deploymentName);
 
         // Build the workflow by adding executors and connecting them
         var workflow = new WorkflowBuilder(frenchAgent)
@@ -52,28 +52,26 @@ public static class Program
         }
 
         // Cleanup the agents created for the sample.
-        await persistentAgentsClient.Administration.DeleteAgentAsync(frenchAgent.Id);
-        await persistentAgentsClient.Administration.DeleteAgentAsync(spanishAgent.Id);
-        await persistentAgentsClient.Administration.DeleteAgentAsync(englishAgent.Id);
+        aiProjectClient.Agents.DeleteAgent(frenchAgent.Name);
+        aiProjectClient.Agents.DeleteAgent(spanishAgent.Name);
+        aiProjectClient.Agents.DeleteAgent(englishAgent.Name);
     }
 
     /// <summary>
     /// Creates a translation agent for the specified target language.
     /// </summary>
     /// <param name="targetLanguage">The target language for translation</param>
-    /// <param name="persistentAgentsClient">The PersistentAgentsClient to create the agent</param>
+    /// <param name="aiProjectClient">The <see cref="AIProjectClient"/> to create the agent with.</param>
     /// <param name="model">The model to use for the agent</param>
     /// <returns>A ChatClientAgent configured for the specified language</returns>
-    private static async Task<ChatClientAgent> GetTranslationAgentAsync(
+    private static async Task<ChatClientAgent> CreateTranslationAgentAsync(
         string targetLanguage,
-        PersistentAgentsClient persistentAgentsClient,
+        AIProjectClient aiProjectClient,
         string model)
     {
-        var agentMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-            model: model,
+        return await aiProjectClient.CreateAIAgentAsync(
             name: $"{targetLanguage} Translator",
+            model: model,
             instructions: $"You are a translation assistant that translates the provided text to {targetLanguage}.");
-
-        return await persistentAgentsClient.GetAIAgentAsync(agentMetadata.Value.Id);
     }
 }

@@ -81,7 +81,7 @@ public sealed class ChatClientAgentRunOptions : AgentRunOptions
     /// or new <see cref="FunctionCallContent"/> would have been produced.
     /// </para>
     /// <para>
-    /// This option is only relevant if the agent does not use chat history storage in the underyling AI service. If
+    /// This option is only relevant if the agent does not use chat history storage in the underlying AI service. If
     /// chat history is not stored via a <see cref="ChatHistoryProvider"/>, the setting will have no effect. For agents
     /// that store chat history in the underlying AI service, final <see cref="FunctionResultContent"/> is never stored.
     /// </para>

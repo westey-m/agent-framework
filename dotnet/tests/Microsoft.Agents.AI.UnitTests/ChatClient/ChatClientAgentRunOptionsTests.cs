@@ -371,7 +371,7 @@ public class ChatClientAgentRunOptionsTests
         Assert.Same(factory, clone.ChatClientFactory);
         Assert.Equal(runOptions.AllowBackgroundResponses, clone.AllowBackgroundResponses);
         Assert.Same(runOptions.ContinuationToken, clone.ContinuationToken);
-        Assert.Equal(true, clone.StoreFinalFunctionResultContent);
+        Assert.True(clone.StoreFinalFunctionResultContent);
         Assert.NotNull(clone.AdditionalProperties);
         Assert.NotSame(runOptions.AdditionalProperties, clone.AdditionalProperties);
         Assert.Equal("value1", clone.AdditionalProperties["key1"]);

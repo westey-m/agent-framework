@@ -105,7 +105,7 @@ public sealed class ChatClientAgentRunOptions : AgentRunOptions
     /// Defaults to <see langword="false"/>.
     /// </value>
     [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public bool? StoreFinalFunctionResultContent { get; set; }
+    public bool StoreFinalFunctionResultContent { get; set; }
 
     /// <inheritdoc/>
     public override AgentRunOptions Clone() => new ChatClientAgentRunOptions(this);

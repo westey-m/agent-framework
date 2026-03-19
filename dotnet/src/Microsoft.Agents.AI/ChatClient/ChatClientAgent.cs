@@ -922,8 +922,8 @@ public sealed partial class ChatClientAgent : AIAgent
     /// <see cref="FunctionResultContent"/>. Messages with mixed content are left unchanged.
     /// The walk stops at the first message that does not match.
     /// </remarks>
-    private static IEnumerable<ChatMessage> FilterFinalFunctionResultContent(
-        IEnumerable<ChatMessage> responseMessages,
+    private static IList<ChatMessage> FilterFinalFunctionResultContent(
+        IList<ChatMessage> responseMessages,
         AgentRunOptions? options)
     {
         if (options is ChatClientAgentRunOptions { StoreFinalFunctionResultContent: true })
@@ -931,18 +931,16 @@ public sealed partial class ChatClientAgent : AIAgent
             return responseMessages;
         }
 
-        var messages = responseMessages as IList<ChatMessage> ?? responseMessages.ToList();
-
-        if (messages.Count == 0)
+        if (responseMessages.Count == 0)
         {
-            return messages;
+            return responseMessages;
         }
 
         // Walk backward, removing trailing Tool-role messages that contain only FunctionResultContent.
-        int firstKeptIndex = messages.Count;
-        for (int i = messages.Count - 1; i >= 0; i--)
+        int firstKeptIndex = responseMessages.Count;
+        for (int i = responseMessages.Count - 1; i >= 0; i--)
         {
-            ChatMessage message = messages[i];
+            ChatMessage message = responseMessages[i];
 
             if (message.Role != ChatRole.Tool)
             {
@@ -967,17 +965,17 @@ public sealed partial class ChatClientAgent : AIAgent
             firstKeptIndex = i;
         }
 
-        if (firstKeptIndex == messages.Count)
+        if (firstKeptIndex == responseMessages.Count)
         {
             // Nothing was filtered.
-            return messages;
+            return responseMessages;
         }
 
         // Return only the messages before the filtered tail.
         var trimmed = new List<ChatMessage>(firstKeptIndex);
         for (int j = 0; j < firstKeptIndex; j++)
         {
-            trimmed.Add(messages[j]);
+            trimmed.Add(responseMessages[j]);
         }
 
         return trimmed;

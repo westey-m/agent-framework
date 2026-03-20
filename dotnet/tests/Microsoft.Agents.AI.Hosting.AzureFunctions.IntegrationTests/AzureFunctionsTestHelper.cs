@@ -9,8 +9,10 @@ namespace Microsoft.Agents.AI.Hosting.AzureFunctions.IntegrationTests;
 /// </summary>
 internal static class AzureFunctionsTestHelper
 {
+    private static readonly TimeSpan s_buildTimeout = TimeSpan.FromMinutes(5);
+
     /// <summary>
-    /// Builds the sample project, failing fast if the build fails.
+    /// Builds the sample project, failing fast if the build fails or times out.
     /// </summary>
     internal static async Task BuildSampleAsync(
         string samplePath,
@@ -35,7 +37,17 @@ internal static class AzureFunctionsTestHelper
         // Read both streams asynchronously to avoid deadlocks from filled pipe buffers
         Task<string> stdoutTask = buildProcess.StandardOutput.ReadToEndAsync();
         Task<string> stderrTask = buildProcess.StandardError.ReadToEndAsync();
-        await buildProcess.WaitForExitAsync();
+
+        using CancellationTokenSource buildCts = new(s_buildTimeout);
+        try
+        {
+            await buildProcess.WaitForExitAsync(buildCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            buildProcess.Kill(entireProcessTree: true);
+            throw new TimeoutException($"Build timed out after {s_buildTimeout.TotalMinutes} minutes for sample at {samplePath}.");
+        }
 
         await Task.WhenAll(stdoutTask, stderrTask);
 

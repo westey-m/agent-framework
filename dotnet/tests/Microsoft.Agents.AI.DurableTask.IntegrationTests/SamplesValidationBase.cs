@@ -357,7 +357,17 @@ public abstract class SamplesValidationBase : IAsyncLifetime
         // Read both streams asynchronously to avoid deadlocks from filled pipe buffers
         Task<string> stdoutTask = buildProcess.StandardOutput.ReadToEndAsync();
         Task<string> stderrTask = buildProcess.StandardError.ReadToEndAsync();
-        await buildProcess.WaitForExitAsync();
+
+        using CancellationTokenSource buildCts = new(TimeSpan.FromMinutes(5));
+        try
+        {
+            await buildProcess.WaitForExitAsync(buildCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            buildProcess.Kill(entireProcessTree: true);
+            throw new TimeoutException($"Build timed out after 5 minutes for sample at {samplePath}.");
+        }
 
         await Task.WhenAll(stdoutTask, stderrTask);
 

@@ -36,7 +36,7 @@ public sealed class WorkflowSamplesValidation(ITestOutputHelper outputHelper) : 
     private static bool s_infrastructureStarted;
     private static readonly TimeSpan s_orchestrationTimeout = TimeSpan.FromMinutes(1);
 
-    // In CI, `dotnet run` builds the Functions project from scratch before the host starts, so 60s is not enough.
+    // Timeout for the Azure Functions host to become ready after building.
     private static readonly TimeSpan s_functionsReadyTimeout = TimeSpan.FromSeconds(180);
 
     private static readonly string s_samplesPath = Path.GetFullPath(
@@ -425,11 +425,15 @@ public sealed class WorkflowSamplesValidation(ITestOutputHelper outputHelper) : 
 
     private async Task RunSampleTestAsync(string samplePath, bool requiresOpenAI, Func<IReadOnlyList<OutputLog>, Task> testAction)
     {
+        // Build the sample project first (it may not have been built as part of the solution)
+        await this.BuildSampleAsync(samplePath);
+
+        // Start the Azure Functions app
         List<OutputLog> logsContainer = [];
         using Process funcProcess = this.StartFunctionApp(samplePath, logsContainer, requiresOpenAI);
         try
         {
-            await this.WaitForAzureFunctionsAsync();
+            await this.WaitForAzureFunctionsAsync(funcProcess);
             await testAction(logsContainer);
         }
         finally
@@ -438,12 +442,44 @@ public sealed class WorkflowSamplesValidation(ITestOutputHelper outputHelper) : 
         }
     }
 
+    private async Task BuildSampleAsync(string samplePath)
+    {
+        this._outputHelper.WriteLine($"Building sample at {samplePath}...");
+
+        ProcessStartInfo buildInfo = new()
+        {
+            FileName = "dotnet",
+            Arguments = $"build -f {s_dotnetTargetFramework} -c {BuildConfiguration}",
+            WorkingDirectory = samplePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using Process buildProcess = new() { StartInfo = buildInfo };
+        buildProcess.Start();
+
+        // Read both streams asynchronously to avoid deadlocks from filled pipe buffers
+        Task<string> stdoutTask = buildProcess.StandardOutput.ReadToEndAsync();
+        Task<string> stderrTask = buildProcess.StandardError.ReadToEndAsync();
+        await buildProcess.WaitForExitAsync();
+
+        string stderr = await stderrTask;
+        if (buildProcess.ExitCode != 0)
+        {
+            string stdout = await stdoutTask;
+            throw new InvalidOperationException($"Failed to build sample at {samplePath}:\n{stdout}\n{stderr}");
+        }
+
+        this._outputHelper.WriteLine($"Build completed for {samplePath}.");
+    }
+
     private Process StartFunctionApp(string samplePath, List<OutputLog> logs, bool requiresOpenAI)
     {
         ProcessStartInfo startInfo = new()
         {
             FileName = "dotnet",
-            Arguments = $"run -f {s_dotnetTargetFramework} -c {BuildConfiguration} --port {AzureFunctionsPort}",
+            Arguments = $"run --no-build -f {s_dotnetTargetFramework} -c {BuildConfiguration} --port {AzureFunctionsPort}",
             WorkingDirectory = samplePath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -504,13 +540,20 @@ public sealed class WorkflowSamplesValidation(ITestOutputHelper outputHelper) : 
         return process;
     }
 
-    private async Task WaitForAzureFunctionsAsync()
+    private async Task WaitForAzureFunctionsAsync(Process funcProcess)
     {
         this._outputHelper.WriteLine(
             $"Waiting for Azure Functions Core Tools to be ready at http://localhost:{AzureFunctionsPort}/...");
         await this.WaitForConditionAsync(
             condition: async () =>
             {
+                // Fail fast if the host process has exited (e.g. build or startup failure)
+                if (funcProcess.HasExited)
+                {
+                    throw new InvalidOperationException(
+                        $"The Azure Functions host process exited unexpectedly with code {funcProcess.ExitCode}.");
+                }
+
                 try
                 {
                     using HttpRequestMessage request = new(HttpMethod.Head, $"http://localhost:{AzureFunctionsPort}/");

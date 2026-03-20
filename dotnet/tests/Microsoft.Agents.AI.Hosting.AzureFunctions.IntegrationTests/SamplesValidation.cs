@@ -811,7 +811,7 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
         try
         {
             // Wait for the app to be ready
-            await this.WaitForAzureFunctionsAsync();
+            await this.WaitForAzureFunctionsAsync(funcProcess);
 
             // Run the test
             await testAction(logsContainer);
@@ -919,13 +919,20 @@ public sealed class SamplesValidation(ITestOutputHelper outputHelper) : IAsyncLi
         return process;
     }
 
-    private async Task WaitForAzureFunctionsAsync()
+    private async Task WaitForAzureFunctionsAsync(Process funcProcess)
     {
         this._outputHelper.WriteLine(
             $"Waiting for Azure Functions Core Tools to be ready at http://localhost:{AzureFunctionsPort}/...");
         await this.WaitForConditionAsync(
             condition: async () =>
             {
+                // Fail fast if the host process has exited (e.g. build or startup failure)
+                if (funcProcess.HasExited)
+                {
+                    throw new InvalidOperationException(
+                        $"The Azure Functions host process exited unexpectedly with code {funcProcess.ExitCode}.");
+                }
+
                 try
                 {
                     using HttpRequestMessage request = new(HttpMethod.Head, $"http://localhost:{AzureFunctionsPort}/");

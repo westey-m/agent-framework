@@ -141,6 +141,10 @@ public abstract class SamplesValidationBase : IAsyncLifetime
     {
         string uniqueTaskHubName = $"{this.TaskHubPrefix}-{Guid.NewGuid():N}"[..^26];
 
+        // Build the sample project first so that build failures are caught immediately
+        // instead of silently failing inside 'dotnet run' and causing a timeout.
+        await this.BuildSampleAsync(samplePath);
+
         using BlockingCollection<OutputLog> logsContainer = [];
         using Process appProcess = this.StartConsoleApp(samplePath, logsContainer, uniqueTaskHubName);
 
@@ -154,7 +158,11 @@ public abstract class SamplesValidationBase : IAsyncLifetime
         }
         finally
         {
-            logsContainer.CompleteAdding();
+            if (!logsContainer.IsAddingCompleted)
+            {
+                logsContainer.CompleteAdding();
+            }
+
             await this.StopProcessAsync(appProcess);
         }
     }
@@ -329,12 +337,44 @@ public abstract class SamplesValidationBase : IAsyncLifetime
         }
     }
 
+    private async Task BuildSampleAsync(string samplePath)
+    {
+        this.OutputHelper.WriteLine($"Building sample at {samplePath}...");
+
+        ProcessStartInfo buildInfo = new()
+        {
+            FileName = "dotnet",
+            Arguments = $"build --framework {DotnetTargetFramework}",
+            WorkingDirectory = samplePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using Process buildProcess = new() { StartInfo = buildInfo };
+        buildProcess.Start();
+
+        // Read both streams asynchronously to avoid deadlocks from filled pipe buffers
+        Task<string> stdoutTask = buildProcess.StandardOutput.ReadToEndAsync();
+        Task<string> stderrTask = buildProcess.StandardError.ReadToEndAsync();
+        await buildProcess.WaitForExitAsync();
+
+        string stderr = await stderrTask;
+        if (buildProcess.ExitCode != 0)
+        {
+            string stdout = await stdoutTask;
+            throw new InvalidOperationException($"Failed to build sample at {samplePath}:\n{stdout}\n{stderr}");
+        }
+
+        this.OutputHelper.WriteLine($"Build completed for {samplePath}.");
+    }
+
     private Process StartConsoleApp(string samplePath, BlockingCollection<OutputLog> logs, string taskHubName)
     {
         ProcessStartInfo startInfo = new()
         {
             FileName = "dotnet",
-            Arguments = $"run --framework {DotnetTargetFramework}",
+            Arguments = $"run --no-build --framework {DotnetTargetFramework}",
             WorkingDirectory = samplePath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -360,10 +400,20 @@ public abstract class SamplesValidationBase : IAsyncLifetime
 
         this.ConfigureAdditionalEnvironmentVariables(startInfo, SetAndLogEnvironmentVariable);
 
-        Process process = new() { StartInfo = startInfo };
+        Process process = new() { StartInfo = startInfo, EnableRaisingEvents = true };
 
         process.ErrorDataReceived += (sender, e) => this.HandleProcessOutput(e.Data, startInfo.FileName, "err", LogLevel.Error, logs);
         process.OutputDataReceived += (sender, e) => this.HandleProcessOutput(e.Data, startInfo.FileName, "out", LogLevel.Information, logs);
+
+        // When the process exits unexpectedly (e.g. build failure), complete the log collection
+        // so that ReadLogLine returns null immediately instead of blocking until the test timeout.
+        process.Exited += (sender, e) =>
+        {
+            if (!logs.IsAddingCompleted)
+            {
+                logs.CompleteAdding();
+            }
+        };
 
         if (!process.Start())
         {

@@ -13,11 +13,11 @@ string agentType = string.Empty;
 
 for (var i = 0; i < args.Length; i++)
 {
-    if (args[i].StartsWith("--agentName", StringComparison.InvariantCultureIgnoreCase) && i + 1 < args.Length)
+    if (args[i].Equals("--agentName", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
     {
         agentName = args[++i];
     }
-    else if (args[i].StartsWith("--agentType", StringComparison.InvariantCultureIgnoreCase) && i + 1 < args.Length)
+    else if (args[i].Equals("--agentType", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
     {
         agentType = args[++i];
     }

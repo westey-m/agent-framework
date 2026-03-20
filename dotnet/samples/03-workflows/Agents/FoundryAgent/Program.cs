@@ -31,30 +31,35 @@ public static class Program
         AIAgent spanishAgent = await CreateTranslationAgentAsync("Spanish", aiProjectClient, deploymentName);
         AIAgent englishAgent = await CreateTranslationAgentAsync("English", aiProjectClient, deploymentName);
 
-        // Build the workflow by adding executors and connecting them
-        var workflow = new WorkflowBuilder(frenchAgent)
-            .AddEdge(frenchAgent, spanishAgent)
-            .AddEdge(spanishAgent, englishAgent)
-            .Build();
-
-        // Execute the workflow
-        await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, new ChatMessage(ChatRole.User, "Hello World!"));
-        // Must send the turn token to trigger the agents.
-        // The agents are wrapped as executors. When they receive messages,
-        // they will cache the messages and only start processing when they receive a TurnToken.
-        await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
-        await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+        try
         {
-            if (evt is AgentResponseUpdateEvent executorComplete)
+            // Build the workflow by adding executors and connecting them
+            var workflow = new WorkflowBuilder(frenchAgent)
+                .AddEdge(frenchAgent, spanishAgent)
+                .AddEdge(spanishAgent, englishAgent)
+                .Build();
+
+            // Execute the workflow
+            await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, new ChatMessage(ChatRole.User, "Hello World!"));
+            // Must send the turn token to trigger the agents.
+            // The agents are wrapped as executors. When they receive messages,
+            // they will cache the messages and only start processing when they receive a TurnToken.
+            await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+            await foreach (WorkflowEvent evt in run.WatchStreamAsync())
             {
-                Console.WriteLine($"{executorComplete.ExecutorId}: {executorComplete.Data}");
+                if (evt is AgentResponseUpdateEvent executorComplete)
+                {
+                    Console.WriteLine($"{executorComplete.ExecutorId}: {executorComplete.Data}");
+                }
             }
         }
-
-        // Cleanup the agents created for the sample.
-        aiProjectClient.Agents.DeleteAgent(frenchAgent.Name);
-        aiProjectClient.Agents.DeleteAgent(spanishAgent.Name);
-        aiProjectClient.Agents.DeleteAgent(englishAgent.Name);
+        finally
+        {
+            // Cleanup the agents created for the sample.
+            await aiProjectClient.Agents.DeleteAgentAsync(frenchAgent.Name);
+            await aiProjectClient.Agents.DeleteAgentAsync(spanishAgent.Name);
+            await aiProjectClient.Agents.DeleteAgentAsync(englishAgent.Name);
+        }
     }
 
     /// <summary>

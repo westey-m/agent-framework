@@ -19,6 +19,10 @@ When using `ChatClientAgent` with tools, the `FunctionInvokingChatClient` (FIC) 
 
 These discrepancies mean that a `ChatHistoryProvider`-managed conversation and a service-managed conversation can diverge in content and structure, even when processing the same interactions.
 
+### Practical Impact: Resuming After Tool-Call Termination
+
+Today, users of `AIAgent` get different behaviors depending on whether chat history is stored service-side or in a `ChatHistoryProvider`. This creates concrete challenges — for example, when the function call loop is terminated and the user wants to resume the conversation in a subsequent run. With service-stored history, the trailing `FunctionResultContent` is never persisted, so the last stored message is the `FunctionCallContent` from the service. With `ChatHistoryProvider`-stored history, the trailing `FunctionResultContent` *is* persisted. The user cannot know whether the last `FunctionResultContent` is in the chat history or not without inspecting the storage mechanism, making it difficult to write resumption logic that works correctly regardless of the storage backend.
+
 ### Relationship Between the Two Discrepancies
 
 The persistence timing and `FunctionResultContent` trimming behaviors are interrelated:

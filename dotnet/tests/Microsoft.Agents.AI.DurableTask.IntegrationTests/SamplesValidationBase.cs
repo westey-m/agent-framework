@@ -359,10 +359,12 @@ public abstract class SamplesValidationBase : IAsyncLifetime
         Task<string> stderrTask = buildProcess.StandardError.ReadToEndAsync();
         await buildProcess.WaitForExitAsync();
 
-        string stderr = await stderrTask;
+        await Task.WhenAll(stdoutTask, stderrTask);
+
+        string stdout = stdoutTask.Result;
+        string stderr = stderrTask.Result;
         if (buildProcess.ExitCode != 0)
         {
-            string stdout = await stdoutTask;
             throw new InvalidOperationException($"Failed to build sample at {samplePath}:\n{stdout}\n{stderr}");
         }
 

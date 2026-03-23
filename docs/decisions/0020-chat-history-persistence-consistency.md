@@ -80,8 +80,6 @@ Settings:
 
 Chosen option: **Option 2 — Default to per-service-call persistence**, because it fully satisfies the consistency driver (A), naturally handles `FunctionResultContent` trimming without additional logic, and provides better recoverability for long-running tool-calling loops. Per-run persistence remains available via the `PersistChatHistoryAtEndOfRun` setting for users who prefer atomic run semantics.
 
-The setting is named `PersistChatHistoryAtEndOfRun` (default `false`) rather than `PersistChatHistoryAfterEachServiceCall` (default `false`), so the flag is opt-in to per-run behavior rather than opt-in to per-service-call behavior.
-
 ### Configuration Matrix
 
 The behavior depends on the combination of `UseProvidedChatClientAsIs` and `PersistChatHistoryAtEndOfRun`:

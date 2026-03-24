@@ -318,6 +318,11 @@
     <Project Path="samples/05-end-to-end/AspNetAgentAuthorization/Service/Service.csproj" />
     <Project Path="samples/05-end-to-end/AspNetAgentAuthorization/RazorWebClient/RazorWebClient.csproj" />
   </Folder>
+  <Folder Name="/Samples/05-end-to-end/VercelAIChat/">
+    <File Path="samples/05-end-to-end/VercelAIChat/docker-compose.yml" />
+    <File Path="samples/05-end-to-end/VercelAIChat/README.md" />
+    <Project Path="samples/05-end-to-end/VercelAIChat/VercelAIChat.Server/VercelAIChat.Server.csproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
@@ -486,6 +491,7 @@
     <Project Path="src/Microsoft.Agents.AI.Hosting.AGUI.AspNetCore/Microsoft.Agents.AI.Hosting.AGUI.AspNetCore.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Hosting.AzureFunctions/Microsoft.Agents.AI.Hosting.AzureFunctions.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Hosting.OpenAI/Microsoft.Agents.AI.Hosting.OpenAI.csproj" />
+    <Project Path="src/Microsoft.Agents.AI.Hosting.VercelAI.AspNetCore/Microsoft.Agents.AI.Hosting.VercelAI.AspNetCore.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Hosting/Microsoft.Agents.AI.Hosting.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Mem0/Microsoft.Agents.AI.Mem0.csproj" />
     <Project Path="src/Microsoft.Agents.AI.OpenAI/Microsoft.Agents.AI.OpenAI.csproj" />

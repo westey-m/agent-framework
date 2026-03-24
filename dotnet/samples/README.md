@@ -41,6 +41,7 @@ Some additional samples of note include:
 - [Agent Telemetry](./02-agents/AgentOpenTelemetry/README.md): Demo which showcases the integration of OpenTelemetry with the Microsoft Agent Framework using Azure OpenAI and .NET Aspire Dashboard for telemetry visualization.
 - [Durable Agents - Azure Functions](./04-hosting/DurableAgents/AzureFunctions/README.md): Samples for using the Microsoft Agent Framework with Azure Functions via the durable task extension.
 - [Durable Agents - Console Apps](./04-hosting/DurableAgents/ConsoleApps/README.md): Samples demonstrating durable agents in console applications.
+- [Vercel AI Chat](./05-end-to-end/VercelAIChat/README.md): End-to-end sample pairing a Next.js frontend (Vercel AI SDK) with a .NET Agent Framework backend via SSE streaming.
 
 ## Migration from Semantic Kernel
 

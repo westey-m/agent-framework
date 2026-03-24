@@ -1,0 +1,25 @@
+services:
+  agent-server:
+    build:
+      context: ../../..
+      dockerfile: samples/05-end-to-end/VercelAIChat/VercelAIChat.Server/Dockerfile
+    container_name: vercelai-agent-server
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-mini}
+    ports:
+      - "5001:5001"
+
+  web-client:
+    build:
+      context: VercelAIChat.Client
+      dockerfile: Dockerfile
+    container_name: vercelai-web-client
+    environment:
+      - BACKEND_URL=http://agent-server:5001
+    ports:
+      - "3000:3000"
+    depends_on:
+      agent-server:
+        condition: service_started

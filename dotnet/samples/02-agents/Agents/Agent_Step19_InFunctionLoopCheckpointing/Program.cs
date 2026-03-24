@@ -1,12 +1,15 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-// This sample demonstrates how the PersistChatHistoryAfterEachServiceCall option causes
-// chat history to be persisted after each individual call to the AI service, rather than
-// only at the end of the full agent run. When an agent uses tools, FunctionInvokingChatClient
-// loops multiple times (service call → tool execution → service call), and by default the
-// chat history is only persisted once the entire loop finishes. With this option enabled,
-// intermediate messages (tool calls and results) are persisted after each service call,
-// allowing you to inspect or recover them even if the process is interrupted mid-loop.
+// This sample demonstrates how the ChatClientAgent persists chat history after each individual
+// call to the AI service.
+// When an agent uses tools, FunctionInvokingChatClient may loop multiple times
+// (service call → tool execution → service call), and intermediate messages (tool calls and
+// results) are persisted after each service call. This allows you to inspect or recover them
+// even if the process is interrupted mid-loop, but may also result in chat history that is not
+// yet finalized (e.g., tool calls without results) being persisted, which may be undesirable in some cases.
+//
+// To opt into end-of-run persistence instead (atomic run semantics), set
+// PersistChatHistoryAtEndOfRun = true on ChatClientAgentOptions.
 //
 // The sample runs two multi-turn conversations: one using non-streaming (RunAsync) and one
 // using streaming (RunStreamingAsync), to demonstrate correct behavior in both modes.
@@ -50,12 +53,12 @@ static string GetTime([Description("The city name.")] string city) =>
         _ => $"{city}: time data not available."
     };
 
-// Create the agent with PersistChatHistoryAfterEachServiceCall enabled.
+// Create the agent — per-service-call persistence is the default behavior.
 // The in-memory ChatHistoryProvider is used by default when the service does not require service stored chat
 // history, so for those cases, we can inspect the chat history via session.TryGetInMemoryChatHistory().
 IChatClient chatClient = string.Equals(store, "TRUE", StringComparison.OrdinalIgnoreCase) ?
-    openAIClient.GetResponsesClient(deploymentName).AsIChatClient() :
-    openAIClient.GetResponsesClient(deploymentName).AsIChatClientWithStoredOutputDisabled();
+    openAIClient.GetResponsesClient().AsIChatClient(deploymentName) :
+    openAIClient.GetResponsesClient().AsIChatClientWithStoredOutputDisabled(deploymentName);
 AIAgent agent = chatClient.AsAIAgent(
     new ChatClientAgentOptions
     {
@@ -65,7 +68,6 @@ AIAgent agent = chatClient.AsAIAgent(
             Instructions = "You are a helpful assistant. When asked about multiple cities, call the appropriate tool for each city.",
             Tools = [AIFunctionFactory.Create(GetWeather), AIFunctionFactory.Create(GetTime)]
         },
-        PersistChatHistoryAfterEachServiceCall = true,
     });
 
 await RunNonStreamingAsync();

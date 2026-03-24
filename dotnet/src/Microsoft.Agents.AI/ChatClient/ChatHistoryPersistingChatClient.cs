@@ -12,22 +12,34 @@ namespace Microsoft.Agents.AI;
 
 /// <summary>
 /// A delegating chat client that notifies <see cref="ChatHistoryProvider"/> and <see cref="AIContextProvider"/>
-/// instances of request and response messages after each individual call to the inner chat client.
+/// instances of request and response messages after each individual call to the inner chat client,
+/// or marks messages for later persistence depending on the configured mode.
 /// </summary>
 /// <remarks>
 /// <para>
 /// This decorator is intended to operate between the <see cref="FunctionInvokingChatClient"/> and the leaf
-/// <see cref="IChatClient"/> in a <see cref="ChatClientAgent"/> pipeline. It ensures that providers are notified
-/// after each service call rather than only at the end of the full agent run, so that intermediate messages
-/// (e.g., tool calls and results) are saved even if the process is interrupted mid-loop.
+/// <see cref="IChatClient"/> in a <see cref="ChatClientAgent"/> pipeline.
+/// </para>
+/// <para>
+/// In persist mode (the default), it ensures that providers are notified and the session's
+/// <see cref="ChatClientAgentSession.ConversationId"/> is updated after each service call, so that
+/// intermediate messages (e.g., tool calls and results) are saved even if the process is interrupted
+/// mid-loop.
+/// </para>
+/// <para>
+/// In mark-only mode (<see cref="MarkOnly"/> is <see langword="true"/>), it marks messages with metadata
+/// but does not notify providers or update the <see cref="ChatClientAgentSession.ConversationId"/>.
+/// Both are deferred to the <see cref="ChatClientAgent"/> at the end of the run, providing atomic
+/// run semantics.
 /// </para>
 /// <para>
 /// This chat client must be used within the context of a running <see cref="ChatClientAgent"/>. It retrieves the
 /// current agent and session from <see cref="AIAgent.CurrentRunContext"/>, which is set automatically when an agent's
 /// <see cref="AIAgent.RunAsync(IEnumerable{ChatMessage}, AgentSession?, AgentRunOptions?, CancellationToken)"/> or
 /// <see cref="AIAgent.RunStreamingAsync(IEnumerable{ChatMessage}, AgentSession?, AgentRunOptions?, CancellationToken)"/>
-/// method is called. An <see cref="InvalidOperationException"/> is thrown if no run context is available or if the
-/// agent is not a <see cref="ChatClientAgent"/>.
+/// method is called. The <see cref="ChatClientAgent"/> ensures the run context always contains a resolved session,
+/// even when the caller passes null. An <see cref="InvalidOperationException"/> is thrown if no run context is
+/// available or if the agent is not a <see cref="ChatClientAgent"/>.
 /// </para>
 /// </remarks>
 internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
@@ -42,10 +54,31 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
     /// Initializes a new instance of the <see cref="ChatHistoryPersistingChatClient"/> class.
     /// </summary>
     /// <param name="innerClient">The underlying chat client that will handle the core operations.</param>
-    public ChatHistoryPersistingChatClient(IChatClient innerClient)
+    /// <param name="markOnly">
+    /// When <see langword="true"/>, messages are marked with metadata but not persisted immediately,
+    /// and the session's <see cref="ChatClientAgentSession.ConversationId"/> is not updated.
+    /// The <see cref="ChatClientAgent"/> will persist only the marked messages and update the
+    /// conversation ID at the end of the run.
+    /// When <see langword="false"/> (the default), messages are persisted and the conversation ID
+    /// is updated immediately after each service call.
+    /// </param>
+    public ChatHistoryPersistingChatClient(IChatClient innerClient, bool markOnly = false)
         : base(innerClient)
     {
+        this.MarkOnly = markOnly;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether this decorator is in mark-only mode.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="true"/>, messages are marked with metadata but not persisted immediately,
+    /// and the session's <see cref="ChatClientAgentSession.ConversationId"/> is not updated.
+    /// Both are deferred to the <see cref="ChatClientAgent"/> at the end of the run.
+    /// When <see langword="false"/>, messages are persisted and the conversation ID is updated
+    /// after each service call.
+    /// </remarks>
+    public bool MarkOnly { get; }
 
     /// <inheritdoc/>
     public override async Task<ChatResponse> GetResponseAsync(
@@ -68,10 +101,24 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
         }
 
         var newRequestMessages = GetNewRequestMessages(messages);
-        agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
-        await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
-        MarkAsPersisted(newRequestMessages);
-        MarkAsPersisted(response.Messages);
+
+        if (this.ShouldDeferPersistence(options))
+        {
+            // In mark-only mode or when resuming from a continuation token, just mark messages
+            // for later persistence by ChatClientAgent. Conversation ID and provider notification
+            // are deferred to end-of-run. For continuation tokens, the end-of-run handler needs
+            // to send the combined data from both the previous and current runs.
+            MarkAsPersisted(newRequestMessages);
+            MarkAsPersisted(response.Messages);
+        }
+        else
+        {
+            // In persist mode, persist immediately and update conversation ID.
+            agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
+            await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
+            MarkAsPersisted(newRequestMessages);
+            MarkAsPersisted(response.Messages);
+        }
 
         return response;
     }
@@ -130,10 +177,24 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
 
         var chatResponse = responseUpdates.ToChatResponse();
         var newRequestMessages = GetNewRequestMessages(messages);
-        agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
-        await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
-        MarkAsPersisted(newRequestMessages);
-        MarkAsPersisted(chatResponse.Messages);
+
+        if (this.ShouldDeferPersistence(options))
+        {
+            // In mark-only mode or when resuming from a continuation token, just mark messages
+            // for later persistence by ChatClientAgent. Conversation ID and provider notification
+            // are deferred to end-of-run. For continuation tokens, the end-of-run handler needs
+            // to send the combined data from both the previous and current runs.
+            MarkAsPersisted(newRequestMessages);
+            MarkAsPersisted(chatResponse.Messages);
+        }
+        else
+        {
+            // In persist mode, persist immediately and update conversation ID.
+            agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
+            await agent.NotifyProvidersOfNewMessagesAsync(session, newRequestMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
+            MarkAsPersisted(newRequestMessages);
+            MarkAsPersisted(chatResponse.Messages);
+        }
     }
 
     /// <summary>
@@ -146,12 +207,10 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
                 $"{nameof(ChatHistoryPersistingChatClient)} can only be used within the context of a running AIAgent. " +
                 "Ensure that the chat client is being invoked as part of an AIAgent.RunAsync or AIAgent.RunStreamingAsync call.");
 
-        if (runContext.Agent is not ChatClientAgent chatClientAgent)
-        {
-            throw new InvalidOperationException(
+        var chatClientAgent = runContext.Agent.GetService<ChatClientAgent>()
+            ?? throw new InvalidOperationException(
                 $"{nameof(ChatHistoryPersistingChatClient)} can only be used with a {nameof(ChatClientAgent)}. " +
                 $"The current agent is of type '{runContext.Agent.GetType().Name}'.");
-        }
 
         if (runContext.Session is not ChatClientAgentSession chatClientAgentSession)
         {
@@ -161,6 +220,20 @@ internal sealed class ChatHistoryPersistingChatClient : DelegatingChatClient
         }
 
         return (chatClientAgent, chatClientAgentSession);
+    }
+
+    /// <summary>
+    /// Determines whether persistence should be deferred to end-of-run instead of happening immediately.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when in <see cref="MarkOnly"/> mode, when the call is resuming from
+    /// a continuation token (since the end-of-run handler needs to combine data from the previous
+    /// and current runs), or when background responses are allowed (since the caller may stop
+    /// consuming the stream mid-run, preventing the post-stream persistence code from executing).
+    /// </returns>
+    private bool ShouldDeferPersistence(ChatOptions? options)
+    {
+        return this.MarkOnly || options?.ContinuationToken is not null || options?.AllowBackgroundResponses is true;
     }
 
     /// <summary>

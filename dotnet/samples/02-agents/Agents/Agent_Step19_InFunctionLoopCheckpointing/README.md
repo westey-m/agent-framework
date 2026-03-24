@@ -1,17 +1,18 @@
 # In-Function-Loop Checkpointing
 
-This sample demonstrates how the `PersistChatHistoryAfterEachServiceCall` option on `ChatClientAgentOptions` causes chat history to be saved after each individual call to the AI service, rather than only at the end of the full agent run.
+This sample demonstrates how `ChatClientAgent` persists chat history after each individual call to the AI service by default. This per-service-call persistence ensures intermediate progress is saved during the function invocation loop.
 
 ## What This Sample Shows
 
-When an agent uses tools, the `FunctionInvokingChatClient` loops multiple times (service call → tool execution → service call → …). By default, chat history is only persisted once the entire loop finishes. With `PersistChatHistoryAfterEachServiceCall` enabled:
+When an agent uses tools, the `FunctionInvokingChatClient` loops multiple times (service call → tool execution → service call → …). By default, chat history is persisted after each service call via the `ChatHistoryPersistingChatClient` decorator:
 
 - A `ChatHistoryPersistingChatClient` decorator is automatically inserted into the chat client pipeline
 - After each service call, the decorator notifies the `ChatHistoryProvider` (and any `AIContextProvider` instances) with the new messages
 - Only **new** messages are sent to providers on each notification — messages that were already persisted in an earlier call within the same run are deduplicated automatically
-- The end-of-run persistence in `ChatClientAgent` is skipped to avoid double-persisting
 
-This is useful for:
+To opt into end-of-run persistence instead (atomic run semantics), set `PersistChatHistoryAtEndOfRun = true` on `ChatClientAgentOptions`. In that mode, the decorator marks messages with metadata rather than persisting them immediately, and `ChatClientAgent` persists only the marked messages at the end of the run.
+
+Per-service-call persistence is useful for:
 - **Crash recovery** — if the process is interrupted mid-loop, the intermediate tool calls and results are already persisted
 - **Observability** — you can inspect the chat history while the agent is still running (e.g., during streaming)
 - **Long-running tool loops** — agents with many sequential tool calls benefit from incremental persistence

@@ -15,17 +15,17 @@ namespace Microsoft.Agents.AI.UnitTests;
 /// <summary>
 /// Contains unit tests for the <see cref="ChatHistoryPersistingChatClient"/> decorator,
 /// verifying that it persists messages via the <see cref="ChatHistoryProvider"/> after each
-/// individual service call when the <see cref="ChatClientAgentOptions.PersistChatHistoryAfterEachServiceCall"/>
-/// option is enabled.
+/// individual service call by default, or marks messages for end-of-run persistence when the
+/// <see cref="ChatClientAgentOptions.PersistChatHistoryAtEndOfRun"/> option is enabled.
 /// </summary>
 public class ChatHistoryPersistingChatClientTests
 {
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled,
+    /// Verifies that by default (PersistChatHistoryAtEndOfRun is false),
     /// the ChatHistoryProvider receives messages after a successful non-streaming call.
     /// </summary>
     [Fact]
-    public async Task RunAsync_PersistsMessagesPerServiceCall_WhenOptionEnabledAsync()
+    public async Task RunAsync_PersistsMessagesPerServiceCall_ByDefaultAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -50,7 +50,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -68,11 +68,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is disabled (default),
-    /// the ChatHistoryProvider still receives messages at end-of-run as before.
+    /// Verifies that when per-service-call persistence is active (default),
+    /// the ChatHistoryProvider receives messages at the end of the run.
     /// </summary>
     [Fact]
-    public async Task RunAsync_PersistsMessagesAtEndOfRun_WhenOptionDisabledAsync()
+    public async Task RunAsync_PersistsMessagesAtEndOfRun_WhenOptionEnabledAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -97,7 +97,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = false,
+            PersistChatHistoryAtEndOfRun = true,
         });
 
         // Act
@@ -115,11 +115,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled and the service call fails,
+    /// Verifies that when per-service-call persistence is active (default) and the service call fails,
     /// the ChatHistoryProvider is notified with the exception.
     /// </summary>
     [Fact]
-    public async Task RunAsync_NotifiesProviderOfFailure_WhenOptionEnabledAndServiceFailsAsync()
+    public async Task RunAsync_NotifiesProviderOfFailure_WhenPerServiceCallPersistenceActiveAsync()
     {
         // Arrange
         var expectedException = new InvalidOperationException("Service failed");
@@ -145,7 +145,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -163,11 +163,29 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that the decorator is injected into the pipeline when the option is set
+    /// Verifies that the decorator is injected in persist mode by default
     /// and can be discovered via GetService.
     /// </summary>
     [Fact]
-    public void ChatClient_ContainsDecorator_WhenOptionEnabled()
+    public void ChatClient_ContainsDecorator_InPersistMode_ByDefault()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+
+        // Act
+        ChatClientAgent agent = new(mockService.Object, options: new());
+
+        // Assert
+        var decorator = agent.ChatClient.GetService<ChatHistoryPersistingChatClient>();
+        Assert.NotNull(decorator);
+        Assert.False(decorator.MarkOnly);
+    }
+
+    /// <summary>
+    /// Verifies that the decorator is injected in mark-only mode when PersistChatHistoryAtEndOfRun is true.
+    /// </summary>
+    [Fact]
+    public void ChatClient_ContainsDecorator_InMarkOnlyMode_WhenPersistAtEndOfRun()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -175,37 +193,17 @@ public class ChatHistoryPersistingChatClientTests
         // Act
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = true,
         });
 
         // Assert
         var decorator = agent.ChatClient.GetService<ChatHistoryPersistingChatClient>();
         Assert.NotNull(decorator);
+        Assert.True(decorator.MarkOnly);
     }
 
     /// <summary>
-    /// Verifies that the decorator is NOT injected into the pipeline when the option is not set.
-    /// </summary>
-    [Fact]
-    public void ChatClient_DoesNotContainDecorator_WhenOptionDisabled()
-    {
-        // Arrange
-        Mock<IChatClient> mockService = new();
-
-        // Act
-        ChatClientAgent agent = new(mockService.Object, options: new()
-        {
-            PersistChatHistoryAfterEachServiceCall = false,
-        });
-
-        // Assert
-        var decorator = agent.ChatClient.GetService<ChatHistoryPersistingChatClient>();
-        Assert.Null(decorator);
-    }
-
-    /// <summary>
-    /// Verifies that the decorator is NOT injected when UseProvidedChatClientAsIs is true,
-    /// even if PersistChatHistoryAfterEachServiceCall is also true.
+    /// Verifies that the decorator is NOT injected when UseProvidedChatClientAsIs is true.
     /// </summary>
     [Fact]
     public void ChatClient_DoesNotContainDecorator_WhenUseProvidedChatClientAsIs()
@@ -216,7 +214,6 @@ public class ChatHistoryPersistingChatClientTests
         // Act
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
-            PersistChatHistoryAfterEachServiceCall = true,
             UseProvidedChatClientAsIs = true,
         });
 
@@ -226,26 +223,26 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that the PersistChatHistoryAfterEachServiceCall option is included in Clone().
+    /// Verifies that the PersistChatHistoryAtEndOfRun option is included in Clone().
     /// </summary>
     [Fact]
-    public void ChatClientAgentOptions_Clone_IncludesPersistChatHistoryAfterEachServiceCall()
+    public void ChatClientAgentOptions_Clone_IncludesPersistChatHistoryAtEndOfRun()
     {
         // Arrange
         var options = new ChatClientAgentOptions
         {
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = true,
         };
 
         // Act
         var cloned = options.Clone();
 
         // Assert
-        Assert.True(cloned.PersistChatHistoryAfterEachServiceCall);
+        Assert.True(cloned.PersistChatHistoryAtEndOfRun);
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled and the service call
+    /// Verifies that when per-service-call persistence is active (default) and the service call
     /// involves a function invocation loop, the ChatHistoryProvider is called after each individual
     /// service call (not just once at the end).
     /// </summary>
@@ -295,7 +292,7 @@ public class ChatHistoryPersistingChatClientTests
         {
             ChatOptions = new() { Tools = [tool] },
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         }, services: new ServiceCollection().BuildServiceProvider());
 
         // Act
@@ -332,11 +329,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled with streaming,
+    /// Verifies that when per-service-call persistence is active (default) with streaming,
     /// the ChatHistoryProvider receives messages after the stream completes.
     /// </summary>
     [Fact]
-    public async Task RunStreamingAsync_PersistsMessagesPerServiceCall_WhenOptionEnabledAsync()
+    public async Task RunStreamingAsync_PersistsMessagesPerServiceCall_ByDefaultAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -364,7 +361,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -385,11 +382,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled,
+    /// Verifies that when per-service-call persistence is active (default),
     /// AIContextProviders are also notified of new messages after a successful call.
     /// </summary>
     [Fact]
-    public async Task RunAsync_NotifiesAIContextProviders_WhenOptionEnabledAsync()
+    public async Task RunAsync_NotifiesAIContextProviders_ByDefaultAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -413,7 +410,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             AIContextProviders = [mockContextProvider.Object],
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -431,11 +428,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled and the service fails,
+    /// Verifies that when per-service-call persistence is active (default) and the service fails,
     /// AIContextProviders are notified of the failure.
     /// </summary>
     [Fact]
-    public async Task RunAsync_NotifiesAIContextProvidersOfFailure_WhenOptionEnabledAsync()
+    public async Task RunAsync_NotifiesAIContextProvidersOfFailure_ByDefaultAsync()
     {
         // Arrange
         var expectedException = new InvalidOperationException("Service failed");
@@ -460,7 +457,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             AIContextProviders = [mockContextProvider.Object],
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -478,11 +475,11 @@ public class ChatHistoryPersistingChatClientTests
     }
 
     /// <summary>
-    /// Verifies that when PersistChatHistoryAfterEachServiceCall is enabled,
+    /// Verifies that when per-service-call persistence is active (default),
     /// both ChatHistoryProvider and AIContextProviders are notified together.
     /// </summary>
     [Fact]
-    public async Task RunAsync_NotifiesBothProviders_WhenOptionEnabledAsync()
+    public async Task RunAsync_NotifiesBothProviders_ByDefaultAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -519,7 +516,7 @@ public class ChatHistoryPersistingChatClientTests
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
             AIContextProviders = [mockContextProvider.Object],
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -593,7 +590,7 @@ public class ChatHistoryPersistingChatClientTests
         {
             ChatOptions = new() { Tools = [tool] },
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         }, services: new ServiceCollection().BuildServiceProvider());
 
         // Act
@@ -658,7 +655,7 @@ public class ChatHistoryPersistingChatClientTests
         {
             ChatOptions = new() { Tools = [tool] },
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         }, services: new ServiceCollection().BuildServiceProvider());
 
         // Act
@@ -709,7 +706,7 @@ public class ChatHistoryPersistingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatHistoryProvider = mockChatHistoryProvider.Object,
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act
@@ -746,7 +743,7 @@ public class ChatHistoryPersistingChatClientTests
 
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
-            PersistChatHistoryAfterEachServiceCall = true,
+            PersistChatHistoryAtEndOfRun = false,
         });
 
         // Act

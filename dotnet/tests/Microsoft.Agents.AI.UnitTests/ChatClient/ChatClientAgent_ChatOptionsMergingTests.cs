@@ -176,12 +176,12 @@ public class ChatClientAgent_ChatOptionsMergingTests
     }
 
     /// <summary>
-    /// Verify that ChatOptions merging returns ChatOptions with null ConversationId when both agent
-    /// and request have no ChatOptions. The sentinel conversation ID is set for per-service-call
-    /// persistence and stripped before reaching the inner client.
+    /// Verify that ChatOptions merging returns a non-null ChatOptions instance with null ConversationId
+    /// when both agent and request have no ChatOptions. The sentinel conversation ID is set for
+    /// per-service-call persistence and stripped before reaching the inner client.
     /// </summary>
     [Fact]
-    public async Task ChatOptionsMergingReturnsNullWhenBothAgentAndRequestHaveNoneAsync()
+    public async Task ChatOptionsMergingReturnsChatOptionsWithNullConversationIdWhenBothAgentAndRequestHaveNoneAsync()
     {
         // Arrange
         Mock<IChatClient> mockService = new();

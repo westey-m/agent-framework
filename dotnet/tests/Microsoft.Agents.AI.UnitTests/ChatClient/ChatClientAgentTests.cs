@@ -384,7 +384,7 @@ public partial class ChatClientAgentTests
     /// and then stripped by ChatHistoryPersistingChatClient before reaching the inner client.
     /// </summary>
     [Fact]
-    public async Task RunAsyncPassesNullChatOptionsWhenUsingRegularAgentRunOptionsAsync()
+    public async Task RunAsyncPassesChatOptionsWithNullConversationIdWhenUsingRegularAgentRunOptionsAsync()
     {
         // Arrange
         ChatOptions? capturedOptions = null;

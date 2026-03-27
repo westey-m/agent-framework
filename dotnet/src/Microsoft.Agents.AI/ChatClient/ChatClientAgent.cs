@@ -1019,7 +1019,7 @@ public sealed partial class ChatClientAgent : AIAgent
             var loggingAgentName = this.GetLoggingAgentName();
             this._logger.LogAgentChatClientMissingPersistingClient(
                 this.Id,
-                loggingAgentName);
+                loggingAgentName); // CodeQL [CWE-359] False positive: Agent name is not personal information, but rather just the name of a code component (agent in this case).
         }
     }
 

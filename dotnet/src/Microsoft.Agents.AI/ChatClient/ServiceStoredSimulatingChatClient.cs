@@ -76,28 +76,38 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         var (agent, session) = GetRequiredAgentAndSession();
         options = StripLocalHistoryConversationId(options);
 
-        // Load history and prepend it to the messages.
-        var allMessages = await agent.LoadChatHistoryAsync(session, messages, options, cancellationToken).ConfigureAwait(false);
+        bool isServiceManaged = !string.IsNullOrEmpty(options?.ConversationId);
+        var newMessages = messages as IList<ChatMessage> ?? messages.ToList();
+
+        // When simulating, load history and prepend it. When the service manages
+        // history (real ConversationId), just forward the input messages as-is.
+        var messagesForService = isServiceManaged
+            ? newMessages
+            : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
 
         ChatResponse response;
         try
         {
-            response = await base.GetResponseAsync(allMessages, options, cancellationToken).ConfigureAwait(false);
+            response = await base.GetResponseAsync(messagesForService, options, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            var newRequestMessages = GetNewRequestMessages(allMessages);
-            await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessages, options, cancellationToken).ConfigureAwait(false);
+            await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
-        var newMessages = GetNewRequestMessages(allMessages);
-
-        // Persist immediately after each service call.
         await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
 
-        // Set the sentinel ConversationId on the response and session.
-        SetSentinelConversationId(response, session);
+        // If the service returned (or already had) a real ConversationId, update the session
+        // with it. Otherwise set our sentinel so FICC treats this as service-managed.
+        if (isServiceManaged || !string.IsNullOrEmpty(response.ConversationId))
+        {
+            agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
+        }
+        else
+        {
+            SetSentinelConversationId(response, session);
+        }
 
         return response;
     }
@@ -111,20 +121,25 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         var (agent, session) = GetRequiredAgentAndSession();
         options = StripLocalHistoryConversationId(options);
 
-        // Load history and prepend it to the messages.
-        var allMessages = await agent.LoadChatHistoryAsync(session, messages, options, cancellationToken).ConfigureAwait(false);
+        bool isServiceManaged = !string.IsNullOrEmpty(options?.ConversationId);
+        var newMessages = messages as IList<ChatMessage> ?? messages.ToList();
+
+        // When simulating, load history and prepend it. When the service manages
+        // history (real ConversationId), just forward the input messages as-is.
+        var messagesForService = isServiceManaged
+            ? newMessages
+            : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
 
         List<ChatResponseUpdate> responseUpdates = [];
 
         IAsyncEnumerator<ChatResponseUpdate> enumerator;
         try
         {
-            enumerator = base.GetStreamingResponseAsync(allMessages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+            enumerator = base.GetStreamingResponseAsync(messagesForService, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
         }
         catch (Exception ex)
         {
-            var newRequestMessagesOnFailure = GetNewRequestMessages(allMessages);
-            await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
+            await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -135,8 +150,7 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         }
         catch (Exception ex)
         {
-            var newRequestMessagesOnFailure = GetNewRequestMessages(allMessages);
-            await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
+            await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
             throw;
         }
 
@@ -144,7 +158,18 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         {
             var update = enumerator.Current;
             responseUpdates.Add(update);
-            update.ConversationId = LocalHistoryConversationId; // Set the sentinel ConversationId on each update for the streaming case.
+
+            // If the service returned a real ConversationId on any update, remember that.
+            // Otherwise stamp our sentinel so FICC treats this as service-managed.
+            if (!string.IsNullOrEmpty(update.ConversationId))
+            {
+                isServiceManaged = true;
+            }
+            else if (!isServiceManaged)
+            {
+                update.ConversationId = LocalHistoryConversationId;
+            }
+
             yield return update;
 
             try
@@ -153,20 +178,23 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
             }
             catch (Exception ex)
             {
-                var newRequestMessagesOnFailure = GetNewRequestMessages(allMessages);
-                await agent.NotifyProvidersOfFailureAsync(session, ex, newRequestMessagesOnFailure, options, cancellationToken).ConfigureAwait(false);
+                await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
 
         var chatResponse = responseUpdates.ToChatResponse();
-        var newMessages = GetNewRequestMessages(allMessages);
 
-        // Persist immediately after each service call.
         await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
 
-        // Set the sentinel ConversationId on the session. For streaming, set it on the last update.
-        session.ConversationId = LocalHistoryConversationId;
+        if (isServiceManaged)
+        {
+            agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
+        }
+        else
+        {
+            session.ConversationId = LocalHistoryConversationId;
+        }
     }
 
     /// <summary>
@@ -202,23 +230,6 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         }
 
         return (chatClientAgent, chatClientAgentSession);
-    }
-
-    /// <summary>
-    /// Returns only the request messages that have not been loaded from chat history.
-    /// </summary>
-    /// <remarks>
-    /// Messages loaded by the <see cref="ChatHistoryProvider"/> are tagged with
-    /// <see cref="AgentRequestMessageSourceType.ChatHistory"/> and should not be re-persisted.
-    /// Because <see cref="FunctionInvokingChatClient"/> treats the conversation as service-managed
-    /// (via the sentinel <see cref="LocalHistoryConversationId"/>), it clears accumulated history
-    /// between iterations, so only genuinely new messages arrive here.
-    /// </remarks>
-    /// <param name="messages">The full set of request messages to filter.</param>
-    /// <returns>A list of request messages that need to be persisted.</returns>
-    private static List<ChatMessage> GetNewRequestMessages(IEnumerable<ChatMessage> messages)
-    {
-        return messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory).ToList();
     }
 
     /// <summary>

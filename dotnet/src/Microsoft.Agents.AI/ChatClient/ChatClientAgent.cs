@@ -719,6 +719,24 @@ public sealed partial class ChatClientAgent : AIAgent
             throw new InvalidOperationException("Input messages are not allowed when continuing a background response using a continuation token.");
         }
 
+        // If a user provided two different session ids, via the session object and options, we should throw
+        // since we don't know which one to use.
+        if (!string.IsNullOrWhiteSpace(typedSession.ConversationId) && !string.IsNullOrWhiteSpace(chatOptions?.ConversationId) && typedSession.ConversationId != chatOptions!.ConversationId)
+        {
+            throw new InvalidOperationException(
+                $"""
+                The {nameof(chatOptions.ConversationId)} provided via {nameof(this.ChatOptions)} is different to the id of the provided {nameof(AgentSession)}.
+                Only one id can be used for a run.
+                """);
+        }
+
+        // Only create or update ChatOptions if we have an id on the session and we don't have the same one already in ChatOptions.
+        if (!string.IsNullOrWhiteSpace(typedSession.ConversationId) && typedSession.ConversationId != chatOptions?.ConversationId)
+        {
+            chatOptions ??= new();
+            chatOptions.ConversationId = typedSession.ConversationId;
+        }
+
         IEnumerable<ChatMessage> inputMessagesForChatClient = inputMessages;
 
         // Populate the session messages only if we are not continuing an existing response as it's not allowed.
@@ -765,24 +783,6 @@ public sealed partial class ChatClientAgent : AIAgent
                 chatOptions ??= new();
                 chatOptions.Instructions = aiContext.Instructions;
             }
-        }
-
-        // If a user provided two different session ids, via the session object and options, we should throw
-        // since we don't know which one to use.
-        if (!string.IsNullOrWhiteSpace(typedSession.ConversationId) && !string.IsNullOrWhiteSpace(chatOptions?.ConversationId) && typedSession.ConversationId != chatOptions!.ConversationId)
-        {
-            throw new InvalidOperationException(
-                $"""
-                The {nameof(chatOptions.ConversationId)} provided via {nameof(this.ChatOptions)} is different to the id of the provided {nameof(AgentSession)}.
-                Only one id can be used for a run.
-                """);
-        }
-
-        // Only create or update ChatOptions if we have an id on the session and we don't have the same one already in ChatOptions.
-        if (!string.IsNullOrWhiteSpace(typedSession.ConversationId) && typedSession.ConversationId != chatOptions?.ConversationId)
-        {
-            chatOptions ??= new();
-            chatOptions.ConversationId = typedSession.ConversationId;
         }
 
         // Materialize the accumulated messages once at the end of the provider pipeline, reusing the existing list if possible.

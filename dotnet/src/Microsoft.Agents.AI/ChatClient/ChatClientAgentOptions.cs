@@ -117,7 +117,11 @@ public sealed class ChatClientAgentOptions
     /// pipeline.
     /// </para>
     /// <para>
-    /// This option has no effect when <see cref="UseProvidedChatClientAsIs"/> is <see langword="true"/>.
+    /// When setting the <see cref="UseProvidedChatClientAsIs"/> setting to <see langword="true"/> and
+    /// <see cref="SimulateServiceStoredChatHistory"/> to <see langword="true"/>, ensure that your custom chat client stack includes a
+    /// <see cref="ServiceStoredSimulatingChatClient"/> to enable per-service-call persistence.
+    /// If no <see cref="ServiceStoredSimulatingChatClient"/> is provided, and you are not storing chat history via other means,
+    /// no chat history may be stored.
     /// When using a custom chat client stack, you can add a <see cref="ServiceStoredSimulatingChatClient"/>
     /// manually via the <see cref="ChatClientBuilderExtensions.UseServiceStoredChatHistorySimulation"/>
     /// extension method.

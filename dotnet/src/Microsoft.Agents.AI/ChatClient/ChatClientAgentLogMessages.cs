@@ -92,7 +92,7 @@ internal static partial class ChatClientAgentLogMessages
     /// </summary>
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "Agent {AgentId}/{AgentName}: SimulateServiceStoredChatHistory is enabled but we have to fall back to end-of-run persistence because the run involves background responses. Messages will be marked during the run and persisted at the end.")]
+        Message = "Agent {AgentId}/{AgentName}: SimulateServiceStoredChatHistory is enabled but we have to fall back to end-of-run persistence because the run involves background responses.")]
     public static partial void LogAgentChatClientBackgroundResponseFallback(
         this ILogger logger,
         string agentId,

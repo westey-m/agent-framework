@@ -1213,4 +1213,102 @@ public class ServiceStoredSimulatingChatClientTests
         // Assert — session should have the service ConversationId, not the sentinel
         Assert.Equal(ServiceConversationId, session!.ConversationId);
     }
+
+    /// <summary>
+    /// Verifies that when <see cref="ChatOptions.AllowBackgroundResponses"/> is true,
+    /// the decorator skips history loading and sentinel setting, letting the agent's
+    /// forced end-of-run path handle persistence.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_SkipsSimulation_WhenAllowBackgroundResponsesAsync()
+    {
+        // Arrange
+        IEnumerable<ChatMessage>? capturedMessages = null;
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions?, CancellationToken>((msgs, _, _) => capturedMessages = msgs)
+            .ReturnsAsync(new ChatResponse([new(ChatRole.Assistant, "response")]));
+
+        Mock<ChatHistoryProvider> mockChatHistoryProvider = new(null, null, null);
+        mockChatHistoryProvider.SetupGet(p => p.StateKeys).Returns(["TestChatHistoryProvider"]);
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask<IEnumerable<ChatMessage>>>("InvokingCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokingContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns((ChatHistoryProvider.InvokingContext ctx, CancellationToken _) =>
+            {
+                // Add a history message to verify it's NOT prepended in this scenario.
+                var result = ctx.RequestMessages.ToList();
+                result.Insert(0, new ChatMessage(ChatRole.Assistant, "history"));
+                return new ValueTask<IEnumerable<ChatMessage>>(result);
+            });
+        mockChatHistoryProvider
+            .Protected()
+            .Setup<ValueTask>("InvokedCoreAsync", ItExpr.IsAny<ChatHistoryProvider.InvokedContext>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask());
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            ChatHistoryProvider = mockChatHistoryProvider.Object,
+            SimulateServiceStoredChatHistory = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        await agent.RunAsync(
+            [new(ChatRole.User, "test")],
+            session,
+            new AgentRunOptions { AllowBackgroundResponses = true });
+
+        // Assert — the inner client should NOT have received history messages
+        Assert.NotNull(capturedMessages);
+        var messageList = capturedMessages!.ToList();
+        Assert.Single(messageList);
+        Assert.Equal("test", messageList[0].Text);
+
+        // Assert — session should NOT have the sentinel (agent handles ConversationId at end-of-run)
+        Assert.NotEqual(ServiceStoredSimulatingChatClient.LocalHistoryConversationId, session!.ConversationId);
+    }
+
+    /// <summary>
+    /// Verifies that in the streaming path, when <see cref="ChatOptions.AllowBackgroundResponses"/> is true,
+    /// the decorator skips history loading and sentinel setting.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_SkipsSimulation_WhenAllowBackgroundResponsesAsync()
+    {
+        // Arrange
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetStreamingResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(CreateAsyncEnumerableAsync(new ChatResponseUpdate(ChatRole.Assistant, "response")));
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            SimulateServiceStoredChatHistory = true,
+        });
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        List<AgentResponseUpdate> updates = [];
+        await foreach (var update in agent.RunStreamingAsync(
+            [new(ChatRole.User, "test")],
+            session,
+            new AgentRunOptions { AllowBackgroundResponses = true }))
+        {
+            updates.Add(update);
+        }
+
+        // Assert — updates should NOT carry the sentinel ConversationId
+        Assert.NotEmpty(updates);
+
+        // Assert — session should NOT have the sentinel
+        Assert.NotEqual(ServiceStoredSimulatingChatClient.LocalHistoryConversationId, session!.ConversationId);
+    }
 }

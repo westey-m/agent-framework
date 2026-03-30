@@ -77,11 +77,16 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         options = StripLocalHistoryConversationId(options);
 
         bool isServiceManaged = !string.IsNullOrEmpty(options?.ConversationId);
+        bool isContinuationOrBackground = options?.ContinuationToken is not null
+            || options?.AllowBackgroundResponses is true;
+        bool skipSimulation = isServiceManaged || isContinuationOrBackground;
+
         var newMessages = messages as IList<ChatMessage> ?? messages.ToList();
 
         // When simulating, load history and prepend it. When the service manages
-        // history (real ConversationId), just forward the input messages as-is.
-        var messagesForService = isServiceManaged
+        // history (real ConversationId) or this is a continuation/background run,
+        // just forward the input messages as-is.
+        var messagesForService = skipSimulation
             ? newMessages
             : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
 
@@ -98,14 +103,19 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
 
         await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
 
-        // If the service returned (or already had) a real ConversationId, update the session
-        // with it. Otherwise set our sentinel so FICC treats this as service-managed.
-        if (isServiceManaged || !string.IsNullOrEmpty(response.ConversationId))
+        if (isContinuationOrBackground)
         {
+            // Continuation/background run — the agent's forced end-of-run handles
+            // session ConversationId and persistence; the decorator is a no-op.
+        }
+        else if (isServiceManaged || !string.IsNullOrEmpty(response.ConversationId))
+        {
+            // Service manages history — update session with the real ConversationId.
             agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
         }
         else
         {
+            // Normal simulated path — set sentinel so FICC treats this as service-managed.
             SetSentinelConversationId(response, session);
         }
 
@@ -122,11 +132,16 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
         options = StripLocalHistoryConversationId(options);
 
         bool isServiceManaged = !string.IsNullOrEmpty(options?.ConversationId);
+        bool isContinuationOrBackground = options?.ContinuationToken is not null
+            || options?.AllowBackgroundResponses is true;
+        bool skipSimulation = isServiceManaged || isContinuationOrBackground;
+
         var newMessages = messages as IList<ChatMessage> ?? messages.ToList();
 
         // When simulating, load history and prepend it. When the service manages
-        // history (real ConversationId), just forward the input messages as-is.
-        var messagesForService = isServiceManaged
+        // history (real ConversationId) or this is a continuation/background run,
+        // just forward the input messages as-is.
+        var messagesForService = skipSimulation
             ? newMessages
             : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
 
@@ -160,12 +175,13 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
             responseUpdates.Add(update);
 
             // If the service returned a real ConversationId on any update, remember that.
-            // Otherwise stamp our sentinel so FICC treats this as service-managed.
+            // Otherwise stamp our sentinel so FICC treats this as service-managed —
+            // unless this is a continuation/background run where the agent handles everything.
             if (!string.IsNullOrEmpty(update.ConversationId))
             {
                 isServiceManaged = true;
             }
-            else if (!isServiceManaged)
+            else if (!skipSimulation)
             {
                 update.ConversationId = LocalHistoryConversationId;
             }
@@ -187,12 +203,19 @@ internal sealed class ServiceStoredSimulatingChatClient : DelegatingChatClient
 
         await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
 
-        if (isServiceManaged)
+        if (isContinuationOrBackground)
         {
+            // Continuation/background run — the agent's forced end-of-run handles
+            // session ConversationId and persistence; the decorator is a no-op.
+        }
+        else if (isServiceManaged)
+        {
+            // Service manages history — update session with the real ConversationId.
             agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
         }
         else
         {
+            // Normal simulated path — set sentinel on session.
             session.ConversationId = LocalHistoryConversationId;
         }
     }

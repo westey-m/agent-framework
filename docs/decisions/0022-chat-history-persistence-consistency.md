@@ -41,7 +41,7 @@ The persistence timing and `FunctionResultContent` trimming behaviors are interr
 
 ## Considered Options
 
-- Option 1: Per-run persistence with opt-in FRC trimming
+- Option 1: Per-run persistence with opt-in FRC (FunctionResultContent) trimming
 - Option 2: Opt-in per-service-call persistence (via `SimulateServiceStoredChatHistory`)
 
 ## Pros and Cons of the Options

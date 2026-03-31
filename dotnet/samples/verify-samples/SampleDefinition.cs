@@ -18,15 +18,17 @@ internal sealed class SampleDefinition
     public required string ProjectPath { get; init; }
 
     /// <summary>
-    /// Environment variables that the sample requires (will throw if missing).
-    /// The runner will check these before running and report a failure if any are unset.
+    /// Environment variables that the sample requires for a meaningful run.
+    /// The runner checks these before running and will skip the sample if any are unset,
+    /// recording a skip reason that indicates which required variables are missing.
     /// </summary>
     public string[] RequiredEnvironmentVariables { get; init; } = [];
 
     /// <summary>
-    /// Environment variables that the sample uses with defaults.
-    /// If these are not set, the <c>SampleEnvironment</c> helper will prompt on the console,
-    /// which would cause the sample to hang. The runner checks these and reports a failure if unset.
+    /// Environment variables that the sample can use but typically has fallbacks or defaults for.
+    /// If these are not set, the sample might prompt or behave interactively, which could cause
+    /// automated verification to hang. The runner checks these and skips the sample if they are unset
+    /// to avoid non-deterministic or blocking behavior in automated runs.
     /// </summary>
     public string[] OptionalEnvironmentVariables { get; init; } = [];
 

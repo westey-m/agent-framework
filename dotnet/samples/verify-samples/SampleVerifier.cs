@@ -137,6 +137,13 @@ internal sealed class SampleVerifier
                     var detail = string.IsNullOrWhiteSpace(er.Detail) ? er.Expectation : $"{er.Expectation} — {er.Detail}";
                     unmet.Add(detail ?? "Unknown expectation");
                 }
+
+                // If the model flagged overall failure but all individual expectations were met,
+                // still treat as failure using the overall reasoning.
+                if (unmet.Count == 0 && !result.Pass)
+                {
+                    unmet.Add(reasoning);
+                }
             }
             else if (!result.Pass)
             {

@@ -21,7 +21,7 @@ dotnet run --project samples/verify-samples -- --category 02-agents --log result
 # Run specific samples by name
 dotnet run --project samples/verify-samples -- Agent_Step02_StructuredOutput Agent_Step09_AsFunctionTool
 
-# Control parallelism (default 4)
+# Control parallelism (default 8)
 dotnet run --project samples/verify-samples -- --parallel 8 --log results.log
 
 # Combine options

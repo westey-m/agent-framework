@@ -1,14 +1,15 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-// This tool runs the 01-get-started and 02-agents samples and verifies their output.
+// This tool runs the 01-get-started, 02-agents, and 03-workflows samples and verifies their output.
 // Deterministic samples are verified with exact string matching.
 // Non-deterministic (LLM) samples are verified using an agent-framework agent.
 //
 // Usage:
 //   dotnet run                                          # Run all samples
 //   dotnet run -- 01_hello_agent 05_first_workflow      # Run specific samples by name
-//   dotnet run -- --category 01-get-started             # Run a specific category
-//   dotnet run -- --category 02-agents                  # Run another category
+//   dotnet run -- --category 01-get-started             # Run the 01-get-started category
+//   dotnet run -- --category 02-agents                  # Run the 02-agents category
+//   dotnet run -- --category 03-workflows               # Run the 03-workflows category
 //   dotnet run -- --parallel 16                         # Run up to 16 samples concurrently
 //   dotnet run -- --log results.log                     # Write sequential log to file
 //   dotnet run -- --csv results.csv                     # Write CSV summary to file

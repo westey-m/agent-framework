@@ -1078,7 +1078,7 @@ internal static class AgentsSamples
         {
             Name = "FoundryAgent_Step19_SharePoint",
             ProjectPath = "samples/02-agents/AgentsWithFoundry/Agent_Step19_SharePoint",
-            RequiredEnvironmentVariables = ["AZURE_FOUNDRY_PROJECT_ENDPOINT", "AZURE_FOUNDRY_PROJECT_DEPLOYMENT_NAME", "SHAREPOINT_PROJECT_CONNECTION_ID"],
+            RequiredEnvironmentVariables = ["AZURE_AI_PROJECT_ENDPOINT", "AZURE_AI_MODEL_DEPLOYMENT_NAME", "SHAREPOINT_PROJECT_CONNECTION_ID"],
             SkipReason = "Requires SharePoint connection.",
         },
 
@@ -1086,7 +1086,7 @@ internal static class AgentsSamples
         {
             Name = "FoundryAgent_Step20_MicrosoftFabric",
             ProjectPath = "samples/02-agents/AgentsWithFoundry/Agent_Step20_MicrosoftFabric",
-            RequiredEnvironmentVariables = ["AZURE_FOUNDRY_PROJECT_ENDPOINT", "AZURE_FOUNDRY_PROJECT_DEPLOYMENT_NAME", "FABRIC_PROJECT_CONNECTION_ID"],
+            RequiredEnvironmentVariables = ["AZURE_AI_PROJECT_ENDPOINT", "AZURE_AI_MODEL_DEPLOYMENT_NAME", "FABRIC_PROJECT_CONNECTION_ID"],
             SkipReason = "Requires Microsoft Fabric connection.",
         },
 

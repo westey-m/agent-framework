@@ -50,7 +50,7 @@ internal sealed class VerifyOptions
         var logFilePath = ExtractArg(argList, "--log");
         var csvFilePath = ExtractArg(argList, "--csv");
 
-        int maxParallelism = 4;
+        int maxParallelism = 8;
         var parallelArg = ExtractArg(argList, "--parallel");
         if (parallelArg is not null && int.TryParse(parallelArg, out var p) && p > 0)
         {
@@ -105,8 +105,15 @@ internal sealed class VerifyOptions
     private static string? ExtractArg(List<string> list, string flag)
     {
         var idx = list.IndexOf(flag);
-        if (idx < 0 || idx + 1 >= list.Count)
+        if (idx < 0)
         {
+            return null;
+        }
+
+        if (idx + 1 >= list.Count)
+        {
+            Console.Error.WriteLine($"Missing value for {flag}.");
+            list.RemoveAt(idx);
             return null;
         }
 

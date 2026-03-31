@@ -102,7 +102,20 @@ The behavior depends on the combination of `UseProvidedChatClientAsIs` and `Requ
 
 #### Conversation ID Consistency
 
-We should introduce a separate `ConversationIdPersistingChatClient`, middleware which allows us to
-persist response `ConversationIds` during the FICC loop. This could be used with or without
-`PerServiceCallChatHistoryPersistingChatClient`.
+When `RequirePerServiceCallChatHistoryPersistence` is enabled, the `PerServiceCallChatHistoryPersistingChatClient`
+decorator also updates `session.ConversationId` after each service call. This handles two scenarios:
+
+1. **Framework-managed chat history** — the decorator sets a sentinel `ConversationId` on the response
+   so that `FunctionInvokingChatClient` treats the conversation as service-managed (clearing accumulated
+   history between iterations and not injecting duplicate `FunctionCallContent` during approval processing).
+
+2. **Service-stored chat history** — when the service returns a real `ConversationId`, the decorator
+   updates `session.ConversationId` immediately after each service call, rather than deferring the update
+   to the end of the run. This ensures intermediate ConversationId changes are captured even if the
+   process is interrupted mid-loop.
+
+For some service-stored scenarios (e.g., the Conversations API with the Responses API), there is only
+one thread with one ID, so every service call returns the same ConversationId and this per-call update
+makes no practical difference. Enabling `RequirePerServiceCallChatHistoryPersistence` ensures consistent
+per-service-call behavior across all service types regardless of how they manage ConversationIds.
 

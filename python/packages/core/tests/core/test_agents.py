@@ -154,6 +154,24 @@ def test_chat_client_agent_type(client: SupportsChatGetResponse) -> None:
     assert isinstance(chat_client_agent, SupportsAgentRun)
 
 
+def test_chat_client_agent_uses_client_model_attribute(chat_client_base) -> None:
+    chat_client_base.model = "claude-model"  # type: ignore[attr-defined]
+
+    agent = Agent(client=chat_client_base)
+
+    assert agent.default_options["model"] == "claude-model"
+    assert "model_id" not in agent.default_options
+
+
+def test_chat_client_agent_prefers_default_model_over_client_model(chat_client_base) -> None:
+    chat_client_base.model = "legacy-model"  # type: ignore[attr-defined]
+
+    agent = Agent(client=chat_client_base, default_options={"model": "claude-model"})
+
+    assert agent.default_options["model"] == "claude-model"
+    assert "model_id" not in agent.default_options
+
+
 def test_agent_init_docstring_surfaces_raw_agent_constructor_docs() -> None:
     docstring = inspect.getdoc(Agent.__init__)
 
@@ -1924,6 +1942,20 @@ def test_merge_options_none_values_ignored():
 
     assert result["key1"] == "value1"  # None didn't override
     assert result["key2"] == "value2"
+
+
+def test_merge_options_runtime_model_overrides_default_model() -> None:
+    """Test _merge_options lets a runtime model override a default model."""
+    result = _merge_options({"model": "default-model"}, {"model": "runtime-model"})
+
+    assert result["model"] == "runtime-model"
+
+
+def test_merge_options_preserves_base_model_without_override() -> None:
+    """Test _merge_options preserves the base model when there is no override."""
+    result = _merge_options({"model": "preferred-model"}, {})
+
+    assert result["model"] == "preferred-model"
 
 
 def test_merge_options_tools_combined():

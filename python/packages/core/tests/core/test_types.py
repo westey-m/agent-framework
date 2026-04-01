@@ -754,6 +754,14 @@ def test_chat_response():
     assert str(response) == response.text
 
 
+def test_chat_response_accepts_model_alias() -> None:
+    """Test ChatResponse accepts model and exposes it through model alias."""
+    response = ChatResponse(messages=Message(role="assistant", text="Hello"), model="claude-test")
+
+    assert response.model == "claude-test"
+    assert response.model == "claude-test"
+
+
 class OutputModel(BaseModel):
     response: str
 
@@ -849,6 +857,14 @@ def test_chat_response_update():
     assert response_update.contents[0].text == "I'm doing well, thank you!"
     assert response_update.contents[0].type == "text"
     assert response_update.text == "I'm doing well, thank you!"
+
+
+def test_chat_response_update_accepts_model_alias() -> None:
+    """Test ChatResponseUpdate accepts model and exposes it through model alias."""
+    response_update = ChatResponseUpdate(contents=[Content.from_text("Hello")], model="claude-test")
+
+    assert response_update.model == "claude-test"
+    assert response_update.model == "claude-test"
 
 
 def test_chat_response_updates_to_chat_response_one():
@@ -1374,7 +1390,7 @@ def test_response_update_propagates_fields_and_metadata():
         response_id="rid",
         message_id="mid",
         conversation_id="cid",
-        model_id="model-x",
+        model="model-x",
         created_at="t0",
         finish_reason="stop",
         additional_properties={"k": "v"},
@@ -1383,7 +1399,7 @@ def test_response_update_propagates_fields_and_metadata():
     assert resp.response_id == "rid"
     assert resp.created_at == "t0"
     assert resp.conversation_id == "cid"
-    assert resp.model_id == "model-x"
+    assert resp.model == "model-x"
     assert resp.finish_reason == "stop"
     assert resp.additional_properties and resp.additional_properties["k"] == "v"
     assert resp.messages[0].role == "assistant"
@@ -1935,7 +1951,7 @@ def test_chat_response_complex_serialization():
     assert isinstance(response.messages[0], Message)
     assert isinstance(response.finish_reason, str)  # FinishReason is now a NewType of str
     assert isinstance(response.usage_details, dict)
-    assert response.model_id == "gpt-4"  # Should be stored as model_id
+    assert response.model == "gpt-4"  # Should be stored as model
 
     # Test to_dict with complex objects
     response_dict = response.to_dict()
@@ -1943,7 +1959,7 @@ def test_chat_response_complex_serialization():
     assert isinstance(response_dict["messages"][0], dict)
     assert isinstance(response_dict["finish_reason"], str)  # FinishReason serializes to string
     assert isinstance(response_dict["usage_details"], dict)
-    assert response_dict["model"] == "gpt-4"  # Should serialize as model_id
+    assert response_dict["model"] == "gpt-4"  # Should serialize as model
 
 
 def test_chat_response_update_all_content_types():

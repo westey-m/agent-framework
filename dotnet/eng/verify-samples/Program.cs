@@ -31,7 +31,7 @@ if (options is null)
 
 var stopwatch = Stopwatch.StartNew();
 
-// Resolve the dotnet/ root directory (verify-samples is at dotnet/samples/verify-samples/)
+// Resolve the dotnet/ root directory (verify-samples is at dotnet/eng/verify-samples/)
 var dotnetRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 if (!File.Exists(Path.Combine(dotnetRoot, "agent-framework-dotnet.slnx")))
 {

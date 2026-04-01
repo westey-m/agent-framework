@@ -5,7 +5,7 @@ description: How to use the verify-samples tool to run, verify, and manage sampl
 
 # verify-samples Tool
 
-The `verify-samples` project (`dotnet/samples/verify-samples/`) is an automated tool that runs sample projects and verifies their output using deterministic checks and AI-powered verification.
+The `verify-samples` project (`dotnet/eng/verify-samples/`) is an automated tool that runs sample projects and verifies their output using deterministic checks and AI-powered verification.
 
 ## Running verify-samples
 
@@ -13,19 +13,19 @@ The `verify-samples` project (`dotnet/samples/verify-samples/`) is an automated 
 cd dotnet
 
 # Run all samples across all categories
-dotnet run --project samples/verify-samples -- --log results.log --csv results.csv
+dotnet run --project eng/verify-samples -- --log results.log --csv results.csv
 
 # Run a specific category
-dotnet run --project samples/verify-samples -- --category 02-agents --log results.log
+dotnet run --project eng/verify-samples -- --category 02-agents --log results.log
 
 # Run specific samples by name
-dotnet run --project samples/verify-samples -- Agent_Step02_StructuredOutput Agent_Step09_AsFunctionTool
+dotnet run --project eng/verify-samples -- Agent_Step02_StructuredOutput Agent_Step09_AsFunctionTool
 
 # Control parallelism (default 8)
-dotnet run --project samples/verify-samples -- --parallel 8 --log results.log
+dotnet run --project eng/verify-samples -- --parallel 8 --log results.log
 
 # Combine options
-dotnet run --project samples/verify-samples -- --category 03-workflows --parallel 4 --log results.log --csv results.csv
+dotnet run --project eng/verify-samples -- --category 03-workflows --parallel 4 --log results.log --csv results.csv
 ```
 
 ### Required Environment Variables
@@ -43,7 +43,7 @@ Individual samples require their own env vars (e.g., `AZURE_AI_PROJECT_ENDPOINT`
 
 ## Sample Categories
 
-Definitions are in the `dotnet/samples/verify-samples/` directory:
+Definitions are in the `dotnet/eng/verify-samples/` directory:
 
 | Category | Config File | Registered Key |
 |----------|-------------|----------------|

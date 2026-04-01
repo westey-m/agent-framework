@@ -7,7 +7,7 @@
   <Folder Name="/Samples/">
     <File Path="samples/AGENTS.md" />
     <File Path="samples/README.md" />
-    <Project Path="samples/verify-samples/verify-samples.csproj" />
+    <Project Path="eng/verify-samples/verify-samples.csproj" />
   </Folder>
   <Folder Name="/Samples/01-get-started/">
     <Project Path="samples/01-get-started/01_hello_agent/01_hello_agent.csproj" />

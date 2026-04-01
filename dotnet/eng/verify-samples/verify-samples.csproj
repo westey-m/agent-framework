@@ -7,13 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsAotCompatible>false</IsAotCompatible>
+    <!-- This is a top-level console app; ConfigureAwait is unnecessary -->
+    <NoWarn>$(NoWarn);CA2007</NoWarn>
   </PropertyGroup>
-
-  <!-- Remove inherited sample helpers — this project is not a sample -->
-  <ItemGroup>
-    <Using Remove="SampleHelpers.SampleEnvironment" />
-    <Compile Remove="$(MSBuildThisFileDirectory)\..\src\Shared\Demos\*.cs" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" />

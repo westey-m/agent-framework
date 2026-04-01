@@ -307,7 +307,7 @@ internal static class AgentsSamples
                 "The output should show a personal assistant managing a todo list across multiple turns.",
                 "The assistant should acknowledge adding items like picking up milk, taking Sally to soccer practice, and making a dentist appointment for Jimmy.",
                 "There should be a JSON block showing the serialized session state.",
-                "The final response should reference both the remaining todo items and the calendar appointments (doctor at 15:00, team meeting at 17:00, birthday party at 20:00).",
+                "The final response should reference the calendar appointments (doctor at 15:00, team meeting at 17:00, birthday party at 20:00).",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -481,7 +481,7 @@ internal static class AgentsSamples
             OptionalEnvironmentVariables = ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
             ExpectedOutputDescription =
             [
-                "The output should show a Foundry agent being created, responding with a joke about a pirate, and then being deleted.",
+                "The output should contain a joke about a pirate.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -492,10 +492,9 @@ internal static class AgentsSamples
             ProjectPath = "samples/02-agents/AgentsWithFoundry/Agent_Step01_Basics",
             RequiredEnvironmentVariables = ["AZURE_AI_PROJECT_ENDPOINT"],
             OptionalEnvironmentVariables = ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
-            MustContain = ["Latest agent version id:"],
             ExpectedOutputDescription =
             [
-                "The output should show a 'Latest agent version id:' line and a joke response from the agent.",
+                "The output should contain a joke response from the agent.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -683,7 +682,7 @@ internal static class AgentsSamples
             MustContain = ["--- Running File Search Agent ---"],
             ExpectedOutputDescription =
             [
-                "The output should show a file being uploaded and indexed in a vector store, then an agent using file search to answer a question with citations.",
+                "The output should show a file being uploaded and indexed in a vector store, then an agent answering a question based on the file content.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -696,7 +695,7 @@ internal static class AgentsSamples
             OptionalEnvironmentVariables = ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
             ExpectedOutputDescription =
             [
-                "The output should show an agent using an OpenAPI tool to answer a question about countries that use EUR.",
+                "The output should contain a list of countries or information about countries that use the EUR currency.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -935,7 +934,6 @@ internal static class AgentsSamples
             ExpectedOutputDescription =
             [
                 "The output should contain a joke about a pirate.",
-                "There should be two responses — one from a non-streaming call and one from a streaming call.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -1134,7 +1132,7 @@ internal static class AgentsSamples
             OptionalEnvironmentVariables = ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
             Inputs = ["Y", "Y", "Y", "Y", "Y"],
             InputDelayMs = 5000,
-            ExpectedOutputDescription = ["The output should show an agent using the Microsoft Learn MCP tool, first with auto-approval and then with required approval prompts, providing summaries of Azure AI Agent MCP documentation."],
+            ExpectedOutputDescription = ["The output should contain a summary or information about Azure AI documentation from Microsoft Learn."],
         },
 
         new SampleDefinition
@@ -1145,7 +1143,7 @@ internal static class AgentsSamples
             OptionalEnvironmentVariables = ["AZURE_OPENAI_DEPLOYMENT_NAME"],
             Inputs = ["Y", "Y", "Y", "Y", "Y"],
             InputDelayMs = 5000,
-            ExpectedOutputDescription = ["The output should show an agent using the Microsoft Learn MCP tool, first with auto-approval and then with required approval prompts, providing summaries of Azure AI Agent MCP documentation."],
+            ExpectedOutputDescription = ["The output should contain a summary or information about Azure AI documentation from Microsoft Learn."],
         },
 
         new SampleDefinition

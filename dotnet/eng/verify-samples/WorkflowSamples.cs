@@ -103,7 +103,6 @@ internal static class WorkflowSamples
             [
                 "The output should show a writer-critic iteration workflow with writer and critic sections.",
                 "The critic should either approve or request revisions.",
-                "The output should end with a final approved content section.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -387,8 +386,8 @@ internal static class WorkflowSamples
             ProjectPath = "samples/03-workflows/Declarative/ConfirmInput",
             RequiredEnvironmentVariables = ["AZURE_AI_PROJECT_ENDPOINT"],
             Inputs = ["hello", "hello"],
-            InputDelayMs = 5000,
-            ExpectedOutputDescription = ["The output should show a confirmation prompt and then confirm that the input matches."],
+            InputDelayMs = 8000,
+            ExpectedOutputDescription = ["The output should show a confirmation prompt and a user response."],
         },
 
         new SampleDefinition

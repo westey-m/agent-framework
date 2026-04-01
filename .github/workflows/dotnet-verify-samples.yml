@@ -40,7 +40,7 @@ permissions:
 jobs:
   verify-samples:
     runs-on: ubuntu-latest
-    environment: integration
+    environment: ${{ github.event_name != 'pull_request' && 'integration' || '' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
@@ -58,6 +58,7 @@ jobs:
           global-json-file: ${{ github.workspace }}/dotnet/global.json
 
       - name: Azure CLI Login
+        if: github.event_name != 'pull_request'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}

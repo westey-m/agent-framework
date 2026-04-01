@@ -82,7 +82,7 @@ PROVIDER_TYPE_OBJECT_MAPPING: dict[str, ProviderTypeMapping] = {
     },
     "OpenAI.Chat": {
         "package": "agent_framework.openai",
-        "name": "OpenAIChatClient",
+        "name": "OpenAIChatCompletionClient",
         "model_field": "model",
         "endpoint_field": "base_url",
         "api_key_field": "api_key",
@@ -186,7 +186,7 @@ class AgentFactory:
         connections: Mapping[str, Any] | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
         additional_mappings: Mapping[str, ProviderTypeMapping] | None = None,
-        default_provider: str = "OpenAI",
+        default_provider: str = "Foundry",
         safe_mode: bool = True,
         env_file_path: str | None = None,
         env_file_encoding: str | None = None,
@@ -223,7 +223,7 @@ class AgentFactory:
                     SupportsChatGetResponse implementation, and model_field is the name of the field in the
                     constructor that accepts the model.id value.
             default_provider: The default provider used when model.provider is not specified,
-                default is "OpenAI".
+                default is "Foundry", which uses the FoundryChatClient.
             safe_mode: Whether to run in safe mode, default is True.
                 When safe_mode is True, environment variables are not accessible in the powerfx expressions.
                 You can still use environment variables, but through the constructors of the classes.

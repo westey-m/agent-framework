@@ -8,8 +8,6 @@
 name: dotnet-verify-samples
 
 on:
-  pull_request:
-    branches: ["main", "feature*"]
   workflow_dispatch:
     inputs:
       category:
@@ -40,7 +38,7 @@ permissions:
 jobs:
   verify-samples:
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name != 'pull_request' && 'integration' || '' }}
+    environment: 'integration'
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6

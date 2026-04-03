@@ -64,21 +64,24 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run verify-samples
+        id: verify
         working-directory: dotnet
         shell: bash
         run: |
           CATEGORY_ARG=""
-          if [ -n "${{ inputs.category }}" ]; then
-            CATEGORY_ARG="--category ${{ inputs.category }}"
+          if [ -n "$CATEGORY_INPUT" ]; then
+            CATEGORY_ARG="--category $CATEGORY_INPUT"
           fi
 
           dotnet run --project eng/verify-samples -- \
             $CATEGORY_ARG \
-            --parallel ${{ inputs.parallelism || '8' }} \
+            --parallel "$PARALLELISM" \
             --md results.md \
             --csv results.csv \
-            --log results.log || true
+            --log results.log
         env:
+          CATEGORY_INPUT: ${{ github.event.inputs.category || '' }}
+          PARALLELISM: ${{ github.event.inputs.parallelism || '8' }}
           # OpenAI Models
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_CHAT_MODEL_NAME: ${{ vars.OPENAI_CHAT_MODEL_NAME }}
@@ -91,6 +94,7 @@ jobs:
           AZURE_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT }}
           AZURE_AI_MODEL_DEPLOYMENT_NAME: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT_NAME }}
           AZURE_AI_BING_CONNECTION_ID: ${{ vars.AZURE_AI_BING_CONNECTION_ID }}
+
       - name: Write Job Summary
         if: always()
         working-directory: dotnet
@@ -109,4 +113,10 @@ jobs:
           name: verify-samples-results
           path: |
             dotnet/results.csv
+            dotnet/results.log
           if-no-files-found: warn
+
+      - name: Fail if samples failed
+        if: always() && steps.verify.outcome == 'failure'
+        shell: bash
+        run: exit 1

@@ -36,12 +36,12 @@ internal static class MarkdownResultWriter
             var status = result.Passed ? "✅ PASSED" : "❌ FAILED";
             var failedChecks = result.Failures.Count;
             var failures = MdEscape(string.Join("; ", result.Failures));
-            sb.AppendLine($"| {result.SampleName} | {status} | {failedChecks} | {failures} |");
+            sb.AppendLine($"| {MdEscape(result.SampleName)} | {status} | {failedChecks} | {failures} |");
         }
 
         foreach (var (name, reason) in skipped)
         {
-            sb.AppendLine($"| {name} | ⏭️ SKIPPED | 0 | {MdEscape(reason)} |");
+            sb.AppendLine($"| {MdEscape(name)} | ⏭️ SKIPPED | 0 | {MdEscape(reason)} |");
         }
 
         // Collapsible AI reasoning details for failures
@@ -54,19 +54,23 @@ internal static class MarkdownResultWriter
 
             foreach (var result in failures2)
             {
-                sb.AppendLine($"<details><summary><strong>{result.SampleName}</strong></summary>");
+                sb.AppendLine($"<details><summary><strong>{HtmlEscape(result.SampleName)}</strong></summary>");
                 sb.AppendLine();
                 if (result.Failures.Count > 0)
                 {
                     foreach (var failure in result.Failures)
                     {
-                        sb.AppendLine($"- {failure}");
+                        sb.AppendLine($"- {MdEscape(failure)}");
                     }
 
                     sb.AppendLine();
                 }
 
-                sb.AppendLine($"**AI Reasoning:** {result.AIReasoning}");
+                sb.AppendLine("**AI Reasoning:**");
+                sb.AppendLine();
+                sb.AppendLine("```");
+                sb.AppendLine(result.AIReasoning);
+                sb.AppendLine("```");
                 sb.AppendLine();
                 sb.AppendLine("</details>");
                 sb.AppendLine();
@@ -77,10 +81,18 @@ internal static class MarkdownResultWriter
     }
 
     /// <summary>
-    /// Escapes pipe characters for use inside Markdown table cells.
+    /// Escapes pipe characters and newlines for use inside Markdown table cells.
     /// </summary>
     private static string MdEscape(string value)
     {
         return value.Replace("|", "\\|").Replace("\n", " ").Replace("\r", "");
+    }
+
+    /// <summary>
+    /// Escapes HTML special characters for use inside HTML tags.
+    /// </summary>
+    private static string HtmlEscape(string value)
+    {
+        return value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
     }
 }

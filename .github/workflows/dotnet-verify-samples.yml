@@ -63,6 +63,11 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Build solution
+        working-directory: dotnet
+        shell: bash
+        run: dotnet build agent-framework-dotnet.slnx -f net10.0 --warnaserror
+
       - name: Run verify-samples
         id: verify
         working-directory: dotnet

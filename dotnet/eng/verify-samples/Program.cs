@@ -14,6 +14,7 @@
 //   dotnet run -- --log results.log                     # Write sequential log to file
 //   dotnet run -- --csv results.csv                     # Write CSV summary to file
 //   dotnet run -- --md results.md                       # Write Markdown summary to file
+//   dotnet run -- --build                               # Build samples during run (default: --no-build)
 //
 // Required environment variables (for AI-powered samples):
 //   AZURE_OPENAI_ENDPOINT
@@ -63,7 +64,7 @@ try
     // Run all samples
     var reporter = new ConsoleReporter();
     var verifier = new SampleVerifier(chatClient);
-    var orchestrator = new VerificationOrchestrator(verifier, reporter, dotnetRoot, TimeSpan.FromMinutes(3), logWriter);
+    var orchestrator = new VerificationOrchestrator(verifier, reporter, dotnetRoot, TimeSpan.FromMinutes(3), logWriter, buildSamples: options.BuildSamples);
 
     var run = await orchestrator.RunAllAsync(options.Samples, options.MaxParallelism);
 

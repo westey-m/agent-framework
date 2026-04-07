@@ -9,7 +9,7 @@ The `verify-samples` project (`dotnet/eng/verify-samples/`) is an automated tool
 
 ## Running verify-samples
 
-**Important:** Samples must be pre-built before running verify-samples. Build the solution first:
+**Important:** By default, samples must be pre-built before running verify-samples. Build the solution first, or pass `--build` to build samples during the run:
 
 ```bash
 cd dotnet

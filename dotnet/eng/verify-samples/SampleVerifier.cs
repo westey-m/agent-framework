@@ -147,7 +147,9 @@ internal sealed class SampleVerifier
                 return ($"AI verification returned null result. Raw: {response.Text}", ["AI verification returned null result."]);
             }
 
-            var reasoning = result.AIReasoning ?? "(no reasoning provided)";
+            var reasoning = string.IsNullOrWhiteSpace(result.AIReasoning)
+                ? "(no reasoning provided)"
+                : result.AIReasoning;
 
             // Collect unmet expectations as individual failures
             var unmet = new List<string>();

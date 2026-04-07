@@ -174,7 +174,7 @@ public sealed class CompactionProvider : AIContextProvider
         // since they may be summaries of previous messages that are already in chat history.
         foreach (var message in messageIndex.Groups.SelectMany(x => x.Messages))
         {
-            // Only consider messages that aren't already marked as ChatHistory or message that weren't passed into the provider.
+            // Only consider messages that aren't already marked as ChatHistory and messages that weren't passed into the provider.
             if (message.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory && !messageList.Any(x => x.ContentEquals(message)))
             {
                 message.AdditionalProperties ??= new AdditionalPropertiesDictionary();

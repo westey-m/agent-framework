@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agent_framework import SupportsGetEmbeddings
 from agent_framework.exceptions import SettingNotFoundError
 from openai.types import CreateEmbeddingResponse
 from openai.types import Embedding as OpenAIEmbedding
@@ -15,6 +17,7 @@ from agent_framework_openai import (
     OpenAIEmbeddingClient,
     OpenAIEmbeddingOptions,
 )
+from agent_framework_openai._embedding_client import RawOpenAIEmbeddingClient
 
 
 def _make_openai_response(
@@ -42,6 +45,14 @@ def test_openai_construction_with_explicit_params() -> None:
         api_key="test-key",
     )
     assert client.model == "text-embedding-3-small"
+    assert isinstance(client, SupportsGetEmbeddings)
+
+
+def test_raw_openai_embedding_client_init_uses_explicit_parameters() -> None:
+    signature = inspect.signature(RawOpenAIEmbeddingClient.__init__)
+
+    assert "additional_properties" in signature.parameters
+    assert all(parameter.kind != inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values())
 
 
 def test_openai_construction_from_env(openai_unit_test_env: dict[str, str]) -> None:
@@ -174,7 +185,7 @@ async def test_openai_base64_decoding(openai_unit_test_env: dict[str, str]) -> N
         assert abs(expected - actual) < 1e-6
 
 
-async def test_openai_error_when_no_model_id() -> None:
+async def test_openai_error_when_no_model() -> None:
     client = OpenAIEmbeddingClient.__new__(OpenAIEmbeddingClient)
     client.model = None
     client.client = MagicMock()

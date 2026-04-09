@@ -51,7 +51,7 @@ var agent = new AzureOpenAIClient(
 
 // Register the agent with the host and configure it to use an in-memory session store
 // so that conversation state is maintained across requests. In production, you may want to use a persistent session store.
-var pirateAgentBuilder = builder
+builder
     .AddAIAgent(AgentName, (_, _) => agent)
     .WithInMemorySessionStore();
 

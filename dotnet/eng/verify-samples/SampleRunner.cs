@@ -45,7 +45,7 @@ internal static class SampleRunner
         => RunAsync(projectPath, DotnetRunArgs(build), timeout, inputs, inputDelayMs, cancellationToken);
 
     private static string DotnetRunArgs(bool build) =>
-        build ? "run --framework net10.0" : "run --no-build --framework net10.0";
+        $"run {(build ? "" : "--no-build")} --framework net10.0";
 
     /// <summary>
     /// Runs an arbitrary <c>dotnet</c> command in the given working directory.

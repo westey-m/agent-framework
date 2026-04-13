@@ -100,6 +100,8 @@ public sealed class TodoProvider : AIContextProvider
         });
     }
 
+    // Note: These tool delegates mutate shared session state without synchronization.
+    // This is safe because FunctionInvokingChatClient serializes tool calls within a single run.
     private AITool[] CreateTools(TodoState state, AgentSession? session)
     {
         var serializerOptions = AgentJsonUtilities.DefaultOptions;
@@ -135,11 +137,11 @@ public sealed class TodoProvider : AIContextProvider
             AIFunctionFactory.Create(
                 (List<int> ids) =>
                 {
+                    var idSet = new HashSet<int>(ids);
                     int completed = 0;
-                    foreach (int id in ids)
+                    foreach (TodoItem item in state.Items)
                     {
-                        TodoItem? item = state.Items.FirstOrDefault(t => t.Id == id);
-                        if (item is not null)
+                        if (!item.IsComplete && idSet.Contains(item.Id))
                         {
                             item.IsComplete = true;
                             completed++;
@@ -163,16 +165,8 @@ public sealed class TodoProvider : AIContextProvider
             AIFunctionFactory.Create(
                 (List<int> ids) =>
                 {
-                    int removed = 0;
-                    foreach (int id in ids)
-                    {
-                        TodoItem? item = state.Items.FirstOrDefault(t => t.Id == id);
-                        if (item is not null)
-                        {
-                            state.Items.Remove(item);
-                            removed++;
-                        }
-                    }
+                    var idSet = new HashSet<int>(ids);
+                    int removed = state.Items.RemoveAll(t => idSet.Contains(t.Id));
 
                     if (removed > 0)
                     {
@@ -185,6 +179,21 @@ public sealed class TodoProvider : AIContextProvider
                 {
                     Name = "RemoveTodos",
                     Description = "Remove one or more todo items by their IDs. Returns the number of items that were found and removed.",
+                    SerializerOptions = serializerOptions,
+                }),
+
+            AIFunctionFactory.Create(
+                () =>
+                {
+                    state.Items.Clear();
+                    state.NextId = 1;
+                    this._sessionState.SaveState(session, state);
+                    return "All todos cleared.";
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = "ClearTodos",
+                    Description = "Remove all todo items from the list.",
                     SerializerOptions = serializerOptions,
                 }),
 

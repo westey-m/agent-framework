@@ -36,7 +36,7 @@ public class TodoProviderTests
         // Assert
         Assert.NotNull(result.Instructions);
         Assert.NotNull(result.Tools);
-        Assert.Equal(5, result.Tools!.Count());
+        Assert.Equal(6, result.Tools!.Count());
     }
 
     #endregion
@@ -228,6 +228,33 @@ public class TodoProviderTests
 
         // Assert
         Assert.Equal(0, GetIntResult(result));
+    }
+
+    #endregion
+
+    #region ClearTodos Tests
+
+    /// <summary>
+    /// Verify that ClearTodos removes all items and resets the ID counter.
+    /// </summary>
+    [Fact]
+    public async Task ClearTodos_RemovesAllItemsAsync()
+    {
+        // Arrange
+        var (tools, state) = await CreateToolsWithStateAsync();
+        AIFunction addTodos = GetTool(tools, "AddTodos");
+        AIFunction clearTodos = GetTool(tools, "ClearTodos");
+        await addTodos.InvokeAsync(new AIFunctionArguments()
+        {
+            ["todos"] = new List<TodoItemInput> { new() { Title = "First", Description = null }, new() { Title = "Second", Description = null } },
+        });
+
+        // Act
+        await clearTodos.InvokeAsync(new AIFunctionArguments());
+
+        // Assert
+        Assert.Empty(state.Items);
+        Assert.Equal(1, state.NextId);
     }
 
     #endregion

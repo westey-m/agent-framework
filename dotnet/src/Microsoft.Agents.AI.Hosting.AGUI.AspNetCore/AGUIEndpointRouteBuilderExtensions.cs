@@ -36,6 +36,7 @@ public static class AGUIEndpointRouteBuilderExtensions
         IHostedAgentBuilder agentBuilder,
         [StringSyntax("route")] string pattern)
     {
+        ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(agentBuilder);
         return endpoints.MapAGUI(agentBuilder.Name, pattern);
     }
@@ -114,7 +115,7 @@ public static class AGUIEndpointRouteBuilderExtensions
                 }
             };
 
-            var threadId = input.ThreadId ?? Guid.NewGuid().ToString("N");
+            var threadId = string.IsNullOrWhiteSpace(input.ThreadId) ? Guid.NewGuid().ToString("N") : input.ThreadId;
             var session = await hostAgent.GetOrCreateSessionAsync(threadId, cancellationToken).ConfigureAwait(false);
 
             // Run the agent and convert to AG-UI events

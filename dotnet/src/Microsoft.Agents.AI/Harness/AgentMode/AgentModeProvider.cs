@@ -37,12 +37,12 @@ public sealed class AgentModeProvider : AIContextProvider
     /// <summary>
     /// The "plan" mode, indicating the agent is planning work.
     /// </summary>
-    public const string ModePlan = "plan";
+    public const string PlanMode = "plan";
 
     /// <summary>
     /// The "execute" mode, indicating the agent is executing work.
     /// </summary>
-    public const string ModeExecute = "execute";
+    public const string ExecuteMode = "execute";
 
     private readonly ProviderSessionState<AgentModeState> _sessionState;
     private IReadOnlyList<string>? _stateKeys;

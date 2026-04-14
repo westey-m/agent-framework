@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -68,6 +69,14 @@ internal static partial class AgentJsonUtilities
     [JsonSerializable(typeof(ChatClientAgentSession))]
     [JsonSerializable(typeof(TextSearchProvider.TextSearchProviderState))]
     [JsonSerializable(typeof(ChatHistoryMemoryProvider.State))]
+
+    // Harness types
+    [JsonSerializable(typeof(TodoState))]
+    [JsonSerializable(typeof(TodoItem))]
+    [JsonSerializable(typeof(TodoItemInput))]
+    [JsonSerializable(typeof(List<int>), TypeInfoPropertyName = "IntList")]
+    [JsonSerializable(typeof(List<TodoItem>), TypeInfoPropertyName = "TodoItemList")]
+    [JsonSerializable(typeof(List<TodoItemInput>), TypeInfoPropertyName = "TodoItemInputList")]
 
     [ExcludeFromCodeCoverage]
     internal sealed partial class JsonContext : JsonSerializerContext;

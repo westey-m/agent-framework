@@ -36,7 +36,7 @@ public class TodoProviderTests
         // Assert
         Assert.NotNull(result.Instructions);
         Assert.NotNull(result.Tools);
-        Assert.Equal(6, result.Tools!.Count());
+        Assert.Equal(5, result.Tools!.Count());
     }
 
     #endregion

@@ -16,5 +16,5 @@ internal sealed class AgentModeState
     /// Gets or sets the current operating mode of the agent.
     /// </summary>
     [JsonPropertyName("currentMode")]
-    public string CurrentMode { get; set; } = AgentModeProvider.ModePlan;
+    public string CurrentMode { get; set; } = AgentModeProvider.PlanMode;
 }

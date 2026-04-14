@@ -232,33 +232,6 @@ public class TodoProviderTests
 
     #endregion
 
-    #region ClearTodos Tests
-
-    /// <summary>
-    /// Verify that ClearTodos removes all items and resets the ID counter.
-    /// </summary>
-    [Fact]
-    public async Task ClearTodos_RemovesAllItemsAsync()
-    {
-        // Arrange
-        var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction clearTodos = GetTool(tools, "ClearTodos");
-        await addTodos.InvokeAsync(new AIFunctionArguments()
-        {
-            ["todos"] = new List<TodoItemInput> { new() { Title = "First", Description = null }, new() { Title = "Second", Description = null } },
-        });
-
-        // Act
-        await clearTodos.InvokeAsync(new AIFunctionArguments());
-
-        // Assert
-        Assert.Empty(state.Items);
-        Assert.Equal(1, state.NextId);
-    }
-
-    #endregion
-
     #region GetRemainingTodos Tests
 
     /// <summary>

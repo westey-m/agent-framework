@@ -183,21 +183,6 @@ public sealed class TodoProvider : AIContextProvider
                 }),
 
             AIFunctionFactory.Create(
-                () =>
-                {
-                    state.Items.Clear();
-                    state.NextId = 1;
-                    this._sessionState.SaveState(session, state);
-                    return "All todos cleared.";
-                },
-                new AIFunctionFactoryOptions
-                {
-                    Name = "ClearTodos",
-                    Description = "Remove all todo items from the list.",
-                    SerializerOptions = serializerOptions,
-                }),
-
-            AIFunctionFactory.Create(
                 () => state.Items.Where(t => !t.IsComplete).ToList(),
                 new AIFunctionFactoryOptions
                 {

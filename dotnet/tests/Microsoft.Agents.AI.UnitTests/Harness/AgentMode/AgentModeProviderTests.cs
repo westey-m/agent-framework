@@ -156,7 +156,7 @@ public class AgentModeProviderTests
         string mode = provider.GetMode(session);
 
         // Assert
-        Assert.Equal(AgentModeProvider.ModePlan, mode);
+        Assert.Equal(AgentModeProvider.PlanMode, mode);
     }
 
     /// <summary>
@@ -170,11 +170,11 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Act
-        provider.SetMode(session, AgentModeProvider.ModeExecute);
+        provider.SetMode(session, AgentModeProvider.ExecuteMode);
         string mode = provider.GetMode(session);
 
         // Assert
-        Assert.Equal(AgentModeProvider.ModeExecute, mode);
+        Assert.Equal(AgentModeProvider.ExecuteMode, mode);
     }
 
     /// <summary>
@@ -189,7 +189,7 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Set mode via public helper
-        provider.SetMode(session, AgentModeProvider.ModeExecute);
+        provider.SetMode(session, AgentModeProvider.ExecuteMode);
 
 #pragma warning disable MAAI001
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
@@ -249,8 +249,8 @@ public class AgentModeProviderTests
     public void ModeConstants_HaveExpectedValues()
     {
         // Assert
-        Assert.Equal("plan", AgentModeProvider.ModePlan);
-        Assert.Equal("execute", AgentModeProvider.ModeExecute);
+        Assert.Equal("plan", AgentModeProvider.PlanMode);
+        Assert.Equal("execute", AgentModeProvider.ExecuteMode);
     }
 
     #endregion

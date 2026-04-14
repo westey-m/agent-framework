@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -98,6 +99,26 @@ public class AgentModeProviderTests
         Assert.Equal("Mode changed to \"execute\".", GetStringResult(result));
     }
 
+    /// <summary>
+    /// Verify that SetMode with an unsupported value throws and does not persist the mode.
+    /// </summary>
+    [Fact]
+    public async Task SetMode_InvalidMode_ThrowsAsync()
+    {
+        // Arrange
+        var (tools, provider, session) = await CreateToolsWithProviderAndSessionAsync();
+        AIFunction setMode = GetTool(tools, "SetMode");
+        AIFunction getMode = GetTool(tools, "GetMode");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await setMode.InvokeAsync(new AIFunctionArguments() { ["mode"] = "foo" }));
+
+        // Verify mode was not changed from default
+        object? currentMode = await getMode.InvokeAsync(new AIFunctionArguments());
+        Assert.Equal(AgentModeProvider.PlanMode, GetStringResult(currentMode));
+    }
+
     #endregion
 
     #region GetMode Tool Tests
@@ -175,6 +196,24 @@ public class AgentModeProviderTests
 
         // Assert
         Assert.Equal(AgentModeProvider.ExecuteMode, mode);
+    }
+
+    /// <summary>
+    /// Verify that the public SetMode helper throws for an unsupported value and does not persist the mode.
+    /// </summary>
+    [Fact]
+    public void PublicSetMode_InvalidMode_Throws()
+    {
+        // Arrange
+        var provider = new AgentModeProvider();
+        var session = new ChatClientAgentSession();
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => provider.SetMode(session, "foo"));
+
+        // Verify mode was not changed from default
+        string mode = provider.GetMode(session);
+        Assert.Equal(AgentModeProvider.PlanMode, mode);
     }
 
     /// <summary>
@@ -272,6 +311,19 @@ public class AgentModeProviderTests
         session.StateBag.TryGetValue<AgentModeState>("AgentModeProvider", out var state, AgentJsonUtilities.DefaultOptions);
 
         return (result.Tools!, state!);
+    }
+
+    private static async Task<(IEnumerable<AITool> Tools, AgentModeProvider Provider, AgentSession Session)> CreateToolsWithProviderAndSessionAsync()
+    {
+        var provider = new AgentModeProvider();
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        AIContext result = await provider.InvokingAsync(context);
+        return (result.Tools!, provider, session);
     }
 
     private static AIFunction GetTool(IEnumerable<AITool> tools, string name)

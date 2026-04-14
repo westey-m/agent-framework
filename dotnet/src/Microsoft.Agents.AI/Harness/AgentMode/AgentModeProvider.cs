@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -78,6 +79,11 @@ public sealed class AgentModeProvider : AIContextProvider
     /// <param name="mode">The new mode to set.</param>
     public void SetMode(AgentSession? session, string mode)
     {
+        if (mode != PlanMode && mode != ExecuteMode)
+        {
+            throw new ArgumentException($"Invalid mode: {mode}. Supported modes are \"{PlanMode}\" and \"{ExecuteMode}\".", nameof(mode));
+        }
+
         AgentModeState state = this._sessionState.GetOrInitializeState(session);
         state.CurrentMode = mode;
         this._sessionState.SaveState(session, state);
@@ -113,6 +119,11 @@ public sealed class AgentModeProvider : AIContextProvider
             AIFunctionFactory.Create(
                 (string mode) =>
                 {
+                    if (mode != PlanMode && mode != ExecuteMode)
+                    {
+                        throw new ArgumentException($"Invalid mode: {mode}. Supported modes are \"{PlanMode}\" and \"{ExecuteMode}\".", nameof(mode));
+                    }
+
                     state.CurrentMode = mode;
                     this._sessionState.SaveState(session, state);
                     return $"Mode changed to \"{mode}\".";

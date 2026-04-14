@@ -70,13 +70,16 @@ internal static partial class AgentJsonUtilities
     [JsonSerializable(typeof(TextSearchProvider.TextSearchProviderState))]
     [JsonSerializable(typeof(ChatHistoryMemoryProvider.State))]
 
-    // Harness types
+    // TODO harness types
     [JsonSerializable(typeof(TodoState))]
     [JsonSerializable(typeof(TodoItem))]
     [JsonSerializable(typeof(TodoItemInput))]
     [JsonSerializable(typeof(List<int>), TypeInfoPropertyName = "IntList")]
     [JsonSerializable(typeof(List<TodoItem>), TypeInfoPropertyName = "TodoItemList")]
     [JsonSerializable(typeof(List<TodoItemInput>), TypeInfoPropertyName = "TodoItemInputList")]
+
+    // Agent-mode harness types
+    [JsonSerializable(typeof(AgentModeState))]
 
     [ExcludeFromCodeCoverage]
     internal sealed partial class JsonContext : JsonSerializerContext;

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 // This sample demonstrates how to use a ChatClientAgent with the Harness AIContextProviders
 // (TodoProvider and AgentModeProvider) for interactive research tasks with web search

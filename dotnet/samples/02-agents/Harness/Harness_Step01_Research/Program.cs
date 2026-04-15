@@ -21,7 +21,7 @@ using Microsoft.Extensions.AI;
 using SampleApp;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
-var deploymentName = "gpt-5.4";
+var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-5.4";
 
 // Create the Azure AI Project client and get an IChatClient with stored output disabled
 // so that chat history is managed locally by the agent framework.
@@ -81,6 +81,9 @@ AIAgent agent = new ChatClientAgent(
         AIContextProviders = [new TodoProvider(), new AgentModeProvider()],
         ChatOptions = new ChatOptions
         {
+            // Set a high token limit for long research tasks with many tool calls and long outputs.
+            // This matches gpt-5.4's max output tokens, and should be adjusted depending on the model used and expected response length.
+            MaxOutputTokens = 128_000,
             Instructions = instructions,
             Reasoning = new() { Effort = ReasoningEffort.High },
             Tools = [FoundryAITool.CreateWebSearchTool(), .. webBrowsingTools.Tools],

@@ -88,4 +88,4 @@ AIAgent agent = new ChatClientAgent(
     });
 
 // Run the interactive console session using the shared HarnessConsole helper.
-await HarnessConsole.RunAgentAsync(agent);
+await HarnessConsole.RunAgentAsync(agent, title: "Research Assistant", userPrompt: "Enter a research topic to get started.");

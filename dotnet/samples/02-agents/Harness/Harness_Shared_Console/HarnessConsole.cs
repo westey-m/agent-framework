@@ -17,13 +17,15 @@ public static class HarnessConsole
     /// and the <c>/todos</c> command.
     /// </summary>
     /// <param name="agent">The agent to interact with.</param>
-    public static async Task RunAgentAsync(AIAgent agent)
+    /// <param name="title">The title displayed in the console header.</param>
+    /// <param name="userPrompt">A short prompt to the user, displayed below the title.</param>
+    public static async Task RunAgentAsync(AIAgent agent, string title, string userPrompt)
     {
         var todoProvider = agent.GetService<TodoProvider>();
         var modeProvider = agent.GetService<AgentModeProvider>();
 
-        System.Console.WriteLine("=== Research Assistant ===");
-        System.Console.WriteLine("Enter a research topic to get started.");
+        System.Console.WriteLine($"=== {title} ===");
+        System.Console.WriteLine(userPrompt);
         System.Console.WriteLine("Commands: /todos (show todo list), /mode [plan|execute] (show or switch mode), exit (quit)");
         System.Console.WriteLine();
 

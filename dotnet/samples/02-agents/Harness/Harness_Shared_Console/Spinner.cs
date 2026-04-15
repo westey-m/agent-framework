@@ -37,7 +37,23 @@ internal sealed class Spinner : IDisposable
         this._task = null;
     }
 
-    public void Dispose() => this._cts?.Dispose();
+    public void Dispose()
+    {
+        if (this._cts is not null && this._task is not null)
+        {
+            this._cts.Cancel();
+
+            // Block briefly to let the spinner task clean up.
+            // This prevents the background task from writing to the console after disposal.
+#pragma warning disable VSTHRD002 // Synchronous wait in Dispose is acceptable here — the spinner task completes quickly on cancellation.
+            this._task.Wait();
+#pragma warning restore VSTHRD002
+        }
+
+        this._cts?.Dispose();
+        this._cts = null;
+        this._task = null;
+    }
 
     private static async Task RunAsync(CancellationToken cancellationToken)
     {

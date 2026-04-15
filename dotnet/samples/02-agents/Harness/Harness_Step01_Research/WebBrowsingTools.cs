@@ -27,9 +27,14 @@ internal sealed partial class WebBrowsingTools
         [Description("The URL to download")] string uri,
         CancellationToken cancellationToken = default)
     {
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsedUri))
+        {
+            return $"Error: '{uri}' is not a valid URL.";
+        }
+
         try
         {
-            string html = await s_httpClient.GetStringAsync(new Uri(uri), cancellationToken);
+            string html = await s_httpClient.GetStringAsync(parsedUri, cancellationToken);
             return HtmlToMarkdownConverter.Convert(html);
         }
         catch (HttpRequestException ex)
@@ -129,10 +134,10 @@ internal sealed partial class WebBrowsingTools
             });
 
         private static string ConvertBold(string html) =>
-            BoldRegex().Replace(html, m => $"**{m.Groups[1].Value}**");
+            BoldRegex().Replace(html, m => $"**{m.Groups[2].Value}**");
 
         private static string ConvertItalic(string html) =>
-            ItalicRegex().Replace(html, m => $"*{m.Groups[1].Value}*");
+            ItalicRegex().Replace(html, m => $"*{m.Groups[2].Value}*");
 
         private static string ConvertInlineCode(string html) =>
             InlineCodeRegex().Replace(html, m => $"`{m.Groups[1].Value}`");

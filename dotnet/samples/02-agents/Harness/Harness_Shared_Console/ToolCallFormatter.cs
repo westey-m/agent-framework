@@ -98,7 +98,7 @@ public static class ToolCallFormatter
             return null;
         }
 
-        return $"(#{string.Join(", #", ids)})";
+        return $"({verb} #{string.Join(", #", ids)})";
     }
 
     private static string? FormatSingleId(FunctionCallContent call, string paramName)

@@ -17,7 +17,7 @@ Key features showcased:
 
 Before running this sample, ensure you have:
 
-1. An Azure AI Foundry project with a deployed model (e.g., `gpt-4o-mini`)
+1. An Azure AI Foundry project with a deployed model (e.g., `gpt-5.4`)
 2. Azure CLI installed and authenticated (`az login`)
 
 ## Environment Variables
@@ -28,8 +28,8 @@ Set the following environment variables:
 # Required: Your Azure AI Foundry project endpoint
 export AZURE_AI_PROJECT_ENDPOINT="https://your-project.services.ai.azure.com/api/projects/your-project-name"
 
-# Optional: Model deployment name (defaults to gpt-4o-mini)
-export AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-4o-mini"
+# Optional: Model deployment name (defaults to gpt-5.4)
+export AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4"
 ```
 
 ## Running the Sample

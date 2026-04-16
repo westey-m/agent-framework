@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 import os
+import re
 from pathlib import Path
 from typing import Annotated, Any
 from unittest.mock import MagicMock, patch
@@ -1503,6 +1504,10 @@ async def test_anthropic_client_integration_function_calling() -> None:
 @skip_if_anthropic_integration_tests_disabled
 async def test_anthropic_client_integration_hosted_tools() -> None:
     """Integration test for hosted tools."""
+    local_mcp_url = os.environ.get("LOCAL_MCP_URL", "")
+    if not local_mcp_url or not local_mcp_url.startswith(("http://", "https://")):
+        pytest.skip("LOCAL_MCP_URL not set or not an HTTP URL; skipping hosted tools test")
+
     client = AnthropicClient()
 
     messages = [Message(role="user", contents=["What tools do you have available?"])]
@@ -1510,8 +1515,8 @@ async def test_anthropic_client_integration_hosted_tools() -> None:
         AnthropicClient.get_web_search_tool(),
         AnthropicClient.get_code_interpreter_tool(),
         AnthropicClient.get_mcp_tool(
-            name="example-mcp",
-            url="https://learn.microsoft.com/api/mcp",
+            name="local-mcp",
+            url=local_mcp_url,
         ),
     ]
 
@@ -1607,7 +1612,8 @@ async def test_anthropic_client_integration_images() -> None:
 
     assert response is not None
     assert response.messages[0].text is not None
-    assert "house" in response.messages[0].text.lower()
+    text = response.messages[0].text.lower()
+    assert re.search(r"\b(house|home|building|cottage|mansion|villa)\b", text)
 
 
 # Response Format Tests

@@ -11,28 +11,40 @@
 //   exit    — End the session.
 
 #pragma warning disable OPENAI001 // Suppress experimental API warnings for Responses API usage.
+#pragma warning disable MAAI001  // Suppress experimental API warnings for Agents AI experiments.
 
-using Azure.AI.Projects;
+using System.ClientModel.Primitives;
 using Azure.Identity;
 using Harness.Shared.Console;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Foundry;
+using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
+using OpenAI;
+using OpenAI.Responses;
 using SampleApp;
 
-var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
+var endpoint = Environment.GetEnvironmentVariable("AZURE_FOUNDRY_OPENAI_ENDPOINT") ?? throw new InvalidOperationException("AZURE_FOUNDRY_OPENAI_ENDPOINT is not set.");
 var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-5.4";
 
-// Create the Azure AI Project client and get an IChatClient with stored output disabled
+// Create a compaction strategy based on the model's context window.
+// gpt-5.4: 1,050,000 token context window, 128,000 max output tokens.
+// Defaults: tool result eviction at 50% of input budget, truncation at 80%.
+var compactionStrategy = new ContextWindowCompactionStrategy(
+    maxContextWindowTokens: 1_050_000,
+    maxOutputTokens: 128_000);
+
+// Create an OpenAIClient that communicates with the Foundry responses service and get an IChatClient with stored output disabled
 // so that chat history is managed locally by the agent framework.
 // WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
 // In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
 // latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
-var aiProjectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
-IChatClient chatClient = aiProjectClient
-    .GetProjectOpenAIClient()
-    .GetProjectResponsesClient()
-    .AsIChatClient(deploymentName);
+OpenAIClientOptions clientOptions = new() { Endpoint = new Uri(endpoint) };
+IChatClient chatClient = new OpenAIClient(new BearerTokenPolicy(new DefaultAzureCredential(), "https://ai.azure.com/.default"), clientOptions)
+    .GetResponsesClient()
+    .AsIChatClientWithStoredOutputDisabled(deploymentName)
+    .AsBuilder()
+    .UseAIContextProviders(new CompactionProvider(compactionStrategy))
+    .Build();
 
 // Create web browsing tools for downloading and converting HTML pages to markdown.
 var webBrowsingTools = new WebBrowsingTools();
@@ -79,6 +91,10 @@ AIAgent agent = new ChatClientAgent(
         Name = "ResearchAgent",
         Description = "A research assistant that plans and executes research tasks.",
         AIContextProviders = [new TodoProvider(), new AgentModeProvider()],
+        ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+        {
+            ChatReducer = compactionStrategy.AsChatReducer(),
+        }),
         ChatOptions = new ChatOptions
         {
             // Set a high token limit for long research tasks with many tool calls and long outputs.
@@ -86,9 +102,9 @@ AIAgent agent = new ChatClientAgent(
             MaxOutputTokens = 128_000,
             Instructions = instructions,
             Reasoning = new() { Effort = ReasoningEffort.High },
-            Tools = [FoundryAITool.CreateWebSearchTool(), .. webBrowsingTools.Tools],
+            Tools = [ResponseTool.CreateWebSearchTool().AsAITool(), .. webBrowsingTools.Tools],
         },
     });
 
 // Run the interactive console session using the shared HarnessConsole helper.
-await HarnessConsole.RunAgentAsync(agent, title: "Research Assistant", userPrompt: "Enter a research topic to get started.");
+await HarnessConsole.RunAgentAsync(agent, title: "Research Assistant", userPrompt: "Enter a research topic to get started.", maxContextWindowTokens: 1_050_000, maxOutputTokens: 128_000);

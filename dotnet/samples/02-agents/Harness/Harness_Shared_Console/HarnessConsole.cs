@@ -19,7 +19,9 @@ public static class HarnessConsole
     /// <param name="agent">The agent to interact with.</param>
     /// <param name="title">The title displayed in the console header.</param>
     /// <param name="userPrompt">A short prompt to the user, displayed below the title.</param>
-    public static async Task RunAgentAsync(AIAgent agent, string title, string userPrompt)
+    /// <param name="maxContextWindowTokens">Optional max context window size in tokens. When set, usage is displayed as a percentage.</param>
+    /// <param name="maxOutputTokens">Optional max output tokens. Used with <paramref name="maxContextWindowTokens"/> to show input/output budget breakdown.</param>
+    public static async Task RunAgentAsync(AIAgent agent, string title, string userPrompt, int? maxContextWindowTokens = null, int? maxOutputTokens = null)
     {
         var todoProvider = agent.GetService<TodoProvider>();
         var modeProvider = agent.GetService<AgentModeProvider>();
@@ -46,7 +48,7 @@ public static class HarnessConsole
             }
             else
             {
-                await StreamAgentResponseAsync(agent, session, modeProvider, userInput);
+                await StreamAgentResponseAsync(agent, session, modeProvider, userInput, maxContextWindowTokens, maxOutputTokens);
             }
 
             WritePrompt(modeProvider, session);
@@ -57,7 +59,7 @@ public static class HarnessConsole
         System.Console.WriteLine("Goodbye!");
     }
 
-    private static async Task StreamAgentResponseAsync(AIAgent agent, AgentSession session, AgentModeProvider? modeProvider, string userInput)
+    private static async Task StreamAgentResponseAsync(AIAgent agent, AgentSession session, AgentModeProvider? modeProvider, string userInput, int? maxContextWindowTokens, int? maxOutputTokens)
     {
         string mode = modeProvider?.GetMode(session) ?? "unknown";
         System.Console.ForegroundColor = GetModeColor(mode);
@@ -106,6 +108,37 @@ public static class HarnessConsole
 
                         System.Console.ForegroundColor = GetModeColor(mode);
                     }
+                    else if (content is TextReasoningContent reasoning && !string.IsNullOrEmpty(reasoning.Text))
+                    {
+                        await spinner.StopAsync();
+
+                        if (!hasTextOutput)
+                        {
+                            System.Console.Write("\n");
+                            hasTextOutput = true;
+                            hasReceivedAnyText = true;
+                        }
+
+                        System.Console.ForegroundColor = ConsoleColor.DarkMagenta;
+                        System.Console.Write(reasoning.Text);
+                        System.Console.ForegroundColor = GetModeColor(mode);
+                    }
+                    else if (content is UsageContent usage)
+                    {
+                        await spinner.StopAsync();
+                        System.Console.ForegroundColor = ConsoleColor.DarkGray;
+                        System.Console.Write("\n\n  📊 Tokens");
+                        if (usage.Details is not null)
+                        {
+                            WriteUsageBreakdown(usage.Details, maxContextWindowTokens, maxOutputTokens);
+                        }
+                        else
+                        {
+                            System.Console.Write(" —");
+                        }
+                        System.Console.ForegroundColor = GetModeColor(mode);
+                        hasTextOutput = false;
+                    }
                 }
 
                 if (string.IsNullOrEmpty(update.Text))
@@ -136,7 +169,7 @@ public static class HarnessConsole
         {
             await spinner.StopAsync();
             System.Console.ForegroundColor = ConsoleColor.Red;
-            System.Console.Write($"\n  ❌ Stream error: {ex.GetType().Name}: {ex.Message}");
+            System.Console.Write($"\n  ❌ Stream error: {ex.GetType().Name}:\n{ex}");
         }
 
         await spinner.StopAsync();
@@ -190,7 +223,7 @@ public static class HarnessConsole
         catch (ArgumentException ex)
         {
             System.Console.ForegroundColor = ConsoleColor.Red;
-            System.Console.WriteLine($"\n  {ex.Message}\n");
+            System.Console.WriteLine($"\n  {ex}\n");
             System.Console.ResetColor();
         }
     }
@@ -235,6 +268,38 @@ public static class HarnessConsole
 
         System.Console.ResetColor();
         System.Console.WriteLine();
+    }
+
+    private static void WriteUsageBreakdown(UsageDetails details, int? maxContextWindowTokens, int? maxOutputTokens)
+    {
+        int? inputBudget = (maxContextWindowTokens is not null && maxOutputTokens is not null)
+            ? maxContextWindowTokens.Value - maxOutputTokens.Value
+            : null;
+
+        System.Console.Write(" — input: ");
+        WriteTokenCount(details.InputTokenCount, inputBudget);
+
+        System.Console.Write(" | output: ");
+        WriteTokenCount(details.OutputTokenCount, maxOutputTokens);
+
+        System.Console.Write(" | total: ");
+        WriteTokenCount(details.TotalTokenCount, maxContextWindowTokens);
+    }
+
+    private static void WriteTokenCount(long? count, int? budget)
+    {
+        if (count is null)
+        {
+            System.Console.Write("—");
+            return;
+        }
+
+        System.Console.Write($"{count.Value:N0}");
+        if (budget is not null && budget.Value > 0)
+        {
+            double pct = (double)count.Value / budget.Value * 100;
+            System.Console.Write($"/{budget.Value:N0} ({pct:F1}%)");
+        }
     }
 
     private static ConsoleColor GetModeColor(string mode) => mode switch

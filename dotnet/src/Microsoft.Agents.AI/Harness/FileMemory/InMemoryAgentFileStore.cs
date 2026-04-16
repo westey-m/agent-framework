@@ -1,0 +1,167 @@
+﻿// Copyright (c) Microsoft. All rights reserved.
+
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Shared.DiagnosticIds;
+
+namespace Microsoft.Agents.AI;
+
+/// <summary>
+/// An in-memory implementation of <see cref="AgentFileStore"/> that stores files in a dictionary.
+/// </summary>
+/// <remarks>
+/// This implementation is suitable for testing and lightweight scenarios where persistence is not required.
+/// Directory concepts are simulated using path prefixes — no explicit directory structure is maintained.
+/// </remarks>
+[Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
+public sealed class InMemoryAgentFileStore : AgentFileStore
+{
+    private readonly ConcurrentDictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase) { string.Empty };
+
+    /// <inheritdoc />
+    public override Task WriteFileAsync(string path, string content, CancellationToken cancellationToken = default)
+    {
+        path = NormalizePath(path);
+        this._files[path] = content;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public override Task<string?> ReadFileAsync(string path, CancellationToken cancellationToken = default)
+    {
+        path = NormalizePath(path);
+        this._files.TryGetValue(path, out string? content);
+        return Task.FromResult(content);
+    }
+
+    /// <inheritdoc />
+    public override Task<bool> DeleteFileAsync(string path, CancellationToken cancellationToken = default)
+    {
+        path = NormalizePath(path);
+        return Task.FromResult(this._files.TryRemove(path, out _));
+    }
+
+    /// <inheritdoc />
+    public override Task<IReadOnlyList<string>> ListFilesAsync(string directory, CancellationToken cancellationToken = default)
+    {
+        string prefix = NormalizePath(directory);
+        if (prefix.Length > 0 && !prefix.EndsWith("/", StringComparison.Ordinal))
+        {
+            prefix += "/";
+        }
+
+        var files = this._files.Keys
+            .Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(k => k.Substring(prefix.Length))
+            .Where(k => k.IndexOf("/", StringComparison.Ordinal) < 0)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<string>>(files);
+    }
+
+    /// <inheritdoc />
+    public override Task<bool> FileExistsAsync(string path, CancellationToken cancellationToken = default)
+    {
+        path = NormalizePath(path);
+        return Task.FromResult(this._files.ContainsKey(path));
+    }
+
+    /// <inheritdoc />
+    public override Task<IReadOnlyList<FileSearchResult>> SearchFilesAsync(string directory, string regexPattern, string? filePattern = null, CancellationToken cancellationToken = default)
+    {
+        string prefix = NormalizePath(directory);
+        if (prefix.Length > 0 && !prefix.EndsWith("/", StringComparison.Ordinal))
+        {
+            prefix += "/";
+        }
+
+        var regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
+        var results = new List<FileSearchResult>();
+        foreach (var kvp in this._files)
+        {
+            if (!kvp.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string relativeName = kvp.Key.Substring(prefix.Length);
+            if (relativeName.IndexOf("/", StringComparison.Ordinal) >= 0)
+            {
+                continue;
+            }
+
+            if (!MatchesGlob(relativeName, filePattern))
+            {
+                continue;
+            }
+
+            string[] lines = kvp.Value.Split('\n');
+            var matchingLines = new List<FileSearchMatch>();
+            string? firstSnippet = null;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                Match match = regex.Match(lines[i]);
+                if (match.Success)
+                {
+                    matchingLines.Add(new FileSearchMatch { LineNumber = i + 1, Line = lines[i].TrimEnd('\r') });
+
+                    if (firstSnippet is null)
+                    {
+                        int charIndex = kvp.Value.IndexOf(match.Value, StringComparison.OrdinalIgnoreCase);
+                        int snippetStart = Math.Max(0, charIndex - 50);
+                        int snippetEnd = Math.Min(kvp.Value.Length, charIndex + match.Value.Length + 50);
+                        firstSnippet = kvp.Value.Substring(snippetStart, snippetEnd - snippetStart);
+                    }
+                }
+            }
+
+            if (matchingLines.Count > 0)
+            {
+                results.Add(new FileSearchResult
+                {
+                    FileName = relativeName,
+                    Snippet = firstSnippet!,
+                    MatchingLines = matchingLines,
+                });
+            }
+        }
+
+        return Task.FromResult<IReadOnlyList<FileSearchResult>>(results);
+    }
+
+    /// <inheritdoc />
+    public override Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
+    {
+        path = NormalizePath(path);
+        if (path.Length > 0)
+        {
+            this._directories.Add(path);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string NormalizePath(string path)
+    {
+        string normalized = path.Replace('\\', '/').Trim('/');
+
+        if (normalized.IndexOf("..", StringComparison.Ordinal) >= 0 ||
+            path.StartsWith("/", StringComparison.Ordinal) ||
+            path.StartsWith("\\", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Invalid path: '{path}'. Paths must not contain '..' segments or start with '/' or '\\'.",
+                nameof(path));
+        }
+
+        return normalized;
+    }
+}

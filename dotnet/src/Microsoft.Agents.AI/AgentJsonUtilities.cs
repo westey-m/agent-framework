@@ -81,6 +81,15 @@ internal static partial class AgentJsonUtilities
     // AgentModeProvider types
     [JsonSerializable(typeof(AgentModeState))]
 
+    // FileMemoryProvider types
+    [JsonSerializable(typeof(FileMemoryState))]
+    [JsonSerializable(typeof(FileSearchResult))]
+    [JsonSerializable(typeof(List<FileSearchResult>), TypeInfoPropertyName = "FileSearchResultList")]
+    [JsonSerializable(typeof(FileSearchMatch))]
+    [JsonSerializable(typeof(List<FileSearchMatch>), TypeInfoPropertyName = "FileSearchMatchList")]
+    [JsonSerializable(typeof(FileListEntry))]
+    [JsonSerializable(typeof(List<FileListEntry>), TypeInfoPropertyName = "FileListEntryList")]
+
     [ExcludeFromCodeCoverage]
     internal sealed partial class JsonContext : JsonSerializerContext;
 }

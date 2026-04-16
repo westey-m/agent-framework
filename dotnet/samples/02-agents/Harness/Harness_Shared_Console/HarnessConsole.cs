@@ -128,7 +128,14 @@ public static class HarnessConsole
                         await spinner.StopAsync();
                         System.Console.ForegroundColor = ConsoleColor.DarkGray;
                         System.Console.Write("\n\n  📊 Tokens");
-                        WriteUsageBreakdown(usage.Details, maxContextWindowTokens, maxOutputTokens);
+                        if (usage.Details is not null)
+                        {
+                            WriteUsageBreakdown(usage.Details, maxContextWindowTokens, maxOutputTokens);
+                        }
+                        else
+                        {
+                            System.Console.Write(" —");
+                        }
                         System.Console.ForegroundColor = GetModeColor(mode);
                         hasTextOutput = false;
                     }

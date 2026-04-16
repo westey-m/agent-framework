@@ -55,11 +55,11 @@ public sealed class ContextWindowCompactionStrategy : CompactionStrategy
     /// The maximum number of output tokens the model can generate per response (e.g., 128,000 for gpt-5.4).
     /// </param>
     /// <param name="toolEvictionThreshold">
-    /// The fraction of the input budget (0.0–1.0) at which tool result eviction triggers.
+    /// The fraction of the input budget (0.0, 1.0] at which tool result eviction triggers.
     /// Defaults to <see cref="DefaultToolEvictionThreshold"/> (0.5).
     /// </param>
     /// <param name="truncationThreshold">
-    /// The fraction of the input budget (0.0–1.0) at which truncation triggers.
+    /// The fraction of the input budget (0.0, 1.0] at which truncation triggers.
     /// Defaults to <see cref="DefaultTruncationThreshold"/> (0.8).
     /// Must be greater than or equal to <paramref name="toolEvictionThreshold"/>.
     /// </param>

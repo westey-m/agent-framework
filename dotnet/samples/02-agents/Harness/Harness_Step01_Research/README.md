@@ -5,7 +5,7 @@ This sample demonstrates how to use a `ChatClientAgent` with the Harness `AICont
 Key features showcased:
 
 - **ChatClientAgent** — configured directly with Harness providers for planning and task management
-- **Web Search** — the agent can search the web for current information via `FoundryAITool.CreateWebSearchTool()`
+- **Web Search** — the agent can search the web for current information via `ResponseTool.CreateWebSearchTool()`
 - **TodoProvider** — the agent creates and manages a todo list to track research questions
 - **AgentModeProvider** — the agent switches between "plan" mode (breaking down the topic) and "execute" mode (answering each research question)
 - **Interactive conversation** — you can review the agent's plan, provide feedback, and approve before execution begins
@@ -25,8 +25,8 @@ Before running this sample, ensure you have:
 Set the following environment variables:
 
 ```bash
-# Required: Your Azure AI Foundry project endpoint
-export AZURE_AI_PROJECT_ENDPOINT="https://your-project.services.ai.azure.com/api/projects/your-project-name"
+# Required: Your Azure AI Foundry OpenAI endpoint
+export AZURE_FOUNDRY_OPENAI_ENDPOINT="https://your-project.services.ai.azure.com/openai/v1/"
 
 # Optional: Model deployment name (defaults to gpt-5.4)
 export AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4"

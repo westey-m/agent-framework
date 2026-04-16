@@ -18,7 +18,6 @@ using Azure.Identity;
 using Harness.Shared.Console;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
-using Microsoft.Agents.AI.Foundry;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Responses;
@@ -103,7 +102,7 @@ AIAgent agent = new ChatClientAgent(
             MaxOutputTokens = 128_000,
             Instructions = instructions,
             Reasoning = new() { Effort = ReasoningEffort.High },
-            Tools = [FoundryAITool.CreateWebSearchTool(), .. webBrowsingTools.Tools],
+            Tools = [ResponseTool.CreateWebSearchTool().AsAITool(), .. webBrowsingTools.Tools],
         },
     });
 

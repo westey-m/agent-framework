@@ -78,36 +78,45 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     /// <inheritdoc />
     public override Task<IReadOnlyList<FileSearchResult>> SearchFilesAsync(string directory, string regexPattern, string? filePattern = null, CancellationToken cancellationToken = default)
     {
+        // Normalize the directory prefix for path matching.
         string prefix = NormalizePath(directory);
         if (prefix.Length > 0 && !prefix.EndsWith("/", StringComparison.Ordinal))
         {
             prefix += "/";
         }
 
+        // Compile the regex with a timeout to guard against catastrophic backtracking (ReDoS).
         var regex = new Regex(regexPattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
         Matcher? matcher = filePattern is not null ? CreateGlobMatcher(filePattern) : null;
         var results = new List<FileSearchResult>();
+
         foreach (var kvp in this._files)
         {
+            // Only consider files within the target directory (by path prefix).
             if (!kvp.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
+            // Exclude files in subdirectories (direct children only).
             string relativeName = kvp.Key.Substring(prefix.Length);
             if (relativeName.IndexOf("/", StringComparison.Ordinal) >= 0)
             {
                 continue;
             }
 
+            // Apply the optional glob filter on the file name.
             if (!MatchesGlob(relativeName, matcher))
             {
                 continue;
             }
 
-            string[] lines = kvp.Value.Split('\n');
+            // Search each line for regex matches, tracking line numbers and building a snippet.
+            string fileContent = kvp.Value;
+            string[] lines = fileContent.Split('\n');
             var matchingLines = new List<FileSearchMatch>();
             string? firstSnippet = null;
+            int lineStartOffset = 0;
 
             for (int i = 0; i < lines.Length; i++)
             {
@@ -116,14 +125,18 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
                 {
                     matchingLines.Add(new FileSearchMatch { LineNumber = i + 1, Line = lines[i].TrimEnd('\r') });
 
+                    // Build a context snippet around the first match (±50 chars).
                     if (firstSnippet is null)
                     {
-                        int charIndex = kvp.Value.IndexOf(match.Value, StringComparison.OrdinalIgnoreCase);
+                        int charIndex = lineStartOffset + match.Index;
                         int snippetStart = Math.Max(0, charIndex - 50);
-                        int snippetEnd = Math.Min(kvp.Value.Length, charIndex + match.Value.Length + 50);
-                        firstSnippet = kvp.Value.Substring(snippetStart, snippetEnd - snippetStart);
+                        int snippetEnd = Math.Min(fileContent.Length, charIndex + match.Value.Length + 50);
+                        firstSnippet = fileContent.Substring(snippetStart, snippetEnd - snippetStart);
                     }
                 }
+
+                // Advance the offset past this line (including the '\n' separator).
+                lineStartOffset += lines[i].Length + 1;
             }
 
             if (matchingLines.Count > 0)

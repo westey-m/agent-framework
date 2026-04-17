@@ -389,6 +389,30 @@ public class InMemoryAgentFileStoreTests
     }
 
     [Fact]
+    public async Task WriteFile_DoubleDotsInFileName_AllowedAsync()
+    {
+        // Arrange — "notes..md" contains ".." as a substring but not as a path segment.
+        var store = new InMemoryAgentFileStore();
+
+        // Act
+        await store.WriteFileAsync("notes..md", "Content");
+        var content = await store.ReadFileAsync("notes..md");
+
+        // Assert
+        Assert.Equal("Content", content);
+    }
+
+    [Fact]
+    public async Task WriteFile_DriveRootedPath_ThrowsAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => store.WriteFileAsync("C:\\temp\\file.md", "Content"));
+    }
+
+    [Fact]
     public async Task ListFiles_PathTraversal_ThrowsAsync()
     {
         // Arrange

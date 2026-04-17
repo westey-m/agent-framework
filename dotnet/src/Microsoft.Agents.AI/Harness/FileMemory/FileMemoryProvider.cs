@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -110,22 +111,28 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// </summary>
     /// <param name="fileName">The name of the file to save.</param>
     /// <param name="content">The content to write to the file.</param>
-    /// <param name="description">An optional description of the file contents for discovery. Pass an empty string to skip.</param>
+    /// <param name="description">An optional description of the file contents for discovery. Leave empty or omit to skip.</param>
     /// <returns>A confirmation message.</returns>
-    [Description("Save a memory file with the given name and content. Overwrites the file if it already exists. Include a description for large files to provide a summary that helps with discovery. Pass an empty string for description to skip.")]
-    private async Task<string> SaveFileAsync(string fileName, string content, string description)
+    [Description("Save a memory file with the given name and content. Overwrites the file if it already exists. Include a description for large files to provide a summary that helps with discovery.")]
+    private async Task<string> SaveFileAsync(string fileName, string content, string? description = null)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, fileName);
         await this._fileStore.WriteFileAsync(path, content).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(description))
+        string descPath = ResolvePath(state.WorkingFolder, GetDescriptionFileName(fileName));
+
+        if (!string.IsNullOrWhiteSpace(description))
         {
-            string descPath = ResolvePath(state.WorkingFolder, GetDescriptionFileName(fileName));
             await this._fileStore.WriteFileAsync(descPath, description).ConfigureAwait(false);
         }
+        else
+        {
+            // Remove any stale description file when no description is provided.
+            await this._fileStore.DeleteFileAsync(descPath).ConfigureAwait(false);
+        }
 
-        return string.IsNullOrEmpty(description)
+        return string.IsNullOrWhiteSpace(description)
             ? $"File '{fileName}' saved."
             : $"File '{fileName}' saved with description.";
     }
@@ -212,13 +219,13 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// Returns matching file names, content snippets, and matching lines with line numbers.
     /// </summary>
     /// <param name="regexPattern">A regular expression pattern to match against file contents (case-insensitive).</param>
-    /// <param name="filePattern">An optional glob pattern to filter which files to search (e.g., "*.md", "research*"). Pass an empty string to search all files.</param>
+    /// <param name="filePattern">An optional glob pattern to filter which files to search (e.g., "*.md", "research*"). Leave empty or omit to search all files.</param>
     /// <returns>A list of search results with matching file names, snippets, and matching lines.</returns>
-    [Description("Search memory file contents using a regular expression pattern (case-insensitive). Optionally filter which files to search using a glob pattern (e.g., \"*.md\", \"research*\"). Pass an empty string for filePattern to search all files. Returns matching file names, content snippets, and matching lines with line numbers.")]
-    private async Task<List<FileSearchResult>> SearchFilesAsync(string regexPattern, string filePattern)
+    [Description("Search memory file contents using a regular expression pattern (case-insensitive). Optionally filter which files to search using a glob pattern (e.g., \"*.md\", \"research*\"). Returns matching file names, content snippets, and matching lines with line numbers.")]
+    private async Task<List<FileSearchResult>> SearchFilesAsync(string regexPattern, string? filePattern = null)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
-        string? pattern = string.IsNullOrEmpty(filePattern) ? null : filePattern;
+        string? pattern = string.IsNullOrWhiteSpace(filePattern) ? null : filePattern;
         IReadOnlyList<FileSearchResult> results = await this._fileStore.SearchFilesAsync(state.WorkingFolder, regexPattern, pattern).ConfigureAwait(false);
         return new List<FileSearchResult>(results);
     }
@@ -252,10 +259,23 @@ public sealed class FileMemoryProvider : AIContextProvider
 
     private static string ResolvePath(string workingFolder, string fileName)
     {
-        // Prevent path traversal by rejecting '..' segments and absolute paths.
-        if (fileName.IndexOf("..", StringComparison.Ordinal) >= 0 || fileName.StartsWith("/", StringComparison.Ordinal) || fileName.StartsWith("\\", StringComparison.Ordinal))
+        // Prevent path traversal by rejecting rooted paths and '.'/'..' segments.
+        string normalized = fileName.Replace('\\', '/');
+
+        if (Path.IsPathRooted(fileName) ||
+            fileName.StartsWith("/", StringComparison.Ordinal) ||
+            fileName.StartsWith("\\", StringComparison.Ordinal) ||
+            (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
         {
-            throw new ArgumentException($"Invalid file name: '{fileName}'. File names must not contain '..' or start with '/' or '\\'.", nameof(fileName));
+            throw new ArgumentException($"Invalid file name: '{fileName}'. File names must be relative and must not start with '/', '\\', or a drive root.", nameof(fileName));
+        }
+
+        foreach (string segment in normalized.Split('/'))
+        {
+            if (segment.Equals(".", StringComparison.Ordinal) || segment.Equals("..", StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"Invalid file name: '{fileName}'. File names must not contain '.' or '..' segments.", nameof(fileName));
+            }
         }
 
         return CombinePaths(workingFolder, fileName);

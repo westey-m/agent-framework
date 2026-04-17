@@ -50,7 +50,7 @@ public class FileMemoryProviderTests
     public async Task ProvideAIContextAsync_ReturnsToolsAsync()
     {
         // Arrange
-        var (tools, _) = await CreateToolsAsync();
+        var (tools, _, session) = await CreateToolsAsync();
 
         // Assert - 5 tools: SaveFile, ReadFile, DeleteFile, ListFiles, SearchFiles
         Assert.Equal(5, tools.Count());
@@ -85,7 +85,7 @@ public class FileMemoryProviderTests
     {
         // Arrange
         var store = new InMemoryAgentFileStore();
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var saveFile = GetTool(tools, "FileMemory_SaveFile");
 
         // Act
@@ -94,7 +94,7 @@ public class FileMemoryProviderTests
             ["fileName"] = "notes.md",
             ["content"] = "Test content",
             ["description"] = "",
-        });
+        }, session);
 
         // Assert
         var content = await store.ReadFileAsync("notes.md");
@@ -106,7 +106,7 @@ public class FileMemoryProviderTests
     {
         // Arrange
         var store = new InMemoryAgentFileStore();
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var saveFile = GetTool(tools, "FileMemory_SaveFile");
 
         // Act
@@ -115,7 +115,7 @@ public class FileMemoryProviderTests
             ["fileName"] = "research.md",
             ["content"] = "Long research content...",
             ["description"] = "Summary of research findings",
-        });
+        }, session);
 
         // Assert
         var content = await store.ReadFileAsync("research.md");
@@ -125,11 +125,40 @@ public class FileMemoryProviderTests
     }
 
     [Fact]
+    public async Task SaveFile_WithoutDescription_DeletesStaleDescriptionAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+
+        // Save with description first.
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Original",
+            ["description"] = "Old description",
+        }, session);
+        Assert.NotNull(await store.ReadFileAsync("notes_description.md"));
+
+        // Act — overwrite without description.
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Updated",
+        }, session);
+
+        // Assert — stale description file is removed.
+        Assert.Equal("Updated", await store.ReadFileAsync("notes.md"));
+        Assert.Null(await store.ReadFileAsync("notes_description.md"));
+    }
+
+    [Fact]
     public async Task SaveFile_WithCustomState_CreatesInSubfolderAsync()
     {
         // Arrange
         var store = new InMemoryAgentFileStore();
-        var (tools, state) = await CreateToolsAsync(store, _ => new FileMemoryState { WorkingFolder = "session123" });
+        var (tools, state, session) = await CreateToolsAsync(store, _ => new FileMemoryState { WorkingFolder = "session123" });
         var saveFile = GetTool(tools, "FileMemory_SaveFile");
 
         // Act
@@ -138,7 +167,7 @@ public class FileMemoryProviderTests
             ["fileName"] = "notes.md",
             ["content"] = "Session content",
             ["description"] = "",
-        });
+        }, session);
 
         // Assert
         Assert.Equal("session123", state.WorkingFolder);
@@ -156,14 +185,14 @@ public class FileMemoryProviderTests
         // Arrange
         var store = new InMemoryAgentFileStore();
         await store.WriteFileAsync("notes.md", "Stored content");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var readFile = GetTool(tools, "FileMemory_ReadFile");
 
         // Act
         var result = await InvokeWithRunContextAsync(readFile, new AIFunctionArguments
         {
             ["fileName"] = "notes.md",
-        });
+        }, session);
 
         // Assert
         var text = Assert.IsType<JsonElement>(result).GetString();
@@ -174,14 +203,14 @@ public class FileMemoryProviderTests
     public async Task ReadFile_NonExistent_ReturnsNotFoundMessageAsync()
     {
         // Arrange
-        var (tools, _) = await CreateToolsAsync();
+        var (tools, _, session) = await CreateToolsAsync();
         var readFile = GetTool(tools, "FileMemory_ReadFile");
 
         // Act
         var result = await InvokeWithRunContextAsync(readFile, new AIFunctionArguments
         {
             ["fileName"] = "nonexistent.md",
-        });
+        }, session);
 
         // Assert
         var text = Assert.IsType<JsonElement>(result).GetString();
@@ -198,14 +227,14 @@ public class FileMemoryProviderTests
         // Arrange
         var store = new InMemoryAgentFileStore();
         await store.WriteFileAsync("notes.md", "Content");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var deleteFile = GetTool(tools, "FileMemory_DeleteFile");
 
         // Act
         var result = await InvokeWithRunContextAsync(deleteFile, new AIFunctionArguments
         {
             ["fileName"] = "notes.md",
-        });
+        }, session);
 
         // Assert
         var text = Assert.IsType<JsonElement>(result).GetString();
@@ -220,14 +249,14 @@ public class FileMemoryProviderTests
         var store = new InMemoryAgentFileStore();
         await store.WriteFileAsync("notes.md", "Content");
         await store.WriteFileAsync("notes_description.md", "Description");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var deleteFile = GetTool(tools, "FileMemory_DeleteFile");
 
         // Act
         await InvokeWithRunContextAsync(deleteFile, new AIFunctionArguments
         {
             ["fileName"] = "notes.md",
-        });
+        }, session);
 
         // Assert
         Assert.False(await store.FileExistsAsync("notes.md"));
@@ -246,11 +275,11 @@ public class FileMemoryProviderTests
         await store.WriteFileAsync("notes.md", "Content");
         await store.WriteFileAsync("notes_description.md", "A description");
         await store.WriteFileAsync("other.md", "Other content");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var listFiles = GetTool(tools, "FileMemory_ListFiles");
 
         // Act
-        var result = await InvokeWithRunContextAsync(listFiles, new AIFunctionArguments());
+        var result = await InvokeWithRunContextAsync(listFiles, new AIFunctionArguments(), session);
 
         // Assert
         var entries = Assert.IsType<JsonElement>(result).EnumerateArray().ToList();
@@ -270,11 +299,11 @@ public class FileMemoryProviderTests
         var store = new InMemoryAgentFileStore();
         await store.WriteFileAsync("notes.md", "Content");
         await store.WriteFileAsync("notes_description.md", "Desc");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var listFiles = GetTool(tools, "FileMemory_ListFiles");
 
         // Act
-        var result = await InvokeWithRunContextAsync(listFiles, new AIFunctionArguments());
+        var result = await InvokeWithRunContextAsync(listFiles, new AIFunctionArguments(), session);
 
         // Assert
         var entries = Assert.IsType<JsonElement>(result).EnumerateArray().ToList();
@@ -292,7 +321,7 @@ public class FileMemoryProviderTests
         // Arrange
         var store = new InMemoryAgentFileStore();
         await store.WriteFileAsync("notes.md", "Important research findings about AI");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var searchFiles = GetTool(tools, "FileMemory_SearchFiles");
 
         // Act
@@ -300,7 +329,7 @@ public class FileMemoryProviderTests
         {
             ["regexPattern"] = "research findings",
             ["filePattern"] = "",
-        });
+        }, session);
 
         // Assert
         var entries = Assert.IsType<JsonElement>(result).EnumerateArray().ToList();
@@ -317,7 +346,7 @@ public class FileMemoryProviderTests
         var store = new InMemoryAgentFileStore();
         await store.WriteFileAsync("notes.md", "Important data");
         await store.WriteFileAsync("data.txt", "Important data");
-        var (tools, _) = await CreateToolsAsync(store);
+        var (tools, _, session) = await CreateToolsAsync(store);
         var searchFiles = GetTool(tools, "FileMemory_SearchFiles");
 
         // Act
@@ -325,7 +354,7 @@ public class FileMemoryProviderTests
         {
             ["regexPattern"] = "Important",
             ["filePattern"] = "*.md",
-        });
+        }, session);
 
         // Assert
         var entries = Assert.IsType<JsonElement>(result).EnumerateArray().ToList();
@@ -342,7 +371,7 @@ public class FileMemoryProviderTests
     {
         // Arrange
         var store = new InMemoryAgentFileStore();
-        var (_, state) = await CreateToolsAsync(store, _ => new FileMemoryState { WorkingFolder = "user42" });
+        var (_, state, _) = await CreateToolsAsync(store, _ => new FileMemoryState { WorkingFolder = "user42" });
 
         // Assert
         Assert.Equal("user42", state.WorkingFolder);
@@ -352,7 +381,7 @@ public class FileMemoryProviderTests
     public async Task DefaultStateInitializer_UsesEmptyWorkingFolderAsync()
     {
         // Arrange
-        var (_, state) = await CreateToolsAsync();
+        var (_, state, _) = await CreateToolsAsync();
 
         // Assert
         Assert.Equal(string.Empty, state.WorkingFolder);
@@ -392,7 +421,7 @@ public class FileMemoryProviderTests
     public async Task SaveFile_PathTraversal_ThrowsAsync()
     {
         // Arrange
-        var (tools, _) = await CreateToolsAsync();
+        var (tools, _, session) = await CreateToolsAsync();
         var saveFile = GetTool(tools, "FileMemory_SaveFile");
 
         // Act & Assert
@@ -402,14 +431,14 @@ public class FileMemoryProviderTests
                 ["fileName"] = "../escape.md",
                 ["content"] = "Content",
                 ["description"] = "",
-            }));
+            }, session));
     }
 
     [Fact]
     public async Task SaveFile_AbsolutePath_ThrowsAsync()
     {
         // Arrange
-        var (tools, _) = await CreateToolsAsync();
+        var (tools, _, session) = await CreateToolsAsync();
         var saveFile = GetTool(tools, "FileMemory_SaveFile");
 
         // Act & Assert
@@ -419,7 +448,42 @@ public class FileMemoryProviderTests
                 ["fileName"] = "/etc/passwd",
                 ["content"] = "Content",
                 ["description"] = "",
-            }));
+            }, session));
+    }
+
+    [Fact]
+    public async Task SaveFile_DriveRootedPath_ThrowsAsync()
+    {
+        // Arrange
+        var (tools, _, session) = await CreateToolsAsync();
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+            {
+                ["fileName"] = "C:\\temp\\file.md",
+                ["content"] = "Content",
+            }, session));
+    }
+
+    [Fact]
+    public async Task SaveFile_DoubleDotsInFileName_AllowedAsync()
+    {
+        // Arrange — "notes..md" is not a path traversal attempt.
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+
+        // Act
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes..md",
+            ["content"] = "Content",
+        }, session);
+
+        // Assert
+        Assert.Equal("Content", await store.ReadFileAsync("notes..md"));
     }
 
     #endregion
@@ -431,7 +495,7 @@ public class FileMemoryProviderTests
         return new FileMemoryProvider(store ?? new InMemoryAgentFileStore(), stateInitializer);
     }
 
-    private static async Task<(IEnumerable<AITool> Tools, FileMemoryState State)> CreateToolsAsync(InMemoryAgentFileStore? store = null, Func<AgentSession?, FileMemoryState>? stateInitializer = null)
+    private static async Task<(IEnumerable<AITool> Tools, FileMemoryState State, AgentSession Session)> CreateToolsAsync(InMemoryAgentFileStore? store = null, Func<AgentSession?, FileMemoryState>? stateInitializer = null)
     {
         var provider = CreateProvider(store, stateInitializer);
         var agent = new Mock<AIAgent>().Object;
@@ -444,7 +508,7 @@ public class FileMemoryProviderTests
 
         session.StateBag.TryGetValue<FileMemoryState>("FileMemoryProvider", out var state, AgentJsonUtilities.DefaultOptions);
 
-        return (result.Tools!, state!);
+        return (result.Tools!, state!, session);
     }
 
     private static AIFunction GetTool(IEnumerable<AITool> tools, string name)
@@ -456,10 +520,17 @@ public class FileMemoryProviderTests
     /// Invokes a tool within a mock <see cref="AIAgent.CurrentRunContext"/> so that
     /// the tool methods can access the session via <c>AIAgent.CurrentRunContext?.Session</c>.
     /// </summary>
-    private static async Task<object?> InvokeWithRunContextAsync(AIFunction tool, AIFunctionArguments arguments)
+    /// <param name="tool">The tool to invoke.</param>
+    /// <param name="arguments">The arguments to pass to the tool.</param>
+    /// <param name="session">
+    /// An optional session to use in the run context. When provided, ensures the tool executes
+    /// against the same session whose state was initialized during <see cref="CreateToolsAsync"/>.
+    /// When <see langword="null"/>, a new session is created.
+    /// </param>
+    private static async Task<object?> InvokeWithRunContextAsync(AIFunction tool, AIFunctionArguments arguments, AgentSession? session = null)
     {
         var agent = new Mock<AIAgent>().Object;
-        var session = new ChatClientAgentSession();
+        session ??= new ChatClientAgentSession();
         var messages = new List<ChatMessage>();
 
         // Set up the ambient run context so tool methods can access the session.

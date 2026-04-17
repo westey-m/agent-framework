@@ -4,10 +4,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Shared.DiagnosticIds;
 
 namespace Microsoft.Agents.AI;
@@ -23,7 +25,7 @@ namespace Microsoft.Agents.AI;
 public sealed class InMemoryAgentFileStore : AgentFileStore
 {
     private readonly ConcurrentDictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase) { string.Empty };
+    private readonly ConcurrentDictionary<string, byte> _directories = new(StringComparer.OrdinalIgnoreCase) { [string.Empty] = 0 };
 
     /// <inheritdoc />
     public override Task WriteFileAsync(string path, string content, CancellationToken cancellationToken = default)
@@ -82,7 +84,8 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
             prefix += "/";
         }
 
-        var regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
+        var regex = new Regex(regexPattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
+        Matcher? matcher = filePattern is not null ? CreateGlobMatcher(filePattern) : null;
         var results = new List<FileSearchResult>();
         foreach (var kvp in this._files)
         {
@@ -97,7 +100,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
                 continue;
             }
 
-            if (!MatchesGlob(relativeName, filePattern))
+            if (!MatchesGlob(relativeName, matcher))
             {
                 continue;
             }
@@ -143,7 +146,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
         path = NormalizePath(path);
         if (path.Length > 0)
         {
-            this._directories.Add(path);
+            this._directories.TryAdd(path, 0);
         }
 
         return Task.CompletedTask;
@@ -153,13 +156,24 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     {
         string normalized = path.Replace('\\', '/').Trim('/');
 
-        if (normalized.IndexOf("..", StringComparison.Ordinal) >= 0 ||
+        if (Path.IsPathRooted(path) ||
             path.StartsWith("/", StringComparison.Ordinal) ||
-            path.StartsWith("\\", StringComparison.Ordinal))
+            path.StartsWith("\\", StringComparison.Ordinal) ||
+            (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
         {
             throw new ArgumentException(
-                $"Invalid path: '{path}'. Paths must not contain '..' segments or start with '/' or '\\'.",
+                $"Invalid path: '{path}'. Paths must be relative and must not start with '/', '\\', or a drive root.",
                 nameof(path));
+        }
+
+        foreach (string segment in normalized.Split('/'))
+        {
+            if (segment.Equals(".", StringComparison.Ordinal) || segment.Equals("..", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Invalid path: '{path}'. Paths must not contain '.' or '..' segments.",
+                    nameof(path));
+            }
         }
 
         return normalized;

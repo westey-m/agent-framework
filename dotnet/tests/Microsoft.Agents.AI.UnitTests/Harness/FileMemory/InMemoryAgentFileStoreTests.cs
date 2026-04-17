@@ -345,6 +345,105 @@ public class InMemoryAgentFileStoreTests
     }
 
     [Fact]
+    public async Task SearchFiles_Snippet_IncludesSurroundingContextAsync()
+    {
+        // Arrange — place the match in the middle of a long line so ±50 chars are available.
+        var store = new InMemoryAgentFileStore();
+        string padding = new('A', 60);
+        string content = $"{padding}MATCH_HERE{padding}";
+        await store.WriteFileAsync("folder/file.md", content);
+
+        // Act
+        var results = await store.SearchFilesAsync("folder", "MATCH_HERE");
+
+        // Assert — snippet should contain the match and surrounding context (up to ±50 chars).
+        Assert.Single(results);
+        string snippet = results[0].Snippet;
+        Assert.Contains("MATCH_HERE", snippet);
+        Assert.True(snippet.Length <= 50 + "MATCH_HERE".Length + 50, "Snippet should be at most ±50 chars around the match.");
+        Assert.True(snippet.Length > "MATCH_HERE".Length, "Snippet should include surrounding context.");
+    }
+
+    [Fact]
+    public async Task SearchFiles_Snippet_MatchNearStartOfFileAsync()
+    {
+        // Arrange — match is at the very beginning, so no leading context is available.
+        var store = new InMemoryAgentFileStore();
+        string trailing = new('B', 80);
+        string content = $"MATCH{trailing}";
+        await store.WriteFileAsync("folder/file.md", content);
+
+        // Act
+        var results = await store.SearchFilesAsync("folder", "MATCH");
+
+        // Assert — snippet should start at the beginning of the file.
+        Assert.Single(results);
+        Assert.StartsWith("MATCH", results[0].Snippet);
+        Assert.True(results[0].Snippet.Length <= "MATCH".Length + 50);
+    }
+
+    [Fact]
+    public async Task SearchFiles_Snippet_MatchNearEndOfFileAsync()
+    {
+        // Arrange — match is at the very end, so no trailing context is available.
+        var store = new InMemoryAgentFileStore();
+        string leading = new('C', 80);
+        string content = $"{leading}MATCH";
+        await store.WriteFileAsync("folder/file.md", content);
+
+        // Act
+        var results = await store.SearchFilesAsync("folder", "MATCH");
+
+        // Assert — snippet should end at the end of the file.
+        Assert.Single(results);
+        Assert.EndsWith("MATCH", results[0].Snippet);
+        Assert.True(results[0].Snippet.Length <= 50 + "MATCH".Length);
+    }
+
+    [Fact]
+    public async Task SearchFiles_Snippet_UsesFirstMatchPositionAsync()
+    {
+        // Arrange — "target" appears on lines 1 and 3, but the regex only matches line 3
+        // because we require the word "UNIQUE" which only appears on line 3.
+        var store = new InMemoryAgentFileStore();
+        const string Content = "Line one has some text\nLine two is filler\nLine three has UNIQUE_MARKER here";
+        await store.WriteFileAsync("folder/file.md", Content);
+
+        // Act
+        var results = await store.SearchFilesAsync("folder", "UNIQUE_MARKER");
+
+        // Assert — snippet should be from around line 3, not line 1.
+        Assert.Single(results);
+        Assert.Contains("UNIQUE_MARKER", results[0].Snippet);
+        Assert.Contains("Line three", results[0].Snippet);
+    }
+
+    [Fact]
+    public async Task SearchFiles_Snippet_CorrectForMultiLineMatchAsync()
+    {
+        // Arrange — match is on the second line with enough distance from line 1
+        // that the ±50 char snippet window does not reach the start of the file.
+        var store = new InMemoryAgentFileStore();
+        string line1 = new('X', 100);
+        string line2 = new string('Y', 60) + "FIND_ME" + new string('Z', 60);
+        string line3 = new('W', 100);
+        string content = $"{line1}\n{line2}\n{line3}";
+        await store.WriteFileAsync("folder/file.md", content);
+
+        // Act
+        var results = await store.SearchFilesAsync("folder", "FIND_ME");
+
+        // Assert — snippet should contain the match from line 2.
+        Assert.Single(results);
+        Assert.Contains("FIND_ME", results[0].Snippet);
+
+        // The match is at offset 101 (line1=100 + '\n') + 60 = 161.
+        // snippetStart = 161 - 50 = 111, which is well past line 1 (ends at offset 100).
+        // So line 1 content should not appear in the snippet.
+        Assert.DoesNotContain("XXXX", results[0].Snippet);
+    }
+
+    [Fact]
     public async Task PathNormalization_HandlesBackslashesAndTrailingSlashesAsync()
     {
         // Arrange

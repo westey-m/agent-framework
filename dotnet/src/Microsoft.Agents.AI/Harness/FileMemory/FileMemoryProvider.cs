@@ -112,24 +112,25 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// <param name="fileName">The name of the file to save.</param>
     /// <param name="content">The content to write to the file.</param>
     /// <param name="description">An optional description of the file contents for discovery. Leave empty or omit to skip.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A confirmation message.</returns>
     [Description("Save a memory file with the given name and content. Overwrites the file if it already exists. Include a description for large files to provide a summary that helps with discovery.")]
-    private async Task<string> SaveFileAsync(string fileName, string content, string? description = null)
+    private async Task<string> SaveFileAsync(string fileName, string content, string? description = null, CancellationToken cancellationToken = default)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, fileName);
-        await this._fileStore.WriteFileAsync(path, content).ConfigureAwait(false);
+        await this._fileStore.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
 
         string descPath = ResolvePath(state.WorkingFolder, GetDescriptionFileName(fileName));
 
         if (!string.IsNullOrWhiteSpace(description))
         {
-            await this._fileStore.WriteFileAsync(descPath, description).ConfigureAwait(false);
+            await this._fileStore.WriteFileAsync(descPath, description, cancellationToken).ConfigureAwait(false);
         }
         else
         {
             // Remove any stale description file when no description is provided.
-            await this._fileStore.DeleteFileAsync(descPath).ConfigureAwait(false);
+            await this._fileStore.DeleteFileAsync(descPath, cancellationToken).ConfigureAwait(false);
         }
 
         return string.IsNullOrWhiteSpace(description)
@@ -142,13 +143,14 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// Returns the file content or a message indicating the file was not found.
     /// </summary>
     /// <param name="fileName">The name of the file to read.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The file content or a not-found message.</returns>
     [Description("Read the content of a memory file by name. Returns the file content or a message indicating the file was not found.")]
-    private async Task<string> ReadFileAsync(string fileName)
+    private async Task<string> ReadFileAsync(string fileName, CancellationToken cancellationToken = default)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, fileName);
-        string? content = await this._fileStore.ReadFileAsync(path).ConfigureAwait(false);
+        string? content = await this._fileStore.ReadFileAsync(path, cancellationToken).ConfigureAwait(false);
         return content ?? $"File '{fileName}' not found.";
     }
 
@@ -156,17 +158,18 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// Delete a memory file by name. Also removes its companion description file if one exists.
     /// </summary>
     /// <param name="fileName">The name of the file to delete.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A confirmation or not-found message.</returns>
     [Description("Delete a memory file by name. Also removes its companion description file if one exists.")]
-    private async Task<string> DeleteFileAsync(string fileName)
+    private async Task<string> DeleteFileAsync(string fileName, CancellationToken cancellationToken = default)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, fileName);
-        bool deleted = await this._fileStore.DeleteFileAsync(path).ConfigureAwait(false);
+        bool deleted = await this._fileStore.DeleteFileAsync(path, cancellationToken).ConfigureAwait(false);
 
         // Also delete companion description file if it exists.
         string descPath = ResolvePath(state.WorkingFolder, GetDescriptionFileName(fileName));
-        await this._fileStore.DeleteFileAsync(descPath).ConfigureAwait(false);
+        await this._fileStore.DeleteFileAsync(descPath, cancellationToken).ConfigureAwait(false);
 
         return deleted ? $"File '{fileName}' deleted." : $"File '{fileName}' not found.";
     }
@@ -174,12 +177,13 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// <summary>
     /// List all memory files with their descriptions (if available). Description files are not shown separately.
     /// </summary>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A list of file entries with names and optional descriptions.</returns>
     [Description("List all memory files with their descriptions (if available). Description files are not shown separately.")]
-    private async Task<List<FileListEntry>> ListFilesAsync()
+    private async Task<List<FileListEntry>> ListFilesAsync(CancellationToken cancellationToken = default)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
-        IReadOnlyList<string> fileNames = await this._fileStore.ListFilesAsync(state.WorkingFolder).ConfigureAwait(false);
+        IReadOnlyList<string> fileNames = await this._fileStore.ListFilesAsync(state.WorkingFolder, cancellationToken).ConfigureAwait(false);
 
         var descriptionFileSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string file in fileNames)
@@ -204,7 +208,7 @@ public sealed class FileMemoryProvider : AIContextProvider
             if (descriptionFileSet.Contains(descFileName))
             {
                 string descPath = CombinePaths(state.WorkingFolder, descFileName);
-                fileDescription = await this._fileStore.ReadFileAsync(descPath).ConfigureAwait(false);
+                fileDescription = await this._fileStore.ReadFileAsync(descPath, cancellationToken).ConfigureAwait(false);
             }
 
             entries.Add(new FileListEntry { FileName = file, Description = fileDescription });
@@ -220,13 +224,14 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// </summary>
     /// <param name="regexPattern">A regular expression pattern to match against file contents (case-insensitive).</param>
     /// <param name="filePattern">An optional glob pattern to filter which files to search (e.g., "*.md", "research*"). Leave empty or omit to search all files.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A list of search results with matching file names, snippets, and matching lines.</returns>
     [Description("Search memory file contents using a regular expression pattern (case-insensitive). Optionally filter which files to search using a glob pattern (e.g., \"*.md\", \"research*\"). Returns matching file names, content snippets, and matching lines with line numbers.")]
-    private async Task<List<FileSearchResult>> SearchFilesAsync(string regexPattern, string? filePattern = null)
+    private async Task<List<FileSearchResult>> SearchFilesAsync(string regexPattern, string? filePattern = null, CancellationToken cancellationToken = default)
     {
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string? pattern = string.IsNullOrWhiteSpace(filePattern) ? null : filePattern;
-        IReadOnlyList<FileSearchResult> results = await this._fileStore.SearchFilesAsync(state.WorkingFolder, regexPattern, pattern).ConfigureAwait(false);
+        IReadOnlyList<FileSearchResult> results = await this._fileStore.SearchFilesAsync(state.WorkingFolder, regexPattern, pattern, cancellationToken).ConfigureAwait(false);
         return new List<FileSearchResult>(results);
     }
 

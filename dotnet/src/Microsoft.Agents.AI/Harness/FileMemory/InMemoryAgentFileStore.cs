@@ -25,7 +25,6 @@ namespace Microsoft.Agents.AI;
 public sealed class InMemoryAgentFileStore : AgentFileStore
 {
     private readonly ConcurrentDictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, byte> _directories = new(StringComparer.OrdinalIgnoreCase) { [string.Empty] = 0 };
 
     /// <inheritdoc />
     public override Task WriteFileAsync(string path, string content, CancellationToken cancellationToken = default)
@@ -156,12 +155,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     /// <inheritdoc />
     public override Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
     {
-        path = NormalizePath(path);
-        if (path.Length > 0)
-        {
-            this._directories.TryAdd(path, 0);
-        }
-
+        // No-op: directories are implicit from file paths in the in-memory store.
         return Task.CompletedTask;
     }
 

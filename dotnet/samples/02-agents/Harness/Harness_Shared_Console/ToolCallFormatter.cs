@@ -41,6 +41,13 @@ public static class ToolCallFormatter
             "ContinueTask" => FormatContinueTask(call),
             "ClearCompletedTask" => FormatSingleId(call, "taskId"),
 
+            // File memory tools
+            "FileMemory_SaveFile" => FormatSaveFile(call),
+            "FileMemory_ReadFile" => FormatStringArg(call, "fileName"),
+            "FileMemory_DeleteFile" => FormatStringArg(call, "fileName"),
+            "FileMemory_ListFiles" => null,
+            "FileMemory_SearchFiles" => FormatSearchFiles(call),
+
             // External tools
             "web_search" => FormatStringArg(call, "query"),
             "DownloadUri" => FormatStringArg(call, "uri"),
@@ -150,6 +157,36 @@ public static class ToolCallFormatter
         return text is not null
             ? $"(task #{taskId.Value}, \"{Truncate(text, 50)}\")"
             : $"(task #{taskId.Value})";
+    }
+
+    private static string? FormatSaveFile(FunctionCallContent call)
+    {
+        string? fileName = GetString(call, "fileName");
+        string? description = GetString(call, "description");
+
+        if (fileName is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrEmpty(description)
+            ? $"({fileName})"
+            : $"({fileName}, with description)";
+    }
+
+    private static string? FormatSearchFiles(FunctionCallContent call)
+    {
+        string? pattern = GetString(call, "regexPattern");
+        string? filePattern = GetString(call, "filePattern");
+
+        if (pattern is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrEmpty(filePattern)
+            ? $"(/{pattern}/)"
+            : $"(/{pattern}/ in {filePattern})";
     }
 
     private static string? FormatStringArg(FunctionCallContent call, string paramName)

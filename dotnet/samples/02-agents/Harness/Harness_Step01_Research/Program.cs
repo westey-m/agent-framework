@@ -90,7 +90,7 @@ AIAgent agent = new ChatClientAgent(
     {
         Name = "ResearchAgent",
         Description = "A research assistant that plans and executes research tasks.",
-        AIContextProviders = [new TodoProvider(), new AgentModeProvider()],
+        AIContextProviders = [new TodoProvider(), new AgentModeProvider(), new FileMemoryProvider(new InMemoryAgentFileStore())],
         ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
         {
             ChatReducer = compactionStrategy.AsChatReducer(),

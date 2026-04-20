@@ -22,8 +22,8 @@ namespace Microsoft.Agents.AI;
 /// <remarks>
 /// <para>
 /// All paths passed to this store are resolved relative to the root directory provided
-/// at construction time. Path traversal attempts (e.g., via <c>..</c> segments, absolute paths, or symlinks
-/// that resolve outside the root) are rejected with an <see cref="ArgumentException"/>.
+/// at construction time. Lexical path traversal attempts (for example, via <c>..</c> segments
+/// or absolute paths) are rejected with an <see cref="ArgumentException"/>.
 /// </para>
 /// <para>
 /// The root directory is created automatically if it does not already exist.
@@ -231,16 +231,19 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
 
     /// <summary>
     /// Resolves a relative file path to a safe absolute path under the root directory.
-    /// Rejects paths that would escape the root via traversal, rooted paths, or symlinks.
+    /// Rejects paths that would escape the root via traversal or rooted paths.
     /// </summary>
     private string ResolveSafePath(string relativePath)
     {
         ValidateRelativePath(relativePath);
 
-        string combined = Path.Combine(this._rootPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        // Normalize separators before combining to prevent backslashes from becoming
+        // literal filename characters on Unix.
+        string normalized = relativePath.Replace('\\', '/').Replace('/', Path.DirectorySeparatorChar);
+        string combined = Path.Combine(this._rootPath, normalized);
         string fullPath = Path.GetFullPath(combined);
 
-        if (!fullPath.StartsWith(this._rootPath, StringComparison.OrdinalIgnoreCase))
+        if (!fullPath.StartsWith(this._rootPath, StringComparison.Ordinal))
         {
             throw new ArgumentException(
                 $"Invalid path: '{relativePath}'. The resolved path escapes the root directory.",
@@ -289,6 +292,14 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
                     $"Invalid path: '{path}'. Paths must not contain '.' or '..' segments.",
                     nameof(path));
             }
+        }
+
+        if (normalized.StartsWith("/", StringComparison.Ordinal) ||
+            normalized.EndsWith("/", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Invalid path: '{path}'. Paths must not start or end with a directory separator.",
+                nameof(path));
         }
     }
 }

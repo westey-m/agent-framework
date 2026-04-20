@@ -135,7 +135,7 @@ AIAgent agent = new ChatClientAgent(
             new AgentModeProvider(),
             new FileMemoryProvider(
                 new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "agent-files")),
-                (_) => new FileMemoryState() { WorkingFolder = DateTime.UtcNow.ToString("s") + Guid.NewGuid().ToString() })
+                (_) => new FileMemoryState() { WorkingFolder = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString() })
         ],
         RequirePerServiceCallChatHistoryPersistence = true,
         UseProvidedChatClientAsIs = true,

@@ -101,6 +101,13 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
         Assert.Equal("content", result);
     }
 
+    [Fact]
+    public async Task WriteFileAsync_TrailingSlash_ThrowsAsync()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => this._store.WriteFileAsync("subdir/", "content"));
+    }
+
     #endregion
 
     #region Write and Read

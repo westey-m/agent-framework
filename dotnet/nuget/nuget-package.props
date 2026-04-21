@@ -30,7 +30,8 @@
 
     <!-- Report low, moderate, high and critical advisories -->
     <NuGetAuditLevel>low</NuGetAuditLevel>
-    
+
+
     <!-- Default description and tags. Packages can override. -->
     <Authors>Microsoft</Authors>
     <Company>Microsoft</Company>

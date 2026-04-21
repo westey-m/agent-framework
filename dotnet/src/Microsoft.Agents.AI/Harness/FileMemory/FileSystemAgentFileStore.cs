@@ -152,7 +152,7 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
 
         // Compile the regex with a timeout to guard against catastrophic backtracking (ReDoS).
         var regex = new Regex(regexPattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
-        Matcher? matcher = filePattern is not null ? CreateGlobMatcher(filePattern) : null;
+        Matcher? matcher = filePattern is not null ? StorePaths.CreateGlobMatcher(filePattern) : null;
         var results = new List<FileSearchResult>();
 
         foreach (string filePath in Directory.GetFiles(fullDir))
@@ -164,7 +164,7 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
             }
 
             // Apply the optional glob filter on the file name.
-            if (!MatchesGlob(fileName, matcher))
+            if (!StorePaths.MatchesGlob(fileName, matcher))
             {
                 continue;
             }
@@ -236,7 +236,7 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
     private string ResolveSafePath(string relativePath)
     {
         // Normalize and validate the relative path (rejects rooted, traversal, etc.).
-        string normalized = NormalizeRelativePath(relativePath);
+        string normalized = StorePaths.NormalizeRelativePath(relativePath);
 
         // Convert to OS-native separators before combining.
         string nativePath = normalized.Replace('/', Path.DirectorySeparatorChar);

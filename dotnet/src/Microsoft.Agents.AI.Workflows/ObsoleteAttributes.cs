@@ -29,6 +29,7 @@ namespace Microsoft.Agents.AI.Workflows;
 /// }
 /// </code>
 /// </example>
+[Obsolete("Use YieldsOutput instead. The Code Generator and the runtime attribute-based type mapping ignore this attribute.")]
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
 public sealed class YieldsMessageAttribute : Attribute
 {
@@ -44,6 +45,28 @@ public sealed class YieldsMessageAttribute : Attribute
     /// <exception cref="ArgumentNullException"><paramref name="type"/> is <see langword="null"/>.</exception>
     public YieldsMessageAttribute(Type type)
     {
+        this.Type = Throw.IfNull(type);
+    }
+}
+
+/// <summary>
+/// This attribute indicates that a message handler streams messages during its execution.
+/// </summary>
+[Obsolete("This attribute does not do anything. The Code Generator and the runtime attribute-based type mapping ignore this attribute.")]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
+public sealed class StreamsMessageAttribute : Attribute
+{
+    /// <summary>
+    /// The type of the message that the handler yields.
+    /// </summary>
+    public Type Type { get; }
+
+    /// <summary>
+    /// Indicates that the message handler yields streaming messages during the course of execution.
+    /// </summary>
+    public StreamsMessageAttribute(Type type)
+    {
+        // This attribute is used to mark executors that yield messages.
         this.Type = Throw.IfNull(type);
     }
 }

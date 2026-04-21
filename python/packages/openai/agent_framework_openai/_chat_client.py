@@ -1405,7 +1405,7 @@ class RawOpenAIChatClient(  # type: ignore[misc]
                         else "auto",
                     }
                     file_id = content.additional_properties.get("file_id") if content.additional_properties else None
-                    if file_id:
+                    if file_id is not None:
                         result["file_id"] = file_id
                     return result
                 if content.has_top_level_media_type("audio"):

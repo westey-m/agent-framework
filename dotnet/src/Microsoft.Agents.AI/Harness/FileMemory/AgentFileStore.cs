@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.FileSystemGlobbing;
@@ -92,6 +94,54 @@ public abstract class AgentFileStore
     public abstract Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Normalizes a relative path by replacing backslashes with forward slashes, trimming leading
+    /// and trailing separators, and collapsing consecutive separators. Also validates that the path
+    /// does not contain rooted paths, drive roots, or <c>.</c>/<c>..</c> traversal segments.
+    /// </summary>
+    /// <param name="path">The relative path to normalize.</param>
+    /// <returns>The normalized forward-slash path.</returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="path"/> is rooted, starts with a drive letter, or contains
+    /// <c>.</c> or <c>..</c> segments.
+    /// </exception>
+    protected static string NormalizeRelativePath(string path)
+    {
+        string normalized = path.Replace('\\', '/').Trim('/');
+
+        if (Path.IsPathRooted(path) ||
+            path.StartsWith("/", StringComparison.Ordinal) ||
+            path.StartsWith("\\", StringComparison.Ordinal) ||
+            (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
+        {
+            throw new ArgumentException(
+                $"Invalid path: '{path}'. Paths must be relative and must not start with '/', '\\', or a drive root.",
+                nameof(path));
+        }
+
+        // Split, validate segments, and filter out empty segments to collapse consecutive separators.
+        string[] segments = normalized.Split('/');
+        var cleanSegments = new List<string>(segments.Length);
+        foreach (string segment in segments)
+        {
+            if (segment.Length == 0)
+            {
+                continue;
+            }
+
+            if (segment.Equals(".", StringComparison.Ordinal) || segment.Equals("..", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Invalid path: '{path}'. Paths must not contain '.' or '..' segments.",
+                    nameof(path));
+            }
+
+            cleanSegments.Add(segment);
+        }
+
+        return string.Join("/", cleanSegments);
+    }
+
+    /// <summary>
     /// Creates a <see cref="Matcher"/> for the specified glob pattern. Use the returned instance
     /// to test multiple file names without allocating a new matcher for each one.
     /// </summary>
@@ -101,7 +151,7 @@ public abstract class AgentFileStore
     /// <returns>A <see cref="Matcher"/> configured with the specified pattern.</returns>
     protected static Matcher CreateGlobMatcher(string filePattern)
     {
-        var matcher = new Matcher(System.StringComparison.OrdinalIgnoreCase);
+        var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
         matcher.AddInclude(filePattern);
         return matcher;
     }

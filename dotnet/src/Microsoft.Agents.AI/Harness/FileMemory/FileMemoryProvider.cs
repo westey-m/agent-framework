@@ -264,26 +264,32 @@ public sealed class FileMemoryProvider : AIContextProvider
 
     private static string ResolvePath(string workingFolder, string fileName)
     {
-        // Prevent path traversal by rejecting rooted paths and '.'/'..' segments.
-        string normalized = fileName.Replace('\\', '/');
+        string normalizedFileName = fileName.Replace('\\', '/');
 
-        if (Path.IsPathRooted(fileName) ||
-            fileName.StartsWith("/", StringComparison.Ordinal) ||
-            fileName.StartsWith("\\", StringComparison.Ordinal) ||
-            (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
+        // Prevent path traversal by rejecting rooted paths and '.'/'..' segments.
+        // Only fileName needs validation — workingFolder is developer-provided and trusted.
+        ValidateNormalizedRelativePath(normalizedFileName, nameof(fileName), "file name");
+
+        string normalizedWorkingFolder = workingFolder.Replace('\\', '/');
+        return CombinePaths(normalizedWorkingFolder, normalizedFileName);
+    }
+
+    private static void ValidateNormalizedRelativePath(string path, string parameterName, string pathDescription)
+    {
+        if (Path.IsPathRooted(path) ||
+            path.StartsWith("/", StringComparison.Ordinal) ||
+            (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':'))
         {
-            throw new ArgumentException($"Invalid file name: '{fileName}'. File names must be relative and must not start with '/', '\\', or a drive root.", nameof(fileName));
+            throw new ArgumentException($"Invalid {pathDescription}: '{path}'. Paths must be relative and must not start with '/' or a drive root.", parameterName);
         }
 
-        foreach (string segment in normalized.Split('/'))
+        foreach (string segment in path.Split('/'))
         {
             if (segment.Equals(".", StringComparison.Ordinal) || segment.Equals("..", StringComparison.Ordinal))
             {
-                throw new ArgumentException($"Invalid file name: '{fileName}'. File names must not contain '.' or '..' segments.", nameof(fileName));
+                throw new ArgumentException($"Invalid {pathDescription}: '{path}'. Paths must not contain '.' or '..' segments.", parameterName);
             }
         }
-
-        return CombinePaths(workingFolder, fileName);
     }
 
     private static string CombinePaths(string basePath, string relativePath)

@@ -97,8 +97,8 @@ public sealed class AgentModeProvider : AIContextProvider
         string instructions = $"""
             You are currently operating in "{state.CurrentMode}" mode.
             Available modes:
-            - "plan": Use this mode when analyzing requirements, breaking down tasks, and creating plans.
-            - "execute": Use this mode when implementing changes, writing code, and carrying out planned work.
+            - "plan": Use this mode when analyzing requirements, breaking down tasks, and creating plans. This is the interactive mode — ask clarifying questions, discuss options, and get user approval before proceeding.
+            - "execute": Use this mode when carrying out approved plans. Work autonomously using your best judgement — do not ask the user questions or wait for feedback. Make reasonable decisions on your own so that there is a complete, useful result when the user returns. If you encounter ambiguity, choose the most reasonable option and note your choice.
             Use the SetMode tool to switch between modes as your work progresses. Only use SetMode if the user explicitly instructs you to change modes.
             Use the GetMode tool to check your current operating mode.
             """;

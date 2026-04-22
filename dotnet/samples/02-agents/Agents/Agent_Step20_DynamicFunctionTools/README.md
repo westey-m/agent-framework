@@ -18,19 +18,21 @@ This sample demonstrates how to dynamically expand the set of function tools ava
 ## Prerequisites
 
 - .NET 10 SDK or later
-- OpenAI API key
+- Azure OpenAI service endpoint and deployment configured
+- Azure CLI installed and authenticated (for Azure credential authentication)
+- User has the `Cognitive Services OpenAI Contributor` role for the Azure OpenAI resource
 
 ## Running the sample
 
 Set the required environment variables:
 
-```bash
-export OPENAI_API_KEY="your-api-key"
-export OPENAI_CHAT_MODEL_NAME="gpt-5.4-mini"  # Optional, defaults to gpt-5.4-mini
+```powershell
+$env:AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
+$env:AZURE_OPENAI_DEPLOYMENT_NAME="gpt-5.4-mini"  # Optional, defaults to gpt-5.4-mini
 ```
 
 Run the sample:
 
-```bash
+```powershell
 dotnet run
 ```

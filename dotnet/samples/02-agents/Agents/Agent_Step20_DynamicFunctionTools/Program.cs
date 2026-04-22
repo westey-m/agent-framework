@@ -7,12 +7,13 @@
 // can then use the newly added tools in subsequent iterations of the same function-calling loop.
 
 using System.ComponentModel;
+using Azure.AI.OpenAI;
+using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using OpenAI;
 
-var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? throw new InvalidOperationException("OPENAI_API_KEY is not set.");
-var model = Environment.GetEnvironmentVariable("OPENAI_CHAT_MODEL_NAME") ?? "gpt-5.4-mini";
+var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
+var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-5.4-mini";
 
 // Pre-defined tool implementations that can be loaded on demand.
 [Description("Get the current weather for a city.")]
@@ -93,8 +94,13 @@ AIFunction requestToolsFunction = AIFunctionFactory.Create(
 // Create the agent with only the RequestTools function initially.
 // Insert chat client middleware that logs the tools available on each LLM call,
 // making the dynamic expansion visible in the console output.
-AIAgent agent = new OpenAIClient(apiKey)
-    .GetChatClient(model)
+// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
+AIAgent agent = new AzureOpenAIClient(
+    new Uri(endpoint),
+    new DefaultAzureCredential())
+    .GetChatClient(deploymentName)
     .AsIChatClient()
     .AsBuilder()
     .Use(getResponseFunc: ToolLoggingMiddleware, getStreamingResponseFunc: ToolLoggingStreamingMiddleware)

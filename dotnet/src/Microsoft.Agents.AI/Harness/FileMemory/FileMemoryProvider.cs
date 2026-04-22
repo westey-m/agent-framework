@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -264,26 +263,12 @@ public sealed class FileMemoryProvider : AIContextProvider
 
     private static string ResolvePath(string workingFolder, string fileName)
     {
-        // Prevent path traversal by rejecting rooted paths and '.'/'..' segments.
-        string normalized = fileName.Replace('\\', '/');
+        // Validate and normalize the file name (rejects rooted, traversal, empty, etc.).
+        // Only fileName needs validation — workingFolder is developer-provided and trusted.
+        string normalizedFileName = StorePaths.NormalizeRelativePath(fileName);
 
-        if (Path.IsPathRooted(fileName) ||
-            fileName.StartsWith("/", StringComparison.Ordinal) ||
-            fileName.StartsWith("\\", StringComparison.Ordinal) ||
-            (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
-        {
-            throw new ArgumentException($"Invalid file name: '{fileName}'. File names must be relative and must not start with '/', '\\', or a drive root.", nameof(fileName));
-        }
-
-        foreach (string segment in normalized.Split('/'))
-        {
-            if (segment.Equals(".", StringComparison.Ordinal) || segment.Equals("..", StringComparison.Ordinal))
-            {
-                throw new ArgumentException($"Invalid file name: '{fileName}'. File names must not contain '.' or '..' segments.", nameof(fileName));
-            }
-        }
-
-        return CombinePaths(workingFolder, fileName);
+        string normalizedWorkingFolder = workingFolder.Replace('\\', '/');
+        return CombinePaths(normalizedWorkingFolder, normalizedFileName);
     }
 
     private static string CombinePaths(string basePath, string relativePath)

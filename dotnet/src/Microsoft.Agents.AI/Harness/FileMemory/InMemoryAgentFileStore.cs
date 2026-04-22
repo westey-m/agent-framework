@@ -4,7 +4,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -29,7 +28,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     /// <inheritdoc />
     public override Task WriteFileAsync(string path, string content, CancellationToken cancellationToken = default)
     {
-        path = NormalizePath(path);
+        path = StorePaths.NormalizeRelativePath(path);
         this._files[path] = content;
         return Task.CompletedTask;
     }
@@ -37,7 +36,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     /// <inheritdoc />
     public override Task<string?> ReadFileAsync(string path, CancellationToken cancellationToken = default)
     {
-        path = NormalizePath(path);
+        path = StorePaths.NormalizeRelativePath(path);
         this._files.TryGetValue(path, out string? content);
         return Task.FromResult(content);
     }
@@ -45,14 +44,14 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     /// <inheritdoc />
     public override Task<bool> DeleteFileAsync(string path, CancellationToken cancellationToken = default)
     {
-        path = NormalizePath(path);
+        path = StorePaths.NormalizeRelativePath(path);
         return Task.FromResult(this._files.TryRemove(path, out _));
     }
 
     /// <inheritdoc />
     public override Task<IReadOnlyList<string>> ListFilesAsync(string directory, CancellationToken cancellationToken = default)
     {
-        string prefix = NormalizePath(directory);
+        string prefix = StorePaths.NormalizeRelativePath(directory, isDirectory: true);
         if (prefix.Length > 0 && !prefix.EndsWith("/", StringComparison.Ordinal))
         {
             prefix += "/";
@@ -70,7 +69,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     /// <inheritdoc />
     public override Task<bool> FileExistsAsync(string path, CancellationToken cancellationToken = default)
     {
-        path = NormalizePath(path);
+        path = StorePaths.NormalizeRelativePath(path);
         return Task.FromResult(this._files.ContainsKey(path));
     }
 
@@ -78,7 +77,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     public override Task<IReadOnlyList<FileSearchResult>> SearchFilesAsync(string directory, string regexPattern, string? filePattern = null, CancellationToken cancellationToken = default)
     {
         // Normalize the directory prefix for path matching.
-        string prefix = NormalizePath(directory);
+        string prefix = StorePaths.NormalizeRelativePath(directory, isDirectory: true);
         if (prefix.Length > 0 && !prefix.EndsWith("/", StringComparison.Ordinal))
         {
             prefix += "/";
@@ -86,7 +85,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
 
         // Compile the regex with a timeout to guard against catastrophic backtracking (ReDoS).
         var regex = new Regex(regexPattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(5));
-        Matcher? matcher = filePattern is not null ? CreateGlobMatcher(filePattern) : null;
+        Matcher? matcher = filePattern is not null ? StorePaths.CreateGlobMatcher(filePattern) : null;
         var results = new List<FileSearchResult>();
 
         foreach (var kvp in this._files)
@@ -105,7 +104,7 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
             }
 
             // Apply the optional glob filter on the file name.
-            if (!MatchesGlob(relativeName, matcher))
+            if (!StorePaths.MatchesGlob(relativeName, matcher))
             {
                 continue;
             }
@@ -157,32 +156,5 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
     {
         // No-op: directories are implicit from file paths in the in-memory store.
         return Task.CompletedTask;
-    }
-
-    private static string NormalizePath(string path)
-    {
-        string normalized = path.Replace('\\', '/').Trim('/');
-
-        if (Path.IsPathRooted(path) ||
-            path.StartsWith("/", StringComparison.Ordinal) ||
-            path.StartsWith("\\", StringComparison.Ordinal) ||
-            (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
-        {
-            throw new ArgumentException(
-                $"Invalid path: '{path}'. Paths must be relative and must not start with '/', '\\', or a drive root.",
-                nameof(path));
-        }
-
-        foreach (string segment in normalized.Split('/'))
-        {
-            if (segment.Equals(".", StringComparison.Ordinal) || segment.Equals("..", StringComparison.Ordinal))
-            {
-                throw new ArgumentException(
-                    $"Invalid path: '{path}'. Paths must not contain '.' or '..' segments.",
-                    nameof(path));
-            }
-        }
-
-        return normalized;
     }
 }

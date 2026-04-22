@@ -90,39 +90,4 @@ public abstract class AgentFileStore
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     public abstract Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Creates a <see cref="Matcher"/> for the specified glob pattern. Use the returned instance
-    /// to test multiple file names without allocating a new matcher for each one.
-    /// </summary>
-    /// <param name="filePattern">
-    /// The glob pattern to match against (e.g., <c>"*.md"</c>, <c>"research*"</c>).
-    /// </param>
-    /// <returns>A <see cref="Matcher"/> configured with the specified pattern.</returns>
-    protected static Matcher CreateGlobMatcher(string filePattern)
-    {
-        var matcher = new Matcher(System.StringComparison.OrdinalIgnoreCase);
-        matcher.AddInclude(filePattern);
-        return matcher;
-    }
-
-    /// <summary>
-    /// Determines whether a file name matches a pre-built glob <see cref="Matcher"/>.
-    /// </summary>
-    /// <param name="fileName">The file name to test (not a full path — just the name).</param>
-    /// <param name="matcher">
-    /// A pre-built <see cref="Matcher"/> to test against.
-    /// When <see langword="null"/>, this method returns <see langword="true"/> for any file name.
-    /// </param>
-    /// <returns><see langword="true"/> if the file name matches the pattern or if the matcher is <see langword="null"/>; otherwise, <see langword="false"/>.</returns>
-    protected static bool MatchesGlob(string fileName, Matcher? matcher)
-    {
-        if (matcher is null)
-        {
-            return true;
-        }
-
-        PatternMatchingResult result = matcher.Match(fileName);
-        return result.HasMatches;
-    }
 }

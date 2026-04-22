@@ -102,10 +102,14 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task WriteFileAsync_TrailingSlash_ThrowsAsync()
+    public async Task WriteFileAsync_TrailingSlash_NormalizesAsync()
     {
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => this._store.WriteFileAsync("subdir/", "content"));
+        // Act — trailing slash is trimmed during normalization.
+        await this._store.WriteFileAsync("subdir/", "content");
+
+        // Assert — the file is accessible via the normalized name.
+        string? result = await this._store.ReadFileAsync("subdir");
+        Assert.Equal("content", result);
     }
 
     #endregion

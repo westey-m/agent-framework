@@ -86,7 +86,7 @@ AIFunction requestToolsFunction = AIFunctionFactory.Create(
         }
 
         return addedToolNames.Count > 0
-            ? $"Successfully loaded tools: {string.Join(", ", addedToolNames)}. You can now call these tools."
+            ? "Successfully loaded tools"
             : $"No tools matched the description '{description}'. Available categories: {string.Join(", ", toolCatalog.Keys)}.";
     },
     name: "RequestTools");

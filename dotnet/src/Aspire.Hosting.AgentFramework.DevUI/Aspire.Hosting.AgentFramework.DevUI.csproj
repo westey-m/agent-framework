@@ -15,6 +15,7 @@
     <Title>Microsoft Agent Framework DevUI for Aspire</Title>
     <PackageTags>aspire integration hosting agent-framework devui ai agents</PackageTags>
     <Description>Microsoft Agent Framework DevUI support for Aspire.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>

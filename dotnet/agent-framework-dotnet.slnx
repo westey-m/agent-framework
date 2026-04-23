@@ -4,9 +4,6 @@
     <BuildType Name="Publish" />
     <BuildType Name="Release" />
   </Configurations>
-  <Folder Name="/src/Aspire.Hosting.AgentFramework.DevUI/">
-    <Project Path="src/Aspire.Hosting.AgentFramework.DevUI/Aspire.Hosting.AgentFramework.DevUI.csproj" />
-  </Folder>
   <Folder Name="/Samples/">
     <File Path="samples/AGENTS.md" />
     <File Path="samples/README.md" />
@@ -533,6 +530,7 @@
     <File Path="tests/Directory.Build.props" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Aspire.Hosting.AgentFramework.DevUI/Aspire.Hosting.AgentFramework.DevUI.csproj" />
     <Project Path="src/Microsoft.Agents.AI.A2A/Microsoft.Agents.AI.A2A.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Abstractions/Microsoft.Agents.AI.Abstractions.csproj" />
     <Project Path="src/Microsoft.Agents.AI.AGUI/Microsoft.Agents.AI.AGUI.csproj" />

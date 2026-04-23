@@ -201,7 +201,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
             List<ToolApprovalRequestContent> unapproved = [];
             foreach (var tarc in streamedApprovalRequests)
             {
-                if (MatchesRule(tarc, state.Rules))
+                if (MatchesRule(tarc, state.Rules, this._jsonSerializerOptions))
                 {
                     state.CollectedApprovalResponses.Add(
                         tarc.CreateResponse(approved: true, reason: "Auto-approved by standing rule"));
@@ -293,11 +293,11 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
     /// <summary>
     /// Re-evaluates queued approval requests against current rules and auto-approves any that now match.
     /// </summary>
-    private static void DrainAutoApprovableFromQueue(ToolApprovalState state)
+    private void DrainAutoApprovableFromQueue(ToolApprovalState state)
     {
         for (int i = state.QueuedApprovalRequests.Count - 1; i >= 0; i--)
         {
-            if (MatchesRule(state.QueuedApprovalRequests[i], state.Rules))
+            if (MatchesRule(state.QueuedApprovalRequests[i], state.Rules, this._jsonSerializerOptions))
             {
                 state.CollectedApprovalResponses.Add(
                     state.QueuedApprovalRequests[i].CreateResponse(approved: true, reason: "Auto-approved by standing rule"));
@@ -337,7 +337,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
 
             // Re-evaluate remaining queued items — the caller may have added new rules
             // (e.g., "always approve this tool") that resolve additional items.
-            DrainAutoApprovableFromQueue(state);
+            this.DrainAutoApprovableFromQueue(state);
 
             if (state.QueuedApprovalRequests.Count > 0)
             {
@@ -402,7 +402,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
             {
                 if (content is ToolApprovalRequestContent tarc)
                 {
-                    if (MatchesRule(tarc, state.Rules))
+                    if (MatchesRule(tarc, state.Rules, this._jsonSerializerOptions))
                     {
                         autoApproved.Add(tarc);
                     }
@@ -615,12 +615,10 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
                 }
             }
 
-            // Build a new message with the same role and metadata but replaced contents.
-            result.Add(new ChatMessage(message.Role, newContents)
-            {
-                AuthorName = message.AuthorName,
-                AdditionalProperties = message.AdditionalProperties,
-            });
+            // Clone the original message so all metadata is preserved, then replace contents.
+            var clonedMessage = message.Clone();
+            clonedMessage.Contents = newContents;
+            result.Add(clonedMessage);
             anyModified = true;
         }
 
@@ -631,7 +629,10 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
     /// <summary>
     /// Determines whether a tool approval request matches any of the stored rules.
     /// </summary>
-    internal static bool MatchesRule(ToolApprovalRequestContent request, IReadOnlyList<ToolApprovalRule> rules)
+    internal static bool MatchesRule(
+        ToolApprovalRequestContent request,
+        IReadOnlyList<ToolApprovalRule> rules,
+        JsonSerializerOptions jsonSerializerOptions)
     {
         if (request.ToolCall is not FunctionCallContent functionCall)
         {
@@ -652,7 +653,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
             }
 
             // Tool+arguments rule: exact match on all argument values
-            if (ArgumentsMatch(rule.Arguments, functionCall.Arguments))
+            if (ArgumentsMatch(rule.Arguments, functionCall.Arguments, jsonSerializerOptions))
             {
                 return true;
             }
@@ -664,7 +665,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
     /// <summary>
     /// Compares stored rule arguments against actual function call arguments for an exact match.
     /// </summary>
-    private static bool ArgumentsMatch(IDictionary<string, string> ruleArguments, IDictionary<string, object?>? callArguments)
+    private static bool ArgumentsMatch(IDictionary<string, string> ruleArguments, IDictionary<string, object?>? callArguments, JsonSerializerOptions jsonSerializerOptions)
     {
         if (callArguments is null)
         {
@@ -683,7 +684,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
                 return false;
             }
 
-            var serializedCallValue = SerializeArgumentValue(callValue);
+            var serializedCallValue = SerializeArgumentValue(callValue, jsonSerializerOptions);
             if (!string.Equals(kvp.Value, serializedCallValue, StringComparison.Ordinal))
             {
                 return false;
@@ -715,7 +716,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
     /// <summary>
     /// Serializes a single argument value to its JSON string representation.
     /// </summary>
-    private static string SerializeArgumentValue(object? value, JsonSerializerOptions? jsonSerializerOptions = null)
+    private static string SerializeArgumentValue(object? value, JsonSerializerOptions jsonSerializerOptions)
     {
         if (value is null)
         {
@@ -727,8 +728,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
             return jsonElement.GetRawText();
         }
 
-        var options = jsonSerializerOptions ?? AgentJsonUtilities.DefaultOptions;
-        return JsonSerializer.Serialize(value, options.GetTypeInfo(value.GetType()));
+        return JsonSerializer.Serialize(value, jsonSerializerOptions.GetTypeInfo(value.GetType()));
     }
 
     /// <summary>

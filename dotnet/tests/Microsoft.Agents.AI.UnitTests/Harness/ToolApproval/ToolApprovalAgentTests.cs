@@ -598,7 +598,7 @@ public class ToolApprovalAgentTests
             new FunctionCallContent("call1", "MyTool", new Dictionary<string, object?> { ["x"] = "1" }));
 
         // Act & Assert
-        Assert.True(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.True(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     /// <summary>
@@ -615,7 +615,7 @@ public class ToolApprovalAgentTests
         var request = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "ToolB"));
 
         // Act & Assert
-        Assert.False(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.False(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     /// <summary>
@@ -637,7 +637,7 @@ public class ToolApprovalAgentTests
             new FunctionCallContent("call1", "ReadFile", new Dictionary<string, object?> { ["path"] = "test.txt" }));
 
         // Act & Assert
-        Assert.True(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.True(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     /// <summary>
@@ -659,7 +659,7 @@ public class ToolApprovalAgentTests
             new FunctionCallContent("call1", "ReadFile", new Dictionary<string, object?> { ["path"] = "other.txt" }));
 
         // Act & Assert
-        Assert.False(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.False(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     /// <summary>
@@ -685,7 +685,7 @@ public class ToolApprovalAgentTests
             }));
 
         // Act & Assert
-        Assert.False(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.False(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     /// <summary>
@@ -702,7 +702,7 @@ public class ToolApprovalAgentTests
         var request = new ToolApprovalRequestContent("req1", new ToolCallContent("call1"));
 
         // Act & Assert
-        Assert.False(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.False(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     /// <summary>
@@ -725,7 +725,7 @@ public class ToolApprovalAgentTests
             new FunctionCallContent("call1", "MyTool", new Dictionary<string, object?> { ["count"] = jsonElement }));
 
         // Act & Assert
-        Assert.True(ToolApprovalAgent.MatchesRule(request, rules));
+        Assert.True(ToolApprovalAgent.MatchesRule(request, rules, AgentJsonUtilities.DefaultOptions));
     }
 
     #endregion

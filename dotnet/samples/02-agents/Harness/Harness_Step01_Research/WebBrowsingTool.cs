@@ -2,25 +2,34 @@
 
 using System.ComponentModel;
 using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 
 namespace SampleApp;
 
 /// <summary>
-/// Provides a web browsing tool that downloads HTML pages and converts them to markdown.
+/// An AI function that downloads HTML pages and converts them to markdown.
 /// </summary>
-internal sealed partial class WebBrowsingTools
+internal sealed partial class WebBrowsingTool : AIFunction
 {
     private static readonly HttpClient s_httpClient = new();
+    private readonly AIFunction _inner = AIFunctionFactory.Create(DownloadUriAsync);
 
-    /// <summary>
-    /// Gets the web browsing tools.
-    /// </summary>
-    public IList<AITool> Tools { get; } =
-    [
-        AIFunctionFactory.Create(DownloadUriAsync),
-    ];
+    /// <inheritdoc/>
+    public override string Name => this._inner.Name;
+
+    /// <inheritdoc/>
+    public override string Description => this._inner.Description;
+
+    /// <inheritdoc/>
+    public override JsonElement JsonSchema => this._inner.JsonSchema;
+
+    /// <inheritdoc/>
+    protected override ValueTask<object?> InvokeCoreAsync(
+        AIFunctionArguments arguments,
+        CancellationToken cancellationToken) =>
+        this._inner.InvokeAsync(arguments, cancellationToken);
 
     [Description("Download the html from the given url as markdown")]
     private static async Task<string> DownloadUriAsync(

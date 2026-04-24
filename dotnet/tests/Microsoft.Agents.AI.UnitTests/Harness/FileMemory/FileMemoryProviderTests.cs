@@ -552,4 +552,51 @@ public class FileMemoryProviderTests
     }
 
     #endregion
+
+    #region Options Tests
+
+    /// <summary>
+    /// Verify that custom instructions override the default.
+    /// </summary>
+    [Fact]
+    public async Task Options_CustomInstructions_OverridesDefaultAsync()
+    {
+        // Arrange
+        var options = new FileMemoryProviderOptions { Instructions = "Custom file memory instructions." };
+        var provider = new FileMemoryProvider(new InMemoryAgentFileStore(), options: options);
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        // Act
+        AIContext result = await provider.InvokingAsync(context);
+
+        // Assert
+        Assert.Equal("Custom file memory instructions.", result.Instructions);
+    }
+
+    /// <summary>
+    /// Verify that null options uses default instructions.
+    /// </summary>
+    [Fact]
+    public async Task Options_Null_UsesDefaultInstructionsAsync()
+    {
+        // Arrange
+        var provider = new FileMemoryProvider(new InMemoryAgentFileStore());
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        // Act
+        AIContext result = await provider.InvokingAsync(context);
+
+        // Assert
+        Assert.Contains("file-based memory", result.Instructions);
+    }
+
+    #endregion
 }

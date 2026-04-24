@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -21,10 +22,15 @@ namespace Microsoft.Agents.AI;
 /// and is included in the instructions provided to the agent on each invocation.
 /// </para>
 /// <para>
+/// The set of available modes is configurable via <see cref="AgentModeProviderOptions.Modes"/>.
+/// By default, two modes are provided: <c>"plan"</c> (interactive planning) and <c>"execute"</c>
+/// (autonomous execution).
+/// </para>
+/// <para>
 /// This provider exposes the following tools to the agent:
 /// <list type="bullet">
-/// <item><description><c>SetMode</c> — Switch the agent's operating mode.</description></item>
-/// <item><description><c>GetMode</c> — Retrieve the agent's current operating mode.</description></item>
+/// <item><description><c>AgentMode_Set</c> — Switch the agent's operating mode.</description></item>
+/// <item><description><c>AgentMode_Get</c> — Retrieve the agent's current operating mode.</description></item>
 /// </list>
 /// </para>
 /// <para>
@@ -35,26 +41,48 @@ namespace Microsoft.Agents.AI;
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class AgentModeProvider : AIContextProvider
 {
-    /// <summary>
-    /// The "plan" mode, indicating the agent is planning work.
-    /// </summary>
-    public const string PlanMode = "plan";
-
-    /// <summary>
-    /// The "execute" mode, indicating the agent is executing work.
-    /// </summary>
-    public const string ExecuteMode = "execute";
+    private static readonly IReadOnlyList<AgentModeProviderOptions.AgentMode> s_defaultModes =
+    [
+        new("plan", "Use this mode when analyzing requirements, breaking down tasks, and creating plans. This is the interactive mode — ask clarifying questions, discuss options, and get user approval before proceeding."),
+        new("execute", "Use this mode when carrying out approved plans. Work autonomously using your best judgement — do not ask the user questions or wait for feedback. Make reasonable decisions on your own so that there is a complete, useful result when the user returns. If you encounter ambiguity, choose the most reasonable option and note your choice."),
+    ];
 
     private readonly ProviderSessionState<AgentModeState> _sessionState;
+    private readonly IReadOnlyList<AgentModeProviderOptions.AgentMode> _modes;
+    private readonly string _defaultMode;
+    private readonly string? _customInstructions;
+    private readonly HashSet<string> _validModeNames;
     private IReadOnlyList<string>? _stateKeys;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AgentModeProvider"/> class.
     /// </summary>
-    public AgentModeProvider()
+    /// <param name="options">Optional settings that control provider behavior. When <see langword="null"/>, defaults are used.</param>
+    public AgentModeProvider(AgentModeProviderOptions? options = null)
     {
+        this._modes = options?.Modes ?? s_defaultModes;
+
+        if (this._modes.Count == 0)
+        {
+            throw new ArgumentException("At least one mode must be configured.", nameof(options));
+        }
+
+        this._defaultMode = options?.DefaultMode ?? this._modes[0].Name;
+        this._customInstructions = options?.Instructions;
+
+        this._validModeNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mode in this._modes)
+        {
+            this._validModeNames.Add(mode.Name);
+        }
+
+        if (!this._validModeNames.Contains(this._defaultMode))
+        {
+            throw new ArgumentException($"Default mode \"{this._defaultMode}\" is not in the configured modes list.", nameof(options));
+        }
+
         this._sessionState = new ProviderSessionState<AgentModeState>(
-            _ => new AgentModeState(),
+            _ => new AgentModeState { CurrentMode = this._defaultMode },
             this.GetType().Name,
             AgentJsonUtilities.DefaultOptions);
     }
@@ -77,15 +105,20 @@ public sealed class AgentModeProvider : AIContextProvider
     /// </summary>
     /// <param name="session">The agent session to update the mode in.</param>
     /// <param name="mode">The new mode to set.</param>
+    /// <exception cref="ArgumentException"><paramref name="mode"/> is not a configured mode.</exception>
     public void SetMode(AgentSession? session, string mode)
     {
-        if (mode != PlanMode && mode != ExecuteMode)
-        {
-            throw new ArgumentException($"Invalid mode: {mode}. Supported modes are \"{PlanMode}\" and \"{ExecuteMode}\".", nameof(mode));
-        }
+        this.ValidateMode(mode);
 
         AgentModeState state = this._sessionState.GetOrInitializeState(session);
+        string previousMode = state.CurrentMode;
         state.CurrentMode = mode;
+
+        if (!string.Equals(previousMode, mode, StringComparison.Ordinal))
+        {
+            state.PreviousModeForNotification = previousMode;
+        }
+
         this._sessionState.SaveState(session, state);
     }
 
@@ -94,35 +127,68 @@ public sealed class AgentModeProvider : AIContextProvider
     {
         AgentModeState state = this._sessionState.GetOrInitializeState(context.Session);
 
-        string instructions = $"""
-            You are currently operating in "{state.CurrentMode}" mode.
-            Available modes:
-            - "plan": Use this mode when analyzing requirements, breaking down tasks, and creating plans. This is the interactive mode — ask clarifying questions, discuss options, and get user approval before proceeding.
-            - "execute": Use this mode when carrying out approved plans. Work autonomously using your best judgement — do not ask the user questions or wait for feedback. Make reasonable decisions on your own so that there is a complete, useful result when the user returns. If you encounter ambiguity, choose the most reasonable option and note your choice.
-            Use the SetMode tool to switch between modes as your work progresses. Only use SetMode if the user explicitly instructs you to change modes.
-            Use the GetMode tool to check your current operating mode.
-            """;
+        string instructions = this._customInstructions ?? this.BuildDefaultInstructions(state.CurrentMode);
 
-        return new ValueTask<AIContext>(new AIContext
+        var aiContext = new AIContext
         {
             Instructions = instructions,
             Tools = this.CreateTools(state, context.Session),
-        });
+        };
+
+        // If the mode was changed externally (e.g., via /mode command), inject a notification message
+        // so the agent clearly sees the change rather than relying solely on the system instructions.
+        if (state.PreviousModeForNotification != null)
+        {
+            string previousMode = state.PreviousModeForNotification;
+            state.PreviousModeForNotification = null;
+
+            aiContext.Messages =
+            [
+                new ChatMessage(ChatRole.User, $"[Mode changed: The operating mode has been switched from \"{previousMode}\" to \"{state.CurrentMode}\". You must now adjust your behavior to match the \"{state.CurrentMode}\" mode.]"),
+            ];
+        }
+
+        return new ValueTask<AIContext>(aiContext);
+    }
+
+    private string BuildDefaultInstructions(string currentMode)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"You are currently operating in \"{currentMode}\" mode.");
+        sb.AppendLine();
+        sb.AppendLine("Available modes:");
+
+        foreach (var mode in this._modes)
+        {
+            sb.AppendLine($"- \"{mode.Name}\": {mode.Description}");
+        }
+
+        sb.AppendLine("Use the AgentMode_Set tool to switch between modes as your work progresses. Only use AgentMode_Set if the user explicitly instructs/allows you to change modes.");
+        sb.Append("Use the AgentMode_Get tool to check your current operating mode.");
+
+        return sb.ToString();
+    }
+
+    private void ValidateMode(string mode)
+    {
+        if (!this._validModeNames.Contains(mode))
+        {
+            var modeNames = string.Join("\", \"", this._validModeNames);
+            throw new ArgumentException($"Invalid mode: \"{mode}\". Supported modes are: \"{modeNames}\".", nameof(mode));
+        }
     }
 
     private AITool[] CreateTools(AgentModeState state, AgentSession? session)
     {
         var serializerOptions = AgentJsonUtilities.DefaultOptions;
+        var modeNames = string.Join("\", \"", this._validModeNames);
 
         return
         [
             AIFunctionFactory.Create(
                 (string mode) =>
                 {
-                    if (mode != PlanMode && mode != ExecuteMode)
-                    {
-                        throw new ArgumentException($"Invalid mode: {mode}. Supported modes are \"{PlanMode}\" and \"{ExecuteMode}\".", nameof(mode));
-                    }
+                    this.ValidateMode(mode);
 
                     state.CurrentMode = mode;
                     this._sessionState.SaveState(session, state);
@@ -130,8 +196,8 @@ public sealed class AgentModeProvider : AIContextProvider
                 },
                 new AIFunctionFactoryOptions
                 {
-                    Name = "SetMode",
-                    Description = "Switch the agent's operating mode. Supported modes: \"plan\" and \"execute\".",
+                    Name = "AgentMode_Set",
+                    Description = $"Switch the agent's operating mode. Supported modes: \"{modeNames}\".",
                     SerializerOptions = serializerOptions,
                 }),
 
@@ -139,7 +205,7 @@ public sealed class AgentModeProvider : AIContextProvider
                 () => state.CurrentMode,
                 new AIFunctionFactoryOptions
                 {
-                    Name = "GetMode",
+                    Name = "AgentMode_Get",
                     Description = "Get the agent's current operating mode.",
                     SerializerOptions = serializerOptions,
                 }),

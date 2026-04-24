@@ -52,6 +52,7 @@ public sealed class AgentModeProvider : AIContextProvider
     private readonly string _defaultMode;
     private readonly string? _customInstructions;
     private readonly HashSet<string> _validModeNames;
+    private readonly string _modeNamesDisplay;
     private IReadOnlyList<string>? _stateKeys;
 
     /// <summary>
@@ -67,14 +68,33 @@ public sealed class AgentModeProvider : AIContextProvider
             throw new ArgumentException("At least one mode must be configured.", nameof(options));
         }
 
-        this._defaultMode = options?.DefaultMode ?? this._modes[0].Name;
         this._customInstructions = options?.Instructions;
 
         this._validModeNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var mode in this._modes)
+        var modeNamesList = new List<string>(this._modes.Count);
+        for (int i = 0; i < this._modes.Count; i++)
         {
-            this._validModeNames.Add(mode.Name);
+            var mode = this._modes[i];
+            if (mode is null)
+            {
+                throw new ArgumentException($"Configured mode at index {i} must not be null.", nameof(options));
+            }
+
+            if (string.IsNullOrEmpty(mode.Name))
+            {
+                throw new ArgumentException($"Configured mode at index {i} must have a non-empty name.", nameof(options));
+            }
+
+            if (!this._validModeNames.Add(mode.Name))
+            {
+                throw new ArgumentException($"Configured modes contain a duplicate mode name \"{mode.Name}\".", nameof(options));
+            }
+
+            modeNamesList.Add(mode.Name);
         }
+
+        this._modeNamesDisplay = string.Join("\", \"", modeNamesList);
+        this._defaultMode = options?.DefaultMode ?? modeNamesList[0];
 
         if (!this._validModeNames.Contains(this._defaultMode))
         {
@@ -173,15 +193,13 @@ public sealed class AgentModeProvider : AIContextProvider
     {
         if (!this._validModeNames.Contains(mode))
         {
-            var modeNames = string.Join("\", \"", this._validModeNames);
-            throw new ArgumentException($"Invalid mode: \"{mode}\". Supported modes are: \"{modeNames}\".", nameof(mode));
+            throw new ArgumentException($"Invalid mode: \"{mode}\". Supported modes are: \"{this._modeNamesDisplay}\".", nameof(mode));
         }
     }
 
     private AITool[] CreateTools(AgentModeState state, AgentSession? session)
     {
         var serializerOptions = AgentJsonUtilities.DefaultOptions;
-        var modeNames = string.Join("\", \"", this._validModeNames);
 
         return
         [
@@ -197,7 +215,7 @@ public sealed class AgentModeProvider : AIContextProvider
                 new AIFunctionFactoryOptions
                 {
                     Name = "AgentMode_Set",
-                    Description = $"Switch the agent's operating mode. Supported modes: \"{modeNames}\".",
+                    Description = $"Switch the agent's operating mode. Supported modes: \"{this._modeNamesDisplay}\".",
                     SerializerOptions = serializerOptions,
                 }),
 

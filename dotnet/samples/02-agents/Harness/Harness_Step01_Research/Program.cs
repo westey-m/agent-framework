@@ -68,7 +68,7 @@ var instructions =
     - Explain your reasoning and thought process as you work through tasks.
     - Explain what you learned and what you are going to do next between tool calls, so the user can follow along with your thought process.
     - Avoid making more than 4 tool calls in a row without explaining what you are doing.
-    - Do answer the underlying question before the plan has been presented and approved.
+    - Do not answer the underlying question before the plan has been presented and approved.
     - This rule applies even when the answer seems obvious or the task seems small.
     - For short requests, use a brief micro-plan rather than skipping planning. The only exceptions are:
       - greetings,

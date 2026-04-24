@@ -463,6 +463,44 @@ public class AgentModeProviderTests
         Assert.ThrowsAny<ArgumentException>(() => new AgentModeProviderOptions.AgentMode("name", null!));
     }
 
+    /// <summary>
+    /// Verify that duplicate mode names throw.
+    /// </summary>
+    [Fact]
+    public void Options_DuplicateModeNames_Throws()
+    {
+        // Arrange
+        var options = new AgentModeProviderOptions
+        {
+            Modes =
+            [
+                new AgentModeProviderOptions.AgentMode("draft", "First draft."),
+                new AgentModeProviderOptions.AgentMode("draft", "Second draft."),
+            ],
+        };
+
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentException>(() => new AgentModeProvider(options));
+        Assert.Contains("duplicate", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verify that a null entry in the modes list throws.
+    /// </summary>
+    [Fact]
+    public void Options_NullModeEntry_Throws()
+    {
+        // Arrange
+        var options = new AgentModeProviderOptions
+        {
+            Modes = new List<AgentModeProviderOptions.AgentMode> { null! },
+        };
+
+        // Act & Assert
+        var ex = Assert.Throws<ArgumentException>(() => new AgentModeProvider(options));
+        Assert.Contains("must not be null", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     #endregion
 
     #region External Mode Change Notification Tests

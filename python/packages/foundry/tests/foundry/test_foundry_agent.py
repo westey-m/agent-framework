@@ -10,7 +10,17 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from agent_framework import AgentResponse, AgentSession, ChatContext, ChatMiddleware, ChatResponse, Message, tool
+from agent_framework import (
+    AgentResponse,
+    AgentSession,
+    ChatContext,
+    ChatMiddleware,
+    ChatResponse,
+    ChatResponseUpdate,
+    Message,
+    tool,
+)
+from agent_framework_openai._chat_client import RawOpenAIChatClient
 from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import AzureCliCredential
 
@@ -282,6 +292,31 @@ def test_raw_foundry_agent_chat_client_parse_response_suppresses_conversation_id
         result = client._parse_response_from_openai(
             response=MagicMock(),
             options={"conversation_id": "agent-session-123"},
+        )
+
+    assert result.conversation_id is None
+
+
+def test_raw_foundry_agent_chat_client_parse_chunk_suppresses_conversation_id_for_agent_sessions() -> None:
+    """Test that agent-session stream updates do not overwrite session.service_session_id."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    parsed = ChatResponseUpdate(conversation_id="resp_123")
+    with patch(
+        "agent_framework_openai._chat_client.RawOpenAIChatClient._parse_chunk_from_openai",
+        return_value=parsed,
+    ):
+        result = client._parse_chunk_from_openai(
+            event=MagicMock(type="response.output_text.delta"),
+            options={"conversation_id": "agent-session-123"},
+            function_call_ids={},
         )
 
     assert result.conversation_id is None
@@ -622,3 +657,158 @@ async def test_foundry_agent_custom_client_run() -> None:
     assert isinstance(response, AgentResponse)
     assert response.text is not None
     assert "response test" in response.text.lower()
+
+
+def test_parse_chunk_surfaces_oauth_consent_request() -> None:
+    """An oauth_consent_request output item surfaces as Content with consent_link."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.added"
+    mock_item = MagicMock()
+    mock_item.type = "oauth_consent_request"
+    mock_item.consent_link = "https://consent-host.example.com/login?data=abc123"
+    mock_item.id = "oauth-item-1"
+    mock_event.item = mock_item
+    mock_event.output_index = 0
+
+    update = client._parse_chunk_from_openai(mock_event, {}, {})
+
+    consent_contents = [c for c in update.contents if c.type == "oauth_consent_request"]
+    assert len(consent_contents) == 1
+    assert consent_contents[0].consent_link == "https://consent-host.example.com/login?data=abc123"
+    assert update.role == "assistant"
+    assert update.raw_representation is mock_event
+
+
+def test_parse_chunk_skips_non_https_oauth_consent() -> None:
+    """An oauth_consent_request with a non-HTTPS link is rejected."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.added"
+    mock_item = MagicMock()
+    mock_item.type = "oauth_consent_request"
+    mock_item.consent_link = "http://insecure.example.com/login"
+    mock_item.id = "oauth-item-2"
+    mock_event.item = mock_item
+    mock_event.output_index = 0
+
+    update = client._parse_chunk_from_openai(mock_event, {}, {})
+
+    consent_contents = [c for c in update.contents if c.type == "oauth_consent_request"]
+    assert len(consent_contents) == 0
+
+
+def test_parse_chunk_handles_missing_consent_link() -> None:
+    """An oauth_consent_request without a consent_link produces no content."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.added"
+    mock_item = MagicMock()
+    mock_item.type = "oauth_consent_request"
+    mock_item.consent_link = None
+    mock_item.id = "oauth-item-3"
+    mock_event.item = mock_item
+    mock_event.output_index = 0
+
+    update = client._parse_chunk_from_openai(mock_event, {}, {})
+
+    consent_contents = [c for c in update.contents if c.type == "oauth_consent_request"]
+    assert len(consent_contents) == 0
+
+
+def test_parse_chunk_handles_empty_string_consent_link() -> None:
+    """An oauth_consent_request with empty-string consent_link produces no content."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.added"
+    mock_item = MagicMock()
+    mock_item.type = "oauth_consent_request"
+    mock_item.consent_link = ""
+    mock_item.id = "oauth-item-4"
+    mock_event.item = mock_item
+    mock_event.output_index = 0
+
+    update = client._parse_chunk_from_openai(mock_event, {}, {})
+
+    consent_contents = [c for c in update.contents if c.type == "oauth_consent_request"]
+    assert len(consent_contents) == 0
+
+
+def test_parse_chunk_delegates_non_oauth_events_to_super() -> None:
+    """Non-oauth events are delegated to super()._parse_chunk_from_openai()."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_text.delta"
+
+    with patch.object(
+        RawOpenAIChatClient,
+        "_parse_chunk_from_openai",
+        return_value=MagicMock(),
+    ) as mock_super:
+        client._parse_chunk_from_openai(mock_event, {}, {})
+        mock_super.assert_called_once_with(mock_event, {}, {}, None)
+
+
+def test_parse_chunk_surfaces_oauth_consent_requested_event() -> None:
+    """A top-level response.oauth_consent_requested event surfaces as Content."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "response.oauth_consent_requested"
+    mock_event.consent_link = "https://consent-host.example.com/authorize?code=xyz"
+    mock_event.id = "consent-event-1"
+
+    update = client._parse_chunk_from_openai(mock_event, {}, {})
+
+    consent_contents = [c for c in update.contents if c.type == "oauth_consent_request"]
+    assert len(consent_contents) == 1
+    assert consent_contents[0].consent_link == "https://consent-host.example.com/authorize?code=xyz"
+    assert update.role == "assistant"
+    assert update.raw_representation is mock_event

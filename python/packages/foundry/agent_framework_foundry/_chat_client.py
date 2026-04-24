@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal
 
 from agent_framework import (
     ChatMiddlewareLayer,
+    ChatResponseUpdate,
     Content,
     FunctionInvocationConfiguration,
     FunctionInvocationLayer,
@@ -32,6 +33,8 @@ from azure.ai.projects.models import FileSearchTool as ProjectsFileSearchTool
 from azure.ai.projects.models import MCPTool as FoundryMCPTool
 from azure.core.credentials import TokenCredential
 from azure.core.credentials_async import AsyncTokenCredential
+
+from agent_framework_foundry._oauth_helpers import try_parse_oauth_consent_event
 
 from ._tools import _sanitize_foundry_response_tool, fetch_toolbox  # pyright: ignore[reportPrivateUsage]
 
@@ -240,6 +243,20 @@ class RawFoundryChatClient(  # type: ignore[misc]
         """
         response_tools = super()._prepare_tools_for_openai(tools)
         return [_sanitize_foundry_response_tool(tool_item) for tool_item in response_tools]
+
+    @override
+    def _parse_chunk_from_openai(
+        self,
+        event: Any,
+        options: dict[str, Any],
+        function_call_ids: dict[int, tuple[str, str]],
+        seen_reasoning_delta_item_ids: set[str] | None = None,
+    ) -> ChatResponseUpdate:
+        """Parse streaming event, intercepting oauth_consent_request items."""
+        update = try_parse_oauth_consent_event(event, self.model)
+        if update is not None:
+            return update
+        return super()._parse_chunk_from_openai(event, options, function_call_ids, seen_reasoning_delta_item_ids)
 
     async def configure_azure_monitor(
         self,

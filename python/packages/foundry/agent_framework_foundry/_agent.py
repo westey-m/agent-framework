@@ -19,6 +19,7 @@ from agent_framework import (
     AgentSession,
     ChatAndFunctionMiddlewareTypes,
     ChatMiddlewareLayer,
+    ChatResponseUpdate,
     ContextProvider,
     FunctionInvocationConfiguration,
     FunctionInvocationLayer,
@@ -34,6 +35,8 @@ from agent_framework_openai._chat_client import OpenAIChatOptions, RawOpenAIChat
 from azure.ai.projects.aio import AIProjectClient
 from azure.core.credentials import TokenCredential
 from azure.core.credentials_async import AsyncTokenCredential
+
+from agent_framework_foundry._oauth_helpers import try_parse_oauth_consent_event
 
 from ._tools import _sanitize_foundry_response_tool  # pyright: ignore[reportPrivateUsage]
 
@@ -373,16 +376,19 @@ class RawFoundryAgentChatClient(  # type: ignore[misc]
         options: dict[str, Any],
         function_call_ids: dict[int, tuple[str, str]],
         seen_reasoning_delta_item_ids: set[str] | None = None,
-    ) -> Any:
-        parsed_chunk = super()._parse_chunk_from_openai(
-            event,
-            options,
-            function_call_ids,
-            seen_reasoning_delta_item_ids,
-        )
+    ) -> ChatResponseUpdate:
+        """Parse streaming events while preserving hosted-agent session state."""
+        update = try_parse_oauth_consent_event(event, self.model)
+        if update is None:
+            update = super()._parse_chunk_from_openai(
+                event,
+                options,
+                function_call_ids,
+                seen_reasoning_delta_item_ids,
+            )
         if _uses_foundry_agent_session(options.get("conversation_id")):
-            parsed_chunk.conversation_id = None
-        return parsed_chunk
+            update.conversation_id = None
+        return update
 
     @override
     def _check_model_presence(self, options: dict[str, Any]) -> None:

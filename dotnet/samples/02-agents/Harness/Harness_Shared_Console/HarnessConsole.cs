@@ -61,6 +61,21 @@ public static class HarnessConsole
 
     private static async Task StreamAgentResponseAsync(AIAgent agent, AgentSession session, AgentModeProvider? modeProvider, string userInput, int? maxContextWindowTokens, int? maxOutputTokens)
     {
+        // Initial user input
+        var approvalRequests = await StreamAndCollectApprovalsAsync(agent.RunStreamingAsync(userInput, session), modeProvider, session, maxContextWindowTokens, maxOutputTokens);
+        var messagesToSend = PromptForApprovals(approvalRequests);
+
+        // Loop while there are approval responses to send back
+        while (messagesToSend is not null)
+        {
+            approvalRequests = await StreamAndCollectApprovalsAsync(agent.RunStreamingAsync(messagesToSend, session), modeProvider, session, maxContextWindowTokens, maxOutputTokens);
+            messagesToSend = PromptForApprovals(approvalRequests);
+        }
+    }
+
+    private static async Task<List<ToolApprovalRequestContent>> StreamAndCollectApprovalsAsync(IAsyncEnumerable<AgentResponseUpdate> updates, AgentModeProvider? modeProvider, AgentSession session, int? maxContextWindowTokens, int? maxOutputTokens)
+    {
+        var approvalRequests = new List<ToolApprovalRequestContent>();
         string mode = modeProvider?.GetMode(session) ?? "unknown";
         System.Console.ForegroundColor = GetModeColor(mode);
         System.Console.Write($"\n[{mode}] Agent: ");
@@ -72,7 +87,7 @@ public static class HarnessConsole
 
         try
         {
-            await foreach (var update in agent.RunStreamingAsync(userInput, session))
+            await foreach (var update in updates)
             {
                 foreach (var content in update.Contents)
                 {
@@ -95,6 +110,17 @@ public static class HarnessConsole
                         System.Console.ForegroundColor = GetModeColor(mode);
                         hasTextOutput = false;
                         spinner.Start();
+                    }
+                    else if (content is ToolApprovalRequestContent approvalRequest)
+                    {
+                        await spinner.StopAsync();
+                        approvalRequests.Add(approvalRequest);
+                        string toolName = approvalRequest.ToolCall is FunctionCallContent fc ? ToolCallFormatter.Format(fc) : approvalRequest.ToolCall?.ToString() ?? "unknown";
+                        System.Console.ForegroundColor = ConsoleColor.Yellow;
+                        System.Console.Write(hasTextOutput ? "\n\n  ⚠️ Approval needed: " : "\n  ⚠️ Approval needed: ");
+                        System.Console.Write(toolName);
+                        System.Console.ForegroundColor = GetModeColor(mode);
+                        hasTextOutput = false;
                     }
                     else if (content is ErrorContent errorContent)
                     {
@@ -174,7 +200,7 @@ public static class HarnessConsole
 
         await spinner.StopAsync();
 
-        if (!hasReceivedAnyText)
+        if (!hasReceivedAnyText && approvalRequests.Count == 0)
         {
             System.Console.ForegroundColor = ConsoleColor.DarkYellow;
             System.Console.Write("\n  (no text response from agent)");
@@ -183,6 +209,59 @@ public static class HarnessConsole
         System.Console.ResetColor();
         System.Console.WriteLine();
         System.Console.WriteLine();
+
+        return approvalRequests;
+    }
+
+    /// <summary>
+    /// Prompts the user for approval of each tool approval request.
+    /// Returns a list of messages to send back to the agent, or <see langword="null"/> if there are no requests.
+    /// </summary>
+    private static List<ChatMessage>? PromptForApprovals(List<ToolApprovalRequestContent> approvalRequests)
+    {
+        if (approvalRequests.Count == 0)
+        {
+            return null;
+        }
+
+        var responses = new List<AIContent>();
+        foreach (var request in approvalRequests)
+        {
+            string toolName = request.ToolCall is FunctionCallContent fc ? ToolCallFormatter.Format(fc) : request.ToolCall?.ToString() ?? "unknown";
+
+            System.Console.ForegroundColor = ConsoleColor.Yellow;
+            System.Console.WriteLine($"\n  🔐 Tool approval required: {toolName}");
+            System.Console.ResetColor();
+            System.Console.WriteLine("     1) Approve this call");
+            System.Console.WriteLine("     2) Always approve this tool (any arguments)");
+            System.Console.WriteLine("     3) Always approve this tool with these arguments");
+            System.Console.WriteLine("     4) Deny");
+            System.Console.Write("     Choice [1-4]: ");
+
+            string? choice = System.Console.ReadLine()?.Trim();
+            AIContent response = choice switch
+            {
+                "2" => request.CreateAlwaysApproveToolResponse("User chose to always approve this tool"),
+                "3" => request.CreateAlwaysApproveToolWithArgumentsResponse("User chose to always approve this tool with these arguments"),
+                "4" => request.CreateResponse(approved: false, reason: "User denied"),
+                _ => request.CreateResponse(approved: true, reason: "User approved"),
+            };
+
+            string action = choice switch
+            {
+                "2" => "✅ Always approved (any args)",
+                "3" => "✅ Always approved (these args)",
+                "4" => "❌ Denied",
+                _ => "✅ Approved",
+            };
+            System.Console.ForegroundColor = ConsoleColor.DarkGray;
+            System.Console.WriteLine($"     {action}");
+            System.Console.ResetColor();
+
+            responses.Add(response);
+        }
+
+        return [new ChatMessage(ChatRole.User, responses)];
     }
 
     private static void HandleModeCommand(AgentModeProvider? modeProvider, AgentSession session, string input)

@@ -29,31 +29,6 @@ var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYME
 const int MaxContextWindowTokens = 1_050_000;
 const int MaxOutputTokens = 128_000;
 
-// Create a compaction strategy based on the model's context window.
-// gpt-5.4: 1,050,000 token context window, 128,000 max output tokens.
-// Defaults: tool result eviction at 50% of input budget, truncation at 80%.
-var compactionStrategy = new ContextWindowCompactionStrategy(
-    maxContextWindowTokens: MaxContextWindowTokens,
-    maxOutputTokens: MaxOutputTokens);
-
-// Create an OpenAIClient that communicates with the Foundry responses service and get an IChatClient with stored output disabled
-// so that chat history is managed locally by the agent framework.
-// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
-// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
-// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
-OpenAIClientOptions clientOptions = new() { Endpoint = new Uri(endpoint), RetryPolicy = new ClientRetryPolicy(3) };
-IChatClient chatClient = new OpenAIClient(new BearerTokenPolicy(new DefaultAzureCredential(), "https://ai.azure.com/.default"), clientOptions)
-    .GetResponsesClient()
-    .AsIChatClientWithStoredOutputDisabled(deploymentName)
-    .AsBuilder()
-    .UseFunctionInvocation()
-    .UsePerServiceCallChatHistoryPersistence()
-    .UseAIContextProviders(new CompactionProvider(compactionStrategy))
-    .Build();
-
-// Create web browsing tools for downloading and converting HTML pages to markdown.
-var webBrowsingTools = new WebBrowsingTools();
-
 // Create a ChatClientAgent with the Harness providers (TodoProvider and AgentModeProvider)
 // and research-focused instructions including the mandatory planning workflow.
 var instructions =
@@ -123,36 +98,70 @@ var instructions =
     When a temporary file is no longer needed, delete it to keep file memory tidy.
     """;
 
-AIAgent agent = new ChatClientAgent(
-    chatClient,
-    new ChatClientAgentOptions
-    {
-        Name = "ResearchAgent",
-        Description = "A research assistant that plans and executes research tasks.",
-        AIContextProviders =
-        [
-            new TodoProvider(),
-            new AgentModeProvider(),
-            new FileMemoryProvider(
-                new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "agent-files")),
-                (_) => new FileMemoryState() { WorkingFolder = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString() })
-        ],
-        RequirePerServiceCallChatHistoryPersistence = true,
-        UseProvidedChatClientAsIs = true,
-        ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+// Create a compaction strategy based on the model's context window.
+// gpt-5.4: 1,050,000 token context window, 128,000 max output tokens.
+// Defaults: tool result eviction at 50% of input budget, truncation at 80%.
+var compactionStrategy = new ContextWindowCompactionStrategy(
+    maxContextWindowTokens: MaxContextWindowTokens,
+    maxOutputTokens: MaxOutputTokens);
+
+AIAgent agent =
+    // Create an OpenAIClient that communicates with the Foundry responses service.
+    new OpenAIClient(
+        // WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+        // In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+        // latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
+        new BearerTokenPolicy(new DefaultAzureCredential(), "https://ai.azure.com/.default"),
+        new OpenAIClientOptions()
         {
-            ChatReducer = compactionStrategy.AsChatReducer(),
-        }),
-        ChatOptions = new ChatOptions
+            Endpoint = new Uri(endpoint),
+            RetryPolicy = new ClientRetryPolicy(3)          // Enable retries to improve resiliency.
+        })
+    .GetResponsesClient()
+    .AsIChatClientWithStoredOutputDisabled(deploymentName)  // We want to manage chat history locally (not stored in the responses service), so that we can manage compaction ourselves.
+
+    // Build a ChatClient Pipeline
+    .AsBuilder()
+    .UseFunctionInvocation()                                // We are building our own stack from scratch so we need to include Function Invocation ourselves.
+    .UsePerServiceCallChatHistoryPersistence()              // Save chat history updates to the session after each service call, rather than only at the end of the run.
+    .UseAIContextProviders(new CompactionProvider(compactionStrategy))  // Add Compaction before each service call to responses so that long function invocation loops don't overflow the context.
+
+    // Build our agent on top of the ChatClient Pipeline
+    .BuildAIAgent(
+        new ChatClientAgentOptions
         {
-            // Set a high token limit for long research tasks with many tool calls and long outputs.
-            // This matches gpt-5.4's max output tokens, and should be adjusted depending on the model used and expected response length.
-            MaxOutputTokens = 128_000,
-            Instructions = instructions,
-            Reasoning = new() { Effort = ReasoningEffort.Medium },
-            Tools = [ResponseTool.CreateWebSearchTool().AsAITool(), .. webBrowsingTools.Tools],
-        },
-    });
+            Name = "ResearchAgent",
+            Description = "A research assistant that plans and executes research tasks.",
+            UseProvidedChatClientAsIs = true,                           // Since we built our own stack from scratch we need to tell the agent not to also add defaults like Function Invocation.
+            RequirePerServiceCallChatHistoryPersistence = true,         // Since we are added the per service call persistence ChatClient, we need to tell the agent to not also store chat history at the end of the run.
+            ChatHistoryProvider = new InMemoryChatHistoryProvider(      // Store chat history in memory in the session object. Will persist if the session is persisted.
+                new InMemoryChatHistoryProviderOptions
+                {
+                    ChatReducer = compactionStrategy.AsChatReducer(),   // Run compaction on the InMemory chat history when it gets too large.
+                }),
+            AIContextProviders =
+            [
+                new TodoProvider(),         // Add an AIContextProvider to allow the agent to create a TODO list, which is stored in the session.
+                new AgentModeProvider(),    // Add an AIContextProvider that tracks the agent mode and allows switching mode. Current mode is stored in the session.
+                new FileMemoryProvider(     // Add an AIContextProvider that can store memories in files under a session specific working folder.
+                    new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "agent-files")),
+                    (_) => new FileMemoryState() { WorkingFolder = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString() })
+            ],
+            ChatOptions = new ChatOptions
+            {
+                Instructions = instructions,
+                Tools =
+                [
+                    ResponseTool.CreateWebSearchTool().AsAITool(),          // Add the foundry hosted web search tool that runs in the service.
+                    new WebBrowsingTool(),                                  // Add a local web browsing tool that converts html to markdown.
+                ],
+                MaxOutputTokens = MaxOutputTokens,                          // Set a high token limit for long research tasks with many tool calls and long outputs.
+                Reasoning = new() { Effort = ReasoningEffort.Medium },
+            },
+        })
+    .AsBuilder()
+    .UseToolApproval()                                                      // Add the ability to auto approve tools once a user has said they don't want to be asked again. Approval rules are tied to the session.
+    .Build();
 
 // Run the interactive console session using the shared HarnessConsole helper.
 await HarnessConsole.RunAgentAsync(agent, title: "Research Assistant", userPrompt: "Enter a research topic to get started.", maxContextWindowTokens: MaxContextWindowTokens, maxOutputTokens: MaxOutputTokens);

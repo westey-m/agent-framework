@@ -81,6 +81,11 @@ internal static partial class AgentJsonUtilities
     // AgentModeProvider types
     [JsonSerializable(typeof(AgentModeState))]
 
+    // ToolApprovalAgent types
+    [JsonSerializable(typeof(ToolApprovalState))]
+    [JsonSerializable(typeof(ToolApprovalRule))]
+    [JsonSerializable(typeof(List<ToolApprovalRule>), TypeInfoPropertyName = "ToolApprovalRuleList")]
+
     // FileMemoryProvider types
     [JsonSerializable(typeof(FileMemoryState))]
     [JsonSerializable(typeof(FileSearchResult))]

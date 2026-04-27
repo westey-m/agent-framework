@@ -34,12 +34,12 @@ public static class ToolCallFormatter
             "AgentMode_Get" => null,
 
             // Sub-agent tools
-            "StartSubTask" => FormatStartSubTask(call),
-            "WaitForFirstCompletion" => FormatIdList(call, "taskIds", "Wait for"),
-            "GetSubTaskResults" => FormatSingleId(call, "taskId"),
-            "GetAllTasks" => null,
-            "ContinueTask" => FormatContinueTask(call),
-            "ClearCompletedTask" => FormatSingleId(call, "taskId"),
+            "SubAgents_StartTask" => FormatStartSubTask(call),
+            "SubAgents_WaitForFirstCompletion" => FormatIdList(call, "taskIds", "Wait for"),
+            "SubAgents_GetTaskResults" => FormatSingleId(call, "taskId"),
+            "SubAgents_GetAllTasks" => null,
+            "SubAgents_ContinueTask" => FormatContinueTask(call),
+            "SubAgents_ClearCompletedTask" => FormatSingleId(call, "taskId"),
 
             // File memory tools
             "FileMemory_SaveFile" => FormatSaveFile(call),

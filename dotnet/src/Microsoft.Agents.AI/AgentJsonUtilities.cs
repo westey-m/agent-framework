@@ -95,7 +95,7 @@ internal static partial class AgentJsonUtilities
     [JsonSerializable(typeof(FileListEntry))]
     [JsonSerializable(typeof(List<FileListEntry>), TypeInfoPropertyName = "FileListEntryList")]
 
-    // SubAgentProvider types
+    // SubAgentsProvider types
     [JsonSerializable(typeof(SubAgentState))]
     [JsonSerializable(typeof(SubAgentRuntimeState))]
     [JsonSerializable(typeof(SubTaskInfo))]

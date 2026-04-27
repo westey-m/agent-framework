@@ -46,7 +46,7 @@ public sealed class SubAgentsProvider : AIContextProvider
         Important: Always wait for outstanding tasks to finish before you finish processing.
         Important: After retrieving results from a completed task, clear it with SubAgents_ClearCompletedTask to free memory, unless you plan to continue it with SubAgents_ContinueTask.
 
-        Use SubAgents_StartTask to delegate work to a sub-agent. This will send the task to the sub agent and return immedateily Sub-tasks run concurrently.
+        Use SubAgents_StartTask to delegate work to a sub-agent. This will send the task to the sub agent and return immediately. Sub-tasks run concurrently.
         Use SubAgents_WaitForFirstCompletion to block until one of the specified tasks finishes.
         Use SubAgents_GetTaskResults to retrieve the output of a completed task.
         Use SubAgents_GetAllTasks to see the status of all sub-tasks.
@@ -293,7 +293,7 @@ public sealed class SubAgentsProvider : AIContextProvider
                         SubTaskInfo? alreadyComplete = state.Tasks.FirstOrDefault(t => taskIds.Contains(t.Id) && t.Status != SubTaskStatus.Running);
                         if (alreadyComplete is not null)
                         {
-                            return $"Task {alreadyComplete.Id} has already finished with status: {alreadyComplete.Status}.";
+                            return $"Task {alreadyComplete.Id} is not running; current status: {alreadyComplete.Status}.";
                         }
 
                         return "Error: None of the specified task IDs correspond to running tasks.";
@@ -313,7 +313,7 @@ public sealed class SubAgentsProvider : AIContextProvider
                         this._sessionState.SaveState(session, state);
                     }
 
-                    return $"Task {completedEntry.Id} completed.";
+                    return $"Task {completedEntry.Id} finished with status: {taskInfo?.Status.ToString() ?? "Unknown"}.";
                 },
                 new AIFunctionFactoryOptions
                 {

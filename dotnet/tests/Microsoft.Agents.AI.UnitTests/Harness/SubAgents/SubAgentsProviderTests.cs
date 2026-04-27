@@ -276,7 +276,7 @@ public class SubAgentsProviderTests
         // Assert
         string text = GetStringResult(result);
         Assert.Contains("1", text);
-        Assert.Contains("completed", text);
+        Assert.Contains("finished with status: Completed", text);
     }
 
     /// <summary>

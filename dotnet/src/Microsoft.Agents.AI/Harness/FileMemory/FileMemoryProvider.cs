@@ -58,6 +58,7 @@ public sealed class FileMemoryProvider : AIContextProvider
 
     private readonly AgentFileStore _fileStore;
     private readonly ProviderSessionState<FileMemoryState> _sessionState;
+    private readonly string _instructions;
     private IReadOnlyList<string>? _stateKeys;
     private AITool[]? _tools;
 
@@ -70,12 +71,14 @@ public sealed class FileMemoryProvider : AIContextProvider
     /// Use this to customize the working folder (e.g., per-user or per-session subfolders).
     /// When <see langword="null"/>, the default initializer creates state with an empty working folder.
     /// </param>
+    /// <param name="options">Optional settings that control provider behavior. When <see langword="null"/>, defaults are used.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="fileStore"/> is <see langword="null"/>.</exception>
-    public FileMemoryProvider(AgentFileStore fileStore, Func<AgentSession?, FileMemoryState>? stateInitializer = null)
+    public FileMemoryProvider(AgentFileStore fileStore, Func<AgentSession?, FileMemoryState>? stateInitializer = null, FileMemoryProviderOptions? options = null)
     {
         Throw.IfNull(fileStore);
 
         this._fileStore = fileStore;
+        this._instructions = options?.Instructions ?? DefaultInstructions;
         this._sessionState = new ProviderSessionState<FileMemoryState>(
             stateInitializer ?? (_ => new FileMemoryState()),
             this.GetType().Name,
@@ -98,7 +101,7 @@ public sealed class FileMemoryProvider : AIContextProvider
 
         return new AIContext
         {
-            Instructions = DefaultInstructions,
+            Instructions = this._instructions,
             Tools = this._tools ??= this.CreateTools(),
         };
     }

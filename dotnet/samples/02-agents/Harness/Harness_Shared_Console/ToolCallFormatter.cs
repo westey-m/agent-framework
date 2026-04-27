@@ -23,15 +23,15 @@ public static class ToolCallFormatter
         string? detail = call.Name switch
         {
             // Todo tools
-            "AddTodos" => FormatAddTodos(call),
-            "CompleteTodos" => FormatIdList(call, "ids", "Complete"),
-            "RemoveTodos" => FormatIdList(call, "ids", "Remove"),
-            "GetRemainingTodos" => null,
-            "GetAllTodos" => null,
+            "TodoList_Add" => FormatAddTodos(call),
+            "TodoList_Complete" => FormatIdList(call, "ids", "Complete"),
+            "TodoList_Remove" => FormatIdList(call, "ids", "Remove"),
+            "TodoList_GetRemaining" => null,
+            "TodoList_GetAll" => null,
 
             // Mode tools
-            "SetMode" => FormatStringArg(call, "mode"),
-            "GetMode" => null,
+            "AgentMode_Set" => FormatStringArg(call, "mode"),
+            "AgentMode_Get" => null,
 
             // Sub-agent tools
             "StartSubTask" => FormatStartSubTask(call),

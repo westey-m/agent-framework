@@ -51,7 +51,7 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
 
         // Act
         await addTodos.InvokeAsync(new AIFunctionArguments()
@@ -75,7 +75,7 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
 
         // Act
         await addTodos.InvokeAsync(new AIFunctionArguments()
@@ -111,8 +111,8 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction completeTodos = GetTool(tools, "CompleteTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
+        AIFunction completeTodos = GetTool(tools, "TodoList_Complete");
         await addTodos.InvokeAsync(new AIFunctionArguments() { ["todos"] = new List<TodoItemInput> { new() { Title = "Test", Description = null } } });
 
         // Act
@@ -131,8 +131,8 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction completeTodos = GetTool(tools, "CompleteTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
+        AIFunction completeTodos = GetTool(tools, "TodoList_Complete");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
             ["todos"] = new List<TodoItemInput> { new() { Title = "First" }, new() { Title = "Second" }, new() { Title = "Third" } },
@@ -156,7 +156,7 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction completeTodos = GetTool(tools, "CompleteTodos");
+        AIFunction completeTodos = GetTool(tools, "TodoList_Complete");
 
         // Act
         object? result = await completeTodos.InvokeAsync(new AIFunctionArguments() { ["ids"] = new List<int> { 999 } });
@@ -177,8 +177,8 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction removeTodos = GetTool(tools, "RemoveTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
+        AIFunction removeTodos = GetTool(tools, "TodoList_Remove");
         await addTodos.InvokeAsync(new AIFunctionArguments() { ["todos"] = new List<TodoItemInput> { new() { Title = "Test", Description = null } } });
 
         // Act
@@ -197,8 +197,8 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction removeTodos = GetTool(tools, "RemoveTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
+        AIFunction removeTodos = GetTool(tools, "TodoList_Remove");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
             ["todos"] = new List<TodoItemInput> { new() { Title = "First" }, new() { Title = "Second" }, new() { Title = "Third" } },
@@ -221,7 +221,7 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction removeTodos = GetTool(tools, "RemoveTodos");
+        AIFunction removeTodos = GetTool(tools, "TodoList_Remove");
 
         // Act
         object? result = await removeTodos.InvokeAsync(new AIFunctionArguments() { ["ids"] = new List<int> { 999 } });
@@ -242,9 +242,9 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction completeTodos = GetTool(tools, "CompleteTodos");
-        AIFunction getRemainingTodos = GetTool(tools, "GetRemainingTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
+        AIFunction completeTodos = GetTool(tools, "TodoList_Complete");
+        AIFunction getRemainingTodos = GetTool(tools, "TodoList_GetRemaining");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
             ["todos"] = new List<TodoItemInput> { new() { Title = "Done", Description = null }, new() { Title = "Pending", Description = null } },
@@ -272,9 +272,9 @@ public class TodoProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction addTodos = GetTool(tools, "AddTodos");
-        AIFunction completeTodos = GetTool(tools, "CompleteTodos");
-        AIFunction getAllTodos = GetTool(tools, "GetAllTodos");
+        AIFunction addTodos = GetTool(tools, "TodoList_Add");
+        AIFunction completeTodos = GetTool(tools, "TodoList_Complete");
+        AIFunction getAllTodos = GetTool(tools, "TodoList_GetAll");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
             ["todos"] = new List<TodoItemInput> { new() { Title = "Done", Description = null }, new() { Title = "Pending", Description = null } },
@@ -309,12 +309,12 @@ public class TodoProviderTests
 
         // Act — first invocation adds a todo
         AIContext result1 = await provider.InvokingAsync(context);
-        AIFunction addTodos = (AIFunction)result1.Tools!.First(t => t is AIFunction f && f.Name == "AddTodos");
+        AIFunction addTodos = (AIFunction)result1.Tools!.First(t => t is AIFunction f && f.Name == "TodoList_Add");
         await addTodos.InvokeAsync(new AIFunctionArguments() { ["todos"] = new List<TodoItemInput> { new() { Title = "Persisted", Description = null } } });
 
         // Second invocation should see the same state
         AIContext result2 = await provider.InvokingAsync(context);
-        AIFunction getAllTodos = (AIFunction)result2.Tools!.First(t => t is AIFunction f && f.Name == "GetAllTodos");
+        AIFunction getAllTodos = (AIFunction)result2.Tools!.First(t => t is AIFunction f && f.Name == "TodoList_GetAll");
         object? allResult = await getAllTodos.InvokeAsync(new AIFunctionArguments());
 
         // Assert
@@ -341,7 +341,7 @@ public class TodoProviderTests
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
 #pragma warning restore MAAI001
         AIContext result = await provider.InvokingAsync(context);
-        AIFunction addTodos = GetTool(result.Tools!, "AddTodos");
+        AIFunction addTodos = GetTool(result.Tools!, "TodoList_Add");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
             ["todos"] = new List<TodoItemInput> { new() { Title = "First", Description = null }, new() { Title = "Second", Description = null } },
@@ -370,8 +370,8 @@ public class TodoProviderTests
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
 #pragma warning restore MAAI001
         AIContext result = await provider.InvokingAsync(context);
-        AIFunction addTodos = GetTool(result.Tools!, "AddTodos");
-        AIFunction completeTodos = GetTool(result.Tools!, "CompleteTodos");
+        AIFunction addTodos = GetTool(result.Tools!, "TodoList_Add");
+        AIFunction completeTodos = GetTool(result.Tools!, "TodoList_Complete");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
             ["todos"] = new List<TodoItemInput> { new() { Title = "Done", Description = null }, new() { Title = "Pending", Description = null } },
@@ -439,6 +439,53 @@ public class TodoProviderTests
     {
         var element = Assert.IsType<JsonElement>(result);
         return element.EnumerateArray().ToList();
+    }
+
+    #endregion
+
+    #region Options Tests
+
+    /// <summary>
+    /// Verify that custom instructions override the default.
+    /// </summary>
+    [Fact]
+    public async Task Options_CustomInstructions_OverridesDefaultAsync()
+    {
+        // Arrange
+        var options = new TodoProviderOptions { Instructions = "Custom todo instructions." };
+        var provider = new TodoProvider(options);
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        // Act
+        AIContext result = await provider.InvokingAsync(context);
+
+        // Assert
+        Assert.Equal("Custom todo instructions.", result.Instructions);
+    }
+
+    /// <summary>
+    /// Verify that null options uses default instructions.
+    /// </summary>
+    [Fact]
+    public async Task Options_Null_UsesDefaultInstructionsAsync()
+    {
+        // Arrange
+        var provider = new TodoProvider();
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        // Act
+        AIContext result = await provider.InvokingAsync(context);
+
+        // Assert
+        Assert.Contains("todo list", result.Instructions);
     }
 
     #endregion

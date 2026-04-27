@@ -282,16 +282,6 @@ public static class HarnessConsole
 
         string newMode = parts[1];
 
-        // Normalize to known mode values for case-insensitive matching.
-        if (string.Equals(newMode, AgentModeProvider.PlanMode, StringComparison.OrdinalIgnoreCase))
-        {
-            newMode = AgentModeProvider.PlanMode;
-        }
-        else if (string.Equals(newMode, AgentModeProvider.ExecuteMode, StringComparison.OrdinalIgnoreCase))
-        {
-            newMode = AgentModeProvider.ExecuteMode;
-        }
-
         try
         {
             modeProvider.SetMode(session, newMode);
@@ -383,8 +373,8 @@ public static class HarnessConsole
 
     private static ConsoleColor GetModeColor(string mode) => mode switch
     {
-        AgentModeProvider.PlanMode => ConsoleColor.Cyan,
-        AgentModeProvider.ExecuteMode => ConsoleColor.Green,
+        "plan" => ConsoleColor.Cyan,
+        "execute" => ConsoleColor.Green,
         _ => ConsoleColor.Gray,
     };
 }

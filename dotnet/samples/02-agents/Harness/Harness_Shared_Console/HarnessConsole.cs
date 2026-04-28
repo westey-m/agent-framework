@@ -28,7 +28,20 @@ public static class HarnessConsole
 
         System.Console.WriteLine($"=== {title} ===");
         System.Console.WriteLine(userPrompt);
-        System.Console.WriteLine("Commands: /todos (show todo list), /mode [plan|execute] (show or switch mode), exit (quit)");
+
+        var commands = new List<string>();
+        if (todoProvider is not null)
+        {
+            commands.Add("/todos (show todo list)");
+        }
+
+        if (modeProvider is not null)
+        {
+            commands.Add("/mode [plan|execute] (show or switch mode)");
+        }
+
+        commands.Add("exit (quit)");
+        System.Console.WriteLine($"Commands: {string.Join(", ", commands)}");
         System.Console.WriteLine();
 
         AgentSession session = await agent.CreateSessionAsync();
@@ -76,9 +89,16 @@ public static class HarnessConsole
     private static async Task<List<ToolApprovalRequestContent>> StreamAndCollectApprovalsAsync(IAsyncEnumerable<AgentResponseUpdate> updates, AgentModeProvider? modeProvider, AgentSession session, int? maxContextWindowTokens, int? maxOutputTokens)
     {
         var approvalRequests = new List<ToolApprovalRequestContent>();
-        string mode = modeProvider?.GetMode(session) ?? "unknown";
-        System.Console.ForegroundColor = GetModeColor(mode);
-        System.Console.Write($"\n[{mode}] Agent: ");
+        string? mode = modeProvider is not null ? modeProvider.GetMode(session) : null;
+        if (mode is not null)
+        {
+            System.Console.ForegroundColor = GetModeColor(mode);
+            System.Console.Write($"\n[{mode}] Agent: ");
+        }
+        else
+        {
+            System.Console.Write("\nAgent: ");
+        }
 
         var spinner = new Spinner();
         spinner.Start();
@@ -181,11 +201,14 @@ public static class HarnessConsole
                     hasReceivedAnyText = true;
                 }
 
-                string currentMode = modeProvider?.GetMode(session) ?? "unknown";
-                if (currentMode != mode)
+                if (modeProvider is not null)
                 {
-                    mode = currentMode;
-                    System.Console.ForegroundColor = GetModeColor(mode);
+                    string currentMode = modeProvider.GetMode(session);
+                    if (currentMode != mode)
+                    {
+                        mode = currentMode;
+                        System.Console.ForegroundColor = GetModeColor(mode);
+                    }
                 }
 
                 System.Console.Write(update.Text);
@@ -299,9 +322,14 @@ public static class HarnessConsole
 
     private static void WritePrompt(AgentModeProvider? modeProvider, AgentSession session)
     {
-        string mode = modeProvider?.GetMode(session) ?? "unknown";
-        System.Console.ForegroundColor = GetModeColor(mode);
-        System.Console.Write($"[{mode}] You: ");
+        if (modeProvider is not null)
+        {
+            string mode = modeProvider.GetMode(session);
+            System.Console.ForegroundColor = GetModeColor(mode);
+            System.Console.Write($"[{mode}] ");
+        }
+
+        System.Console.Write("You: ");
         System.Console.ResetColor();
     }
 
@@ -371,10 +399,11 @@ public static class HarnessConsole
         }
     }
 
-    private static ConsoleColor GetModeColor(string mode) => mode switch
+    private static ConsoleColor GetModeColor(string? mode) => mode switch
     {
         "plan" => ConsoleColor.Cyan,
         "execute" => ConsoleColor.Green,
+        null => ConsoleColor.Gray,
         _ => ConsoleColor.Gray,
     };
 }

@@ -121,6 +121,7 @@
     <File Path="samples/02-agents/Harness/README.md" />
     <Project Path="samples/02-agents/Harness/Harness_Shared_Console/Harness_Shared_Console.csproj" />
     <Project Path="samples/02-agents/Harness/Harness_Step01_Research/Harness_Step01_Research.csproj" />
+    <Project Path="samples/02-agents/Harness/Harness_Step02_Research_WithSubAgents/Harness_Step02_Research_WithSubAgents.csproj" />
   </Folder>
   <Folder Name="/Samples/02-agents/AGUI/Step05_StateManagement/">
     <Project Path="samples/02-agents/AGUI/Step05_StateManagement/Client/Client.csproj" />

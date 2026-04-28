@@ -16,6 +16,10 @@ public sealed class SubAgentsProviderOptions
     /// <summary>
     /// Gets or sets custom instructions provided to the agent for using the sub-agent tools.
     /// </summary>
+    /// <remarks>
+    /// Use the <c>{sub_agents}</c> placeholder to allow the provider to inject
+    /// the formatted list of available sub agents.
+    /// </remarks>
     /// <value>
     /// When <see langword="null"/> (the default), the provider uses built-in instructions
     /// that guide the agent on how to use the sub-agent tools.

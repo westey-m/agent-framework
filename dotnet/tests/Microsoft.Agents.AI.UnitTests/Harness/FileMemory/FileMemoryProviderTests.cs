@@ -488,6 +488,200 @@ public class FileMemoryProviderTests
 
     #endregion
 
+    #region Memory Index Tests
+
+    [Fact]
+    public async Task SaveFile_CreatesMemoryIndexAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+
+        // Act
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Test content",
+        }, session);
+
+        // Assert — memories.md should exist and contain the file entry.
+        string? index = await store.ReadFileAsync("memories.md");
+        Assert.NotNull(index);
+        Assert.Contains("**notes.md**", index);
+    }
+
+    [Fact]
+    public async Task SaveFile_WithDescription_IndexIncludesDescriptionAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+
+        // Act
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "research.md",
+            ["content"] = "Research data",
+            ["description"] = "Key findings",
+        }, session);
+
+        // Assert
+        string? index = await store.ReadFileAsync("memories.md");
+        Assert.NotNull(index);
+        Assert.Contains("**research.md**: Key findings", index);
+    }
+
+    [Fact]
+    public async Task DeleteFile_UpdatesMemoryIndexAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+        var deleteFile = GetTool(tools, "FileMemory_DeleteFile");
+
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Content",
+        }, session);
+
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "other.md",
+            ["content"] = "Other",
+        }, session);
+
+        // Act
+        await InvokeWithRunContextAsync(deleteFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+        }, session);
+
+        // Assert — index should only contain other.md
+        string? index = await store.ReadFileAsync("memories.md");
+        Assert.NotNull(index);
+        Assert.DoesNotContain("notes.md", index);
+        Assert.Contains("**other.md**", index);
+    }
+
+    [Fact]
+    public async Task MemoryIndex_CappedAt50EntriesAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+
+        // Act — save 55 files
+        for (int i = 0; i < 55; i++)
+        {
+            await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+            {
+                ["fileName"] = $"file{i:D3}.md",
+                ["content"] = $"Content {i}",
+            }, session);
+        }
+
+        // Assert — index should have at most 50 entries
+        string? index = await store.ReadFileAsync("memories.md");
+        Assert.NotNull(index);
+
+        int entryCount = 0;
+        foreach (string line in index!.Split('\n'))
+        {
+            if (line.StartsWith("- **", StringComparison.Ordinal))
+            {
+                entryCount++;
+            }
+        }
+
+        Assert.Equal(50, entryCount);
+    }
+
+    [Fact]
+    public async Task ListFiles_HidesMemoryIndexAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileMemory_SaveFile");
+        var listFiles = GetTool(tools, "FileMemory_ListFiles");
+
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Content",
+        }, session);
+
+        // Act
+        var result = await InvokeWithRunContextAsync(listFiles, new AIFunctionArguments(), session);
+
+        // Assert — memories.md should not appear in the listing
+        var entries = Assert.IsType<JsonElement>(result).EnumerateArray().ToList();
+        Assert.Single(entries);
+        Assert.Equal("notes.md", entries[0].GetProperty("fileName").GetString());
+    }
+
+    [Fact]
+    public async Task ProvideAIContextAsync_InjectsMemoryIndexMessageAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var provider = new FileMemoryProvider(store);
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+
+        // First, save a file via tool invocation to create the index.
+#pragma warning disable MAAI001
+        var initContext = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+        AIContext initResult = await provider.InvokingAsync(initContext);
+        var saveFile = GetTool(initResult.Tools!, "FileMemory_SaveFile");
+        await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "research.md",
+            ["content"] = "Data",
+            ["description"] = "Research summary",
+        }, session);
+
+        // Act — invoke the provider again; it should now inject the memory index.
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+        AIContext result = await provider.InvokingAsync(context);
+
+        // Assert
+        Assert.NotNull(result.Messages);
+        var messages = result.Messages!.ToList();
+        Assert.Single(messages);
+        Assert.Equal(ChatRole.User, messages[0].Role);
+        Assert.Contains("memory index", messages[0].Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("research.md", messages[0].Text);
+    }
+
+    [Fact]
+    public async Task ProvideAIContextAsync_NoFiles_NoMessageInjectedAsync()
+    {
+        // Arrange
+        var provider = new FileMemoryProvider(new InMemoryAgentFileStore());
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        // Act
+        AIContext result = await provider.InvokingAsync(context);
+
+        // Assert — no memories.md exists, so no message should be injected
+        Assert.Null(result.Messages);
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static FileMemoryProvider CreateProvider(InMemoryAgentFileStore? store = null, Func<AgentSession?, FileMemoryState>? stateInitializer = null)

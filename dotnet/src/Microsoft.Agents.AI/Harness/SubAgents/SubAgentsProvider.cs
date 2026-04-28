@@ -40,18 +40,15 @@ public sealed class SubAgentsProvider : AIContextProvider
 {
     private const string DefaultInstructions =
         """
+        ## SubAgents
         You have access to sub-agents that can perform work on your behalf.
-        Use the `SubAgents_*` list of tools to start tasks on sub agents and check their results.
-        Creating a sub task does not block, and sub-tasks run concurrently.
-        Important: Always wait for outstanding tasks to finish before you finish processing.
-        Important: After retrieving results from a completed task, clear it with SubAgents_ClearCompletedTask to free memory, unless you plan to continue it with SubAgents_ContinueTask.
 
-        Use SubAgents_StartTask to delegate work to a sub-agent. This will send the task to the sub agent and return immediately. Sub-tasks run concurrently.
-        Use SubAgents_WaitForFirstCompletion to block until one of the specified tasks finishes.
-        Use SubAgents_GetTaskResults to retrieve the output of a completed task.
-        Use SubAgents_GetAllTasks to see the status of all sub-tasks.
-        Use SubAgents_ContinueTask to send follow-up input to a completed sub-task (e.g., provide clarification or additional instructions).
-        Use SubAgents_ClearCompletedTask to remove a completed task and free its memory after you no longer need its results or session.
+        - Use the `SubAgents_*` list of tools to start tasks on sub agents and check their results.
+        - Creating a sub task does not block, and sub-tasks run concurrently.
+        - Important: Always wait for outstanding tasks to finish before you finish processing.
+        - Important: After retrieving results from a completed task, clear it with SubAgents_ClearCompletedTask to free memory, unless you plan to continue it with SubAgents_ContinueTask.
+
+        {sub_agents}
         """;
 
     private readonly Dictionary<string, AIAgent> _agents;
@@ -77,7 +74,7 @@ public sealed class SubAgentsProvider : AIContextProvider
         string agentListText = options?.AgentListBuilder is not null
             ? options.AgentListBuilder(this._agents)
             : BuildDefaultAgentListText(this._agents);
-        this._instructions = baseInstructions + "\n" + agentListText;
+        this._instructions = baseInstructions.Replace("{sub_agents}", agentListText);
 
         this._sessionState = new ProviderSessionState<SubAgentState>(
             _ => new SubAgentState(),

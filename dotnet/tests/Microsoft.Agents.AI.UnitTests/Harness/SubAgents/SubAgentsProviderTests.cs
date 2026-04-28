@@ -819,14 +819,14 @@ public class SubAgentsProviderTests
     #region Options Tests
 
     /// <summary>
-    /// Verify that custom instructions from options override the default instructions but agent list is still appended.
+    /// Verify that custom instructions from options override the default instructions but agent list is still injected via placeholder.
     /// </summary>
     [Fact]
     public async Task CustomInstructions_OverridesDefaultInstructionsAsync()
     {
         // Arrange
         var agent = CreateMockAgent("Research", "Research agent");
-        const string CustomInstructions = "These are custom sub-agent instructions.";
+        const string CustomInstructions = "These are custom sub-agent instructions.\n{sub_agents}";
         var options = new SubAgentsProviderOptions { Instructions = CustomInstructions };
         var provider = new SubAgentsProvider(new[] { agent }, options);
         var context = CreateInvokingContext();
@@ -834,16 +834,16 @@ public class SubAgentsProviderTests
         // Act
         AIContext result = await provider.InvokingAsync(context);
 
-        // Assert — custom instructions replace default, agent list is appended
-        Assert.StartsWith(CustomInstructions, result.Instructions);
+        // Assert — custom instructions replace default, agent list is injected via {sub_agents} placeholder
+        Assert.Contains("These are custom sub-agent instructions.", result.Instructions);
         Assert.Contains("Research", result.Instructions);
     }
 
     /// <summary>
-    /// Verify that default instructions contain tool names and agent names.
+    /// Verify that default instructions contain tool reference and agent names.
     /// </summary>
     [Fact]
-    public async Task DefaultInstructions_ContainsToolNamesAndAgentListAsync()
+    public async Task DefaultInstructions_ContainsToolReferenceAndAgentListAsync()
     {
         // Arrange
         var agent = CreateMockAgent("Research", "Research agent");
@@ -853,12 +853,8 @@ public class SubAgentsProviderTests
         // Act
         AIContext result = await provider.InvokingAsync(context);
 
-        // Assert — instructions contain both tool usage guidance and agent list
-        Assert.Contains("SubAgents_StartTask", result.Instructions);
-        Assert.Contains("SubAgents_WaitForFirstCompletion", result.Instructions);
-        Assert.Contains("SubAgents_GetTaskResults", result.Instructions);
-        Assert.Contains("SubAgents_GetAllTasks", result.Instructions);
-        Assert.Contains("SubAgents_ContinueTask", result.Instructions);
+        // Assert — instructions contain tool usage guidance and agent list
+        Assert.Contains("SubAgents_*", result.Instructions);
         Assert.Contains("SubAgents_ClearCompletedTask", result.Instructions);
         Assert.Contains("Research", result.Instructions);
         Assert.Contains("Research agent", result.Instructions);

@@ -17,6 +17,11 @@ public sealed class AgentModeProviderOptions
     /// <summary>
     /// Gets or sets custom instructions provided to the agent for using the mode tools.
     /// </summary>
+    /// <remarks>
+    /// The instructions must contain a <c>{available_modes}</c> placeholder for the provider to inject the
+    /// curently available list of modes, and a <c>{current_mode}</c> placeholder to inject the currently
+    /// active mode.
+    /// </remarks>
     /// <value>
     /// When <see langword="null"/> (the default), the provider generates instructions dynamically
     /// from the configured <see cref="Modes"/> list.

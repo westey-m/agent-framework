@@ -45,7 +45,7 @@ public sealed class AgentModeProvider : AIContextProvider
         """
         ## Agent Mode
 
-        You can operate in different modes. Dependeing on the mode you are in, you will be required to follow different processes.
+        You can operate in different modes. Depending on the mode you are in, you will be required to follow different processes.
 
         Use the AgentMode_Get tool to check your current operating mode.
         Use the AgentMode_Set tool to switch between modes as your work progresses. Only use AgentMode_Set if the user explicitly instructs/allows you to change modes.

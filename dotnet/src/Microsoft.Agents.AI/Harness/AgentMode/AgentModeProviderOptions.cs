@@ -19,7 +19,7 @@ public sealed class AgentModeProviderOptions
     /// </summary>
     /// <remarks>
     /// The instructions must contain a <c>{available_modes}</c> placeholder for the provider to inject the
-    /// curently available list of modes, and a <c>{current_mode}</c> placeholder to inject the currently
+    /// currently available list of modes, and a <c>{current_mode}</c> placeholder to inject the currently
     /// active mode.
     /// </remarks>
     /// <value>

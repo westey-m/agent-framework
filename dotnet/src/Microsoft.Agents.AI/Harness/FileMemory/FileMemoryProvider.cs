@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -228,8 +229,7 @@ public sealed class FileMemoryProvider : AIContextProvider
                 continue;
             }
 
-            // Hide the memory index file from the listing.
-            if (file.Equals(MemoryIndexFileName, StringComparison.OrdinalIgnoreCase))
+            if (IsInternalFile(file))
             {
                 continue;
             }
@@ -264,7 +264,20 @@ public sealed class FileMemoryProvider : AIContextProvider
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string? pattern = string.IsNullOrWhiteSpace(filePattern) ? null : filePattern;
         IReadOnlyList<FileSearchResult> results = await this._fileStore.SearchFilesAsync(state.WorkingFolder, regexPattern, pattern, cancellationToken).ConfigureAwait(false);
-        return new List<FileSearchResult>(results);
+
+        // Filter out internal files (description sidecars and memory index) so they stay hidden.
+        var filtered = new List<FileSearchResult>(results.Count);
+        foreach (var result in results)
+        {
+            if (IsInternalFile(result.FileName))
+            {
+                continue;
+            }
+
+            filtered.Add(result);
+        }
+
+        return filtered;
     }
 
     private AITool[] CreateTools()
@@ -289,16 +302,18 @@ public sealed class FileMemoryProvider : AIContextProvider
     {
         IReadOnlyList<string> fileNames = await this._fileStore.ListFilesAsync(state.WorkingFolder, cancellationToken).ConfigureAwait(false);
 
+        // Sort deterministically so the index is stable across runs and platforms.
+        var sortedFiles = fileNames.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("# Memory Index");
         sb.AppendLine();
 
         int count = 0;
-        foreach (string file in fileNames)
+        foreach (string file in sortedFiles)
         {
-            // Skip system files: description companions and the index itself.
-            if (file.EndsWith(DescriptionSuffix, StringComparison.OrdinalIgnoreCase) ||
-                file.Equals(MemoryIndexFileName, StringComparison.OrdinalIgnoreCase))
+            // Skip internal system files.
+            if (IsInternalFile(file))
             {
                 continue;
             }
@@ -341,6 +356,14 @@ public sealed class FileMemoryProvider : AIContextProvider
 
         return fileName + DescriptionSuffix;
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the file is an internal system file that should be hidden
+    /// from user-facing operations (description sidecars and the memory index).
+    /// </summary>
+    private static bool IsInternalFile(string fileName) =>
+        fileName.EndsWith(DescriptionSuffix, StringComparison.OrdinalIgnoreCase) ||
+        fileName.Equals(MemoryIndexFileName, StringComparison.OrdinalIgnoreCase);
 
     private static string ResolvePath(string workingFolder, string fileName)
     {

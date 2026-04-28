@@ -257,7 +257,7 @@ public sealed class SubAgentsProvider : AIContextProvider
                 new AIFunctionFactoryOptions
                 {
                     Name = "SubAgents_StartTask",
-                    Description = "Start a sub-task on a named sub-agent. Returns an ID for the new task.",
+                    Description = "Start a sub-task on a named sub-agent. Returns a confirmation message containing the task ID.",
                     SerializerOptions = serializerOptions,
                 }),
 
@@ -315,7 +315,7 @@ public sealed class SubAgentsProvider : AIContextProvider
                 new AIFunctionFactoryOptions
                 {
                     Name = "SubAgents_WaitForFirstCompletion",
-                    Description = "Block until the first of the specified sub-tasks completes. Provide one or more task IDs. Returns the ID of the task that completed first.",
+                    Description = "Block until the first of the specified sub-tasks completes. Provide one or more task IDs. Returns a status message containing the ID of the task that completed first.",
                     SerializerOptions = serializerOptions,
                 }),
 

@@ -44,7 +44,7 @@ dev = [
     "azure-monitor-opentelemetry==1.8.7",
     #tasks
     "poethepoet==0.42.1",
-    "rich>=13.7.1,<15.0.0",
+    "rich>=13.7.1,<16.0.0",
     "tomli==2.4.1",
     "prek==0.3.8",
 ]

@@ -98,13 +98,10 @@ public class StorePathsTests
     }
 
     [Fact]
-    public void NormalizeRelativePath_WhitespaceOnlyFile_DoesNotThrowAsTraversal()
+    public void NormalizeRelativePath_WhitespaceOnlyFile_Throws()
     {
-        // Act — whitespace characters are not path separators, so "   " becomes a valid segment.
-        string result = StorePaths.NormalizeRelativePath("   ");
-
-        // Assert
-        Assert.Equal("   ", result);
+        // Act & Assert — whitespace-only paths are rejected as invalid file names.
+        Assert.Throws<ArgumentException>(() => StorePaths.NormalizeRelativePath("   "));
     }
 
     #endregion

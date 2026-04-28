@@ -383,6 +383,11 @@ public sealed class SubAgentsProvider : AIContextProvider
                         return $"Error: No task found with ID {taskId}.";
                     }
 
+                    if (taskInfo.Status == SubTaskStatus.Lost)
+                    {
+                        return $"Error: Task {taskId} cannot be continued because its session was lost (e.g., after a session restore). Start a new task instead.";
+                    }
+
                     if (taskInfo.Status == SubTaskStatus.Running)
                     {
                         return $"Error: Task {taskId} is still running. Wait for it to complete before continuing.";

@@ -30,6 +30,16 @@ internal static class StorePaths
     /// </exception>
     internal static string NormalizeRelativePath(string path, bool isDirectory = false)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            if (!isDirectory)
+            {
+                throw new ArgumentException("A file path must not be empty or whitespace-only.", nameof(path));
+            }
+
+            return string.Empty;
+        }
+
         string normalized = path.Replace('\\', '/').Trim('/');
 
         if (Path.IsPathRooted(path) ||

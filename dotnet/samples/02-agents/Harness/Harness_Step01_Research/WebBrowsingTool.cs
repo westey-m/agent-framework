@@ -31,7 +31,7 @@ internal sealed partial class WebBrowsingTool : AIFunction
         CancellationToken cancellationToken) =>
         this._inner.InvokeAsync(arguments, cancellationToken);
 
-    [Description("Download the html from the given url as markdown")]
+    [Description("Fetch the html from the given url as markdown")]
     private static async Task<string> DownloadUriAsync(
         [Description("The URL to download")] string uri,
         CancellationToken cancellationToken = default)

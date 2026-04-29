@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -42,18 +43,22 @@ namespace Microsoft.Agents.AI;
 public sealed class FileMemoryProvider : AIContextProvider
 {
     private const string DescriptionSuffix = "_description.md";
+    private const string MemoryIndexFileName = "memories.md";
+    private const int MaxIndexEntries = 50;
 
     private const string DefaultInstructions =
         """
-        You have access to a file-based memory system via the FileMemory_* tools for storing and retrieving information across interactions.
-        Use FileMemory_SaveFile to store one memory per file with a clear, descriptive file name (e.g., "projectarchitecture.md", "userpreferences.md").
-        For large files, include a description when saving to provide a summary that helps with discovery.
-        Before starting new tasks, use FileMemory_ListFiles and FileMemory_SearchFiles to check for relevant existing memories.
-        Use FileMemory_ReadFile to retrieve file contents and FileMemory_DeleteFile to remove outdated memories.
-        Keep memories up-to-date by overwriting files when information changes.
-        When you receive large amounts of data (e.g., downloaded web pages, API responses, research results),
-        save them to files if they will be required later, so that they are not lost when older context is compacted or truncated.
-        This ensures important data remains accessible across long-running sessions.
+        ## File Based Memory
+        You have access to a file-based memory system via the `FileMemory_*` tools for storing and retrieving information across interactions.
+        Use these tools to store plans, memories, processing results, or downloaded data.
+
+        - Use descriptive file names (e.g., "projectarchitecture.md", "userpreferences.md").
+        - Include a description when saving a file to help with future discovery.
+        - Before starting new tasks, use FileMemory_ListFiles and FileMemory_SearchFiles to check for relevant existing memories.
+        - Keep memories up-to-date by overwriting files when information changes.
+        - When you receive large amounts of data (e.g., downloaded web pages, API responses, research results),
+          save them to files if they will be required later, so that they are not lost when older context is compacted or truncated.
+          This ensures important data remains accessible across long-running sessions.
         """;
 
     private readonly AgentFileStore _fileStore;
@@ -99,11 +104,27 @@ public sealed class FileMemoryProvider : AIContextProvider
             await this._fileStore.CreateDirectoryAsync(state.WorkingFolder, cancellationToken).ConfigureAwait(false);
         }
 
-        return new AIContext
+        var aiContext = new AIContext
         {
             Instructions = this._instructions,
             Tools = this._tools ??= this.CreateTools(),
         };
+
+        // Inject the memory index as a user message so the agent knows what memories are available.
+        string indexPath = CombinePaths(state.WorkingFolder, MemoryIndexFileName);
+        string? indexContent = await this._fileStore.ReadFileAsync(indexPath, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(indexContent))
+        {
+            aiContext.Messages =
+            [
+                new ChatMessage(ChatRole.User,
+                    "The following is your memory index — a list of files you have previously saved. " +
+                    "You can read any of these files using the FileMemory_ReadFile tool.\n\n" +
+                    indexContent),
+            ];
+        }
+
+        return aiContext;
     }
 
     /// <summary>
@@ -119,6 +140,11 @@ public sealed class FileMemoryProvider : AIContextProvider
     [Description("Save a memory file with the given name and content. Overwrites the file if it already exists. Include a description for large files to provide a summary that helps with discovery.")]
     private async Task<string> SaveFileAsync(string fileName, string content, string? description = null, CancellationToken cancellationToken = default)
     {
+        if (IsInternalFile(fileName))
+        {
+            throw new ArgumentException("The provided file name is reserved by the system for internal use. Please choose a different file name.", nameof(fileName));
+        }
+
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, fileName);
         await this._fileStore.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
@@ -135,9 +161,12 @@ public sealed class FileMemoryProvider : AIContextProvider
             await this._fileStore.DeleteFileAsync(descPath, cancellationToken).ConfigureAwait(false);
         }
 
-        return string.IsNullOrWhiteSpace(description)
+        string result = string.IsNullOrWhiteSpace(description)
             ? $"File '{fileName}' saved."
             : $"File '{fileName}' saved with description.";
+
+        await this.RebuildMemoryIndexAsync(state, cancellationToken).ConfigureAwait(false);
+        return result;
     }
 
     /// <summary>
@@ -173,6 +202,7 @@ public sealed class FileMemoryProvider : AIContextProvider
         string descPath = ResolvePath(state.WorkingFolder, GetDescriptionFileName(fileName));
         await this._fileStore.DeleteFileAsync(descPath, cancellationToken).ConfigureAwait(false);
 
+        await this.RebuildMemoryIndexAsync(state, cancellationToken).ConfigureAwait(false);
         return deleted ? $"File '{fileName}' deleted." : $"File '{fileName}' not found.";
     }
 
@@ -200,6 +230,11 @@ public sealed class FileMemoryProvider : AIContextProvider
         foreach (string file in fileNames)
         {
             if (descriptionFileSet.Contains(file))
+            {
+                continue;
+            }
+
+            if (IsInternalFile(file))
             {
                 continue;
             }
@@ -234,7 +269,20 @@ public sealed class FileMemoryProvider : AIContextProvider
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string? pattern = string.IsNullOrWhiteSpace(filePattern) ? null : filePattern;
         IReadOnlyList<FileSearchResult> results = await this._fileStore.SearchFilesAsync(state.WorkingFolder, regexPattern, pattern, cancellationToken).ConfigureAwait(false);
-        return new List<FileSearchResult>(results);
+
+        // Filter out internal files (description sidecars and memory index) so they stay hidden.
+        var filtered = new List<FileSearchResult>(results.Count);
+        foreach (var result in results)
+        {
+            if (IsInternalFile(result.FileName))
+            {
+                continue;
+            }
+
+            filtered.Add(result);
+        }
+
+        return filtered;
     }
 
     private AITool[] CreateTools()
@@ -251,6 +299,56 @@ public sealed class FileMemoryProvider : AIContextProvider
         ];
     }
 
+    /// <summary>
+    /// Rebuilds the <c>memories.md</c> index file by listing all user files in the working folder,
+    /// reading their companion description files, and writing a markdown summary capped at <see cref="MaxIndexEntries"/> entries.
+    /// </summary>
+    private async Task RebuildMemoryIndexAsync(FileMemoryState state, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<string> fileNames = await this._fileStore.ListFilesAsync(state.WorkingFolder, cancellationToken).ConfigureAwait(false);
+
+        // Sort deterministically so the index is stable across runs and platforms.
+        var sortedFiles = fileNames.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("# Memory Index");
+        sb.AppendLine();
+
+        int count = 0;
+        foreach (string file in sortedFiles)
+        {
+            // Skip internal system files.
+            if (IsInternalFile(file))
+            {
+                continue;
+            }
+
+            if (count >= MaxIndexEntries)
+            {
+                break;
+            }
+
+            string? description = null;
+            string descFileName = GetDescriptionFileName(file);
+            string descPath = CombinePaths(state.WorkingFolder, descFileName);
+            description = await this._fileStore.ReadFileAsync(descPath, cancellationToken).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                sb.AppendLine($"- **{file}**: {description}");
+            }
+            else
+            {
+                sb.AppendLine($"- **{file}**");
+            }
+
+            count++;
+        }
+
+        string indexPath = CombinePaths(state.WorkingFolder, MemoryIndexFileName);
+        await this._fileStore.WriteFileAsync(indexPath, sb.ToString(), cancellationToken).ConfigureAwait(false);
+    }
+
     private static string GetDescriptionFileName(string fileName)
     {
         int extIndex = fileName.LastIndexOf('.');
@@ -263,6 +361,14 @@ public sealed class FileMemoryProvider : AIContextProvider
 
         return fileName + DescriptionSuffix;
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the file is an internal system file that should be hidden
+    /// from user-facing operations (description sidecars and the memory index).
+    /// </summary>
+    private static bool IsInternalFile(string fileName) =>
+        fileName.EndsWith(DescriptionSuffix, StringComparison.OrdinalIgnoreCase) ||
+        fileName.Equals(MemoryIndexFileName, StringComparison.OrdinalIgnoreCase);
 
     private static string ResolvePath(string workingFolder, string fileName)
     {

@@ -31,7 +31,7 @@ internal sealed partial class WebBrowsingTool : AIFunction
         CancellationToken cancellationToken) =>
         this._inner.InvokeAsync(arguments, cancellationToken);
 
-    [Description("Download the html from the given url as markdown")]
+    [Description("Fetch the html from the given url as markdown")]
     private static async Task<string> DownloadUriAsync(
         [Description("The URL to download")] string uri,
         CancellationToken cancellationToken = default)
@@ -40,6 +40,15 @@ internal sealed partial class WebBrowsingTool : AIFunction
         {
             return $"Error: '{uri}' is not a valid URL.";
         }
+
+        if (parsedUri.Scheme is not "http" and not "https")
+        {
+            return $"Error: Only HTTP and HTTPS URLs are supported. Got: '{parsedUri.Scheme}'.";
+        }
+
+        // NOTE: In production scenarios, consider also blocking requests to private/internal IP
+        // ranges (e.g., 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.0.0.1, 169.254.169.254)
+        // to prevent SSRF attacks via prompt injection in web content.
 
         try
         {

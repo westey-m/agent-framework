@@ -36,6 +36,8 @@ public sealed class TodoProvider : AIContextProvider
 {
     private const string DefaultInstructions =
         """
+        ## Todo Items
+
         You have access to a todo list for tracking work items.
         While planning, make sure that you break down complex tasks into manageable todo items and add them to the list.
         Ask questions from the user where clarification is needed to create effective todos.

@@ -41,6 +41,20 @@ namespace Microsoft.Agents.AI;
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class AgentModeProvider : AIContextProvider
 {
+    private const string DefaultInstructions =
+        """
+        ## Agent Mode
+
+        You can operate in different modes. Depending on the mode you are in, you will be required to follow different processes.
+
+        Use the AgentMode_Get tool to check your current operating mode.
+        Use the AgentMode_Set tool to switch between modes as your work progresses. Only use AgentMode_Set if the user explicitly instructs/allows you to change modes.
+
+        {available_modes}
+
+        You are currently operating in the {current_mode} mode.
+        """;
+
     private static readonly IReadOnlyList<AgentModeProviderOptions.AgentMode> s_defaultModes =
     [
         new("plan", "Use this mode when analyzing requirements, breaking down tasks, and creating plans. This is the interactive mode — ask clarifying questions, discuss options, and get user approval before proceeding."),
@@ -50,7 +64,7 @@ public sealed class AgentModeProvider : AIContextProvider
     private readonly ProviderSessionState<AgentModeState> _sessionState;
     private readonly IReadOnlyList<AgentModeProviderOptions.AgentMode> _modes;
     private readonly string _defaultMode;
-    private readonly string? _customInstructions;
+    private readonly string? _instructions;
     private readonly HashSet<string> _validModeNames;
     private readonly string _modeNamesDisplay;
     private IReadOnlyList<string>? _stateKeys;
@@ -68,7 +82,7 @@ public sealed class AgentModeProvider : AIContextProvider
             throw new ArgumentException("At least one mode must be configured.", nameof(options));
         }
 
-        this._customInstructions = options?.Instructions;
+        this._instructions = options?.Instructions ?? DefaultInstructions;
 
         this._validModeNames = new HashSet<string>(StringComparer.Ordinal);
         var modeNamesList = new List<string>(this._modes.Count);
@@ -147,7 +161,7 @@ public sealed class AgentModeProvider : AIContextProvider
     {
         AgentModeState state = this._sessionState.GetOrInitializeState(context.Session);
 
-        string instructions = this._customInstructions ?? this.BuildDefaultInstructions(state.CurrentMode);
+        string instructions = this.BuildInstructions(state.CurrentMode);
 
         var aiContext = new AIContext
         {
@@ -171,22 +185,20 @@ public sealed class AgentModeProvider : AIContextProvider
         return new ValueTask<AIContext>(aiContext);
     }
 
-    private string BuildDefaultInstructions(string currentMode)
+    private string BuildInstructions(string currentMode)
     {
-        var sb = new StringBuilder();
-        sb.Append($"You are currently operating in \"{currentMode}\" mode.");
-        sb.AppendLine();
-        sb.AppendLine("Available modes:");
-
+        // Build list of modes text:
+        var modesListBuilder = new StringBuilder();
         foreach (var mode in this._modes)
         {
-            sb.AppendLine($"- \"{mode.Name}\": {mode.Description}");
+            modesListBuilder.AppendLine($"- \"{mode.Name}\": {mode.Description}");
         }
+        var modesListText = modesListBuilder.ToString();
 
-        sb.AppendLine("Use the AgentMode_Set tool to switch between modes as your work progresses. Only use AgentMode_Set if the user explicitly instructs/allows you to change modes.");
-        sb.Append("Use the AgentMode_Get tool to check your current operating mode.");
-
-        return sb.ToString();
+        return new StringBuilder(this._instructions)
+            .Replace("{available_modes}", modesListText)
+            .Replace("{current_mode}", currentMode)
+            .ToString();
     }
 
     private void ValidateMode(string mode)

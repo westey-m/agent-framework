@@ -437,6 +437,13 @@ class WorkflowAgent(BaseAgent):
                     yield event
 
         elif checkpoint_id is not None:
+            # Restore the prior workflow state from the checkpoint. Shared
+            # state (e.g. accumulated conversation history maintained by the
+            # workflow's executors) survives across turns because Workflow.run
+            # no longer wipes state per call. Callers who want to deliver a
+            # new user message after restore should make a second
+            # `workflow.run(message=...)` call - they are NOT mutually
+            # exclusive on the same instance, but each must be its own call.
             if streaming:
                 async for event in self.workflow.run(
                     stream=True,

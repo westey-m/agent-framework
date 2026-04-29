@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 using Harness.Shared.Console.Commands;
 using Harness.Shared.Console.Observers;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 namespace Harness.Shared.Console;
 

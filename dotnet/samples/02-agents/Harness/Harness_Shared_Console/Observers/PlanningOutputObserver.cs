@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.Text;
 using System.Text.Json;
@@ -78,12 +78,19 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
         // Render based on response type.
         if (planningResponse.Type == PlanningResponseType.Clarification)
         {
-            return AsUserMessages(await this.RenderClarificationAndCollectResponseAsync(writer, planningResponse));
+            return AsUserMessages(await this.RenderClarificationsAndCollectResponsesAsync(writer, planningResponse));
         }
 
         if (planningResponse.Type == PlanningResponseType.Approval)
         {
-            string response = await this.RenderApprovalAndCollectResponseAsync(writer, planningResponse, options);
+            var question = planningResponse.Questions.FirstOrDefault();
+            if (question is null)
+            {
+                await writer.WriteInfoLineAsync("(approval response had no content)", ConsoleColor.DarkYellow);
+                return null;
+            }
+
+            string response = await this.RenderApprovalAndCollectResponseAsync(writer, question, options);
             if (response == "Approved")
             {
                 this._modeProvider.SetMode(session, options.ExecutionModeName!);
@@ -102,24 +109,39 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
     private static IList<ChatMessage>? AsUserMessages(string? text) =>
         text is not null ? [new ChatMessage(ChatRole.User, text)] : null;
 
-    private async Task<string?> RenderClarificationAndCollectResponseAsync(ConsoleWriter writer, PlanningResponse response)
+    private async Task<string?> RenderClarificationsAndCollectResponsesAsync(ConsoleWriter writer, PlanningResponse response)
     {
-        await writer.WriteInfoLineAsync(response.Message ?? string.Empty);
+        var answers = new List<string>();
 
-        if (response.Choices is { Count: > 0 })
+        foreach (var question in response.Questions)
         {
-            return await writer.ReadSelectionAsync(
-                "Choose an option:",
-                response.Choices);
+            await writer.WriteInfoLineAsync(string.Empty);
+            await writer.WriteInfoLineAsync(question.Message);
+
+            string? answer;
+            if (question.Choices is { Count: > 0 })
+            {
+                answer = await writer.ReadSelectionAsync(
+                    "Choose an option:",
+                    question.Choices);
+            }
+            else
+            {
+                answer = (await writer.ReadLineAsync("Response: "))?.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(answer))
+            {
+                answers.Add($"Q: {question.Message}\nA: {answer}");
+            }
         }
 
-        string? input = (await writer.ReadLineAsync("Response: "))?.Trim();
-        return string.IsNullOrWhiteSpace(input) ? null : input;
+        return answers.Count > 0 ? string.Join("\n\n", answers) : null;
     }
 
-    private async Task<string> RenderApprovalAndCollectResponseAsync(ConsoleWriter writer, PlanningResponse response, HarnessConsoleOptions options)
+    private async Task<string> RenderApprovalAndCollectResponseAsync(ConsoleWriter writer, PlanningQuestion question, HarnessConsoleOptions options)
     {
-        await writer.WriteInfoLineAsync(response.Message ?? string.Empty);
+        await writer.WriteInfoLineAsync(question.Message);
 
         var choices = new List<string>
         {

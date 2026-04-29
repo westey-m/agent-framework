@@ -79,10 +79,7 @@ public sealed class ConsoleWriter : IDisposable
         string prefix = this._lastWasText ? "\n\n  " : "  ";
         this._lastWasText = false;
 
-        if (color.HasValue)
-        {
-            System.Console.ForegroundColor = color.Value;
-        }
+        System.Console.ForegroundColor = color ?? GetModeColor(this.CurrentMode, this._modeColors);
 
         if (newLine)
         {
@@ -93,10 +90,7 @@ public sealed class ConsoleWriter : IDisposable
             System.Console.Write(prefix + text);
         }
 
-        if (color.HasValue)
-        {
-            System.Console.ForegroundColor = GetModeColor(this.CurrentMode, this._modeColors);
-        }
+        System.Console.ForegroundColor = GetModeColor(this.CurrentMode, this._modeColors);
 
         this._spinner.Start();
     }
@@ -186,7 +180,6 @@ public sealed class ConsoleWriter : IDisposable
     {
         await this._spinner.StopAsync();
 
-        System.Console.WriteLine();
         AnsiConsole.Write(this.CreateModeRule());
 
         const string FreeformOption = "✏️  Type a custom response...";
@@ -226,7 +219,6 @@ public sealed class ConsoleWriter : IDisposable
         }
 
         System.Console.ResetColor();
-        System.Console.WriteLine();
         System.Console.WriteLine();
     }
 

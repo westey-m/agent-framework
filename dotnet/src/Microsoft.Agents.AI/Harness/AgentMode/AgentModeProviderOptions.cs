@@ -23,8 +23,7 @@ public sealed class AgentModeProviderOptions
     /// active mode.
     /// </remarks>
     /// <value>
-    /// When <see langword="null"/> (the default), the provider generates instructions dynamically
-    /// from the configured <see cref="Modes"/> list.
+    /// When <see langword="null"/> (the default), the provider uses a default set of instructions.
     /// </value>
     public string? Instructions { get; set; }
 

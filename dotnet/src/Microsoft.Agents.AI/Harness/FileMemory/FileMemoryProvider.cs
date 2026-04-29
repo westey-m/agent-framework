@@ -140,6 +140,11 @@ public sealed class FileMemoryProvider : AIContextProvider
     [Description("Save a memory file with the given name and content. Overwrites the file if it already exists. Include a description for large files to provide a summary that helps with discovery.")]
     private async Task<string> SaveFileAsync(string fileName, string content, string? description = null, CancellationToken cancellationToken = default)
     {
+        if (IsInternalFile(fileName))
+        {
+            throw new ArgumentException("The provided file name is reserved by the system for internal use. Please choose a different file name.", nameof(fileName));
+        }
+
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, fileName);
         await this._fileStore.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);

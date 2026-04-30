@@ -22,7 +22,7 @@ internal sealed class ErrorDisplayObserver : ConsoleObserver
 
             if (!string.IsNullOrWhiteSpace(errorContent.Details))
             {
-                errorText += $" details: {errorContent.Details})";
+                errorText += $" details: {errorContent.Details}";
             }
 
             await writer.WriteInfoLineAsync(errorText, ConsoleColor.Red);

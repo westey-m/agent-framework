@@ -208,11 +208,11 @@ public sealed class ConsoleWriter : IDisposable
     /// <summary>
     /// Writes the stream-complete footer (handles "no text response" fallback, resets color).
     /// </summary>
-    public async Task WriteStreamFooterAsync(bool hasApprovalRequests)
+    public async Task WriteStreamFooterAsync(bool hasFollowUpMessages)
     {
         await this._spinner.StopAsync();
 
-        if (!this._hasReceivedAnyText && !hasApprovalRequests)
+        if (!this._hasReceivedAnyText && !hasFollowUpMessages)
         {
             System.Console.ForegroundColor = ConsoleColor.DarkYellow;
             System.Console.Write("\n  (no text response from agent)");

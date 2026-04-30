@@ -26,6 +26,14 @@ public static class HarnessConsole
     {
         options ??= new();
 
+        if (options.EnablePlanningUx
+            && (string.IsNullOrWhiteSpace(options.PlanningModeName) || string.IsNullOrWhiteSpace(options.ExecutionModeName)))
+        {
+            throw new ArgumentException(
+                "When EnablePlanningUx is true, both PlanningModeName and ExecutionModeName must be configured.",
+                nameof(options));
+        }
+
         System.Console.WriteLine($"=== {title} ===");
         System.Console.WriteLine(userPrompt);
 
@@ -162,7 +170,7 @@ public static class HarnessConsole
                 }
             }
 
-            await writer.WriteStreamFooterAsync(hasApprovalRequests: hasObserverMessages);
+            await writer.WriteStreamFooterAsync(hasFollowUpMessages: hasObserverMessages);
             nextMessages = combinedMessages.Count > 0 ? combinedMessages : null;
         }
     }

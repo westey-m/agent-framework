@@ -161,7 +161,14 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
             string? feedback = await writer.ReadLineAsync(
                 "Your feedback: ",
                 ConsoleWriter.GetModeColor(options.PlanningModeName, options.ModeColors));
-            return string.IsNullOrWhiteSpace(feedback) ? "Approved" : feedback;
+
+            if (string.IsNullOrWhiteSpace(feedback))
+            {
+                // Treat empty feedback as no changes — re-prompt the agent with the plan.
+                return "No changes suggested. Please re-present the plan for approval.";
+            }
+
+            return feedback;
         }
 
         // Custom freeform input — treat as suggested changes.

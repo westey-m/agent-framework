@@ -3,13 +3,12 @@
 using System;
 using System.Linq;
 using Azure.AI.AgentServer.Responses;
-using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using OpenAI.Responses;
 
-namespace Microsoft.Agents.AI.Foundry.UnitTests.Hosting;
+namespace Microsoft.Agents.AI.Foundry.Hosting.UnitTests;
 
 public class ServiceCollectionExtensionsTests
 {

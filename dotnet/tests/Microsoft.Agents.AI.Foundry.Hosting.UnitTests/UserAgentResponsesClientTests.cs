@@ -11,23 +11,22 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.AI.Extensions.OpenAI;
-using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Responses;
 
 #pragma warning disable OPENAI001, SCME0001, SCME0002, MEAI001
 
-namespace Microsoft.Agents.AI.Foundry.UnitTests.Hosting;
+namespace Microsoft.Agents.AI.Foundry.Hosting.UnitTests;
 
 /// <summary>
-/// Verifies that <see cref="DelegatingResponsesClient"/> preserves user-supplied client options
+/// Verifies that <see cref="UserAgentResponsesClient"/> preserves user-supplied client options
 /// (Transport, RetryPolicy, UserAgentApplicationId, OrganizationId, ProjectId) and adds the
 /// hosted-agent User-Agent supplement on every outgoing request, including streaming.
 /// Covers both the Azure-flavored <see cref="ProjectResponsesClient"/> and the native OpenAI
 /// <see cref="ResponsesClient"/>.
 /// </summary>
-public sealed partial class DelegatingResponsesClientTests
+public sealed partial class UserAgentResponsesClientTests
 {
     private const string TestEndpoint = "https://fake-foundry.example.com/api/projects/fake-prj";
     private const string OpenAIEndpoint = "https://fake-openai.example.com/v1";
@@ -215,7 +214,7 @@ public sealed partial class DelegatingResponsesClientTests
         using var httpClient = new HttpClient(handler);
 #pragma warning restore CA5399
         var inner = BuildOpenAIInner(httpClient, userAgentApplicationId: "MY_APP_ID");
-        var wrapper = new DelegatingResponsesClient(inner);
+        var wrapper = new UserAgentResponsesClient(inner);
 
         // Act
         switch (method)
@@ -326,7 +325,7 @@ public sealed partial class DelegatingResponsesClientTests
         IChatClient meai = inner.AsIChatClient(Deployment);
         var meaiType = meai.GetType();
         var field = meaiType.GetField("_responseClient", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        field.SetValue(meai, new DelegatingResponsesClient(inner));
+        field.SetValue(meai, new UserAgentResponsesClient(inner));
         return meai;
     }
 

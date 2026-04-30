@@ -143,7 +143,7 @@ public class FileAccessProviderTests
     }
 
     [Fact]
-    public async Task SaveFile_OverwritesExistingFileAsync()
+    public async Task SaveFile_ExistingFile_WithoutOverwrite_ReturnsErrorAsync()
     {
         // Arrange
         var store = new InMemoryAgentFileStore();
@@ -156,11 +156,39 @@ public class FileAccessProviderTests
             ["content"] = "Original",
         });
 
-        // Act
+        // Act — try to save again without overwrite
+        var result = await InvokeToolAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Updated",
+        });
+
+        // Assert — original content preserved, error message returned
+        Assert.Equal("Original", await store.ReadFileAsync("notes.md"));
+        var text = Assert.IsType<JsonElement>(result).GetString();
+        Assert.Contains("already exists", text);
+    }
+
+    [Fact]
+    public async Task SaveFile_ExistingFile_WithOverwrite_SucceedsAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var tools = await CreateToolsAsync(store);
+        var saveFile = GetTool(tools, "FileAccess_SaveFile");
+
+        await InvokeToolAsync(saveFile, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "Original",
+        });
+
+        // Act — save again with overwrite=true
         await InvokeToolAsync(saveFile, new AIFunctionArguments
         {
             ["fileName"] = "notes.md",
             ["content"] = "Updated",
+            ["overwrite"] = true,
         });
 
         // Assert
@@ -291,9 +319,8 @@ public class FileAccessProviderTests
         // Assert — returns plain list of file names (no description properties)
         var entries = Assert.IsType<JsonElement>(result).EnumerateArray().ToList();
         Assert.Equal(2, entries.Count);
-        var names = entries.Select(e => e.GetString()).Order().ToList();
-        Assert.Contains("data.txt", names);
-        Assert.Contains("notes.md", names);
+        Assert.Contains(entries, e => e.GetString() == "data.txt");
+        Assert.Contains(entries, e => e.GetString() == "notes.md");
     }
 
     [Fact]

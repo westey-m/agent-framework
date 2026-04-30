@@ -87,16 +87,23 @@ public sealed class FileAccessProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Save a file with the given name and content. Overwrites the file if it already exists.
+    /// Save a file with the given name and content. By default, does not overwrite an existing file unless overwrite is set to true.
     /// </summary>
     /// <param name="fileName">The name of the file to save.</param>
     /// <param name="content">The content to write to the file.</param>
+    /// <param name="overwrite">Whether to overwrite the file if it already exists.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A confirmation message.</returns>
-    [Description("Save a file with the given name and content. Overwrites the file if it already exists.")]
-    private async Task<string> SaveFileAsync(string fileName, string content, CancellationToken cancellationToken = default)
+    [Description("Save a file with the given name and content. By default, does not overwrite an existing file unless overwrite is set to true.")]
+    private async Task<string> SaveFileAsync(string fileName, string content, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         string path = StorePaths.NormalizeRelativePath(fileName);
+
+        if (!overwrite && await this._fileStore.FileExistsAsync(path, cancellationToken).ConfigureAwait(false))
+        {
+            return $"File '{fileName}' already exists. To replace it, save again with overwrite set to true.";
+        }
+
         await this._fileStore.WriteFileAsync(path, content, cancellationToken).ConfigureAwait(false);
         return $"File '{fileName}' saved.";
     }

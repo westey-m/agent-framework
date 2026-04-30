@@ -888,5 +888,29 @@ public class FileMemoryProviderTests
         provider.Dispose();
     }
 
+    [Fact]
+    public async Task SaveFile_AfterDispose_ThrowsAsync()
+    {
+        // Arrange — create tools from a provider, then dispose the provider.
+        var store = new InMemoryAgentFileStore();
+        var provider = CreateProvider(store);
+        var agent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
+#pragma warning restore MAAI001
+        AIContext result = await provider.InvokingAsync(context);
+        var saveFile = GetTool(result.Tools!, "FileMemory_SaveFile");
+        provider.Dispose();
+
+        // Act & Assert — the disposed SemaphoreSlim should throw ObjectDisposedException.
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
+            await InvokeWithRunContextAsync(saveFile, new AIFunctionArguments
+            {
+                ["fileName"] = "notes.md",
+                ["content"] = "Should fail",
+            }, session));
+    }
+
     #endregion
 }

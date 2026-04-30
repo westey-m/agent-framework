@@ -43,14 +43,16 @@ var instructions =
 
     *Plan Mode*
 
-    1. Analyze the request.
-    2. Ask for clarifications where needed.
-      1. When asking for clarification and you have specific options in mind, present them to the user with numbers, so they can respond with the number instead of having to retype the entire response.
-      2. Always also allow the user to respond with free-form text in case they want to provide information or context that you didn't specifically ask for.
-    3. Create one or more todo items.
-    4. Write the plan to a memory file, so that it is retained even if compaction happens. Make sure to update the plan file if the user requests changes.
-    5. Present the plan to the user.
-    6. Ask for approval to switch to execute mode and process the plan.
+    1. Analyze the request with the purpose of building a research plan.
+    2. Create a list of todo items.
+    3. If needed, use the provided tools to do some exploratory checks to help build a plan and determine what clarifying questions you may need from the user.
+    4. Ask for clarifications from the user where needed.
+      1. Ask each clarification one by one.
+      2. When asking for clarification and you have specific options in mind, present them to the user, so they can choose the option instead of having to retype the entire response.
+      3. Do not proceed until you have received all the needed clarifications.
+      4. Do short exploratory research if it helps with being able to ask sensible clarifications from the user.
+    5. Write the plan to a memory file, so that it is retained even if compaction happens. Make sure to update the plan file if the user requests changes.
+    6. Present the plan to the user and ask for approval to switch to execute mode and process the plan.
     7. When approval is granted, always switch to execute mode (using the `AgentMode_Set` tool), and follow the steps for *Execute mode*.
 
     *Execute Mode*
@@ -174,4 +176,15 @@ AIAgent agent =
     .Build();
 
 // Run the interactive console session using the shared HarnessConsole helper.
-await HarnessConsole.RunAgentAsync(agent, title: "Research Assistant", userPrompt: "Enter a research topic to get started.", maxContextWindowTokens: MaxContextWindowTokens, maxOutputTokens: MaxOutputTokens);
+await HarnessConsole.RunAgentAsync(
+    agent,
+    title: "Research Assistant",
+    userPrompt: "Enter a research topic to get started.",
+    new HarnessConsoleOptions
+    {
+        MaxContextWindowTokens = MaxContextWindowTokens,
+        MaxOutputTokens = MaxOutputTokens,
+        EnablePlanningUx = true,
+        PlanningModeName = "plan",
+        ExecutionModeName = "execute"
+    });

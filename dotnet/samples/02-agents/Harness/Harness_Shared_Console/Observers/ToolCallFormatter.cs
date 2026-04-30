@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
-namespace Harness.Shared.Console;
+namespace Harness.Shared.Console.Observers;
 
 /// <summary>
 /// Formats <see cref="FunctionCallContent"/> instances into human-readable strings

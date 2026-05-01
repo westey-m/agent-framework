@@ -85,13 +85,7 @@ internal sealed partial class WebBrowsingTool : AIFunction
     {
         string host = uri.Host;
 
-        // 1. If AllowAllHosts is true → allow.
-        if (this._options.AllowAllHosts)
-        {
-            return null;
-        }
-
-        // 2. Check AllowedHosts.
+        // 1. Check AllowedHosts.
         if (this._options.AllowedHosts is { Count: > 0 } allowedHosts)
         {
             foreach (string pattern in allowedHosts)
@@ -101,6 +95,14 @@ internal sealed partial class WebBrowsingTool : AIFunction
                     return null; // Allowed by explicit host list.
                 }
             }
+        }
+
+        // 2. Short-circuit when the policy is guaranteed to block.
+        if (!this._options.AllowPublicNetworks &&
+            !this._options.AllowPrivateNetworks &&
+            !this._options.AllowAllHosts)
+        {
+            return $"Error: Access to '{host}' is blocked by the current access policy. Configure WebBrowsingToolOptions to allow access.";
         }
 
         // 3. Resolve DNS to determine if the host is public or private.
@@ -133,7 +135,13 @@ internal sealed partial class WebBrowsingTool : AIFunction
             return null;
         }
 
-        // 6. Block.
+        // 6. If AllowAllHosts is true → allow.
+        if (this._options.AllowAllHosts)
+        {
+            return null;
+        }
+
+        // 7. Block.
         string networkType = isPrivate ? "private/internal network" : "public network";
         return $"Error: Access to '{host}' is blocked. The host resolves to a {networkType} address and the current access policy does not permit this. " +
                "Configure WebBrowsingToolOptions to allow access.";
@@ -164,6 +172,11 @@ internal sealed partial class WebBrowsingTool : AIFunction
     /// </summary>
     private static bool IsPrivateAddress(IPAddress address)
     {
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
         if (IPAddress.IsLoopback(address))
         {
             return true;

@@ -531,13 +531,17 @@ public class TodoProviderTests
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
 #pragma warning restore MAAI001
 
-        // First invocation — add some todos
+        // First invocation — add some todos (one with a description to cover that branch)
         AIContext result1 = await provider.InvokingAsync(context);
         AIFunction addTodos = (AIFunction)result1.Tools!.First(t => t is AIFunction f && f.Name == "TodoList_Add");
         AIFunction completeTodos = (AIFunction)result1.Tools!.First(t => t is AIFunction f && f.Name == "TodoList_Complete");
         await addTodos.InvokeAsync(new AIFunctionArguments()
         {
-            ["todos"] = new List<TodoItemInput> { new() { Title = "First" }, new() { Title = "Second" } },
+            ["todos"] = new List<TodoItemInput>
+            {
+                new() { Title = "First" },
+                new() { Title = "Second", Description = "Has details" },
+            },
         });
         await completeTodos.InvokeAsync(new AIFunctionArguments() { ["ids"] = new List<int> { 1 } });
 
@@ -552,6 +556,7 @@ public class TodoProviderTests
         Assert.Contains("### Current todo list", text);
         Assert.Contains("[done] First", text);
         Assert.Contains("[open] Second", text);
+        Assert.Contains(": Has details", text);
     }
 
     /// <summary>

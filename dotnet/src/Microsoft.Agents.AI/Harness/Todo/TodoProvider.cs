@@ -95,8 +95,12 @@ public sealed class TodoProvider : AIContextProvider, IDisposable
     /// <summary>
     /// Gets all todo items from the session state.
     /// </summary>
+    /// <remarks>
+    /// The returned <see cref="TodoItem"/> instances are the live objects from internal state.
+    /// Modifying their properties will mutate the provider's state directly.
+    /// </remarks>
     /// <param name="session">The agent session to read todos from.</param>
-    /// <returns>A read-only list snapshot of all todo items.</returns>
+    /// <returns>A list of all todo items. The items are live references to internal state.</returns>
     public async Task<IReadOnlyList<TodoItem>> GetAllTodosAsync(AgentSession? session)
     {
         SemaphoreSlim sessionLock = this.GetSessionLock(session);
@@ -115,8 +119,12 @@ public sealed class TodoProvider : AIContextProvider, IDisposable
     /// <summary>
     /// Gets the remaining (incomplete) todo items from the session state.
     /// </summary>
+    /// <remarks>
+    /// The returned <see cref="TodoItem"/> instances are the live objects from internal state.
+    /// Modifying their properties will mutate the provider's state directly.
+    /// </remarks>
     /// <param name="session">The agent session to read todos from.</param>
-    /// <returns>A snapshot list of incomplete todo items.</returns>
+    /// <returns>A list of incomplete todo items. The items are live references to internal state.</returns>
     public async Task<List<TodoItem>> GetRemainingTodosAsync(AgentSession? session)
     {
         SemaphoreSlim sessionLock = this.GetSessionLock(session);

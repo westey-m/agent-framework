@@ -160,8 +160,8 @@ public sealed class ChatClientAgentOptions
     /// When set to <see langword="true"/>, a <see cref="MessageInjectingChatClient"/> is added to the pipeline
     /// between the <see cref="FunctionInvokingChatClient"/> and the inner client. This enables external code
     /// (such as tool delegates) to inject messages into the function execution loop via the
-    /// <see cref="IChatMessageInjector"/> interface, which can be resolved from the chat client using
-    /// <c>GetService&lt;IChatMessageInjector&gt;()</c>.
+    /// <see cref="MessageInjectingChatClient"/> class, which can be resolved from the chat client using
+    /// <c>GetService&lt;MessageInjectingChatClient&gt;()</c>.
     /// </para>
     /// <para>
     /// This setting can be used independently of <see cref="RequirePerServiceCallChatHistoryPersistence"/>,

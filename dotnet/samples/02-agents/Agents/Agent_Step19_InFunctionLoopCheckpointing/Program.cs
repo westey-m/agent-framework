@@ -8,9 +8,9 @@
 // even if the process is interrupted mid-loop, but may also result in chat history that is not
 // yet finalized (e.g., tool calls without results) being persisted, which may be undesirable in some cases.
 //
-// Additionally, this sample demonstrates the IChatMessageInjector feature, which allows tool
+// Additionally, this sample demonstrates the MessageInjectingChatClient feature, which allows tool
 // code to inject new user messages during the function execution loop. When a tool or anything else enqueues
-// a message via IChatMessageInjector.EnqueueMessages during the tool execution loop, the PerServiceCallChatHistoryPersistingChatClient
+// a message via MessageInjectingChatClient.EnqueueMessages during the tool execution loop, the PerServiceCallChatHistoryPersistingChatClient
 // detects the pending message before the next service call and includes the injected message in the request.
 //
 // To use end-of-run persistence instead (atomic run semantics), remove the
@@ -61,7 +61,7 @@ static string GetTime([Description("The city name.")] string city) =>
 
 // This tool demonstrates message injection during the function execution loop.
 // When called, it checks travel advisories for a city. If an advisory is active, it uses
-// the ambient run context to resolve IChatMessageInjector and injects a follow-up user message
+// the ambient run context to resolve MessageInjectingChatClient and injects a follow-up user message
 // asking for alternative destinations. The model will process this injected message on the next
 // service call — even though the parent FunctionInvokingChatClient loop would otherwise stop.
 [Description("Check current travel advisories for a city.")]
@@ -83,7 +83,7 @@ static string CheckTravelAdvisory([Description("The city name.")] string city)
     // When an advisory is found, inject a follow-up question so the model automatically
     // suggests alternatives without the user needing to ask.
     var runContext = AIAgent.CurrentRunContext!;
-    runContext.Agent.GetService<IChatMessageInjector>()?.EnqueueMessages(
+    runContext.Agent.GetService<MessageInjectingChatClient>()?.EnqueueMessages(
         runContext.Session!,
         [new ChatMessage(ChatRole.User, $"Given the travel advisory for {city}, what alternative cities would you recommend instead?")]);
 

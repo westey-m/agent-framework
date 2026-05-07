@@ -126,8 +126,8 @@ public static class ChatClientBuilderExtensions
     /// in the pipeline.
     /// </para>
     /// <para>
-    /// The <see cref="IChatMessageInjector"/> interface can be retrieved from the chat client via
-    /// <c>GetService&lt;IChatMessageInjector&gt;</c> to enqueue messages from tool delegates or other code.
+    /// The <see cref="MessageInjectingChatClient"/> can be retrieved from the chat client via
+    /// <c>GetService&lt;MessageInjectingChatClient&gt;</c> to enqueue messages from tool delegates or other code.
     /// </para>
     /// <para>
     /// This extension method is intended for use with custom chat client stacks when

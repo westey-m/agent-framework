@@ -2,12 +2,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Microsoft.Shared.Diagnostics;
+using Microsoft.Shared.DiagnosticIds;
 
 namespace Microsoft.Agents.AI;
 
@@ -39,7 +41,8 @@ namespace Microsoft.Agents.AI;
 /// method is called.
 /// </para>
 /// </remarks>
-internal sealed class MessageInjectingChatClient : DelegatingChatClient, IChatMessageInjector
+[Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
+public sealed class MessageInjectingChatClient : DelegatingChatClient
 {
     /// <summary>
     /// The key used to store the pending injected messages queue in the session's <see cref="AgentSessionStateBag"/>.
@@ -162,7 +165,16 @@ internal sealed class MessageInjectingChatClient : DelegatingChatClient, IChatMe
         }
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Enqueues one or more messages to be used at the next opportunity.
+    /// </summary>
+    /// <remarks>
+    /// This method is thread-safe and can be called concurrently from tool delegates or other code
+    /// while the function execution loop is in progress. The enqueued messages will be picked up
+    /// at the next opportunity.
+    /// </remarks>
+    /// <param name="session">The agent session to enqueue messages for.</param>
+    /// <param name="messages">The messages to enqueue.</param>
     public void EnqueueMessages(AgentSession session, IEnumerable<ChatMessage> messages)
     {
         Throw.IfNull(session);

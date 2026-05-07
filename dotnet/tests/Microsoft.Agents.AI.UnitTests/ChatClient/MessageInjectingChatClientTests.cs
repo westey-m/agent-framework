@@ -17,10 +17,10 @@ namespace Microsoft.Agents.AI.UnitTests;
 public class MessageInjectingChatClientTests
 {
     /// <summary>
-    /// Verifies that <see cref="IChatMessageInjector"/> is resolvable via GetService when the decorator is active.
+    /// Verifies that <see cref="MessageInjectingChatClient"/> is resolvable via GetService when the decorator is active.
     /// </summary>
     [Fact]
-    public void GetService_ReturnsIChatMessageInjector_WhenDecoratorActive()
+    public void GetService_ReturnsMessageInjectingChatClient_WhenDecoratorActive()
     {
         // Arrange
         Mock<IChatClient> mockService = new();
@@ -30,14 +30,14 @@ public class MessageInjectingChatClientTests
         });
 
         // Act
-        var injector = agent.ChatClient.GetService<IChatMessageInjector>();
+        var injector = agent.ChatClient.GetService<MessageInjectingChatClient>();
 
         // Assert
         Assert.NotNull(injector);
     }
 
     /// <summary>
-    /// Verifies that <see cref="IChatMessageInjector"/> is null when the decorator is not active.
+    /// Verifies that <see cref="MessageInjectingChatClient"/> is null when the decorator is not active.
     /// </summary>
     [Fact]
     public void GetService_ReturnsNull_WhenDecoratorNotActive()
@@ -47,7 +47,7 @@ public class MessageInjectingChatClientTests
         ChatClientAgent agent = new(mockService.Object, options: new());
 
         // Act
-        var injector = agent.ChatClient.GetService<IChatMessageInjector>();
+        var injector = agent.ChatClient.GetService<MessageInjectingChatClient>();
 
         // Assert
         Assert.Null(injector);
@@ -167,7 +167,7 @@ public class MessageInjectingChatClientTests
         // Arrange
         int serviceCallCount = 0;
         Mock<IChatClient> mockService = new();
-        IChatMessageInjector? injectorRef = null;
+        MessageInjectingChatClient? injectorRef = null;
         ChatClientAgentSession? sessionRef = null;
 
         mockService.Setup(
@@ -207,7 +207,7 @@ public class MessageInjectingChatClientTests
             EnableMessageInjection = true,
         });
 
-        injectorRef = agent.ChatClient.GetService<IChatMessageInjector>()!;
+        injectorRef = agent.ChatClient.GetService<MessageInjectingChatClient>()!;
 
         // Act
         var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
@@ -228,7 +228,7 @@ public class MessageInjectingChatClientTests
         // Arrange
         int serviceCallCount = 0;
         Mock<IChatClient> mockService = new();
-        IChatMessageInjector? injectorRef = null;
+        MessageInjectingChatClient? injectorRef = null;
         ChatClientAgentSession? sessionRef = null;
 
         mockService.Setup(
@@ -274,7 +274,7 @@ public class MessageInjectingChatClientTests
             EnableMessageInjection = true,
         }, services: new ServiceCollection().BuildServiceProvider());
 
-        injectorRef = agent.ChatClient.GetService<IChatMessageInjector>()!;
+        injectorRef = agent.ChatClient.GetService<MessageInjectingChatClient>()!;
 
         // Act
         var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
@@ -298,7 +298,7 @@ public class MessageInjectingChatClientTests
         // Arrange
         int serviceCallCount = 0;
         Mock<IChatClient> mockService = new();
-        IChatMessageInjector? injectorRef = null;
+        MessageInjectingChatClient? injectorRef = null;
         ChatClientAgentSession? sessionRef = null;
 
         mockService.Setup(
@@ -340,7 +340,7 @@ public class MessageInjectingChatClientTests
             EnableMessageInjection = true,
         });
 
-        injectorRef = agent.ChatClient.GetService<IChatMessageInjector>()!;
+        injectorRef = agent.ChatClient.GetService<MessageInjectingChatClient>()!;
 
         // Act
         var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
@@ -363,7 +363,7 @@ public class MessageInjectingChatClientTests
         List<ChatMessage> capturedMessagesSecondRun = [];
         int runCount = 0;
         Mock<IChatClient> mockService = new();
-        IChatMessageInjector? injectorRef = null;
+        MessageInjectingChatClient? injectorRef = null;
         ChatClientAgentSession? sessionRef = null;
 
         mockService.Setup(
@@ -413,7 +413,7 @@ public class MessageInjectingChatClientTests
             EnableMessageInjection = true,
         }, services: new ServiceCollection().BuildServiceProvider());
 
-        injectorRef = agent.ChatClient.GetService<IChatMessageInjector>()!;
+        injectorRef = agent.ChatClient.GetService<MessageInjectingChatClient>()!;
 
         // Act — First run: inject a message that stays pending
         var session = await agent.CreateSessionAsync() as ChatClientAgentSession;

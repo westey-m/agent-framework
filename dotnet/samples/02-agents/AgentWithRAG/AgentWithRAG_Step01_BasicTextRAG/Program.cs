@@ -11,7 +11,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Samples;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
-using Microsoft.SemanticKernel.Connectors.InMemory;
+using CommunityToolkit.VectorData.InMemory;
 using OpenAI.Chat;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");

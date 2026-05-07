@@ -6,10 +6,10 @@
 
 using Azure.AI.OpenAI;
 using Azure.Identity;
+using CommunityToolkit.VectorData.Qdrant;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
-using CommunityToolkit.VectorData.Qdrant;
 using OpenAI.Chat;
 using Qdrant.Client;
 

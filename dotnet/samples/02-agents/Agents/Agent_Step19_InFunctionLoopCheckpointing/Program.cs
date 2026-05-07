@@ -82,9 +82,10 @@ static string CheckTravelAdvisory([Description("The city name.")] string city)
 
     // When an advisory is found, inject a follow-up question so the model automatically
     // suggests alternatives without the user needing to ask.
-    AIAgent.CurrentRunContext!.Agent.GetService<IChatMessageInjector>()
-        ?.EnqueueMessages([new ChatMessage(ChatRole.User,
-            $"Given the travel advisory for {city}, what alternative cities would you recommend instead?")]);
+    var runContext = AIAgent.CurrentRunContext!;
+    runContext.Agent.GetService<IChatMessageInjector>()?.EnqueueMessages(
+        runContext.Session!,
+        [new ChatMessage(ChatRole.User, $"Given the travel advisory for {city}, what alternative cities would you recommend instead?")]);
 
     return advisory;
 }
@@ -100,6 +101,7 @@ AIAgent agent = chatClient.AsAIAgent(
     {
         Name = "WeatherAssistant",
         RequirePerServiceCallChatHistoryPersistence = true,
+        EnableMessageInjection = true,
         ChatOptions = new()
         {
             Instructions = "You are a helpful travel assistant. When asked about cities, call the appropriate tools for each city.",

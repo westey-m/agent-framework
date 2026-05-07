@@ -1,14 +1,12 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
-using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
 
@@ -56,7 +54,7 @@ namespace Microsoft.Agents.AI;
 /// available or if the agent is not a <see cref="ChatClientAgent"/>.
 /// </para>
 /// </remarks>
-internal sealed class PerServiceCallChatHistoryPersistingChatClient : DelegatingChatClient, IChatMessageInjector
+internal sealed class PerServiceCallChatHistoryPersistingChatClient : DelegatingChatClient
 {
     /// <summary>
     /// A sentinel value returned on <see cref="ChatResponse.ConversationId"/> to signal
@@ -75,8 +73,6 @@ internal sealed class PerServiceCallChatHistoryPersistingChatClient : Delegating
     /// </para>
     /// </remarks>
     internal const string LocalHistoryConversationId = "_agent_local_chat_history";
-
-    private readonly ConcurrentQueue<ChatMessage> _pendingInjectedMessages = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PerServiceCallChatHistoryPersistingChatClient"/> class.
@@ -101,66 +97,45 @@ internal sealed class PerServiceCallChatHistoryPersistingChatClient : Delegating
             || options?.AllowBackgroundResponses is true;
         bool skipSimulation = isServiceManaged || isContinuationOrBackground;
 
-        var newMessages = this.DrainInjectedMessages(messages as IList<ChatMessage> ?? messages.ToList());
+        var newMessages = messages as IList<ChatMessage> ?? messages.ToList();
 
-        // Loop to process injected messages: after each service call, if no actionable function calls
-        // are pending but new messages have been injected into the queue, we call the service again
-        // so the model can process them. The loop exits when the response contains actionable
-        // function calls (handed off to the parent FunctionInvokingChatClient) or the queue is empty.
-        while (true)
+        // When simulating, load history and prepend it. When the service manages
+        // history (real ConversationId) or this is a continuation/background run,
+        // just forward the input messages as-is.
+        var messagesForService = skipSimulation
+            ? newMessages
+            : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
+
+        ChatResponse response;
+        try
         {
-            // When simulating, load history and prepend it. When the service manages
-            // history (real ConversationId) or this is a continuation/background run,
-            // just forward the input messages as-is.
-            var messagesForService = skipSimulation
-                ? newMessages
-                : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
-
-            ChatResponse response;
-            try
-            {
-                response = await base.GetResponseAsync(messagesForService, options, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
-                throw;
-            }
-
-            await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
-
-            if (isContinuationOrBackground)
-            {
-                // Continuation/background run — the agent's forced end-of-run handles
-                // session ConversationId and persistence; the decorator is a no-op.
-            }
-            else if (isServiceManaged || !string.IsNullOrEmpty(response.ConversationId))
-            {
-                // Service manages history — update session with the real ConversationId.
-                agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
-            }
-            else
-            {
-                // Normal simulated path — set sentinel so FICC treats this as service-managed.
-                SetSentinelConversationId(response, session);
-            }
-
-            // If the response contains actionable function calls, the parent FunctionInvokingChatClient
-            // loop will iterate — return immediately so it can process them.
-            if (this.HasActionableFunctionCalls(response.Messages))
-            {
-                return response;
-            }
-
-            // No actionable function calls. If there are pending injected messages, loop again
-            // to send them to the service. Otherwise, we're done.
-            if (this._pendingInjectedMessages.IsEmpty)
-            {
-                return response;
-            }
-
-            newMessages = this.DrainInjectedMessages(Array.Empty<ChatMessage>());
+            response = await base.GetResponseAsync(messagesForService, options, cancellationToken).ConfigureAwait(false);
         }
+        catch (Exception ex)
+        {
+            await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
+        await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, response.Messages, options, cancellationToken).ConfigureAwait(false);
+
+        if (isContinuationOrBackground)
+        {
+            // Continuation/background run — the agent's forced end-of-run handles
+            // session ConversationId and persistence; the decorator is a no-op.
+        }
+        else if (isServiceManaged || !string.IsNullOrEmpty(response.ConversationId))
+        {
+            // Service manages history — update session with the real ConversationId.
+            agent.UpdateSessionConversationId(session, response.ConversationId, cancellationToken);
+        }
+        else
+        {
+            // Normal simulated path — set sentinel so FICC treats this as service-managed.
+            SetSentinelConversationId(response, session);
+        }
+
+        return response;
     }
 
     /// <inheritdoc/>
@@ -177,35 +152,58 @@ internal sealed class PerServiceCallChatHistoryPersistingChatClient : Delegating
             || options?.AllowBackgroundResponses is true;
         bool skipSimulation = isServiceManaged || isContinuationOrBackground;
 
-        var newMessages = this.DrainInjectedMessages(messages as IList<ChatMessage> ?? messages.ToList());
+        var newMessages = messages as IList<ChatMessage> ?? messages.ToList();
 
-        // Loop to process injected messages: after each service call, if no actionable function calls
-        // are pending but new messages have been injected into the queue, we call the service again
-        // so the model can process them. The loop exits when the response contains actionable
-        // function calls (handed off to the parent FunctionInvokingChatClient) or the queue is empty.
-        while (true)
+        // When simulating, load history and prepend it. When the service manages
+        // history (real ConversationId) or this is a continuation/background run,
+        // just forward the input messages as-is.
+        var messagesForService = skipSimulation
+            ? newMessages
+            : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
+
+        List<ChatResponseUpdate> responseUpdates = [];
+
+        IAsyncEnumerator<ChatResponseUpdate> enumerator;
+        try
         {
-            // When simulating, load history and prepend it. When the service manages
-            // history (real ConversationId) or this is a continuation/background run,
-            // just forward the input messages as-is.
-            var messagesForService = skipSimulation
-                ? newMessages
-                : await agent.LoadChatHistoryAsync(session, newMessages, options, cancellationToken).ConfigureAwait(false);
+            enumerator = base.GetStreamingResponseAsync(messagesForService, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
 
-            List<ChatResponseUpdate> responseUpdates = [];
+        bool hasUpdates;
+        try
+        {
+            hasUpdates = await enumerator.MoveNextAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
 
-            IAsyncEnumerator<ChatResponseUpdate> enumerator;
-            try
+        while (hasUpdates)
+        {
+            var update = enumerator.Current;
+            responseUpdates.Add(update.Clone());
+
+            // If the service returned a real ConversationId on any update, remember that.
+            // Otherwise stamp our sentinel so FICC treats this as service-managed —
+            // unless this is a continuation/background run where the agent handles everything.
+            if (!string.IsNullOrEmpty(update.ConversationId))
             {
-                enumerator = base.GetStreamingResponseAsync(messagesForService, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                isServiceManaged = true;
             }
-            catch (Exception ex)
+            else if (!skipSimulation)
             {
-                await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
-                throw;
+                update.ConversationId = LocalHistoryConversationId;
             }
 
-            bool hasUpdates;
+            yield return update;
+
             try
             {
                 hasUpdates = await enumerator.MoveNextAsync().ConfigureAwait(false);
@@ -215,83 +213,26 @@ internal sealed class PerServiceCallChatHistoryPersistingChatClient : Delegating
                 await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
                 throw;
             }
-
-            while (hasUpdates)
-            {
-                var update = enumerator.Current;
-                responseUpdates.Add(update.Clone());
-
-                // If the service returned a real ConversationId on any update, remember that.
-                // Otherwise stamp our sentinel so FICC treats this as service-managed —
-                // unless this is a continuation/background run where the agent handles everything.
-                if (!string.IsNullOrEmpty(update.ConversationId))
-                {
-                    isServiceManaged = true;
-                }
-                else if (!skipSimulation)
-                {
-                    update.ConversationId = LocalHistoryConversationId;
-                }
-
-                yield return update;
-
-                try
-                {
-                    hasUpdates = await enumerator.MoveNextAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    await agent.NotifyProvidersOfFailureAsync(session, ex, newMessages, options, cancellationToken).ConfigureAwait(false);
-                    throw;
-                }
-            }
-
-            var chatResponse = responseUpdates.ToChatResponse();
-
-            await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
-
-            if (isContinuationOrBackground)
-            {
-                // Continuation/background run — the agent's forced end-of-run handles
-                // session ConversationId and persistence; the decorator is a no-op.
-            }
-            else if (isServiceManaged)
-            {
-                // Service manages history — update session with the real ConversationId.
-                agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
-            }
-            else
-            {
-                // Normal simulated path — set sentinel on session.
-                session.ConversationId = LocalHistoryConversationId;
-            }
-
-            // If the response contains actionable function calls, the parent FunctionInvokingChatClient
-            // loop will iterate — return immediately so it can process them.
-            if (this.HasActionableFunctionCalls(chatResponse.Messages))
-            {
-                yield break;
-            }
-
-            // No actionable function calls. If there are pending injected messages, loop again
-            // to send them to the service. Otherwise, we're done.
-            if (this._pendingInjectedMessages.IsEmpty)
-            {
-                yield break;
-            }
-
-            newMessages = this.DrainInjectedMessages(Array.Empty<ChatMessage>());
         }
-    }
 
-    /// <inheritdoc/>
-    public void EnqueueMessages(IEnumerable<ChatMessage> messages)
-    {
-        Throw.IfNull(messages);
+        var chatResponse = responseUpdates.ToChatResponse();
 
-        foreach (var message in messages)
+        await agent.NotifyProvidersOfNewMessagesAsync(session, newMessages, chatResponse.Messages, options, cancellationToken).ConfigureAwait(false);
+
+        if (isContinuationOrBackground)
         {
-            this._pendingInjectedMessages.Enqueue(message);
+            // Continuation/background run — the agent's forced end-of-run handles
+            // session ConversationId and persistence; the decorator is a no-op.
+        }
+        else if (isServiceManaged)
+        {
+            // Service manages history — update session with the real ConversationId.
+            agent.UpdateSessionConversationId(session, chatResponse.ConversationId, cancellationToken);
+        }
+        else
+        {
+            // Normal simulated path — set sentinel on session.
+            session.ConversationId = LocalHistoryConversationId;
         }
     }
 
@@ -344,47 +285,5 @@ internal sealed class PerServiceCallChatHistoryPersistingChatClient : Delegating
         }
 
         return options;
-    }
-
-    /// <summary>
-    /// Drains all pending injected messages from the queue and returns a new list combining
-    /// the original messages with the drained messages. The original list is never modified.
-    /// </summary>
-    private IList<ChatMessage> DrainInjectedMessages(IList<ChatMessage> newMessages)
-    {
-        if (this._pendingInjectedMessages.IsEmpty)
-        {
-            return newMessages;
-        }
-
-        var combined = new List<ChatMessage>(newMessages);
-
-        while (this._pendingInjectedMessages.TryDequeue(out var message))
-        {
-            combined.Add(message);
-        }
-
-        return combined;
-    }
-
-    /// <summary>
-    /// Determines whether any message in the response contains a <see cref="FunctionCallContent"/>
-    /// that is not marked as <see cref="FunctionCallContent.InformationalOnly"/>.
-    /// </summary>
-    private bool HasActionableFunctionCalls(IList<ChatMessage> responseMessages)
-    {
-        for (int i = 0; i < responseMessages.Count; i++)
-        {
-            var contents = responseMessages[i].Contents;
-            for (int j = 0; j < contents.Count; j++)
-            {
-                if (contents[j] is FunctionCallContent fcc && !fcc.InformationalOnly)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 }

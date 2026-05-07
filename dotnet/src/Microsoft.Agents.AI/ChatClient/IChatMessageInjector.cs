@@ -21,6 +21,7 @@ public interface IChatMessageInjector
     /// while the function execution loop is in progress. The enqueued messages will be picked up
     /// at the next opportunity.
     /// </remarks>
+    /// <param name="session">The agent session to enqueue messages for.</param>
     /// <param name="messages">The messages to enqueue.</param>
-    void EnqueueMessages(IEnumerable<ChatMessage> messages);
+    void EnqueueMessages(AgentSession session, IEnumerable<ChatMessage> messages);
 }

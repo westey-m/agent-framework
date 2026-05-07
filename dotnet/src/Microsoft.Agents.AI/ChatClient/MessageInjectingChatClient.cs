@@ -97,6 +97,10 @@ public sealed class MessageInjectingChatClient : DelegatingChatClient
                 return response;
             }
 
+            // Propagate any ConversationId returned by the service so subsequent iterations
+            // continue within the same conversation.
+            UpdateOptionsForNextIteration(ref options, response.ConversationId);
+
             newMessages = DrainInjectedMessages(queue, Array.Empty<ChatMessage>());
         }
     }
@@ -119,6 +123,7 @@ public sealed class MessageInjectingChatClient : DelegatingChatClient
         while (true)
         {
             bool hasActionableFunctionCalls = false;
+            string? lastConversationId = null;
 
             var enumerator = base.GetStreamingResponseAsync(newMessages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             try
@@ -131,6 +136,12 @@ public sealed class MessageInjectingChatClient : DelegatingChatClient
                     if (!hasActionableFunctionCalls && HasActionableFunctionCalls(update))
                     {
                         hasActionableFunctionCalls = true;
+                    }
+
+                    // Track the latest ConversationId from the stream.
+                    if (update.ConversationId is not null)
+                    {
+                        lastConversationId = update.ConversationId;
                     }
 
                     yield return update;
@@ -160,6 +171,10 @@ public sealed class MessageInjectingChatClient : DelegatingChatClient
             {
                 yield break;
             }
+
+            // Propagate any ConversationId returned by the service so subsequent iterations
+            // continue within the same conversation.
+            UpdateOptionsForNextIteration(ref options, lastConversationId);
 
             newMessages = DrainInjectedMessages(queue, Array.Empty<ChatMessage>());
         }
@@ -279,5 +294,27 @@ public sealed class MessageInjectingChatClient : DelegatingChatClient
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Propagates the <paramref name="conversationId"/> from the service response into
+    /// <paramref name="options"/> so that subsequent loop iterations continue within the
+    /// same conversation. Clones <paramref name="options"/> before mutating to avoid
+    /// affecting the caller's instance.
+    /// </summary>
+    private static void UpdateOptionsForNextIteration(ref ChatOptions? options, string? conversationId)
+    {
+        if (options is null)
+        {
+            if (conversationId is not null)
+            {
+                options = new() { ConversationId = conversationId };
+            }
+        }
+        else if (options.ConversationId != conversationId)
+        {
+            options = options.Clone();
+            options.ConversationId = conversationId;
+        }
     }
 }

@@ -352,6 +352,62 @@ public class MessageInjectingChatClientTests
     }
 
     /// <summary>
+    /// Verifies that when the inner client returns a ConversationId on the first call, the
+    /// MessageInjectingChatClient propagates it to options on subsequent loop iterations.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_PropagatesConversationId_AcrossInternalLoopIterationsAsync()
+    {
+        // Arrange
+        int serviceCallCount = 0;
+        List<string?> capturedConversationIds = [];
+        MessageInjectingChatClient? injectorRef = null;
+        ChatClientAgentSession? sessionRef = null;
+
+        Mock<IChatClient> mockService = new();
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((IEnumerable<ChatMessage> _, ChatOptions? opts, CancellationToken _) =>
+            {
+                serviceCallCount++;
+                capturedConversationIds.Add(opts?.ConversationId);
+
+                if (serviceCallCount == 1)
+                {
+                    // First call: inject a message and return a ConversationId
+                    injectorRef!.EnqueueMessages(sessionRef!, [new ChatMessage(ChatRole.User, "injected")]);
+                    return Task.FromResult(new ChatResponse([new(ChatRole.Assistant, "first response")])
+                    {
+                        ConversationId = "conv-123",
+                    });
+                }
+
+                // Second call (from loop): should have the propagated ConversationId
+                return Task.FromResult(new ChatResponse([new(ChatRole.Assistant, "second response")]));
+            });
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            EnableMessageInjection = true,
+        }, services: new ServiceCollection().BuildServiceProvider());
+
+        injectorRef = agent.ChatClient.GetService<MessageInjectingChatClient>()!;
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        sessionRef = session;
+        await agent.RunAsync([new(ChatRole.User, "hello")], session);
+
+        // Assert — The second call should have received the ConversationId propagated from the first response
+        Assert.Equal(2, serviceCallCount);
+        Assert.Null(capturedConversationIds[0]); // First call: no ConversationId yet
+        Assert.Equal("conv-123", capturedConversationIds[1]); // Second call: propagated from first response
+    }
+
+    /// <summary>
     /// Verifies that a session with pending injected messages can be serialized and deserialized,
     /// and that the deserialized session correctly delivers the injected messages on the next run.
     /// </summary>

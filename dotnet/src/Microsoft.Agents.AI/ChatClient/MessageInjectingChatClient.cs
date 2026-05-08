@@ -8,8 +8,8 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
-using Microsoft.Shared.Diagnostics;
 using Microsoft.Shared.DiagnosticIds;
+using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
 

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using Harness.Shared.Console.Commands;
 using Harness.Shared.Console.Observers;

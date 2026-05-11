@@ -1,0 +1,94 @@
+﻿// Copyright (c) Microsoft. All rights reserved.
+
+namespace Harness.ConsoleReactiveFramework;
+
+/// <summary>
+/// Abstract base class for all console UI components. Provides layout properties
+/// (position and size) and a <see cref="Render"/> method for drawing to the console.
+/// Derive from <see cref="ConsoleReactiveComponent{TProps, TState}"/> instead of this class directly.
+/// </summary>
+public abstract class ConsoleReactiveComponent
+{
+    internal ConsoleReactiveComponent()
+    {
+    }
+
+    /// <summary>Gets or sets the 1-based column position of the component.</summary>
+    public int X { get; set; }
+
+    /// <summary>Gets or sets the 1-based row position of the component.</summary>
+    public int Y { get; set; }
+
+    /// <summary>Gets or sets the width of the component in columns.</summary>
+    public int Width { get; set; }
+
+    /// <summary>Gets or sets the height of the component in rows.</summary>
+    public int Height { get; set; }
+
+    /// <summary>Renders the component to the console at its current position.</summary>
+    public abstract void Render();
+}
+
+/// <summary>
+/// Generic base class for console UI components with typed props and state.
+/// Props represent externally supplied configuration; state represents internal mutable data.
+/// </summary>
+/// <typeparam name="TProps">The type of the component's props (external configuration).</typeparam>
+/// <typeparam name="TState">The type of the component's internal state.</typeparam>
+public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactiveComponent
+{
+    private readonly object _renderLock = new();
+    private TProps? _lastProps;
+
+    /// <summary>Gets or sets the component's props (external configuration).</summary>
+    public TProps? Props { get; set; }
+
+    /// <summary>Gets or sets the component's internal state.</summary>
+    protected TState? State { get; set; }
+
+    /// <summary>
+    /// Updates the component's state and triggers a re-render.
+    /// </summary>
+    /// <param name="newState">The new state value.</param>
+    public void SetState(TState newState)
+    {
+        this.State = newState;
+        this.Render();
+    }
+
+    /// <summary>
+    /// Renders the component if props or state have changed since the last render.
+    /// Uses a lock to prevent concurrent renders from multiple sources.
+    /// </summary>
+    public override void Render()
+    {
+        lock (this._renderLock)
+        {
+            if (this.Props != null && this.Props.Equals(this._lastProps) && this.State != null && this.State.Equals(this._lastProps))
+            {
+                // Skip rendering if props and state haven't changed
+                return;
+            }
+
+            this._lastProps = this.Props;
+            this.RenderCore(this.Props!, this.State!);
+        }
+    }
+
+    /// <summary>
+    /// Called by <see cref="Render"/> to perform the actual rendering. Override this in derived classes.
+    /// </summary>
+    /// <param name="props">The current props.</param>
+    /// <param name="state">The current state.</param>
+    public abstract void RenderCore(TProps props, TState state);
+}
+
+/// <summary>
+/// Base class for component props. Provides an optional <see cref="Children"/> collection
+/// for composing child components.
+/// </summary>
+public class ConsoleReactiveProps
+{
+    /// <summary>Gets the child components to render within this component.</summary>
+    public IReadOnlyList<ConsoleReactiveComponent> Children { get; init; } = [];
+}

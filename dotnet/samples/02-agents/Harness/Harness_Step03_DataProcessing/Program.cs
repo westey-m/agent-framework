@@ -106,5 +106,4 @@ AIAgent agent =
 // Run the interactive console session.
 await HarnessConsole.RunAgentAsync(
     agent,
-    title: "Data Processing Assistant",
     userPrompt: "Ask me to analyze the data files, produce summaries, or create output files.");

@@ -27,7 +27,7 @@ internal sealed class ModeCommandHandler : CommandHandler
     public override string? GetHelpText() => this._modeProvider is not null ? "/mode [plan|execute] (show or switch mode)" : null;
 
     /// <inheritdoc/>
-    public override async ValueTask<bool> TryHandleAsync(string input, AgentSession session, HarnessUXContainer ux)
+    public override async ValueTask<bool> TryHandleAsync(string input, AgentSession session, IUXStateDriver ux)
     {
         if (!input.StartsWith("/mode ", StringComparison.OrdinalIgnoreCase) && !input.Equals("/mode", StringComparison.OrdinalIgnoreCase))
         {

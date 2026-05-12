@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using Harness.ConsoleReactiveComponents;
 using Harness.Shared.Console.Commands;
 using Harness.Shared.Console.Observers;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 
 namespace Harness.Shared.Console;
 
@@ -15,14 +15,14 @@ public static class HarnessConsole
 {
     /// <summary>
     /// Runs an interactive console session with the specified agent.
-    /// Supports streaming output, tool call display, spinner animation,
-    /// optional planning UX with structured output, and the <c>/todos</c> command.
+    /// Constructs the reactive UI component and the <see cref="HarnessAgentRunner"/>,
+    /// wires them together, and awaits the runner's <see cref="HarnessAgentRunner.ShutdownTask"/>
+    /// (which completes when the user types <c>exit</c>).
     /// </summary>
     /// <param name="agent">The agent to interact with.</param>
-    /// <param name="title">The title displayed in the console header.</param>
-    /// <param name="userPrompt">A short prompt to the user, displayed below the title.</param>
+    /// <param name="userPrompt">A short prompt to the user, displayed as a placeholder in the input area.</param>
     /// <param name="options">Optional configuration options for the console session.</param>
-    public static async Task RunAgentAsync(AIAgent agent, string title, string userPrompt, HarnessConsoleOptions? options = null)
+    public static async Task RunAgentAsync(AIAgent agent, string userPrompt, HarnessConsoleOptions? options = null)
     {
         options ??= new();
 
@@ -46,189 +46,39 @@ public static class HarnessConsole
 
         AgentSession session = await agent.CreateSessionAsync();
 
-        using var ux = new HarnessUXContainer(
+        var observers = CreateObservers(options, modeProvider, session);
+
+        using var component = new HarnessAppComponent(
             placeholder: userPrompt,
             initialMode: modeProvider?.GetMode(session),
             inputEnabled: messageInjector is not null,
+            runnerFactory: ux => new HarnessAgentRunner(
+                agent: agent,
+                session: session,
+                modeProvider: modeProvider,
+                messageInjector: messageInjector,
+                options: options,
+                commandHandlers: commandHandlers,
+                observers: observers,
+                ux: ux),
             modeColors: options.ModeColors);
 
-        // Streaming-mode submissions are enqueued for injection; the queued display
-        // is then refreshed from the injector's current pending list.
-        ux.StreamingInputReceived += (sender, e) =>
+        // Trigger the initial render of the component now that state is seeded.
+        component.Render();
+
+        try
         {
-            if (messageInjector is null)
-            {
-                return;
-            }
-
-            messageInjector.EnqueueMessages(session, [new ChatMessage(ChatRole.User, e.Text)]);
-            ux.ShowQueuedMessages(messageInjector.GetPendingMessages(session));
-        };
-
-        var commandHelp = commandHandlers
-            .Select(h => h.GetHelpText())
-            .Where(t => t is not null)
-            .Append("exit (quit)")!;
-
-        ux.Initialize(title, commandHelp!, messageInjector is not null);
-
-        string userInput = await ux.WaitForInputAsync();
-
-        while (!string.IsNullOrWhiteSpace(userInput) && !userInput.Equals("exit", StringComparison.OrdinalIgnoreCase))
+            await component.Runner.ShutdownTask.ConfigureAwait(false);
+        }
+        finally
         {
-            ux.WriteUserInputEcho(userInput);
-
-            // Check command handlers first — first one to handle wins.
-            bool handled = false;
-            foreach (var handler in commandHandlers)
-            {
-                if (await handler.TryHandleAsync(userInput, session, ux).ConfigureAwait(false))
-                {
-                    handled = true;
-                    break;
-                }
-            }
-
-            if (!handled)
-            {
-                await RunAgentTurnAsync(agent, session, modeProvider, messageInjector, options, ux, userInput);
-            }
-
-            ux.CurrentMode = modeProvider?.GetMode(session);
-            userInput = await ux.WaitForInputAsync();
+            component.Deactivate();
         }
 
-        ux.Deactivate();
         System.Console.ResetColor();
+        System.Console.WriteLine(AnsiEscapes.EraseEntireScreen);
+        System.Console.WriteLine(AnsiEscapes.EraseScrollbackBuffer);
         System.Console.WriteLine("Goodbye!");
-    }
-
-    /// <summary>
-    /// Runs one or more agent invocations for a single user turn, using the current
-    /// observers. Re-invokes automatically for tool approvals and mode-driven follow-ups
-    /// (e.g., planning clarification loops).
-    /// </summary>
-    private static async Task RunAgentTurnAsync(
-        AIAgent agent,
-        AgentSession session,
-        AgentModeProvider? modeProvider,
-        MessageInjectingChatClient? messageInjector,
-        HarnessConsoleOptions options,
-        HarnessUXContainer ux,
-        string userInput)
-    {
-        IList<ChatMessage>? nextMessages = [new ChatMessage(ChatRole.User, userInput)];
-        IReadOnlyList<ChatMessage> lastPendingMessages = messageInjector?.GetPendingMessages(session) ?? [];
-
-        while (nextMessages is not null)
-        {
-            var observers = CreateObservers(options, modeProvider, session);
-
-            var runOptions = new AgentRunOptions();
-            foreach (var observer in observers)
-            {
-                observer.ConfigureRunOptions(runOptions);
-            }
-
-            ux.CurrentMode = modeProvider?.GetMode(session);
-            ux.BeginStreaming();
-            ux.BeginStreamingOutput();
-
-            try
-            {
-                await foreach (var update in agent.RunStreamingAsync(nextMessages, session, runOptions))
-                {
-                    // Update mode color if the mode changed during streaming.
-                    if (modeProvider is not null)
-                    {
-                        string currentMode = modeProvider.GetMode(session);
-                        if (currentMode != ux.CurrentMode)
-                        {
-                            ux.CurrentMode = currentMode;
-                        }
-                    }
-
-                    foreach (var content in update.Contents)
-                    {
-                        foreach (var observer in observers)
-                        {
-                            await observer.OnContentAsync(ux, content);
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(update.Text))
-                    {
-                        foreach (var observer in observers)
-                        {
-                            await observer.OnTextAsync(ux, update.Text);
-                        }
-                    }
-
-                    SyncQueuedMessageDisplay(messageInjector, session, ux, ref lastPendingMessages);
-                }
-            }
-            catch (Exception ex)
-            {
-                await ux.WriteInfoLineAsync($"❌ Stream error: {ex.GetType().Name}:\n{ex}", ConsoleColor.Red);
-            }
-
-            // Final sync after streaming — messages may have been consumed during the last iteration.
-            SyncQueuedMessageDisplay(messageInjector, session, ux, ref lastPendingMessages);
-
-            // Stop spinner before observer completions (which may prompt for input).
-            ux.StopSpinner();
-
-            // Close the streaming output to provide visual separation from observer output.
-            await ux.EndStreamingOutputAsync();
-
-            var combinedMessages = new List<ChatMessage>();
-            bool hasObserverMessages = false;
-            foreach (var observer in observers)
-            {
-                var messages = await observer.OnStreamCompleteAsync(ux, agent, session, options);
-                if (messages is { Count: > 0 })
-                {
-                    combinedMessages.AddRange(messages);
-                    hasObserverMessages = true;
-                }
-            }
-
-            await ux.WriteNoTextWarningAsync(hasFollowUpMessages: hasObserverMessages);
-
-            ux.EndStreaming();
-
-            nextMessages = combinedMessages.Count > 0 ? combinedMessages : null;
-        }
-    }
-
-    /// <summary>
-    /// Synchronizes the queued items display with the message injector's pending messages.
-    /// Messages that have been consumed (drained by the service) are echoed to the output
-    /// area as regular user-input entries.
-    /// </summary>
-    private static void SyncQueuedMessageDisplay(
-        MessageInjectingChatClient? messageInjector,
-        AgentSession session,
-        HarnessUXContainer ux,
-        ref IReadOnlyList<ChatMessage> lastPendingMessages)
-    {
-        if (messageInjector is null)
-        {
-            return;
-        }
-
-        var pending = messageInjector.GetPendingMessages(session);
-
-        // If previously pending messages exceed current pending count, some were consumed.
-        int consumedCount = lastPendingMessages.Count - pending.Count;
-        for (int i = 0; i < consumedCount && i < lastPendingMessages.Count; i++)
-        {
-            string text = lastPendingMessages[i].Text ?? string.Empty;
-            ux.WriteUserInputEcho(text);
-        }
-
-        lastPendingMessages = pending;
-        ux.ShowQueuedMessages(pending);
     }
 
     private static List<ConsoleObserver> CreateObservers(HarnessConsoleOptions options, AgentModeProvider? modeProvider, AgentSession session)

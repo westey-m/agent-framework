@@ -10,7 +10,7 @@ namespace Harness.Shared.Console.Observers;
 internal sealed class ErrorDisplayObserver : ConsoleObserver
 {
     /// <inheritdoc/>
-    public override async Task OnContentAsync(HarnessUXContainer ux, AIContent content)
+    public override async Task OnContentAsync(IUXStateDriver ux, AIContent content)
     {
         if (content is ErrorContent errorContent)
         {

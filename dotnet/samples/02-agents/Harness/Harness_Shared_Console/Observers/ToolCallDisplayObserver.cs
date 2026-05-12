@@ -11,7 +11,7 @@ namespace Harness.Shared.Console.Observers;
 internal sealed class ToolCallDisplayObserver : ConsoleObserver
 {
     /// <inheritdoc/>
-    public override async Task OnContentAsync(HarnessUXContainer ux, AIContent content)
+    public override async Task OnContentAsync(IUXStateDriver ux, AIContent content)
     {
         if (content is FunctionCallContent functionCall)
         {

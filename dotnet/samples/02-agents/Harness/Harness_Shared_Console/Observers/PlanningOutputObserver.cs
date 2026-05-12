@@ -9,8 +9,9 @@ namespace Harness.Shared.Console.Observers;
 
 /// <summary>
 /// Planning observer that configures structured output, collects streamed text,
-/// and deserializes it as a <see cref="PlanningResponse"/>. Renders clarification
-/// questions and approval prompts, and manages mode switching when the user approves a plan.
+/// and deserializes it as a <see cref="PlanningResponse"/>. After the stream completes,
+/// it returns one <see cref="FollowUpQuestion"/> per question to ask the user.
+/// Approval continuations also handle the mode switch when the user approves the plan.
 /// </summary>
 internal sealed class PlanningOutputObserver : ConsoleObserver
 {
@@ -33,7 +34,7 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
     }
 
     /// <inheritdoc/>
-    public override Task OnTextAsync(HarnessUXContainer ux, string text)
+    public override Task OnTextAsync(IUXStateDriver ux, string text)
     {
         // Collect text silently instead of displaying it.
         this._textCollector.Append(text);
@@ -41,8 +42,8 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
     }
 
     /// <inheritdoc/>
-    public override async Task<IList<ChatMessage>?> OnStreamCompleteAsync(
-        HarnessUXContainer ux,
+    public override async Task<IList<FollowUpAction>?> OnStreamCompleteAsync(
+        IUXStateDriver ux,
         AIAgent agent,
         AgentSession session,
         HarnessConsoleOptions options)
@@ -75,10 +76,9 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
             return null;
         }
 
-        // Render based on response type.
         if (planningResponse.Type == PlanningResponseType.Clarification)
         {
-            return AsUserMessages(await this.RenderClarificationsAndCollectResponsesAsync(ux, planningResponse));
+            return BuildClarificationActions(planningResponse);
         }
 
         if (planningResponse.Type == PlanningResponseType.Approval)
@@ -90,67 +90,81 @@ internal sealed class PlanningOutputObserver : ConsoleObserver
                 return null;
             }
 
-            string response = await this.RenderApprovalAndCollectResponseAsync(ux, question, options);
-            if (response == "Approved")
-            {
-                this._modeProvider.SetMode(session, options.ExecutionModeName!);
-
-                await ux.WriteInfoLineAsync($"✅ Switched to {options.ExecutionModeName} mode.",
-                    ModeColors.Get(options.ExecutionModeName, options.ModeColors));
-            }
-
-            return AsUserMessages(response);
+            return new List<FollowUpAction> { this.BuildApprovalAction(question, options, session) };
         }
 
         await ux.WriteInfoLineAsync($"(unexpected response type: {planningResponse.Type})", ConsoleColor.DarkYellow);
         return null;
     }
 
-    private static IList<ChatMessage>? AsUserMessages(string? text) =>
-        text is not null ? [new ChatMessage(ChatRole.User, text)] : null;
-
-    private async Task<string?> RenderClarificationsAndCollectResponsesAsync(HarnessUXContainer ux, PlanningResponse response)
+    private static List<FollowUpAction> BuildClarificationActions(PlanningResponse response)
     {
-        var answers = new List<string>();
+        var actions = new List<FollowUpAction>(response.Questions.Count);
 
         foreach (var question in response.Questions)
         {
-            string? answer;
+            string prompt = question.Message;
+
+            async Task<ChatMessage?> Continuation(string answer, IUXStateDriver ux)
+            {
+                await ux.WriteInfoLineAsync($"Q: {prompt}", ConsoleColor.Gray).ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(answer))
+                {
+                    await ux.WriteInfoLineAsync("A: (no answer)", ConsoleColor.DarkGray).ConfigureAwait(false);
+                    return null;
+                }
+
+                await ux.WriteInfoLineAsync($"A: {answer}", ConsoleColor.Green).ConfigureAwait(false);
+
+                string formatted = $"Q: {prompt}\nA: {answer}";
+                return new ChatMessage(ChatRole.User, formatted);
+            }
+
             if (question.Choices is { Count: > 0 })
             {
-                answer = await ux.ReadSelectionAsync(
-                    question.Message,
-                    question.Choices);
+                actions.Add(new ChoiceFollowUpQuestion(
+                    Prompt: prompt,
+                    Choices: question.Choices,
+                    AllowCustomText: true,
+                    Continuation: Continuation));
             }
             else
             {
-                answer = (await ux.ReadLineAsync(question.Message))?.Trim();
-            }
-
-            if (!string.IsNullOrWhiteSpace(answer))
-            {
-                answers.Add($"Q: {question.Message}\nA: {answer}");
+                actions.Add(new TextFollowUpQuestion(
+                    Prompt: prompt,
+                    Continuation: Continuation));
             }
         }
 
-        return answers.Count > 0 ? string.Join("\n\n", answers) : null;
+        return actions;
     }
 
-    private async Task<string> RenderApprovalAndCollectResponseAsync(HarnessUXContainer ux, PlanningQuestion question, HarnessConsoleOptions options)
+    private ChoiceFollowUpQuestion BuildApprovalAction(PlanningQuestion question, HarnessConsoleOptions options, AgentSession session)
     {
-        var choices = new List<string>
-        {
-            "Approve and switch to execute mode",
-        };
+        const string ApproveOption = "Approve and switch to execute mode";
+        var choices = new List<string> { ApproveOption };
 
-        string selection = await ux.ReadSelectionAsync(question.Message, choices);
+        return new ChoiceFollowUpQuestion(
+            Prompt: question.Message,
+            Choices: choices,
+            AllowCustomText: true,
+            Continuation: async (selection, ux) =>
+            {
+                await ux.WriteInfoLineAsync($"Q: {question.Message}", ConsoleColor.Gray).ConfigureAwait(false);
+                await ux.WriteInfoLineAsync($"A: {selection}", ConsoleColor.Green).ConfigureAwait(false);
 
-        if (selection == choices[0])
-        {
-            return "Approved";
-        }
+                if (selection == ApproveOption)
+                {
+                    this._modeProvider.SetMode(session, options.ExecutionModeName!);
+                    await ux.WriteInfoLineAsync(
+                        $"✅ Switched to {options.ExecutionModeName} mode.",
+                        ModeColors.Get(options.ExecutionModeName, options.ModeColors)).ConfigureAwait(false);
+                    return new ChatMessage(ChatRole.User, "Approved");
+                }
 
-        // Custom freeform input — treat as suggested changes.
-        return selection;
+                // Custom freeform input — treat as suggested changes.
+                return new ChatMessage(ChatRole.User, selection);
+            });
     }
 }

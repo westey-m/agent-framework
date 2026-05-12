@@ -24,7 +24,7 @@ internal sealed class UsageDisplayObserver : ConsoleObserver
     }
 
     /// <inheritdoc/>
-    public override Task OnContentAsync(HarnessUXContainer ux, AIContent content)
+    public override Task OnContentAsync(IUXStateDriver ux, AIContent content)
     {
         if (content is UsageContent usage)
         {

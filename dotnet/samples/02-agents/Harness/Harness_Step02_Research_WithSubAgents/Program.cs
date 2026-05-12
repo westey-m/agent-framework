@@ -102,5 +102,4 @@ AIAgent parentAgent =
 // Run the interactive console session.
 await HarnessConsole.RunAgentAsync(
     parentAgent,
-    title: "Stock Price Researcher (SubAgents Demo)",
     userPrompt: "Enter a list of stock tickers (e.g., BAC, MSFT, BA):");

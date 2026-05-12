@@ -66,7 +66,7 @@ public sealed class HarnessAgent : DelegatingAIAgent
     /// </param>
     /// <param name="maxOutputTokens">
     /// The maximum number of output tokens the model can generate per response (e.g., 128,000 for gpt-5.4).
-    /// Used to configure the compaction strategy.
+    /// Used to configure the compaction strategy and to limit the model's output.
     /// </param>
     /// <param name="options">
     /// Optional configuration options for the agent, including instructions override, tools,

@@ -315,27 +315,39 @@ public class HarnessAgentTests
     #region ChatOptions and Tools
 
     /// <summary>
-    /// Verify that tools from ChatOptions are preserved.
+    /// Verify that tools from ChatOptions are passed to the model during invocation.
     /// </summary>
     [Fact]
-    public void ChatOptions_ToolsArePreserved()
+    public async Task ChatOptions_ToolsArePreservedAsync()
     {
         // Arrange
-        var chatClient = new Mock<IChatClient>().Object;
         var tool = AIFunctionFactory.Create(() => "test", "TestTool");
+        var mockClient = new Mock<IChatClient>();
+        ChatOptions? capturedOptions = null;
+        mockClient
+            .Setup(c => c.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions?, CancellationToken>((_, opts, _) => capturedOptions = opts)
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Done")));
 
-        // Act
-        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, new HarnessAgentOptions
+        var agent = new HarnessAgent(mockClient.Object, TestMaxContextWindowTokens, TestMaxOutputTokens, new HarnessAgentOptions
         {
             ChatOptions = new ChatOptions
             {
                 Tools = [tool],
             },
         });
-        var innerAgent = agent.GetService<ChatClientAgent>();
+        var session = await agent.CreateSessionAsync();
 
-        // Assert
-        Assert.NotNull(innerAgent);
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert — verify the tool was included in the ChatOptions passed to the model.
+        Assert.NotNull(capturedOptions);
+        Assert.NotNull(capturedOptions!.Tools);
+        Assert.Contains(capturedOptions.Tools, t => t == tool);
     }
 
     /// <summary>

@@ -57,7 +57,8 @@ public sealed class HarnessAgentOptions
     /// Gets or sets additional <see cref="AIContextProvider"/> instances to include in the agent pipeline.
     /// </summary>
     /// <remarks>
-    /// These providers are merged alongside the always-included <see cref="Compaction.CompactionProvider"/>.
+    /// These providers are passed to the underlying <see cref="ChatClientAgent"/> via
+    /// <see cref="ChatClientAgentOptions.AIContextProviders"/>.
     /// </remarks>
     public IEnumerable<AIContextProvider>? AIContextProviders { get; set; }
 }

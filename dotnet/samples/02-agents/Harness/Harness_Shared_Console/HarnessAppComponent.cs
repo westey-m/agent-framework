@@ -47,7 +47,7 @@ public sealed class InputSubmittedEventArgs : EventArgs
 /// <summary>
 /// Props for <see cref="HarnessAppComponent"/>.
 /// </summary>
-public class HarnessAppComponentProps : ConsoleReactiveProps
+public record HarnessAppComponentProps : ConsoleReactiveProps
 {
     /// <summary>Gets or sets the list selection choices (for ListSelection mode).</summary>
     public IReadOnlyList<string> Items { get; set; } = Array.Empty<string>();
@@ -101,7 +101,7 @@ public class HarnessAppComponentProps : ConsoleReactiveProps
 /// <summary>
 /// Internal state for <see cref="HarnessAppComponent"/>.
 /// </summary>
-public record HarnessAppComponentState
+public record HarnessAppComponentState : ConsoleReactiveState
 {
     /// <summary>Gets the selected index in list selection mode.</summary>
     public int SelectedIndex { get; init; }
@@ -111,6 +111,12 @@ public record HarnessAppComponentState
 
     /// <summary>Gets the current text being typed into the list's custom text option.</summary>
     public string ListInputText { get; init; } = "";
+
+    /// <summary>Gets the current console width in columns.</summary>
+    public int ConsoleWidth { get; init; }
+
+    /// <summary>Gets the current console height in rows.</summary>
+    public int ConsoleHeight { get; init; }
 }
 
 /// <summary>
@@ -130,6 +136,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
     private readonly AgentModeAndHelp _modeAndHelp = new();
     private readonly Func<object, string> _renderItem;
     private bool _resizedSinceLastRender;
+    private bool _deactivated;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HarnessAppComponent"/> class.
@@ -141,7 +148,11 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
         this._textScrollPanel = new TextScrollPanel(renderScrollItem);
         this._textPanel = new TextPanel(renderScrollItem);
         this._queuedPanel = new TextPanel(renderScrollItem);
-        this.State = new HarnessAppComponentState();
+        this.State = new HarnessAppComponentState
+        {
+            ConsoleWidth = System.Console.WindowWidth,
+            ConsoleHeight = System.Console.WindowHeight,
+        };
         KeyEventListener.Instance.KeyPressed += this.OnKeyPressed;
         ConsoleResizeListener.Instance.ConsoleResized += this.OnConsoleResized;
     }
@@ -160,9 +171,16 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
 
     /// <summary>
     /// Deactivates the component, resetting the scroll region and unsubscribing from events.
+    /// This method is idempotent and safe to call multiple times.
     /// </summary>
     public void Deactivate()
     {
+        if (this._deactivated)
+        {
+            return;
+        }
+
+        this._deactivated = true;
         this._agentStatus.Dispose();
         KeyEventListener.Instance.KeyPressed -= this.OnKeyPressed;
         ConsoleResizeListener.Instance.ConsoleResized -= this.OnConsoleResized;
@@ -186,7 +204,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
     {
         if (disposing)
         {
-            this._agentStatus.Dispose();
+            this.Deactivate();
         }
     }
 
@@ -306,7 +324,11 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
     private void OnConsoleResized(object? sender, ConsoleResizeEventArgs e)
     {
         this._resizedSinceLastRender = true;
-        this.Render();
+        this.SetState(this.State! with
+        {
+            ConsoleWidth = e.NewWidth,
+            ConsoleHeight = e.NewHeight,
+        });
     }
 
     /// <inheritdoc />
@@ -368,8 +390,8 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
                 };
             }
 
-            bottomChildHeight = TextInput.CalculateHeight(textInputProps, System.Console.WindowWidth);
-            this._textInput.Width = System.Console.WindowWidth;
+            bottomChildHeight = TextInput.CalculateHeight(textInputProps, state.ConsoleWidth);
+            this._textInput.Width = state.ConsoleWidth;
             this._textInput.Height = bottomChildHeight;
             this._textInput.Props = textInputProps;
             bottomChild = this._textInput;
@@ -383,8 +405,8 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
                 Placeholder = props.Placeholder,
             };
 
-            bottomChildHeight = TextInput.CalculateHeight(textInputProps, System.Console.WindowWidth);
-            this._textInput.Width = System.Console.WindowWidth;
+            bottomChildHeight = TextInput.CalculateHeight(textInputProps, state.ConsoleWidth);
+            this._textInput.Width = state.ConsoleWidth;
             this._textInput.Height = bottomChildHeight;
             this._textInput.Props = textInputProps;
             bottomChild = this._textInput;
@@ -392,7 +414,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
 
         var ruleProps = new TopBottomRuleProps
         {
-            Width = System.Console.WindowWidth,
+            Width = state.ConsoleWidth,
             Color = props.ModeColor,
             Children = [bottomChild],
         };
@@ -415,7 +437,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
         int modeAndHelpHeight = AgentModeAndHelp.CalculateHeight(modeAndHelpProps);
 
         int ruleHeight = TopBottomRule.CalculateHeight(ruleProps);
-        int scrollBottom = System.Console.WindowHeight - ruleHeight - textPanelHeight - agentStatusHeight - queuedPanelHeight - modeAndHelpHeight;
+        int scrollBottom = Math.Max(1, state.ConsoleHeight - ruleHeight - textPanelHeight - agentStatusHeight - queuedPanelHeight - modeAndHelpHeight);
 
         // If scroll region changed or a clear is needed, reset everything
         if (this._resizedSinceLastRender || (this.ScrollRegionBottom != 0 && scrollBottom != this.ScrollRegionBottom))
@@ -437,7 +459,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
 
         this._textScrollPanel.X = 1;
         this._textScrollPanel.Y = 1;
-        this._textScrollPanel.Width = System.Console.WindowWidth;
+        this._textScrollPanel.Width = state.ConsoleWidth;
         this._textScrollPanel.Height = scrollBottom;
         this._textScrollPanel.Props = new TextScrollPanelProps
         {
@@ -448,7 +470,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
         // Render the text panel for the last (dynamic) item just below the scroll region
         this._textPanel.X = 1;
         this._textPanel.Y = scrollBottom + 1;
-        this._textPanel.Width = System.Console.WindowWidth;
+        this._textPanel.Width = state.ConsoleWidth;
         this._textPanel.Height = textPanelHeight;
         this._textPanel.Props = new TextPanelProps
         {
@@ -460,7 +482,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
         int queuedPanelY = scrollBottom + textPanelHeight + 1;
         this._queuedPanel.X = 1;
         this._queuedPanel.Y = queuedPanelY;
-        this._queuedPanel.Width = System.Console.WindowWidth;
+        this._queuedPanel.Width = state.ConsoleWidth;
         this._queuedPanel.Height = queuedPanelHeight;
         this._queuedPanel.Props = new TextPanelProps
         {
@@ -472,7 +494,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
         int agentStatusY = queuedPanelY + queuedPanelHeight;
         this._agentStatus.X = 1;
         this._agentStatus.Y = agentStatusY;
-        this._agentStatus.Width = System.Console.WindowWidth;
+        this._agentStatus.Width = state.ConsoleWidth;
         this._agentStatus.Height = agentStatusHeight;
         this._agentStatus.Props = agentStatusProps;
         this._agentStatus.Render();
@@ -487,7 +509,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
         int modeAndHelpY = this._rule.Y + ruleHeight;
         this._modeAndHelp.X = 1;
         this._modeAndHelp.Y = modeAndHelpY;
-        this._modeAndHelp.Width = System.Console.WindowWidth;
+        this._modeAndHelp.Width = state.ConsoleWidth;
         this._modeAndHelp.Height = modeAndHelpHeight;
         this._modeAndHelp.Props = modeAndHelpProps;
         this._modeAndHelp.Render();
@@ -502,7 +524,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<HarnessAppComponentP
             || (props.Mode == BottomPanelMode.Streaming && props.InputEnabled))
         {
             int promptLength = props.Prompt.Length;
-            int textWidth = System.Console.WindowWidth - promptLength;
+            int textWidth = state.ConsoleWidth - promptLength;
             int textLength = state.InputText.Length;
 
             int textInputY = this._rule.Y + 1;

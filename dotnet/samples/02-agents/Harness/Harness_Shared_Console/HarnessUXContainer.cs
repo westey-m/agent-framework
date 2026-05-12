@@ -46,6 +46,7 @@ public sealed class HarnessUXContainer : IDisposable
     private readonly IReadOnlyDictionary<string, ConsoleColor>? _modeColors;
     private readonly List<object> _outputItems = [];
     private readonly HarnessAppComponent _appComponent;
+    private readonly object _outputLock = new();
 
     private TaskCompletionSource<string>? _pendingInputTcs;
     private OutputEntryType? _lastEntryType;
@@ -102,8 +103,11 @@ public sealed class HarnessUXContainer : IDisposable
         set
         {
             this._currentMode = value;
-            this._appComponent.Props!.ModeColor = ModeColors.Get(value, this._modeColors);
-            this._appComponent.Props.ModeText = value;
+            this._appComponent.Props = this._appComponent.Props! with
+            {
+                ModeColor = ModeColors.Get(value, this._modeColors),
+                ModeText = value,
+            };
             this._appComponent.Render();
         }
     }
@@ -118,17 +122,19 @@ public sealed class HarnessUXContainer : IDisposable
     public void Initialize(string title, IEnumerable<string> commandHelpTexts, bool messageInjectionActive)
     {
         // Set the help text on the mode-and-help bar (persists below the rule).
-        this._appComponent.Props!.HelpText = string.Join(", ", commandHelpTexts);
-        this._appComponent.Props.ModeText = this._currentMode;
+        this._appComponent.Props = this._appComponent.Props! with
+        {
+            HelpText = string.Join(", ", commandHelpTexts),
+            ModeText = this._currentMode,
+        };
 
         System.Console.Write(AnsiEscapes.EraseEntireScreen);
         System.Console.Write(AnsiEscapes.EraseScrollbackBuffer);
         this._appComponent.Render();
 
-        this._outputItems.Add(new OutputEntry(OutputEntryType.InfoLine, $"=== {title} ===\n", ConsoleColor.White));
-        this._outputItems.Add(new OutputEntry(OutputEntryType.InfoLine, "\n"));
-
-        this._appComponent.Render();
+        this.AppendOutputEntries(
+            new OutputEntry(OutputEntryType.InfoLine, $"=== {title} ===\n", ConsoleColor.White),
+            new OutputEntry(OutputEntryType.InfoLine, "\n"));
     }
 
     /// <summary>
@@ -141,8 +147,11 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public void BeginStreaming()
     {
-        this._appComponent.Props!.Mode = BottomPanelMode.Streaming;
-        this._appComponent.Props.ShowSpinner = true;
+        this._appComponent.Props = this._appComponent.Props! with
+        {
+            Mode = BottomPanelMode.Streaming,
+            ShowSpinner = true,
+        };
         this._appComponent.Render();
     }
 
@@ -152,7 +161,7 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public void StopSpinner()
     {
-        this._appComponent.Props!.ShowSpinner = false;
+        this._appComponent.Props = this._appComponent.Props! with { ShowSpinner = false };
         this._appComponent.Render();
     }
 
@@ -161,8 +170,11 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public void EndStreaming()
     {
-        this._appComponent.Props!.Mode = BottomPanelMode.TextInput;
-        this._appComponent.Props.ShowSpinner = false;
+        this._appComponent.Props = this._appComponent.Props! with
+        {
+            Mode = BottomPanelMode.TextInput,
+            ShowSpinner = false,
+        };
         this._appComponent.Render();
     }
 
@@ -180,7 +192,7 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public void SetUsageText(string usageText)
     {
-        this._appComponent.Props!.UsageText = usageText;
+        this._appComponent.Props = this._appComponent.Props! with { UsageText = usageText };
         this._appComponent.Render();
     }
 
@@ -189,7 +201,7 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public void ClearUsageText()
     {
-        this._appComponent.Props!.UsageText = null;
+        this._appComponent.Props = this._appComponent.Props! with { UsageText = null };
         this._appComponent.Render();
     }
 
@@ -205,7 +217,7 @@ public sealed class HarnessUXContainer : IDisposable
             newQueued.Add(new OutputEntry(OutputEntryType.UserInput, $"  💬 {text}\n", ConsoleColor.DarkGray));
         }
 
-        this._appComponent.Props!.QueuedItems = newQueued;
+        this._appComponent.Props = this._appComponent.Props! with { QueuedItems = newQueued };
         this._appComponent.Render();
     }
 
@@ -216,12 +228,10 @@ public sealed class HarnessUXContainer : IDisposable
     /// <param name="text">The user-entered text.</param>
     public void WriteUserInputEcho(string text)
     {
-        this._outputItems.Add(new OutputEntry(
+        this.AppendOutputEntries(new OutputEntry(
             OutputEntryType.UserInput,
             $"\nYou: {text}\n",
             ConsoleColor.Green));
-        this._lastEntryType = OutputEntryType.UserInput;
-        this._appComponent.Render();
     }
 
     /// <summary>
@@ -242,14 +252,12 @@ public sealed class HarnessUXContainer : IDisposable
         string prefix = this._lastEntryType is OutputEntryType.StreamingText or OutputEntryType.StreamFooter
             ? "\n\n  "
             : "  ";
-        this._lastEntryType = OutputEntryType.InfoLine;
 
         string fullText = newLine ? prefix + text + "\n" : prefix + text;
-        this._outputItems.Add(new OutputEntry(
+        this.AppendOutputEntries(new OutputEntry(
             OutputEntryType.InfoLine,
             fullText,
             color ?? ModeColors.Get(this.CurrentMode, this._modeColors)));
-        this._appComponent.Render();
         return Task.CompletedTask;
     }
 
@@ -259,24 +267,32 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public Task WriteTextAsync(string text, ConsoleColor? color = null)
     {
-        this._lastEntryType = OutputEntryType.StreamingText;
-        this._hasReceivedAnyText = true;
-
-        ConsoleColor effectiveColor = color ?? ModeColors.Get(this.CurrentMode, this._modeColors);
-
-        if (this._currentStreamingEntry is not null)
+        lock (this._outputLock)
         {
-            this._currentStreamingEntry = this._currentStreamingEntry with
+            this._lastEntryType = OutputEntryType.StreamingText;
+            this._hasReceivedAnyText = true;
+
+            ConsoleColor effectiveColor = color ?? ModeColors.Get(this.CurrentMode, this._modeColors);
+
+            if (this._currentStreamingEntry is not null)
             {
-                Text = this._currentStreamingEntry.Text + text,
+                this._currentStreamingEntry = this._currentStreamingEntry with
+                {
+                    Text = this._currentStreamingEntry.Text + text,
+                };
+                this._outputItems[^1] = this._currentStreamingEntry;
+            }
+            else
+            {
+                const string Prefix = "\n";
+                this._currentStreamingEntry = new OutputEntry(OutputEntryType.StreamingText, Prefix + text, effectiveColor);
+                this._outputItems.Add(this._currentStreamingEntry);
+            }
+
+            this._appComponent.Props = this._appComponent.Props! with
+            {
+                ScrollItems = new List<object>(this._outputItems),
             };
-            this._outputItems[^1] = this._currentStreamingEntry;
-        }
-        else
-        {
-            const string Prefix = "\n";
-            this._currentStreamingEntry = new OutputEntry(OutputEntryType.StreamingText, Prefix + text, effectiveColor);
-            this._outputItems.Add(this._currentStreamingEntry);
         }
 
         this._appComponent.Render();
@@ -289,9 +305,17 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public Task EndStreamingOutputAsync()
     {
-        this._outputItems.Add(new OutputEntry(OutputEntryType.StreamFooter, "\n"));
-        this._currentStreamingEntry = null;
-        this._lastEntryType = OutputEntryType.StreamFooter;
+        lock (this._outputLock)
+        {
+            this._outputItems.Add(new OutputEntry(OutputEntryType.StreamFooter, "\n"));
+            this._currentStreamingEntry = null;
+            this._lastEntryType = OutputEntryType.StreamFooter;
+            this._appComponent.Props = this._appComponent.Props! with
+            {
+                ScrollItems = new List<object>(this._outputItems),
+            };
+        }
+
         this._appComponent.Render();
         return Task.CompletedTask;
     }
@@ -305,11 +329,10 @@ public sealed class HarnessUXContainer : IDisposable
     {
         if (!this._hasReceivedAnyText && !hasFollowUpMessages)
         {
-            this._outputItems.Add(new OutputEntry(
+            this.AppendOutputEntries(new OutputEntry(
                 OutputEntryType.StreamFooter,
                 "  (no text response from agent)\n",
                 ConsoleColor.DarkYellow));
-            this._appComponent.Render();
         }
 
         return Task.CompletedTask;
@@ -324,18 +347,21 @@ public sealed class HarnessUXContainer : IDisposable
         if (prompt is not null)
         {
             ConsoleColor ruleColor = ModeColors.Get(this.CurrentMode, this._modeColors);
-            this._outputItems.Add(new OutputEntry(OutputEntryType.InfoLine, "\n", ruleColor));
-            this._outputItems.Add(new OutputEntry(
-                OutputEntryType.InfoLine,
-                $"  {prompt}",
-                promptColor ?? ruleColor));
+            this.AppendOutputEntries(
+                new OutputEntry(OutputEntryType.InfoLine, "\n", ruleColor),
+                new OutputEntry(OutputEntryType.InfoLine, $"  {prompt}", promptColor ?? ruleColor));
         }
 
-        this._appComponent.Props!.Mode = BottomPanelMode.TextInput;
+        this._appComponent.Props = this._appComponent.Props! with { Mode = BottomPanelMode.TextInput };
         this._appComponent.Render();
 
         string input = await this.WaitForInputAsync();
-        this._lastEntryType = OutputEntryType.UserInput;
+
+        this.AppendOutputEntries(new OutputEntry(
+            OutputEntryType.UserInput,
+            $"\nYou: {input}\n",
+            ConsoleColor.Green));
+
         return input;
     }
 
@@ -347,26 +373,29 @@ public sealed class HarnessUXContainer : IDisposable
     /// </summary>
     public async Task<string> ReadSelectionAsync(string title, IList<string> choices)
     {
-        this._appComponent.Props!.Mode = BottomPanelMode.ListSelection;
-        this._appComponent.Props.Items = choices.ToList();
-        this._appComponent.Props.ListTitle = title;
-        this._appComponent.Props.ListCustomTextPlaceholder = "✏️  Type a custom response...";
+        this._appComponent.Props = this._appComponent.Props! with
+        {
+            Mode = BottomPanelMode.ListSelection,
+            Items = choices.ToList(),
+            ListTitle = title,
+            ListCustomTextPlaceholder = "✏️  Type a custom response...",
+        };
         this._appComponent.Render();
 
         string selection = await this.WaitForInputAsync();
 
-        this._appComponent.Props.Mode = BottomPanelMode.TextInput;
-        this._outputItems.Add(new OutputEntry(
-            OutputEntryType.InfoLine,
-            $"\n  {title}\n",
-            ModeColors.Get(this.CurrentMode, this._modeColors)));
-        this._outputItems.Add(new OutputEntry(
-            OutputEntryType.UserInput,
-            $"\nYou: {selection}\n",
-            ConsoleColor.Green));
-        this._appComponent.Render();
+        this._appComponent.Props = this._appComponent.Props with { Mode = BottomPanelMode.TextInput };
 
-        this._lastEntryType = OutputEntryType.UserInput;
+        this.AppendOutputEntries(
+            new OutputEntry(
+                OutputEntryType.InfoLine,
+                $"\n  {title}\n",
+                ModeColors.Get(this.CurrentMode, this._modeColors)),
+            new OutputEntry(
+                OutputEntryType.UserInput,
+                $"\nYou: {selection}\n",
+                ConsoleColor.Green));
+
         return selection;
     }
 
@@ -397,6 +426,7 @@ public sealed class HarnessUXContainer : IDisposable
     public void Dispose()
     {
         this._appComponent.InputSubmitted -= this.OnInputSubmitted;
+        this._appComponent.Deactivate();
         this._appComponent.Dispose();
     }
 
@@ -417,5 +447,32 @@ public sealed class HarnessUXContainer : IDisposable
         }
 
         return entry.Text;
+    }
+
+    /// <summary>
+    /// Appends one or more output entries to the output list under lock,
+    /// updates <see cref="_lastEntryType"/> to the last entry's type, and renders.
+    /// </summary>
+    private void AppendOutputEntries(params OutputEntry[] entries)
+    {
+        lock (this._outputLock)
+        {
+            foreach (OutputEntry entry in entries)
+            {
+                this._outputItems.Add(entry);
+            }
+
+            if (entries.Length > 0)
+            {
+                this._lastEntryType = entries[^1].Type;
+            }
+
+            this._appComponent.Props = this._appComponent.Props! with
+            {
+                ScrollItems = new List<object>(this._outputItems),
+            };
+        }
+
+        this._appComponent.Render();
     }
 }

@@ -7,7 +7,7 @@ namespace Harness.ConsoleReactiveComponents;
 /// <summary>
 /// Props for <see cref="TopBottomRule"/>.
 /// </summary>
-public class TopBottomRuleProps : ConsoleReactiveProps
+public record TopBottomRuleProps : ConsoleReactiveProps
 {
     /// <summary>Gets the width of the horizontal rules in characters.</summary>
     public int Width { get; init; }
@@ -20,7 +20,7 @@ public class TopBottomRuleProps : ConsoleReactiveProps
 /// A component that renders a top and bottom horizontal rule (─) with children
 /// stacked vertically between them.
 /// </summary>
-public class TopBottomRule : ConsoleReactiveComponent<TopBottomRuleProps, object>
+public class TopBottomRule : ConsoleReactiveComponent<TopBottomRuleProps, ConsoleReactiveState>
 {
     /// <summary>
     /// Calculates the total height including the top rule, children, and bottom rule.
@@ -40,7 +40,7 @@ public class TopBottomRule : ConsoleReactiveComponent<TopBottomRuleProps, object
     }
 
     /// <inheritdoc />
-    public override void RenderCore(TopBottomRuleProps props, object state)
+    public override void RenderCore(TopBottomRuleProps props, ConsoleReactiveState state)
     {
         int ruleWidth = props.Width;
         string rule = new('─', ruleWidth);

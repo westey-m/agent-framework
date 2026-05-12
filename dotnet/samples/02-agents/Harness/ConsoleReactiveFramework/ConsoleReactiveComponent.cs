@@ -36,9 +36,12 @@ public abstract class ConsoleReactiveComponent
 /// <typeparam name="TProps">The type of the component's props (external configuration).</typeparam>
 /// <typeparam name="TState">The type of the component's internal state.</typeparam>
 public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactiveComponent
+    where TProps : ConsoleReactiveProps
+    where TState : ConsoleReactiveState
 {
     private readonly object _renderLock = new();
-    private TProps? _lastProps;
+    private TProps? _lastRenderedProps;
+    private TState? _lastRenderedState;
 
     /// <summary>Gets or sets the component's props (external configuration).</summary>
     public TProps? Props { get; set; }
@@ -57,21 +60,29 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
     }
 
     /// <summary>
-    /// Renders the component if props or state have changed since the last render.
+    /// Renders the component using the current props and state.
     /// Uses a lock to prevent concurrent renders from multiple sources.
+    /// Skips rendering if neither props nor state have changed since the last render.
     /// </summary>
     public override void Render()
     {
         lock (this._renderLock)
         {
-            if (this.Props != null && this.Props.Equals(this._lastProps) && this.State != null && this.State.Equals(this._lastProps))
+            if (this.Props is null)
             {
-                // Skip rendering if props and state haven't changed
                 return;
             }
 
-            this._lastProps = this.Props;
-            this.RenderCore(this.Props!, this.State!);
+            if (ReferenceEquals(this.Props, this._lastRenderedProps)
+                && ReferenceEquals(this.State, this._lastRenderedState))
+            {
+                return;
+            }
+
+            this.RenderCore(this.Props, this.State!);
+
+            this._lastRenderedProps = this.Props;
+            this._lastRenderedState = this.State;
         }
     }
 
@@ -84,11 +95,16 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
 }
 
 /// <summary>
-/// Base class for component props. Provides an optional <see cref="Children"/> collection
+/// Base record for component props. Provides an optional <see cref="Children"/> collection
 /// for composing child components.
 /// </summary>
-public class ConsoleReactiveProps
+public record ConsoleReactiveProps
 {
     /// <summary>Gets the child components to render within this component.</summary>
     public IReadOnlyList<ConsoleReactiveComponent> Children { get; init; } = [];
 }
+
+/// <summary>
+/// Base record for component state.
+/// </summary>
+public record ConsoleReactiveState;

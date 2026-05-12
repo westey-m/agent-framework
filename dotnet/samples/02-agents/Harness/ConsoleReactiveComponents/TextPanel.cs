@@ -7,7 +7,7 @@ namespace Harness.ConsoleReactiveComponents;
 /// <summary>
 /// Props for <see cref="TextPanel"/>.
 /// </summary>
-public class TextPanelProps : ConsoleReactiveProps
+public record TextPanelProps : ConsoleReactiveProps
 {
     /// <summary>Gets the items to render in the panel.</summary>
     public IReadOnlyList<object> Items { get; init; } = [];
@@ -19,7 +19,7 @@ public class TextPanelProps : ConsoleReactiveProps
 /// re-rendered on each update. If the component's <see cref="ConsoleReactiveComponent.Height"/>
 /// exceeds the number of output lines, leftover lines are erased.
 /// </summary>
-public class TextPanel : ConsoleReactiveComponent<TextPanelProps, object?>
+public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiveState>
 {
     private readonly Func<object, string> _renderItem;
 
@@ -51,7 +51,7 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, object?>
     }
 
     /// <inheritdoc />
-    public override void RenderCore(TextPanelProps props, object? state)
+    public override void RenderCore(TextPanelProps props, ConsoleReactiveState state)
     {
         int currentRow = 0;
 

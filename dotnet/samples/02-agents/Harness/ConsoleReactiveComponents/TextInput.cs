@@ -7,7 +7,7 @@ namespace Harness.ConsoleReactiveComponents;
 /// <summary>
 /// Props for <see cref="TextInput"/>.
 /// </summary>
-public class TextInputProps : ConsoleReactiveProps
+public record TextInputProps : ConsoleReactiveProps
 {
     /// <summary>Gets the prompt string displayed on the left (e.g. "&gt; " or "user &gt; ").</summary>
     public string Prompt { get; init; } = "> ";
@@ -24,7 +24,7 @@ public class TextInputProps : ConsoleReactiveProps
 /// where continuation lines are indented to align with the text start position
 /// (i.e. the column after the prompt).
 /// </summary>
-public class TextInput : ConsoleReactiveComponent<TextInputProps, object>
+public class TextInput : ConsoleReactiveComponent<TextInputProps, ConsoleReactiveState>
 {
     /// <summary>
     /// Calculates the height (in rows) required to render the prompt and text
@@ -55,7 +55,7 @@ public class TextInput : ConsoleReactiveComponent<TextInputProps, object>
     }
 
     /// <inheritdoc />
-    public override void RenderCore(TextInputProps props, object state)
+    public override void RenderCore(TextInputProps props, ConsoleReactiveState state)
     {
         int promptLength = props.Prompt.Length;
         int textWidth = this.Width - promptLength;

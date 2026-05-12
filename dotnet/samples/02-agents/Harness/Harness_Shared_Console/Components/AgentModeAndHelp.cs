@@ -8,7 +8,7 @@ namespace Harness.Shared.Console.Components;
 /// <summary>
 /// Props for <see cref="AgentModeAndHelp"/>.
 /// </summary>
-public class AgentModeAndHelpProps : ConsoleReactiveProps
+public record AgentModeAndHelpProps : ConsoleReactiveProps
 {
     /// <summary>Gets or sets the current mode name (e.g. "plan", "execute"), or <see langword="null"/> if no mode is active.</summary>
     public string? Mode { get; set; }
@@ -24,7 +24,7 @@ public class AgentModeAndHelpProps : ConsoleReactiveProps
 /// A component that renders a single fixed line below the bottom rule showing
 /// the current agent mode (in the mode colour) and available commands (in dark grey).
 /// </summary>
-public class AgentModeAndHelp : ConsoleReactiveComponent<AgentModeAndHelpProps, object?>
+public class AgentModeAndHelp : ConsoleReactiveComponent<AgentModeAndHelpProps, ConsoleReactiveState>
 {
     /// <summary>
     /// Calculates the height of the component.
@@ -35,7 +35,7 @@ public class AgentModeAndHelp : ConsoleReactiveComponent<AgentModeAndHelpProps, 
         (props.Mode is not null || !string.IsNullOrEmpty(props.HelpText)) ? 1 : 0;
 
     /// <inheritdoc />
-    public override void RenderCore(AgentModeAndHelpProps props, object? state)
+    public override void RenderCore(AgentModeAndHelpProps props, ConsoleReactiveState state)
     {
         if (props.Mode is null && string.IsNullOrEmpty(props.HelpText))
         {

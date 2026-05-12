@@ -17,7 +17,7 @@ public enum BottomPanelMode
     TextInput
 }
 
-public class AppComponentProps : ConsoleReactiveProps
+public record AppComponentProps : ConsoleReactiveProps
 {
     public IReadOnlyList<string> Items { get; init; } = Array.Empty<string>();
     public IReadOnlyList<object> ScrollItems { get; init; } = [];
@@ -44,7 +44,7 @@ public class AppComponentProps : ConsoleReactiveProps
 /// <summary>
 /// Internal state for the <see cref="AppComponent"/>.
 /// </summary>
-public record AppComponentState
+public record AppComponentState : ConsoleReactiveState
 {
     /// <summary>Gets the selected index in list selection mode.</summary>
     public int SelectedIndex { get; init; }

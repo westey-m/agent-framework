@@ -9,7 +9,7 @@ namespace Harness.ConsoleReactiveComponents;
 /// The selected item is indicated with a "&gt;" prefix and rendered in the highlight color.
 /// Optionally includes a title above the list and a custom text input option at the bottom.
 /// </summary>
-public class ListSelection : ConsoleReactiveComponent<ListSelectionProps, object>
+public class ListSelection : ConsoleReactiveComponent<ListSelectionProps, ConsoleReactiveState>
 {
     /// <summary>
     /// Calculates the height (in rows) required to render the list,
@@ -30,7 +30,7 @@ public class ListSelection : ConsoleReactiveComponent<ListSelectionProps, object
     }
 
     /// <inheritdoc />
-    public override void RenderCore(ListSelectionProps props, object state)
+    public override void RenderCore(ListSelectionProps props, ConsoleReactiveState state)
     {
         int row = 0;
 
@@ -129,7 +129,7 @@ public class ListSelection : ConsoleReactiveComponent<ListSelectionProps, object
 /// <summary>
 /// Props for <see cref="ListSelection"/>.
 /// </summary>
-public class ListSelectionProps : ConsoleReactiveProps
+public record ListSelectionProps : ConsoleReactiveProps
 {
     /// <summary>Gets the title text displayed above the list items. May contain newlines for multi-line titles.</summary>
     public string? Title { get; init; }

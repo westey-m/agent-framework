@@ -8,7 +8,7 @@ namespace Harness.Shared.Console.Components;
 /// <summary>
 /// Props for <see cref="AgentStatus"/>.
 /// </summary>
-public class AgentStatusProps : ConsoleReactiveProps
+public record AgentStatusProps : ConsoleReactiveProps
 {
     /// <summary>Gets or sets a value indicating whether the spinner is visible.</summary>
     public bool ShowSpinner { get; set; }
@@ -18,10 +18,16 @@ public class AgentStatusProps : ConsoleReactiveProps
 }
 
 /// <summary>
+/// State for <see cref="AgentStatus"/>.
+/// </summary>
+/// <param name="SpinnerIndex">The current spinner animation frame index.</param>
+public record AgentStatusState(int SpinnerIndex = 0) : ConsoleReactiveState;
+
+/// <summary>
 /// A component that renders a single-line agent status bar with an animated spinner
 /// and token usage statistics. Positioned above the rule in the non-scrolling area.
 /// </summary>
-public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, object?>, IDisposable
+public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, AgentStatusState>, IDisposable
 {
     private static readonly string[] s_spinnerFrames =
     [
@@ -29,13 +35,13 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, object?>, 
     ];
 
     private readonly Timer _timer;
-    private int _spinnerIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AgentStatus"/> class.
     /// </summary>
     public AgentStatus()
     {
+        this.State = new AgentStatusState();
         this._timer = new Timer(this.OnTimerTick, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
     }
 
@@ -71,7 +77,7 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, object?>, 
     }
 
     /// <inheritdoc />
-    public override void RenderCore(AgentStatusProps props, object? state)
+    public override void RenderCore(AgentStatusProps props, AgentStatusState state)
     {
         if (!props.ShowSpinner && string.IsNullOrEmpty(props.UsageText))
         {
@@ -83,8 +89,7 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, object?>, 
 
         if (props.ShowSpinner)
         {
-            string frame = s_spinnerFrames[this._spinnerIndex % s_spinnerFrames.Length];
-            this._spinnerIndex++;
+            string frame = s_spinnerFrames[state.SpinnerIndex];
             System.Console.Write(AnsiEscapes.SetForegroundColor(ConsoleColor.Cyan));
             System.Console.Write($" {frame} ");
             System.Console.Write(AnsiEscapes.ResetAttributes);
@@ -108,7 +113,8 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, object?>, 
     {
         if (this.Props is { ShowSpinner: true })
         {
-            this.Render();
+            int nextIndex = ((this.State?.SpinnerIndex ?? 0) + 1) % s_spinnerFrames.Length;
+            this.SetState(new AgentStatusState(nextIndex));
         }
     }
 }

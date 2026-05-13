@@ -15,6 +15,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
 {
     private readonly Func<HarnessAppComponentState> _getState;
     private readonly Action<HarnessAppComponentState> _setState;
+    private readonly Action _requestShutdown;
     private readonly IReadOnlyDictionary<string, ConsoleColor>? _modeColors;
     private readonly List<string> _outputItems = [];
     private readonly object _outputLock = new();
@@ -29,14 +30,17 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     /// </summary>
     /// <param name="getState">Returns the component's current state.</param>
     /// <param name="setState">Replaces the component's state and triggers a re-render.</param>
+    /// <param name="requestShutdown">Callback invoked when a command handler requests application shutdown.</param>
     /// <param name="modeColors">Optional mapping of mode names to console colors.</param>
     public HarnessConsoleUXStateDriver(
         Func<HarnessAppComponentState> getState,
         Action<HarnessAppComponentState> setState,
+        Action requestShutdown,
         IReadOnlyDictionary<string, ConsoleColor>? modeColors = null)
     {
         this._getState = getState;
         this._setState = setState;
+        this._requestShutdown = requestShutdown;
         this._modeColors = modeColors;
         this._currentMode = getState().ModeText;
     }
@@ -230,7 +234,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     {
         this.AppendOutputEntries(new OutputEntry(
             OutputEntryType.UserInput,
-            $"\nYou: {text}\n",
+            $"\nYou: {text}\n\n",
             ConsoleColor.Green));
     }
 
@@ -246,10 +250,10 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     {
         // Add a blank line separator when transitioning from streaming text or user input.
         string prefix = this._lastEntryType is OutputEntryType.StreamingText or OutputEntryType.StreamFooter
-            ? "\n\n  "
+            ? "\n  "
             : "  ";
 
-        string fullText = newLine ? prefix + text + "\n" : prefix + text;
+        string fullText = newLine ? prefix + text + "\n\n" : prefix + text;
         this.AppendOutputEntries(new OutputEntry(
             OutputEntryType.InfoLine,
             fullText,
@@ -294,11 +298,14 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     {
         lock (this._outputLock)
         {
-            this._outputItems.Add(RenderEntry("\n", null));
-            this._currentStreamingEntry = null;
-            this._lastEntryType = OutputEntryType.StreamFooter;
-            var snapshot = new List<string>(this._outputItems);
-            this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
+            if (this._hasReceivedAnyText)
+            {
+                this._outputItems.Add(RenderEntry("\n", null));
+                this._currentStreamingEntry = null;
+                this._lastEntryType = OutputEntryType.StreamFooter;
+                var snapshot = new List<string>(this._outputItems);
+                this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
+            }
         }
 
         return Task.CompletedTask;
@@ -358,4 +365,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
             this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
         }
     }
+
+    /// <inheritdoc/>
+    public void RequestShutdown() => this._requestShutdown();
 }

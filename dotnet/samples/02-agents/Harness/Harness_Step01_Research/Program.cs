@@ -16,6 +16,7 @@
 using System.ClientModel.Primitives;
 using Azure.Identity;
 using Harness.Shared.Console;
+using Harness.Shared.Console.ToolFormatters;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
@@ -183,9 +184,12 @@ await HarnessConsole.RunAgentAsync(
     userPrompt: "Enter a research topic to get started.",
     new HarnessConsoleOptions
     {
-        MaxContextWindowTokens = MaxContextWindowTokens,
-        MaxOutputTokens = MaxOutputTokens,
-        EnablePlanningUx = true,
-        PlanningModeName = "plan",
-        ExecutionModeName = "execute"
+        Observers = HarnessConsoleOptions.BuildObserversWithPlanning(
+            agent,
+            planModeName: "plan",
+            executionModeName: "execute",
+            maxContextWindowTokens: MaxContextWindowTokens,
+            maxOutputTokens: MaxOutputTokens,
+            toolFormatters: [new DownloadUriToolFormatter(), .. ToolCallFormatter.BuildDefaultToolFormatters()]),
+        CommandHandlers = HarnessConsoleOptions.BuildDefaultCommandHandlers(agent),
     });

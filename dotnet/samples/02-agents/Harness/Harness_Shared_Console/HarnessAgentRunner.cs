@@ -15,7 +15,6 @@ namespace Harness.Shared.Console;
 /// All per-turn follow-up state (pending questions and accumulated responses) lives
 /// in the component's state record — the runner reads/writes it exclusively through
 /// the driver and holds no per-turn fields itself.
-/// <see cref="ShutdownTask"/> completes when the user requests termination (e.g. types "exit").
 /// </summary>
 public sealed class HarnessAgentRunner : IDisposable
 {
@@ -23,12 +22,10 @@ public sealed class HarnessAgentRunner : IDisposable
     private readonly AgentSession _session;
     private readonly AgentModeProvider? _modeProvider;
     private readonly MessageInjectingChatClient? _messageInjector;
-    private readonly HarnessConsoleOptions _options;
     private readonly IReadOnlyList<CommandHandler> _commandHandlers;
     private readonly IReadOnlyList<ConsoleObserver> _observers;
     private readonly IUXStateDriver _ux;
 
-    private readonly TaskCompletionSource<bool> _shutdownTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly SemaphoreSlim _inputGate = new(1, 1);
 
     /// <summary>
@@ -39,7 +36,6 @@ public sealed class HarnessAgentRunner : IDisposable
         AgentSession session,
         AgentModeProvider? modeProvider,
         MessageInjectingChatClient? messageInjector,
-        HarnessConsoleOptions options,
         IReadOnlyList<CommandHandler> commandHandlers,
         IReadOnlyList<ConsoleObserver> observers,
         IUXStateDriver ux)
@@ -48,7 +44,6 @@ public sealed class HarnessAgentRunner : IDisposable
         this._session = session;
         this._modeProvider = modeProvider;
         this._messageInjector = messageInjector;
-        this._options = options;
         this._commandHandlers = commandHandlers;
         this._observers = observers;
         this._ux = ux;
@@ -57,30 +52,22 @@ public sealed class HarnessAgentRunner : IDisposable
             ", ",
             commandHandlers
                 .Select(h => h.GetHelpText())
-                .Where(t => t is not null)
-                .Append("exit (quit)")!);
+                .Where(t => t is not null)!);
     }
 
     /// <summary>
     /// Gets the help text describing all available commands (joined by ", "), suitable
     /// for display in the mode-and-help bar. Computed from the supplied
-    /// <c>commandHandlers</c> plus a trailing <c>"exit (quit)"</c> entry for the
-    /// runner's built-in termination sentinel.
+    /// <c>commandHandlers</c>.
     /// </summary>
     public string HelpText { get; }
-
-    /// <summary>
-    /// Completes when the user requests termination (e.g. types "exit").
-    /// Awaited by <see cref="HarnessConsole.RunAgentAsync"/>.
-    /// </summary>
-    public Task ShutdownTask => this._shutdownTcs.Task;
 
     /// <inheritdoc/>
     public void Dispose() => this._inputGate.Dispose();
 
     /// <summary>
     /// Handles a top-level user input submission (TextInput mode, no pending question).
-    /// Recognizes the "exit" sentinel, dispatches to command handlers, or starts an agent turn.
+    /// Dispatches to command handlers, or starts an agent turn.
     /// </summary>
     internal async Task OnUserInputAsync(string text)
     {
@@ -88,12 +75,6 @@ public sealed class HarnessAgentRunner : IDisposable
         try
         {
             this._ux.WriteUserInputEcho(text);
-
-            if (text.Equals("exit", StringComparison.OrdinalIgnoreCase))
-            {
-                this._shutdownTcs.TrySetResult(true);
-                return;
-            }
 
             foreach (var handler in this._commandHandlers)
             {
@@ -164,7 +145,7 @@ public sealed class HarnessAgentRunner : IDisposable
             var runOptions = new AgentRunOptions();
             foreach (var observer in this._observers)
             {
-                observer.ConfigureRunOptions(runOptions);
+                observer.ConfigureRunOptions(runOptions, this._agent, this._session);
             }
 
             this._ux.CurrentMode = this._modeProvider?.GetMode(this._session);
@@ -188,7 +169,7 @@ public sealed class HarnessAgentRunner : IDisposable
                     {
                         foreach (var observer in this._observers)
                         {
-                            await observer.OnContentAsync(this._ux, content).ConfigureAwait(false);
+                            await observer.OnContentAsync(this._ux, content, this._agent, this._session).ConfigureAwait(false);
                         }
                     }
 
@@ -196,7 +177,7 @@ public sealed class HarnessAgentRunner : IDisposable
                     {
                         foreach (var observer in this._observers)
                         {
-                            await observer.OnTextAsync(this._ux, update.Text).ConfigureAwait(false);
+                            await observer.OnTextAsync(this._ux, update.Text, this._agent, this._session).ConfigureAwait(false);
                         }
                     }
 
@@ -219,7 +200,7 @@ public sealed class HarnessAgentRunner : IDisposable
             var questions = new List<FollowUpQuestion>();
             foreach (var observer in this._observers)
             {
-                var actions = await observer.OnStreamCompleteAsync(this._ux, this._agent, this._session, this._options).ConfigureAwait(false);
+                var actions = await observer.OnStreamCompleteAsync(this._ux, this._agent, this._session).ConfigureAwait(false);
                 if (actions is null)
                 {
                     continue;

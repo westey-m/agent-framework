@@ -24,6 +24,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
     private readonly AgentStatus _agentStatus = new();
     private readonly AgentModeAndHelp _modeAndHelp = new();
     private readonly IUXStateDriver _uxDriver;
+    private readonly TaskCompletionSource<bool> _shutdownTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _scrollRegionBottom;
     private bool _resizedSinceLastRender = true;
     private bool _deactivated;
@@ -60,6 +61,7 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         this._uxDriver = new HarnessConsoleUXStateDriver(
             getState: () => this.State!,
             setState: s => this.SetState(s),
+            requestShutdown: () => this._shutdownTcs.TrySetResult(true),
             modeColors: modeColors);
 
         this.Runner = runnerFactory(this._uxDriver);
@@ -74,10 +76,15 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
 
     /// <summary>
     /// Gets the agent runner that owns the agent loop. Constructed by the factory
-    /// passed to the component's constructor; awaited on its <see cref="HarnessAgentRunner.ShutdownTask"/>
-    /// by the hosting console.
+    /// passed to the component's constructor.
     /// </summary>
     public HarnessAgentRunner Runner { get; }
+
+    /// <summary>
+    /// Completes when a command handler requests application shutdown (e.g. the user types <c>/exit</c>).
+    /// Awaited by <see cref="HarnessConsole.RunAgentAsync"/>.
+    /// </summary>
+    public Task ShutdownTask => this._shutdownTcs.Task;
 
     /// <summary>
     /// Deactivates the component, resetting the scroll region and unsubscribing from events.
@@ -94,9 +101,6 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         this._agentStatus.Dispose();
         KeyEventListener.Instance.KeyPressed -= this.OnKeyPressed;
         ConsoleResizeListener.Instance.ConsoleResized -= this.OnConsoleResized;
-        System.Console.Write(AnsiEscapes.ResetScrollRegion);
-        System.Console.Write(AnsiEscapes.MoveCursor(System.Console.WindowHeight, 1));
-        System.Console.WriteLine();
     }
 
     /// <inheritdoc/>
@@ -305,6 +309,11 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
     /// <inheritdoc />
     public override void RenderCore(ConsoleReactiveProps props, HarnessAppComponentState state)
     {
+        if (this._deactivated)
+        {
+            return;
+        }
+
         // Determine the text panel height for the last scroll item
         IReadOnlyList<string> lastItems = state.ScrollAreaContentItems.Count > 0
             ? [state.ScrollAreaContentItems[^1]]
@@ -395,7 +404,6 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
             ShowSpinner = state.ShowSpinner,
             UsageText = state.UsageText,
         };
-        int agentStatusHeight = AgentStatus.CalculateHeight(agentStatusProps);
 
         var modeAndHelpProps = new AgentModeAndHelpProps
         {
@@ -403,7 +411,12 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
             ModeColor = state.ModeColor,
             HelpText = state.HelpText,
         };
-        int modeAndHelpHeight = AgentModeAndHelp.CalculateHeight(modeAndHelpProps);
+
+        // Hide agent status and mode/help during follow-up questions (ListSelection mode)
+        // as they clutter the UI and aren't relevant.
+        bool showStatusAndHelp = state.Mode != BottomPanelMode.ListSelection;
+        int agentStatusHeight = showStatusAndHelp ? AgentStatus.CalculateHeight(agentStatusProps) : 0;
+        int modeAndHelpHeight = showStatusAndHelp ? AgentModeAndHelp.CalculateHeight(modeAndHelpProps) : 0;
 
         int ruleHeight = TopBottomRule.CalculateHeight(ruleProps);
         int scrollBottom = Math.Max(1, state.ConsoleHeight - ruleHeight - textPanelHeight - agentStatusHeight - queuedPanelHeight - modeAndHelpHeight);
@@ -411,6 +424,9 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         // If scroll region changed or a clear is needed, reset everything
         if (this._resizedSinceLastRender || (this._scrollRegionBottom != 0 && scrollBottom != this._scrollRegionBottom))
         {
+            // Reset scroll region to full screen before erasing so the erase covers all rows —
+            // some terminals only erase within the active DECSTBM region.
+            System.Console.Write(AnsiEscapes.ResetScrollRegion);
             System.Console.Write(AnsiEscapes.EraseEntireScreen);
             System.Console.Write(AnsiEscapes.EraseScrollbackBuffer);
             this._textScrollPanel.Reset();
@@ -461,12 +477,15 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
 
         // Render the agent status line between queued items and rule
         int agentStatusY = queuedPanelY + queuedPanelHeight;
-        this._agentStatus.X = 1;
-        this._agentStatus.Y = agentStatusY;
-        this._agentStatus.Width = state.ConsoleWidth;
-        this._agentStatus.Height = agentStatusHeight;
-        this._agentStatus.Props = agentStatusProps;
-        this._agentStatus.Render();
+        if (showStatusAndHelp)
+        {
+            this._agentStatus.X = 1;
+            this._agentStatus.Y = agentStatusY;
+            this._agentStatus.Width = state.ConsoleWidth;
+            this._agentStatus.Height = agentStatusHeight;
+            this._agentStatus.Props = agentStatusProps;
+            this._agentStatus.Render();
+        }
 
         // Render the bottom rule + child below the agent status
         this._rule.X = 1;
@@ -475,13 +494,16 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         this._rule.Render();
 
         // Render the mode-and-help line below the bottom rule
-        int modeAndHelpY = this._rule.Y + ruleHeight;
-        this._modeAndHelp.X = 1;
-        this._modeAndHelp.Y = modeAndHelpY;
-        this._modeAndHelp.Width = state.ConsoleWidth;
-        this._modeAndHelp.Height = modeAndHelpHeight;
-        this._modeAndHelp.Props = modeAndHelpProps;
-        this._modeAndHelp.Render();
+        if (showStatusAndHelp)
+        {
+            int modeAndHelpY = this._rule.Y + ruleHeight;
+            this._modeAndHelp.X = 1;
+            this._modeAndHelp.Y = modeAndHelpY;
+            this._modeAndHelp.Width = state.ConsoleWidth;
+            this._modeAndHelp.Height = modeAndHelpHeight;
+            this._modeAndHelp.Props = modeAndHelpProps;
+            this._modeAndHelp.Render();
+        }
 
         // Position cursor for natural typing appearance
         this.PositionCursor(state);

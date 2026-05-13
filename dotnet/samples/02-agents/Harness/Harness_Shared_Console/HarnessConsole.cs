@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using Harness.ConsoleReactiveComponents;
-using Harness.Shared.Console.Commands;
-using Harness.Shared.Console.Observers;
 using Microsoft.Agents.AI;
 
 namespace Harness.Shared.Console;
@@ -16,8 +14,8 @@ public static class HarnessConsole
     /// <summary>
     /// Runs an interactive console session with the specified agent.
     /// Constructs the reactive UI component and the <see cref="HarnessAgentRunner"/>,
-    /// wires them together, and awaits the runner's <see cref="HarnessAgentRunner.ShutdownTask"/>
-    /// (which completes when the user types <c>exit</c>).
+    /// wires them together, and awaits the component's <see cref="HarnessAppComponent.ShutdownTask"/>
+    /// (which completes when the user types <c>/exit</c>).
     /// </summary>
     /// <param name="agent">The agent to interact with.</param>
     /// <param name="userPrompt">A short prompt to the user, displayed as a placeholder in the input area.</param>
@@ -26,27 +24,16 @@ public static class HarnessConsole
     {
         options ??= new();
 
-        if (options.EnablePlanningUx
-            && (string.IsNullOrWhiteSpace(options.PlanningModeName) || string.IsNullOrWhiteSpace(options.ExecutionModeName)))
-        {
-            throw new ArgumentException(
-                "When EnablePlanningUx is true, both PlanningModeName and ExecutionModeName must be configured.",
-                nameof(options));
-        }
+        // Null means use defaults; an explicit (possibly empty) list means use exactly what was provided.
+        var observers = options.Observers
+            ?? HarnessConsoleOptions.BuildDefaultObservers();
+        var commandHandlers = options.CommandHandlers
+            ?? HarnessConsoleOptions.BuildDefaultCommandHandlers(agent, options.ModeColors);
 
-        var todoProvider = agent.GetService<TodoProvider>();
         var modeProvider = agent.GetService<AgentModeProvider>();
         var messageInjector = agent.GetService<MessageInjectingChatClient>();
 
-        var commandHandlers = new List<CommandHandler>
-        {
-            new TodoCommandHandler(todoProvider),
-            new ModeCommandHandler(modeProvider, options.ModeColors),
-        };
-
         AgentSession session = await agent.CreateSessionAsync();
-
-        var observers = CreateObservers(options, modeProvider, session);
 
         using var component = new HarnessAppComponent(
             placeholder: userPrompt,
@@ -57,7 +44,6 @@ public static class HarnessConsole
                 session: session,
                 modeProvider: modeProvider,
                 messageInjector: messageInjector,
-                options: options,
                 commandHandlers: commandHandlers,
                 observers: observers,
                 ux: ux),
@@ -68,7 +54,7 @@ public static class HarnessConsole
 
         try
         {
-            await component.Runner.ShutdownTask.ConfigureAwait(false);
+            await component.ShutdownTask.ConfigureAwait(false);
         }
         finally
         {
@@ -76,33 +62,9 @@ public static class HarnessConsole
         }
 
         System.Console.ResetColor();
-        System.Console.WriteLine(AnsiEscapes.EraseEntireScreen);
-        System.Console.WriteLine(AnsiEscapes.EraseScrollbackBuffer);
+        System.Console.Write(AnsiEscapes.ResetScrollRegion);
+        System.Console.Write(AnsiEscapes.EraseEntireScreen);
+        System.Console.Write(AnsiEscapes.MoveCursor(1, 1));
         System.Console.WriteLine("Goodbye!");
-    }
-
-    private static List<ConsoleObserver> CreateObservers(HarnessConsoleOptions options, AgentModeProvider? modeProvider, AgentSession session)
-    {
-        var observers = new List<ConsoleObserver>
-        {
-            new ToolCallDisplayObserver(),
-            new ToolApprovalObserver(),
-            new ErrorDisplayObserver(),
-            new ReasoningDisplayObserver(),
-            new UsageDisplayObserver(options.MaxContextWindowTokens, options.MaxOutputTokens),
-        };
-
-        if (options.EnablePlanningUx
-            && modeProvider is not null
-            && string.Equals(modeProvider.GetMode(session), options.PlanningModeName, StringComparison.OrdinalIgnoreCase))
-        {
-            observers.Add(new PlanningOutputObserver(modeProvider));
-        }
-        else
-        {
-            observers.Add(new TextOutputObserver());
-        }
-
-        return observers;
     }
 }

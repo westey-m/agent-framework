@@ -1,5 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using Harness.ConsoleReactiveComponents;
+using Harness.Shared.Console.ToolFormatters;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -12,18 +14,29 @@ namespace Harness.Shared.Console.Observers;
 /// continuation produces a separate <see cref="ChatMessage"/> carrying the approval
 /// response content.
 /// </summary>
-internal sealed class ToolApprovalObserver : ConsoleObserver
+public sealed class ToolApprovalObserver : ConsoleObserver
 {
     private readonly List<ToolApprovalRequestContent> _approvalRequests = [];
+    private readonly IReadOnlyList<ToolCallFormatter> _formatters;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ToolApprovalObserver"/> class.
+    /// </summary>
+    /// <param name="formatters">Optional list of tool formatters. When <see langword="null"/>,
+    /// the default formatters from <see cref="ToolCallFormatter.BuildDefaultToolFormatters"/> are used.</param>
+    public ToolApprovalObserver(IReadOnlyList<ToolCallFormatter>? formatters = null)
+    {
+        this._formatters = formatters ?? ToolCallFormatter.BuildDefaultToolFormatters();
+    }
 
     /// <inheritdoc/>
-    public override async Task OnContentAsync(IUXStateDriver ux, AIContent content)
+    public override async Task OnContentAsync(IUXStateDriver ux, AIContent content, AIAgent agent, AgentSession session)
     {
         if (content is ToolApprovalRequestContent approvalRequest)
         {
             this._approvalRequests.Add(approvalRequest);
             string toolName = approvalRequest.ToolCall is FunctionCallContent fc
-                ? ToolCallFormatter.Format(fc)
+                ? ToolCallFormatter.Format(this._formatters, fc)
                 : approvalRequest.ToolCall?.ToString() ?? "unknown";
             await ux.WriteInfoLineAsync($"⚠️ Approval needed: {toolName}", ConsoleColor.Yellow);
         }
@@ -33,8 +46,7 @@ internal sealed class ToolApprovalObserver : ConsoleObserver
     public override Task<IList<FollowUpAction>?> OnStreamCompleteAsync(
         IUXStateDriver ux,
         AIAgent agent,
-        AgentSession session,
-        HarnessConsoleOptions options)
+        AgentSession session)
     {
         if (this._approvalRequests.Count == 0)
         {
@@ -44,17 +56,17 @@ internal sealed class ToolApprovalObserver : ConsoleObserver
         var actions = new List<FollowUpAction>(this._approvalRequests.Count);
         foreach (var request in this._approvalRequests)
         {
-            actions.Add(BuildApprovalQuestion(request));
+            actions.Add(this.BuildApprovalQuestion(request));
         }
 
         this._approvalRequests.Clear();
         return Task.FromResult<IList<FollowUpAction>?>(actions);
     }
 
-    private static ChoiceFollowUpQuestion BuildApprovalQuestion(ToolApprovalRequestContent request)
+    private ChoiceFollowUpQuestion BuildApprovalQuestion(ToolApprovalRequestContent request)
     {
         string toolName = request.ToolCall is FunctionCallContent fc
-            ? ToolCallFormatter.Format(fc)
+            ? ToolCallFormatter.Format(this._formatters, fc)
             : request.ToolCall?.ToString() ?? "unknown";
 
         var choices = new List<string>
@@ -90,8 +102,8 @@ internal sealed class ToolApprovalObserver : ConsoleObserver
                 };
 
                 ConsoleColor answerColor = selection == "Deny" ? ConsoleColor.Red : ConsoleColor.Green;
-                await ux.WriteInfoLineAsync($"Q: {prompt}", ConsoleColor.Gray).ConfigureAwait(false);
-                await ux.WriteInfoLineAsync($"A: {action}", answerColor).ConfigureAwait(false);
+                string formatted = $"🔹 {prompt}\n   └─ {AnsiEscapes.SetForegroundColor(answerColor)}{action}{AnsiEscapes.ResetAttributes}";
+                await ux.WriteInfoLineAsync(formatted, ConsoleColor.Gray).ConfigureAwait(false);
 
                 return new ChatMessage(ChatRole.User, [response]);
             });

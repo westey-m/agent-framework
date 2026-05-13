@@ -7,7 +7,7 @@ namespace Harness.Shared.Console.Commands;
 /// <summary>
 /// Handles the <c>/todos</c> command to display the current todo list.
 /// </summary>
-internal sealed class TodoCommandHandler : CommandHandler
+public sealed class TodoCommandHandler : CommandHandler
 {
     private readonly TodoProvider? _todoProvider;
 

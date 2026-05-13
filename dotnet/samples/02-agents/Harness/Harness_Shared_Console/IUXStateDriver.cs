@@ -111,4 +111,10 @@ public interface IUXStateDriver
     /// Called by the runner immediately before invoking the next agent turn.
     /// </summary>
     IReadOnlyList<ChatMessage> TakeFollowUpResponses();
+
+    /// <summary>
+    /// Signals that the application should shut down. Completes the shutdown task
+    /// on the owning component.
+    /// </summary>
+    void RequestShutdown();
 }

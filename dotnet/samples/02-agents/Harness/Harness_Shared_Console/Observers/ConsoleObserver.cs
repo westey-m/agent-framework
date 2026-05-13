@@ -18,7 +18,9 @@ public abstract class ConsoleObserver
     /// Override to set options such as <see cref="AgentRunOptions.ResponseFormat"/>.
     /// </summary>
     /// <param name="options">The run options to configure.</param>
-    public virtual void ConfigureRunOptions(AgentRunOptions options)
+    /// <param name="agent">The agent being interacted with.</param>
+    /// <param name="session">The current agent session.</param>
+    public virtual void ConfigureRunOptions(AgentRunOptions options, AIAgent agent, AgentSession session)
     {
     }
 
@@ -27,14 +29,18 @@ public abstract class ConsoleObserver
     /// </summary>
     /// <param name="ux">The UX state driver, used for rendering output.</param>
     /// <param name="content">The content item from the stream.</param>
-    public virtual Task OnContentAsync(IUXStateDriver ux, AIContent content) => Task.CompletedTask;
+    /// <param name="agent">The agent being interacted with.</param>
+    /// <param name="session">The current agent session.</param>
+    public virtual Task OnContentAsync(IUXStateDriver ux, AIContent content, AIAgent agent, AgentSession session) => Task.CompletedTask;
 
     /// <summary>
     /// Called for each text update in the response stream.
     /// </summary>
     /// <param name="ux">The UX state driver, used for rendering output.</param>
     /// <param name="text">The text from the update.</param>
-    public virtual Task OnTextAsync(IUXStateDriver ux, string text) => Task.CompletedTask;
+    /// <param name="agent">The agent being interacted with.</param>
+    /// <param name="session">The current agent session.</param>
+    public virtual Task OnTextAsync(IUXStateDriver ux, string text, AIAgent agent, AgentSession session) => Task.CompletedTask;
 
     /// <summary>
     /// Called after the response stream completes. Returns a heterogeneous list of
@@ -44,11 +50,9 @@ public abstract class ConsoleObserver
     /// <param name="ux">The UX state driver, used for rendering output.</param>
     /// <param name="agent">The agent being interacted with.</param>
     /// <param name="session">The current agent session.</param>
-    /// <param name="options">The console options.</param>
     /// <returns>Follow-up actions to process after the stream completes, or <see langword="null"/>.</returns>
     public virtual Task<IList<FollowUpAction>?> OnStreamCompleteAsync(
         IUXStateDriver ux,
         AIAgent agent,
-        AgentSession session,
-        HarnessConsoleOptions options) => Task.FromResult<IList<FollowUpAction>?>(null);
+        AgentSession session) => Task.FromResult<IList<FollowUpAction>?>(null);
 }

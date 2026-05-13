@@ -65,6 +65,7 @@
     <Project Path="samples/02-agents/Agents/Agent_Step18_CompactionPipeline/Agent_Step18_CompactionPipeline.csproj" />
     <Project Path="samples/02-agents/Agents/Agent_Step19_InFunctionLoopCheckpointing/Agent_Step19_InFunctionLoopCheckpointing.csproj" />
     <Project Path="samples/02-agents/Agents/Agent_Step20_DynamicFunctionTools/Agent_Step20_DynamicFunctionTools.csproj" />
+    <Project Path="samples/02-agents/Agents/Agent_Step21_ShellWithEnvironment/Agent_Step21_ShellWithEnvironment.csproj" />
   </Folder>
   <Folder Name="/Samples/02-agents/DeclarativeAgents/">
     <Project Path="samples/02-agents/DeclarativeAgents/ChatClient/DeclarativeChatClientAgents.csproj" />
@@ -581,6 +582,7 @@
     <Project Path="src/Microsoft.Agents.AI.DurableTask/Microsoft.Agents.AI.DurableTask.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Foundry.Hosting/Microsoft.Agents.AI.Foundry.Hosting.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Foundry/Microsoft.Agents.AI.Foundry.csproj" />
+    <Project Path="src/Microsoft.Agents.AI.Harness/Microsoft.Agents.AI.Harness.csproj" />
     <Project Path="src/Microsoft.Agents.AI.GitHub.Copilot/Microsoft.Agents.AI.GitHub.Copilot.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Hosting.A2A.AspNetCore/Microsoft.Agents.AI.Hosting.A2A.AspNetCore.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Hosting.A2A/Microsoft.Agents.AI.Hosting.A2A.csproj" />
@@ -592,6 +594,7 @@
     <Project Path="src/Microsoft.Agents.AI.Mem0/Microsoft.Agents.AI.Mem0.csproj" />
     <Project Path="src/Microsoft.Agents.AI.OpenAI/Microsoft.Agents.AI.OpenAI.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Purview/Microsoft.Agents.AI.Purview.csproj" />
+    <Project Path="src/Microsoft.Agents.AI.Tools.Shell/Microsoft.Agents.AI.Tools.Shell.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Workflows.Declarative.Foundry/Microsoft.Agents.AI.Workflows.Declarative.Foundry.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Workflows.Declarative.Mcp/Microsoft.Agents.AI.Workflows.Declarative.Mcp.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Workflows.Declarative/Microsoft.Agents.AI.Workflows.Declarative.csproj" />
@@ -614,6 +617,7 @@
     <Project Path="tests/Microsoft.Agents.AI.Hosting.AzureFunctions.IntegrationTests/Microsoft.Agents.AI.Hosting.AzureFunctions.IntegrationTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Hyperlight.IntegrationTests/Microsoft.Agents.AI.Hyperlight.IntegrationTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Mem0.IntegrationTests/Microsoft.Agents.AI.Mem0.IntegrationTests.csproj" />
+    <Project Path="tests/Microsoft.Agents.AI.Tools.Shell.IntegrationTests/Microsoft.Agents.AI.Tools.Shell.IntegrationTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Workflows.Declarative.IntegrationTests/Microsoft.Agents.AI.Workflows.Declarative.IntegrationTests.csproj" />
     <Project Path="tests/OpenAIAssistant.IntegrationTests/OpenAIAssistant.IntegrationTests.csproj" />
     <Project Path="tests/OpenAIChatCompletion.IntegrationTests/OpenAIChatCompletion.IntegrationTests.csproj" />
@@ -633,6 +637,7 @@
     <Project Path="tests/Microsoft.Agents.AI.Foundry.UnitTests/Microsoft.Agents.AI.Foundry.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Foundry.Hosting.UnitTests/Microsoft.Agents.AI.Foundry.Hosting.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.GitHub.Copilot.UnitTests/Microsoft.Agents.AI.GitHub.Copilot.UnitTests.csproj" />
+    <Project Path="tests/Microsoft.Agents.AI.Harness.UnitTests/Microsoft.Agents.AI.Harness.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Hosting.A2A.UnitTests/Microsoft.Agents.AI.Hosting.A2A.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Hosting.AGUI.AspNetCore.UnitTests/Microsoft.Agents.AI.Hosting.AGUI.AspNetCore.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Hosting.AzureFunctions.UnitTests/Microsoft.Agents.AI.Hosting.AzureFunctions.UnitTests.csproj" />
@@ -642,6 +647,7 @@
     <Project Path="tests/Microsoft.Agents.AI.Mem0.UnitTests/Microsoft.Agents.AI.Mem0.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.OpenAI.UnitTests/Microsoft.Agents.AI.OpenAI.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Purview.UnitTests/Microsoft.Agents.AI.Purview.UnitTests.csproj" />
+    <Project Path="tests/Microsoft.Agents.AI.Tools.Shell.UnitTests/Microsoft.Agents.AI.Tools.Shell.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.UnitTests/Microsoft.Agents.AI.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Workflows.Declarative.Mcp.UnitTests/Microsoft.Agents.AI.Workflows.Declarative.Mcp.UnitTests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Workflows.Declarative.UnitTests/Microsoft.Agents.AI.Workflows.Declarative.UnitTests.csproj" />

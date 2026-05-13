@@ -23,6 +23,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     private OutputEntryType? _lastEntryType;
     private bool _hasReceivedAnyText;
     private OutputEntry? _currentStreamingEntry;
+    private int _currentStreamingEntryIndex = -1;
     private string? _currentMode;
 
     /// <summary>
@@ -87,6 +88,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
         {
             this._hasReceivedAnyText = false;
             this._currentStreamingEntry = null;
+            this._currentStreamingEntryIndex = -1;
         }
     }
 
@@ -274,8 +276,10 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
 
             ConsoleColor effectiveColor = color ?? ModeColors.Get(this._currentMode, this._modeColors);
 
-            if (this._currentStreamingEntry is not null)
+            if (this._currentStreamingEntry is not null
+                && this._currentStreamingEntryIndex == this._outputItems.Count - 1)
             {
+                // The streaming entry is still the last item — safe to replace in place.
                 this._currentStreamingEntry = this._currentStreamingEntry with
                 {
                     Text = this._currentStreamingEntry.Text + text,
@@ -284,9 +288,12 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
             }
             else
             {
+                // Either the first text delta or other entries (tool calls, info lines)
+                // were appended after the previous streaming entry — start a fresh one.
                 const string Prefix = "\n";
                 this._currentStreamingEntry = new OutputEntry(OutputEntryType.StreamingText, Prefix + text, effectiveColor);
                 this._outputItems.Add(RenderEntry(this._currentStreamingEntry.Text, this._currentStreamingEntry.Color));
+                this._currentStreamingEntryIndex = this._outputItems.Count - 1;
             }
 
             var snapshot = new List<string>(this._outputItems);

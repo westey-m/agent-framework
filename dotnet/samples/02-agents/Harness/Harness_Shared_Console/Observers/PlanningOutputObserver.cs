@@ -20,7 +20,7 @@ public sealed class PlanningOutputObserver : ConsoleObserver
     private readonly AgentModeProvider _modeProvider;
     private readonly string _planModeName;
     private readonly string _executionModeName;
-    private readonly Dictionary<string, ConsoleColor>? _modeColors;
+    private readonly IReadOnlyDictionary<string, ConsoleColor>? _modeColors;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlanningOutputObserver"/> class.
@@ -29,7 +29,7 @@ public sealed class PlanningOutputObserver : ConsoleObserver
     /// <param name="planModeName">The mode name that represents the planning mode.</param>
     /// <param name="executionModeName">The mode name to switch to when the user approves a plan.</param>
     /// <param name="modeColors">Optional mode-to-color mapping for display.</param>
-    public PlanningOutputObserver(AgentModeProvider modeProvider, string planModeName, string executionModeName, Dictionary<string, ConsoleColor>? modeColors = null)
+    public PlanningOutputObserver(AgentModeProvider modeProvider, string planModeName, string executionModeName, IReadOnlyDictionary<string, ConsoleColor>? modeColors = null)
     {
         this._modeProvider = modeProvider;
         this._planModeName = planModeName;

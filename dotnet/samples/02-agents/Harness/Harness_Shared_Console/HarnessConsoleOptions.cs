@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System.Collections.ObjectModel;
 using Harness.Shared.Console.Commands;
 using Harness.Shared.Console.Observers;
 using Harness.Shared.Console.ToolFormatters;
@@ -31,11 +32,12 @@ public class HarnessConsoleOptions
     /// <summary>
     /// The default mode-to-color mapping used when no custom <see cref="ModeColors"/> are provided.
     /// </summary>
-    public static readonly Dictionary<string, ConsoleColor> DefaultModeColors = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["plan"] = ConsoleColor.Cyan,
-        ["execute"] = ConsoleColor.Green,
-    };
+    public static readonly IReadOnlyDictionary<string, ConsoleColor> DefaultModeColors = new ReadOnlyDictionary<string, ConsoleColor>(
+        new Dictionary<string, ConsoleColor>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["plan"] = ConsoleColor.Cyan,
+            ["execute"] = ConsoleColor.Green,
+        });
 
     /// <summary>
     /// Gets or sets a mapping of agent mode names to console colors.
@@ -87,7 +89,7 @@ public class HarnessConsoleOptions
         AIAgent agent,
         string planModeName,
         string executionModeName,
-        Dictionary<string, ConsoleColor>? modeColors = null,
+        IReadOnlyDictionary<string, ConsoleColor>? modeColors = null,
         int? maxContextWindowTokens = null,
         int? maxOutputTokens = null,
         IReadOnlyList<ToolCallFormatter>? toolFormatters = null)
@@ -116,7 +118,7 @@ public class HarnessConsoleOptions
     /// <returns>A list of command handlers for a standard console session.</returns>
     public static List<CommandHandler> BuildDefaultCommandHandlers(
         AIAgent agent,
-        Dictionary<string, ConsoleColor>? modeColors = null)
+        IReadOnlyDictionary<string, ConsoleColor>? modeColors = null)
     {
         var todoProvider = agent.GetService<TodoProvider>();
         var modeProvider = agent.GetService<AgentModeProvider>();

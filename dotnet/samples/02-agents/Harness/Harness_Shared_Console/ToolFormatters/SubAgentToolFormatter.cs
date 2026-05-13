@@ -35,23 +35,22 @@ public sealed class SubAgentToolFormatter : ToolCallFormatter
             return null;
         }
 
-        var sb = new StringBuilder("(");
-        if (agentName is not null)
+        var sb = new StringBuilder();
+
+        if (agentName is not null && description is not null)
         {
-            sb.Append($"agent: {agentName}");
+            sb.Append($"\n   ├─ Agent: {agentName}");
+            sb.Append($"\n   └─ \"{Truncate(description, 80)}\"");
+        }
+        else if (agentName is not null)
+        {
+            sb.Append($"\n   └─ Agent: {agentName}");
+        }
+        else
+        {
+            sb.Append($"\n   └─ \"{Truncate(description!, 80)}\"");
         }
 
-        if (description is not null)
-        {
-            if (agentName is not null)
-            {
-                sb.Append(", ");
-            }
-
-            sb.Append($"\"{Truncate(description, 60)}\"");
-        }
-
-        sb.Append(')');
         return sb.ToString();
     }
 
@@ -89,8 +88,14 @@ public sealed class SubAgentToolFormatter : ToolCallFormatter
             return null;
         }
 
-        return text is not null
-            ? $"(task #{taskId.Value}, \"{Truncate(text, 50)}\")"
-            : $"(task #{taskId.Value})";
+        if (text is not null)
+        {
+            var sb = new StringBuilder();
+            sb.Append($"\n   ├─ Task #{taskId.Value}");
+            sb.Append($"\n   └─ \"{Truncate(text, 80)}\"");
+            return sb.ToString();
+        }
+
+        return $"\n   └─ Task #{taskId.Value}";
     }
 }

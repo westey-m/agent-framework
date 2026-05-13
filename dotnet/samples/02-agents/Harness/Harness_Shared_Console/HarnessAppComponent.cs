@@ -23,8 +23,9 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
     private readonly TextPanel _queuedPanel = new();
     private readonly AgentStatus _agentStatus = new();
     private readonly AgentModeAndHelp _modeAndHelp = new();
-    private readonly IUXStateDriver _uxDriver;
+    private readonly HarnessConsoleUXStateDriver _uxDriver;
     private readonly TaskCompletionSource<bool> _shutdownTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly SemaphoreSlim _followUpGate = new(1, 1);
     private int _scrollRegionBottom;
     private bool _resizedSinceLastRender = true;
     private bool _deactivated;
@@ -119,6 +120,8 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         if (disposing)
         {
             this.Deactivate();
+            this._followUpGate.Dispose();
+            this.Runner.Dispose();
         }
     }
 
@@ -262,37 +265,60 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
     /// </summary>
     private async Task HandleFollowUpAnswerAsync(string text)
     {
-        IUXStateDriver ux = this._uxDriver;
-        IReadOnlyList<FollowUpQuestion> queue = this.State!.PendingQuestions;
-        if (queue.Count == 0)
-        {
-            return;
-        }
+        IReadOnlyList<ChatMessage>? messagesToSend = null;
 
-        FollowUpQuestion head = queue[0];
-
-        ChatMessage? response;
+        await this._followUpGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            response = await head.Continuation(text, ux).ConfigureAwait(false);
+            HarnessConsoleUXStateDriver ux = this._uxDriver;
+            IReadOnlyList<FollowUpQuestion> queue = this.State!.PendingQuestions;
+            if (queue.Count == 0)
+            {
+                return;
+            }
+
+            FollowUpQuestion head = queue[0];
+
+            ChatMessage? response;
+            try
+            {
+                response = await head.Continuation(text, ux).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ux.WriteInfoLineAsync($"❌ Follow-up handler error: {ex.GetType().Name}: {ex.Message}", ConsoleColor.Red).ConfigureAwait(false);
+                response = null;
+            }
+
+            if (response is not null)
+            {
+                ux.AddFollowUpResponse(response);
+            }
+
+            ux.AdvanceFollowUpQuestion();
+
+            if (this.State!.PendingQuestions.Count == 0)
+            {
+                messagesToSend = ux.TakeFollowUpResponses();
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            await ux.WriteInfoLineAsync($"❌ Follow-up handler error: {ex.GetType().Name}: {ex.Message}", ConsoleColor.Red).ConfigureAwait(false);
-            response = null;
+            this._followUpGate.Release();
         }
 
-        if (response is not null)
+        // Resume the agent outside the gate — StartAgentTurnAsync runs the full agent
+        // loop which may queue new follow-up questions (re-entering this method).
+        if (messagesToSend is not null)
         {
-            ux.AddFollowUpResponse(response);
-        }
-
-        ux.AdvanceFollowUpQuestion();
-
-        if (this.State!.PendingQuestions.Count == 0)
-        {
-            IReadOnlyList<ChatMessage> responses = ux.TakeFollowUpResponses();
-            _ = this.Runner.StartAgentTurnAsync([.. responses]);
+            try
+            {
+                await this.Runner.StartAgentTurnAsync([.. messagesToSend]).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await this._uxDriver.WriteInfoLineAsync($"❌ Agent error: {ex.GetType().Name}: {ex.Message}", ConsoleColor.Red).ConfigureAwait(false);
+            }
         }
     }
 

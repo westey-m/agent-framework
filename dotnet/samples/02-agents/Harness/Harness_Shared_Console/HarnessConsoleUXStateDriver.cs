@@ -213,8 +213,10 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
         }
 
         // Text question — prompt is rendered as an info line above the input row.
+        // We append entries and capture the scroll snapshot inline so the caller's
+        // single _setState picks up both the new output and the UI mode change.
         ConsoleColor ruleColor = ModeColors.Get(this._currentMode, this._modeColors);
-        this.AppendOutputEntries(
+        List<string> scrollSnapshot = this.AppendOutputEntriesAndSnapshot(
             new OutputEntry(OutputEntryType.InfoLine, "\n", ruleColor),
             new OutputEntry(OutputEntryType.InfoLine, $"  {question.Prompt}", ruleColor));
 
@@ -226,6 +228,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
             ListSelectionCustomTextPlaceholder = null,
             ListSelectionIndex = 0,
             ListSelectionCustomInputText = "",
+            ScrollAreaContentItems = scrollSnapshot,
         };
     }
 
@@ -351,18 +354,36 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     {
         lock (this._outputLock)
         {
-            foreach (OutputEntry entry in entries)
-            {
-                this._outputItems.Add(RenderEntry(entry.Text, entry.Color));
-            }
-
-            if (entries.Length > 0)
-            {
-                this._lastEntryType = entries[^1].Type;
-            }
-
+            this.AppendOutputEntriesCore(entries);
             var snapshot = new List<string>(this._outputItems);
             this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
+        }
+    }
+
+    /// <summary>
+    /// Appends output entries and returns a snapshot of the scroll area content,
+    /// without calling <c>_setState</c>. Use this when the caller will include the
+    /// snapshot in a larger state update to avoid double-set overwrite issues.
+    /// </summary>
+    private List<string> AppendOutputEntriesAndSnapshot(params OutputEntry[] entries)
+    {
+        lock (this._outputLock)
+        {
+            this.AppendOutputEntriesCore(entries);
+            return new List<string>(this._outputItems);
+        }
+    }
+
+    private void AppendOutputEntriesCore(OutputEntry[] entries)
+    {
+        foreach (OutputEntry entry in entries)
+        {
+            this._outputItems.Add(RenderEntry(entry.Text, entry.Color));
+        }
+
+        if (entries.Length > 0)
+        {
+            this._lastEntryType = entries[^1].Type;
         }
     }
 

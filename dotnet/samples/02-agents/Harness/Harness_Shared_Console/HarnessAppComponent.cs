@@ -445,7 +445,8 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         int modeAndHelpHeight = showStatusAndHelp ? AgentModeAndHelp.CalculateHeight(modeAndHelpProps) : 0;
 
         int ruleHeight = TopBottomRule.CalculateHeight(ruleProps);
-        int scrollBottom = Math.Max(1, state.ConsoleHeight - ruleHeight - textPanelHeight - agentStatusHeight - queuedPanelHeight - modeAndHelpHeight);
+        int nonScrollHeight = ruleHeight + textPanelHeight + agentStatusHeight + queuedPanelHeight + modeAndHelpHeight + 1; // +1 for bottom padding
+        int scrollBottom = Math.Max(1, state.ConsoleHeight - nonScrollHeight);
 
         // If scroll region changed or a clear is needed, reset everything
         if (this._resizedSinceLastRender || (this._scrollRegionBottom != 0 && scrollBottom != this._scrollRegionBottom))

@@ -18,7 +18,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     private readonly Action _requestShutdown;
     private readonly IReadOnlyDictionary<string, ConsoleColor>? _modeColors;
     private readonly List<string> _outputItems = [];
-    private readonly object _outputLock = new();
+    private readonly object _stateLock = new();
 
     private OutputEntryType? _lastEntryType;
     private bool _hasReceivedAnyText;
@@ -52,11 +52,14 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
         get => this._currentMode;
         set
         {
-            this._currentMode = value;
-            this.UpdateState(s => s with
+            this.UpdateState(s =>
             {
-                ModeColor = ModeColors.Get(value, this._modeColors),
-                ModeText = value,
+                this._currentMode = value;
+                return s with
+                {
+                    ModeColor = ModeColors.Get(value, this._modeColors),
+                    ModeText = value,
+                };
             });
         }
     }
@@ -84,7 +87,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     /// <inheritdoc/>
     public void BeginStreamingOutput()
     {
-        lock (this._outputLock)
+        lock (this._stateLock)
         {
             this._hasReceivedAnyText = false;
             this._currentStreamingEntry = null;
@@ -117,23 +120,23 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
             return;
         }
 
-        HarnessAppComponentState current = this._getState();
-        bool wasEmpty = current.PendingQuestions.Count == 0;
-
-        var combined = new List<FollowUpQuestion>(current.PendingQuestions.Count + questions.Count);
-        combined.AddRange(current.PendingQuestions);
-        combined.AddRange(questions);
-
-        HarnessAppComponentState next = current with { PendingQuestions = combined };
-
-        if (wasEmpty)
+        this.UpdateState(s =>
         {
-            // The new head needs its display configured. Render any prompt-as-info-line
-            // side effects first (so the resulting state covers display fields too).
-            next = this.ConfigureForHeadQuestion(next, combined[0]);
-        }
+            bool wasEmpty = s.PendingQuestions.Count == 0;
 
-        this._setState(next);
+            var combined = new List<FollowUpQuestion>(s.PendingQuestions.Count + questions.Count);
+            combined.AddRange(s.PendingQuestions);
+            combined.AddRange(questions);
+
+            HarnessAppComponentState next = s with { PendingQuestions = combined };
+
+            if (wasEmpty)
+            {
+                next = this.ConfigureForHeadQuestion(next, combined[0]);
+            }
+
+            return next;
+        });
     }
 
     /// <inheritdoc/>
@@ -151,22 +154,22 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     /// <inheritdoc/>
     public void AdvanceFollowUpQuestion()
     {
-        HarnessAppComponentState current = this._getState();
-        if (current.PendingQuestions.Count == 0)
+        this.UpdateState(s =>
         {
-            return;
-        }
+            if (s.PendingQuestions.Count == 0)
+            {
+                return s;
+            }
 
-        var remaining = current.PendingQuestions.Skip(1).ToList();
-        HarnessAppComponentState next = current with { PendingQuestions = remaining };
+            var remaining = s.PendingQuestions.Skip(1).ToList();
+            HarnessAppComponentState next = s with { PendingQuestions = remaining };
 
-        if (remaining.Count > 0)
-        {
-            next = this.ConfigureForHeadQuestion(next, remaining[0]);
-        }
-        else
-        {
-            next = next with
+            if (remaining.Count > 0)
+            {
+                return this.ConfigureForHeadQuestion(next, remaining[0]);
+            }
+
+            return next with
             {
                 Mode = BottomPanelMode.TextInput,
                 ListSelectionOptions = [],
@@ -175,23 +178,22 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
                 ListSelectionIndex = 0,
                 ListSelectionCustomInputText = "",
             };
-        }
-
-        this._setState(next);
+        });
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<ChatMessage> TakeFollowUpResponses()
     {
-        HarnessAppComponentState current = this._getState();
-        IReadOnlyList<ChatMessage> responses = current.AccumulatedFollowUpResponses;
-        if (responses.Count == 0)
+        return this.UpdateState(s =>
         {
-            return responses;
-        }
+            IReadOnlyList<ChatMessage> responses = s.AccumulatedFollowUpResponses;
+            if (responses.Count == 0)
+            {
+                return (s, responses);
+            }
 
-        this._setState(current with { AccumulatedFollowUpResponses = [] });
-        return responses;
+            return (s with { AccumulatedFollowUpResponses = [] }, responses);
+        });
     }
 
     /// <summary>
@@ -237,10 +239,14 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     /// <inheritdoc/>
     public void WriteUserInputEcho(string text)
     {
-        this.AppendOutputEntries(new OutputEntry(
-            OutputEntryType.UserInput,
-            $"\nYou: {text}\n\n",
-            ConsoleColor.Green));
+        this.UpdateState(s =>
+        {
+            List<string> snapshot = this.AppendOutputEntriesAndSnapshot(new OutputEntry(
+                OutputEntryType.UserInput,
+                $"\nYou: {text}\n\n",
+                ConsoleColor.Green));
+            return s with { ScrollAreaContentItems = snapshot };
+        });
     }
 
     /// <inheritdoc/>
@@ -253,23 +259,27 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
 
     private Task WriteInfoCoreAsync(string text, ConsoleColor? color, bool newLine)
     {
-        // Add a blank line separator when transitioning from streaming text or user input.
-        string prefix = this._lastEntryType is OutputEntryType.StreamingText or OutputEntryType.StreamFooter
-            ? "\n  "
-            : "  ";
+        this.UpdateState(s =>
+        {
+            // Add a blank line separator when transitioning from streaming text or user input.
+            string prefix = this._lastEntryType is OutputEntryType.StreamingText or OutputEntryType.StreamFooter
+                ? "\n  "
+                : "  ";
 
-        string fullText = newLine ? prefix + text + "\n\n" : prefix + text;
-        this.AppendOutputEntries(new OutputEntry(
-            OutputEntryType.InfoLine,
-            fullText,
-            color ?? ModeColors.Get(this._currentMode, this._modeColors)));
+            string fullText = newLine ? prefix + text + "\n\n" : prefix + text;
+            List<string> snapshot = this.AppendOutputEntriesAndSnapshot(new OutputEntry(
+                OutputEntryType.InfoLine,
+                fullText,
+                color ?? ModeColors.Get(this._currentMode, this._modeColors)));
+            return s with { ScrollAreaContentItems = snapshot };
+        });
         return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     public Task WriteTextAsync(string text, ConsoleColor? color = null)
     {
-        lock (this._outputLock)
+        this.UpdateState(s =>
         {
             this._lastEntryType = OutputEntryType.StreamingText;
             this._hasReceivedAnyText = true;
@@ -296,9 +306,8 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
                 this._currentStreamingEntryIndex = this._outputItems.Count - 1;
             }
 
-            var snapshot = new List<string>(this._outputItems);
-            this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
-        }
+            return s with { ScrollAreaContentItems = new List<string>(this._outputItems) };
+        });
 
         return Task.CompletedTask;
     }
@@ -306,17 +315,18 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     /// <inheritdoc/>
     public Task EndStreamingOutputAsync()
     {
-        lock (this._outputLock)
+        this.UpdateState(s =>
         {
             if (this._hasReceivedAnyText)
             {
                 this._outputItems.Add(RenderEntry("\n", null));
                 this._currentStreamingEntry = null;
                 this._lastEntryType = OutputEntryType.StreamFooter;
-                var snapshot = new List<string>(this._outputItems);
-                this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
+                return s with { ScrollAreaContentItems = new List<string>(this._outputItems) };
             }
-        }
+
+            return s;
+        });
 
         return Task.CompletedTask;
     }
@@ -326,10 +336,14 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     {
         if (!this._hasReceivedAnyText && !hasFollowUpActions)
         {
-            this.AppendOutputEntries(new OutputEntry(
-                OutputEntryType.StreamFooter,
-                "  (no text response from agent)\n",
-                ConsoleColor.DarkYellow));
+            this.UpdateState(s =>
+            {
+                List<string> snapshot = this.AppendOutputEntriesAndSnapshot(new OutputEntry(
+                    OutputEntryType.StreamFooter,
+                    "  (no text response from agent)\n",
+                    ConsoleColor.DarkYellow));
+                return s with { ScrollAreaContentItems = snapshot };
+            });
         }
 
         return Task.CompletedTask;
@@ -348,37 +362,32 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
 
     private void UpdateState(Func<HarnessAppComponentState, HarnessAppComponentState> update)
     {
-        this._setState(update(this._getState()));
+        lock (this._stateLock)
+        {
+            this._setState(update(this._getState()));
+        }
     }
 
-    /// <summary>
-    /// Appends one or more output entries to the output list under lock,
-    /// updates <see cref="_lastEntryType"/> to the last entry's type, and pushes
-    /// a new state snapshot. Each entry is rendered to its final ANSI string before
-    /// being stored in <see cref="_outputItems"/>.
-    /// </summary>
-    private void AppendOutputEntries(params OutputEntry[] entries)
+    private T UpdateState<T>(Func<HarnessAppComponentState, (HarnessAppComponentState State, T Result)> update)
     {
-        lock (this._outputLock)
+        lock (this._stateLock)
         {
-            this.AppendOutputEntriesCore(entries);
-            var snapshot = new List<string>(this._outputItems);
-            this._setState(this._getState() with { ScrollAreaContentItems = snapshot });
+            var (newState, result) = update(this._getState());
+            this._setState(newState);
+            return result;
         }
     }
 
     /// <summary>
-    /// Appends output entries and returns a snapshot of the scroll area content,
-    /// without calling <c>_setState</c>. Use this when the caller will include the
-    /// snapshot in a larger state update to avoid double-set overwrite issues.
+    /// Appends one or more output entries to the output list, updates
+    /// <see cref="_lastEntryType"/> to the last entry's type, and returns a
+    /// snapshot of <see cref="_outputItems"/>. Must be called inside a locked
+    /// context (e.g. within an <see cref="UpdateState"/> callback).
     /// </summary>
     private List<string> AppendOutputEntriesAndSnapshot(params OutputEntry[] entries)
     {
-        lock (this._outputLock)
-        {
-            this.AppendOutputEntriesCore(entries);
-            return new List<string>(this._outputItems);
-        }
+        this.AppendOutputEntriesCore(entries);
+        return new List<string>(this._outputItems);
     }
 
     private void AppendOutputEntriesCore(OutputEntry[] entries)

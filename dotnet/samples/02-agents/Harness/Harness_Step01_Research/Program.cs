@@ -8,7 +8,8 @@
 //
 // Special commands:
 //   /todos  — Display the current todo list without invoking the agent.
-//   exit    — End the session.
+//   /mode   — Get or set the current agent mode.
+//   /exit   — End the session.
 
 #pragma warning disable OPENAI001 // Suppress experimental API warnings for Responses API usage.
 #pragma warning disable MAAI001  // Suppress experimental API warnings for Agents AI experiments.

@@ -8,7 +8,7 @@
 // Ask the agent to analyze the data, produce summaries, or create new output files.
 //
 // Special commands:
-//   exit — End the session.
+//   /exit — End the session.
 
 #pragma warning disable OPENAI001 // Suppress experimental API warnings for Responses API usage.
 #pragma warning disable MAAI001  // Suppress experimental API warnings for Agents AI experiments.

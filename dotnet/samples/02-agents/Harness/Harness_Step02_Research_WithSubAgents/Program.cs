@@ -6,7 +6,7 @@
 // equipped with Foundry's hosted web search tool.
 //
 // Special commands:
-//   exit    — End the session.
+//   /exit    — End the session.
 
 #pragma warning disable OPENAI001 // Suppress experimental API warnings for Responses API usage.
 #pragma warning disable MAAI001  // Suppress experimental API warnings for Agents AI experiments.

@@ -334,4 +334,428 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
     }
 
     #endregion
+
+    #region Symlink Escape Rejection
+
+#if NET
+    [Fact]
+    public async Task ReadFileAsync_SymlinkedFile_ThrowsAsync()
+    {
+        // Arrange — create a file outside the root and symlink to it from inside.
+        string outsideFile = Path.Combine(Path.GetTempPath(), "symlink_target_read_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outsideFile, "SECRET_OUTSIDE_ROOT");
+
+        string linkPath = Path.Combine(this._rootDir, "leak.txt");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideFile);
+
+            // Verify symlink was created (skip if platform doesn't support it).
+            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            {
+                return; // Cannot create symlinks in this environment; skip.
+            }
+
+            // Act & Assert — reading through the symlink should be rejected.
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.ReadFileAsync("leak.txt"));
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            File.Delete(outsideFile);
+        }
+    }
+
+    [Fact]
+    public async Task WriteFileAsync_SymlinkedFile_ThrowsAsync()
+    {
+        // Arrange — create a file outside the root and symlink to it from inside.
+        string outsideFile = Path.Combine(Path.GetTempPath(), "symlink_target_write_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outsideFile, "ORIGINAL_CONTENT");
+
+        string linkPath = Path.Combine(this._rootDir, "overwrite.txt");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideFile);
+
+            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            {
+                return; // Cannot create symlinks in this environment; skip.
+            }
+
+            // Act & Assert — writing through the symlink should be rejected.
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.WriteFileAsync("overwrite.txt", "EVIL_CONTENT"));
+
+            // Verify the outside file was NOT modified.
+            Assert.Equal("ORIGINAL_CONTENT", await File.ReadAllTextAsync(outsideFile));
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            File.Delete(outsideFile);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteFileAsync_SymlinkedFile_ThrowsAsync()
+    {
+        // Arrange
+        string outsideFile = Path.Combine(Path.GetTempPath(), "symlink_target_delete_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outsideFile, "DO_NOT_DELETE");
+
+        string linkPath = Path.Combine(this._rootDir, "trap.txt");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideFile);
+
+            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.DeleteFileAsync("trap.txt"));
+
+            // Verify the outside file still exists.
+            Assert.True(File.Exists(outsideFile));
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            File.Delete(outsideFile);
+        }
+    }
+
+    [Fact]
+    public async Task FileExistsAsync_SymlinkedFile_ThrowsAsync()
+    {
+        // Arrange
+        string outsideFile = Path.Combine(Path.GetTempPath(), "symlink_target_exists_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outsideFile, "EXISTS_OUTSIDE");
+
+        string linkPath = Path.Combine(this._rootDir, "phantom.txt");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideFile);
+
+            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.FileExistsAsync("phantom.txt"));
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            File.Delete(outsideFile);
+        }
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_SymlinkedDirectory_ThrowsAsync()
+    {
+        // Arrange — create a directory outside root and symlink a directory inside root to it.
+        string outsideDir = Path.Combine(Path.GetTempPath(), "symlink_dir_target_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        File.WriteAllText(Path.Combine(outsideDir, "secret.txt"), "SECRET");
+
+        string linkDir = Path.Combine(this._rootDir, "linked-dir");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, outsideDir);
+
+            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.ListFilesAsync("linked-dir"));
+        }
+        finally
+        {
+            if (Directory.Exists(linkDir))
+            {
+                Directory.Delete(linkDir);
+            }
+
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SearchFilesAsync_SymlinkedDirectory_ThrowsAsync()
+    {
+        // Arrange
+        string outsideDir = Path.Combine(Path.GetTempPath(), "symlink_search_target_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        File.WriteAllText(Path.Combine(outsideDir, "data.txt"), "SENSITIVE_DATA");
+
+        string linkDir = Path.Combine(this._rootDir, "search-link");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, outsideDir);
+
+            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.SearchFilesAsync("search-link", "SENSITIVE"));
+        }
+        finally
+        {
+            if (Directory.Exists(linkDir))
+            {
+                Directory.Delete(linkDir);
+            }
+
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ReadFileAsync_ThroughDirectorySymlink_ThrowsAsync()
+    {
+        // Arrange — directory symlink inside root pointing outside; read a file through it.
+        string outsideDir = Path.Combine(Path.GetTempPath(), "symlink_dir_read_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        File.WriteAllText(Path.Combine(outsideDir, "secret.txt"), "DIR_SYMLINK_SECRET");
+
+        string linkDir = Path.Combine(this._rootDir, "linked-output");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, outsideDir);
+
+            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert — reading through a directory symlink should be rejected.
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.ReadFileAsync("linked-output/secret.txt"));
+        }
+        finally
+        {
+            if (Directory.Exists(linkDir))
+            {
+                Directory.Delete(linkDir);
+            }
+
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WriteFileAsync_ThroughDirectorySymlink_ThrowsAsync()
+    {
+        // Arrange — directory symlink; attempt to create/overwrite a file through it.
+        string outsideDir = Path.Combine(Path.GetTempPath(), "symlink_dir_write_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+
+        string linkDir = Path.Combine(this._rootDir, "linked-output");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, outsideDir);
+
+            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.WriteFileAsync("linked-output/created-by-agent.txt", "CONTENT"));
+
+            // Verify no file was created outside.
+            Assert.False(File.Exists(Path.Combine(outsideDir, "created-by-agent.txt")));
+        }
+        finally
+        {
+            if (Directory.Exists(linkDir))
+            {
+                Directory.Delete(linkDir);
+            }
+
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteFileAsync_ThroughDirectorySymlink_ThrowsAsync()
+    {
+        // Arrange — directory symlink; attempt to delete a file through it.
+        string outsideDir = Path.Combine(Path.GetTempPath(), "symlink_dir_delete_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        string outsideFile = Path.Combine(outsideDir, "delete-me.txt");
+        File.WriteAllText(outsideFile, "DO_NOT_DELETE");
+
+        string linkDir = Path.Combine(this._rootDir, "linked-output");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, outsideDir);
+
+            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.DeleteFileAsync("linked-output/delete-me.txt"));
+
+            // Verify the outside file was NOT deleted.
+            Assert.True(File.Exists(outsideFile));
+        }
+        finally
+        {
+            if (Directory.Exists(linkDir))
+            {
+                Directory.Delete(linkDir);
+            }
+
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateDirectoryAsync_ThroughDirectorySymlink_ThrowsAsync()
+    {
+        // Arrange — directory symlink; attempt to create a subdirectory through it.
+        string outsideDir = Path.Combine(Path.GetTempPath(), "symlink_dir_mkdir_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+
+        string linkDir = Path.Combine(this._rootDir, "linked-output");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, outsideDir);
+
+            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.CreateDirectoryAsync("linked-output/created-directory"));
+
+            // Verify no directory was created outside.
+            Assert.False(Directory.Exists(Path.Combine(outsideDir, "created-directory")));
+        }
+        finally
+        {
+            if (Directory.Exists(linkDir))
+            {
+                Directory.Delete(linkDir);
+            }
+
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SearchFilesAsync_RootWithSymlinkedFile_DoesNotLeakContentAsync()
+    {
+        // Arrange — symlinked file at root level; search should not return its content.
+        string outsideFile = Path.Combine(Path.GetTempPath(), "symlink_search_root_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outsideFile, "ROOT_LEVEL_SECRET_CONTENT");
+
+        string linkPath = Path.Combine(this._rootDir, "env-link.txt");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideFile);
+
+            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Also add a normal file to confirm search still works for non-symlinks.
+            await this._store.WriteFileAsync("normal.txt", "NORMAL_CONTENT");
+
+            // Act — search at root should skip the symlinked file.
+            var results = await this._store.SearchFilesAsync("", "SECRET_CONTENT");
+
+            // Assert — no results from the symlinked file.
+            Assert.Empty(results);
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            File.Delete(outsideFile);
+        }
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_RootWithSymlinkedFile_ExcludesSymlinkAsync()
+    {
+        // Arrange — symlinked file at root level; listing should not include it.
+        string outsideFile = Path.Combine(Path.GetTempPath(), "symlink_list_root_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outsideFile, "OUTSIDE");
+
+        string linkPath = Path.Combine(this._rootDir, "hidden-link.txt");
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideFile);
+
+            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            {
+                return;
+            }
+
+            // Also add a normal file.
+            await this._store.WriteFileAsync("visible.txt", "VISIBLE");
+
+            // Act
+            var files = await this._store.ListFilesAsync("");
+
+            // Assert — symlinked file should not appear in listing.
+            Assert.DoesNotContain("hidden-link.txt", files);
+            Assert.Contains("visible.txt", files);
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            File.Delete(outsideFile);
+        }
+    }
+#endif
+
+    #endregion
 }

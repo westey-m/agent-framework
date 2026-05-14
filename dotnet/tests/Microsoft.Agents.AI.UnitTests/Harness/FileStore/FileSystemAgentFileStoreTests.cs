@@ -338,6 +338,46 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
     #region Symlink Escape Rejection
 
 #if NET
+    /// <summary>
+    /// Attempts to create a file symlink. Returns false if the platform does not support
+    /// symlink creation (e.g., Windows without developer mode) or if creation fails.
+    /// </summary>
+    private static bool TryCreateFileSymbolicLink(string linkPath, string targetPath)
+    {
+        try
+        {
+            File.CreateSymbolicLink(linkPath, targetPath);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+
+        // Verify the symlink was actually created as a reparse point.
+        return File.Exists(linkPath)
+            && (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) != 0;
+    }
+
+    /// <summary>
+    /// Attempts to create a directory symlink. Returns false if the platform does not support
+    /// symlink creation (e.g., Windows without developer mode) or if creation fails.
+    /// </summary>
+    private static bool TryCreateDirectorySymbolicLink(string linkPath, string targetPath)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, targetPath);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+
+        // Verify the symlink was actually created as a reparse point.
+        return Directory.Exists(linkPath)
+            && (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) != 0;
+    }
+
     [Fact]
     public async Task ReadFileAsync_SymlinkedFile_ThrowsAsync()
     {
@@ -349,10 +389,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            File.CreateSymbolicLink(linkPath, outsideFile);
-
-            // Verify symlink was created (skip if platform doesn't support it).
-            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateFileSymbolicLink(linkPath, outsideFile))
             {
                 return; // Cannot create symlinks in this environment; skip.
             }
@@ -382,11 +419,9 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            File.CreateSymbolicLink(linkPath, outsideFile);
-
-            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateFileSymbolicLink(linkPath, outsideFile))
             {
-                return; // Cannot create symlinks in this environment; skip.
+                return;
             }
 
             // Act & Assert — writing through the symlink should be rejected.
@@ -417,9 +452,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            File.CreateSymbolicLink(linkPath, outsideFile);
-
-            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateFileSymbolicLink(linkPath, outsideFile))
             {
                 return;
             }
@@ -452,9 +485,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            File.CreateSymbolicLink(linkPath, outsideFile);
-
-            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateFileSymbolicLink(linkPath, outsideFile))
             {
                 return;
             }
@@ -474,6 +505,38 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFileAsync_DanglingSymlink_ThrowsAsync()
+    {
+        // Arrange — create a symlink pointing to a non-existent target.
+        string nonExistentTarget = Path.Combine(Path.GetTempPath(), "dangling_target_" + Guid.NewGuid().ToString("N") + ".txt");
+        string linkPath = Path.Combine(this._rootDir, "dangling.txt");
+
+        try
+        {
+            if (!TryCreateFileSymbolicLink(linkPath, nonExistentTarget))
+            {
+                return;
+            }
+
+            // Act & Assert — even a dangling symlink must be rejected.
+            await Assert.ThrowsAsync<ArgumentException>(() => this._store.WriteFileAsync("dangling.txt", "CONTENT"));
+
+            // Verify the target was NOT created by following the dangling link.
+            Assert.False(File.Exists(nonExistentTarget));
+        }
+        finally
+        {
+            // Dangling symlinks: File.Exists returns false, but the link entry still exists.
+            // Use FileInfo to delete the link itself.
+            var linkInfo = new FileInfo(linkPath);
+            if (linkInfo.Exists || (linkInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                linkInfo.Delete();
+            }
+        }
+    }
+
+    [Fact]
     public async Task ListFilesAsync_SymlinkedDirectory_ThrowsAsync()
     {
         // Arrange — create a directory outside root and symlink a directory inside root to it.
@@ -485,9 +548,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            Directory.CreateSymbolicLink(linkDir, outsideDir);
-
-            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateDirectorySymbolicLink(linkDir, outsideDir))
             {
                 return;
             }
@@ -518,9 +579,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            Directory.CreateSymbolicLink(linkDir, outsideDir);
-
-            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateDirectorySymbolicLink(linkDir, outsideDir))
             {
                 return;
             }
@@ -551,9 +610,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            Directory.CreateSymbolicLink(linkDir, outsideDir);
-
-            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateDirectorySymbolicLink(linkDir, outsideDir))
             {
                 return;
             }
@@ -583,9 +640,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            Directory.CreateSymbolicLink(linkDir, outsideDir);
-
-            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateDirectorySymbolicLink(linkDir, outsideDir))
             {
                 return;
             }
@@ -620,9 +675,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            Directory.CreateSymbolicLink(linkDir, outsideDir);
-
-            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateDirectorySymbolicLink(linkDir, outsideDir))
             {
                 return;
             }
@@ -655,9 +708,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            Directory.CreateSymbolicLink(linkDir, outsideDir);
-
-            if (!Directory.Exists(linkDir) || (File.GetAttributes(linkDir) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateDirectorySymbolicLink(linkDir, outsideDir))
             {
                 return;
             }
@@ -690,9 +741,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            File.CreateSymbolicLink(linkPath, outsideFile);
-
-            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateFileSymbolicLink(linkPath, outsideFile))
             {
                 return;
             }
@@ -728,9 +777,7 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
 
         try
         {
-            File.CreateSymbolicLink(linkPath, outsideFile);
-
-            if (!File.Exists(linkPath) || (File.GetAttributes(linkPath) & FileAttributes.ReparsePoint) == 0)
+            if (!TryCreateFileSymbolicLink(linkPath, outsideFile))
             {
                 return;
             }

@@ -267,6 +267,8 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
     /// Checks each path segment between the trusted root and the resolved path for symbolic links
     /// or reparse points. Throws <see cref="ArgumentException"/> if any segment is a symlink.
     /// Stops checking at the first segment that does not exist on disk (for write scenarios).
+    /// Uses <see cref="File.GetAttributes(string)"/> directly so that dangling symlinks (whose targets
+    /// do not exist) are still detected via their <see cref="FileAttributes.ReparsePoint"/> flag.
     /// </summary>
     private static void ThrowIfContainsSymlink(string fullPath, string rootPath)
     {
@@ -281,20 +283,22 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
         {
             current = Path.Combine(current, segment);
 
-            // If this segment doesn't exist on disk yet (write scenario), stop checking.
-#if NET8_0_OR_GREATER
-            if (!Path.Exists(current))
+            FileAttributes attributes;
+            try
+            {
+                attributes = File.GetAttributes(current);
+            }
+            catch (FileNotFoundException)
+            {
+                // Segment does not exist on disk (write scenario); stop checking.
+                break;
+            }
+            catch (DirectoryNotFoundException)
             {
                 break;
             }
-#else
-            if (!File.Exists(current) && !Directory.Exists(current))
-            {
-                break;
-            }
-#endif
 
-            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
             {
                 throw new ArgumentException(
                     "Invalid path: the resolved path contains a symbolic link or reparse point.");

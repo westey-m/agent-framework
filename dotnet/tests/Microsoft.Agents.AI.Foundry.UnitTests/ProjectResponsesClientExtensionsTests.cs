@@ -151,25 +151,13 @@ public sealed class ProjectResponsesClientExtensionsTests
             },
         };
 
-        // Act - invoke the configure action from the pipeline on the options
-        var configureField = chatClient.GetType().GetField("_configureOptions", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(configureField);
-        var configureAction = configureField.GetValue(chatClient) as Action<ChatOptions>;
-        Assert.NotNull(configureAction);
-        configureAction(options);
+        // Act
+        var createResponseOptions = GetCreateResponseOptionsFromPipeline(chatClient, options);
 
-        // Assert - invoke the resulting factory and verify all properties are present
-        Assert.NotNull(options.RawRepresentationFactory);
-        var createResponseOptions = options.RawRepresentationFactory(chatClient) as CreateResponseOptions;
+        // Assert
         Assert.NotNull(createResponseOptions);
-
-        // The extension method should have set StoredOutputEnabled to false
         Assert.False(createResponseOptions.StoredOutputEnabled);
-
-        // The extension method should have added ReasoningEncryptedContent
         Assert.Contains(IncludedResponseProperty.ReasoningEncryptedContent, createResponseOptions.IncludedProperties);
-
-        // The caller's original IncludedProperty should still be present
         Assert.Contains(IncludedResponseProperty.WebSearchCallActionSources, createResponseOptions.IncludedProperties);
     }
 
@@ -194,17 +182,10 @@ public sealed class ProjectResponsesClientExtensionsTests
         };
 
         // Act
-        var configureField = chatClient.GetType().GetField("_configureOptions", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(configureField);
-        var configureAction = configureField.GetValue(chatClient) as Action<ChatOptions>;
-        Assert.NotNull(configureAction);
-        configureAction(options);
-
-        Assert.NotNull(options.RawRepresentationFactory);
-        var createResponseOptions = options.RawRepresentationFactory(chatClient) as CreateResponseOptions;
-        Assert.NotNull(createResponseOptions);
+        var createResponseOptions = GetCreateResponseOptionsFromPipeline(chatClient, options);
 
         // Assert - ReasoningEncryptedContent should appear exactly once
+        Assert.NotNull(createResponseOptions);
         int count = 0;
         foreach (var prop in createResponseOptions.IncludedProperties)
         {
@@ -242,13 +223,21 @@ public sealed class ProjectResponsesClientExtensionsTests
     /// </summary>
     private static CreateResponseOptions? GetCreateResponseOptionsFromPipeline(IChatClient chatClient)
     {
+        return GetCreateResponseOptionsFromPipeline(chatClient, new ChatOptions());
+    }
+
+    /// <summary>
+    /// Overload that runs the configure action on caller-supplied <see cref="ChatOptions"/>,
+    /// useful for testing that existing factories are preserved.
+    /// </summary>
+    private static CreateResponseOptions? GetCreateResponseOptionsFromPipeline(IChatClient chatClient, ChatOptions options)
+    {
         var configureField = chatClient.GetType().GetField("_configureOptions", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(configureField);
 
         var configureAction = configureField.GetValue(chatClient) as Action<ChatOptions>;
         Assert.NotNull(configureAction);
 
-        var options = new ChatOptions();
         configureAction(options);
 
         Assert.NotNull(options.RawRepresentationFactory);

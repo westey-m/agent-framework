@@ -74,7 +74,7 @@ AIAgent agent =
         FileAccessStore = new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "working")),
         DisableTodoProvider = true,
         DisableAgentModeProvider = true,
-        DisableFileMemory = true,
+        DisableFileMemory = true,   // If enabled, this would allow the agent to store memories as files in a directory associated with the current session
         DisableWebSearch = true,
         ChatOptions = new ChatOptions
         {

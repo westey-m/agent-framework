@@ -74,22 +74,23 @@ AIAgent agent =
             RetryPolicy = new ClientRetryPolicy(3)          // Enable retries to improve resiliency.
         })
     .GetResponsesClient()
-    .AsIChatClientWithStoredOutputDisabled(deploymentName)   // We want to manage chat history locally (not stored in the responses service), so that we can manage compaction ourselves.
+    .AsIChatClientWithStoredOutputDisabled(deploymentName)  // We want to manage chat history locally (not stored in the responses service), so that we can manage compaction ourselves.
     .AsHarnessAgent(MaxContextWindowTokens, MaxOutputTokens, new HarnessAgentOptions
     {
         Name = "ResearchAgent",
         Description = "A research assistant that plans and executes research tasks.",
-        DisableFileAccess = true,
-        FileMemoryStore = new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "agent-files")),
+        DisableFileMemory = true,                           // If enabled, this would allow the agent to store memories as files in a directory associated with the current session
+        FileMemoryStore = new FileSystemAgentFileStore(     // Configure the file memory provider to store files in a local folder called "agent-files".
+            Path.Combine(AppContext.BaseDirectory, "agent-files")),
         ChatOptions = new ChatOptions
         {
             Instructions = instructions,
             Tools =
             [
-                new WebBrowsingTool(                                    // Add a local web browsing tool that converts html to markdown.
+                new WebBrowsingTool(                        // Add a local web browsing tool that converts html to markdown.
                     new WebBrowsingToolOptions { AllowPublicNetworks = true }),
             ],
-            MaxOutputTokens = MaxOutputTokens,                          // Set a high token limit for long research tasks with many tool calls and long outputs.
+            MaxOutputTokens = MaxOutputTokens,              // Set a high token limit for long research tasks with many tool calls and long outputs.
             Reasoning = new() { Effort = ReasoningEffort.Medium },
         },
     });

@@ -371,6 +371,94 @@ public sealed class OpenAIResponseClientExtensionsTests
     }
 
     /// <summary>
+    /// Verify that AsIChatClientWithStoredOutputDisabled preserves an existing RawRepresentationFactory
+    /// set on ChatOptions, augmenting it with StoredOutputEnabled and ReasoningEncryptedContent
+    /// rather than replacing it.
+    /// </summary>
+    [Fact]
+    public void AsIChatClientWithStoredOutputDisabled_PreservesExistingRawRepresentationFactory()
+    {
+        // Arrange
+        var responseClient = new TestOpenAIResponseClient();
+        var chatClient = responseClient.AsIChatClientWithStoredOutputDisabled();
+
+        // Simulate a caller setting their own RawRepresentationFactory on ChatOptions
+        // (e.g., to add WebSearchCallActionSources).
+        var options = new ChatOptions
+        {
+            RawRepresentationFactory = _ => new CreateResponseOptions
+            {
+                IncludedProperties = { IncludedResponseProperty.WebSearchCallActionSources },
+            },
+        };
+
+        // Act - invoke the configure action from the pipeline on the options
+        var configureField = chatClient.GetType().GetField("_configureOptions", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(configureField);
+        var configureAction = configureField.GetValue(chatClient) as Action<ChatOptions>;
+        Assert.NotNull(configureAction);
+        configureAction(options);
+
+        // Assert - invoke the resulting factory and verify all properties are present
+        Assert.NotNull(options.RawRepresentationFactory);
+        var createResponseOptions = options.RawRepresentationFactory(chatClient) as CreateResponseOptions;
+        Assert.NotNull(createResponseOptions);
+
+        // The extension method should have set StoredOutputEnabled to false
+        Assert.False(createResponseOptions.StoredOutputEnabled);
+
+        // The extension method should have added ReasoningEncryptedContent
+        Assert.Contains(IncludedResponseProperty.ReasoningEncryptedContent, createResponseOptions.IncludedProperties);
+
+        // The caller's original IncludedProperty should still be present
+        Assert.Contains(IncludedResponseProperty.WebSearchCallActionSources, createResponseOptions.IncludedProperties);
+    }
+
+    /// <summary>
+    /// Verify that AsIChatClientWithStoredOutputDisabled does not duplicate ReasoningEncryptedContent
+    /// when the existing factory already includes it.
+    /// </summary>
+    [Fact]
+    public void AsIChatClientWithStoredOutputDisabled_DoesNotDuplicateReasoningEncryptedContent()
+    {
+        // Arrange
+        var responseClient = new TestOpenAIResponseClient();
+        var chatClient = responseClient.AsIChatClientWithStoredOutputDisabled();
+
+        // Simulate a caller that already includes ReasoningEncryptedContent
+        var options = new ChatOptions
+        {
+            RawRepresentationFactory = _ => new CreateResponseOptions
+            {
+                IncludedProperties = { IncludedResponseProperty.ReasoningEncryptedContent },
+            },
+        };
+
+        // Act
+        var configureField = chatClient.GetType().GetField("_configureOptions", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(configureField);
+        var configureAction = configureField.GetValue(chatClient) as Action<ChatOptions>;
+        Assert.NotNull(configureAction);
+        configureAction(options);
+
+        Assert.NotNull(options.RawRepresentationFactory);
+        var createResponseOptions = options.RawRepresentationFactory(chatClient) as CreateResponseOptions;
+        Assert.NotNull(createResponseOptions);
+
+        // Assert - ReasoningEncryptedContent should appear exactly once
+        int count = 0;
+        foreach (var prop in createResponseOptions.IncludedProperties)
+        {
+            if (prop == IncludedResponseProperty.ReasoningEncryptedContent)
+            {
+                count++;
+            }
+        }
+
+        Assert.Equal(1, count);
+    }
+
+    /// <summary>
     /// A simple test IServiceProvider implementation for testing.
     /// </summary>
     private sealed class TestServiceProvider : IServiceProvider

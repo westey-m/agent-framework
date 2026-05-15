@@ -33,7 +33,7 @@ public sealed class ToolCallDisplayObserver : ConsoleObserver
         }
         else if (content is WebSearchToolCallContent)
         {
-            // Handled by WebSearchDisplayObserver when present; skip here to avoid duplication.
+            // Handled by OpenAIResponsesWebSearchDisplayObserver when present; skip here to avoid duplication.
         }
         else if (content is ToolCallContent toolCall)
         {

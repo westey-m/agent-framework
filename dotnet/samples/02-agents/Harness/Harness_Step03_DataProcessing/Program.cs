@@ -54,8 +54,9 @@ var instructions =
     - Always explain what you learned and what you are going to do next between tool calls, so the user can follow along with your thought process.
     """;
 
-// Create the agent using AsHarnessAgent. The default FileAccessProvider uses {cwd}/working,
-// which matches the sample's working/ folder. Unused features are disabled.
+// Create the agent using AsHarnessAgent. The FileAccessStore is explicitly set to the
+// sample's working/ folder (copied to the output directory) so it works regardless of cwd.
+// Unused features are disabled.
 AIAgent agent =
     new OpenAIClient(
         new BearerTokenPolicy(new DefaultAzureCredential(), "https://ai.azure.com/.default"),
@@ -70,6 +71,7 @@ AIAgent agent =
     {
         Name = "DataAnalyst",
         Description = "A data analyst assistant that reads, analyzes, and processes data files.",
+        FileAccessStore = new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "working")),
         DisableTodoProvider = true,
         DisableAgentModeProvider = true,
         DisableFileMemory = true,

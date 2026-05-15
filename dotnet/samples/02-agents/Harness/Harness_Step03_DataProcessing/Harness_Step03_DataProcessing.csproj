@@ -18,4 +18,8 @@
     <ProjectReference Include="..\Harness_Shared_Console\Harness_Shared_Console.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="working\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

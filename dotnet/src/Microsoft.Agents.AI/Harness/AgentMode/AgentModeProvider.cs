@@ -84,11 +84,11 @@ public sealed class AgentModeProvider : AIContextProvider
         new(
             "execute",
             """
-            Use this mode when carrying out approved plans. Work autonomously using your best judgement — do not ask the user questions or wait for feedback.
+            Use this mode when carrying out approved plans. Work autonomously using your best judgment — do not ask the user questions or wait for feedback.
             
             Process to follow when in execute mode:
-            1. If you don't have a plan or tasks yet, analyse the user request and create tasks and a plan. (**Skip this step if you came from plan mode**)
-            2. Work autonomously — use your best judgement to make decisions and keep progressing without asking the user questions. The goal is to have a complete, useful result ready when the user returns.
+            1. If you don't have a plan or tasks yet, analyze the user request and create tasks and a plan. (**Skip this step if you came from plan mode**)
+            2. Work autonomously — use your best judgment to make decisions and keep progressing without asking the user questions. The goal is to have a complete, useful result ready when the user returns.
             3. If you encounter ambiguity or an unexpected situation during execution, choose the most reasonable option, note your choice, and keep going.
             4. Mark tasks as completed as you finish them.
             5. Continue working, thinking and calling tools until you have the research result for the user.

@@ -48,19 +48,22 @@ internal sealed class OpenAIResponsesWebSearchDisplayObserver : ConsoleObserver
                 await WriteOpenPageAsync(ux, openPage);
                 break;
 
+            case WebSearchSearchAction search:
+                await WriteSearchAsync(ux, search, outputs);
+                break;
+
             default:
-                // "search" action type — the concrete class is internal to the SDK,
-                // so we extract queries from the raw JSON representation.
-                await WriteSearchAsync(ux, wscri, outputs);
+                await ux.WriteInfoLineAsync("🌐 Web Search Tool (unknown action)", ConsoleColor.DarkCyan);
                 break;
         }
     }
 
-    private static async Task WriteSearchAsync(IUXStateDriver ux, WebSearchCallResponseItem wscri, IList<AIContent>? outputs)
+    private static async Task WriteSearchAsync(IUXStateDriver ux, WebSearchSearchAction search, IList<AIContent>? outputs)
     {
-        var queries = GetQueriesFromItem(wscri);
+        // Read queries directly from the typed action.
+        IList<string> queries = search.Queries;
 
-        if (queries is null || queries.Count == 0)
+        if (queries.Count == 0)
         {
             await ux.WriteInfoLineAsync("🌐 Web Search Tool: search", ConsoleColor.DarkCyan);
             return;
@@ -79,8 +82,8 @@ internal sealed class OpenAIResponsesWebSearchDisplayObserver : ConsoleObserver
         }
 
         // Show search result sources (URLs + titles) when available.
-        // This requires IncludedResponseProperty.WebSearchCallActionSources on the request options,
-        // which is only supported by the direct OpenAI API — Azure AI Foundry does not currently return sources.
+        // Sources come from M.E.AI's Outputs when IncludedResponseProperty.WebSearchCallActionSources is set,
+        // or directly from the SDK's WebSearchSearchAction.Sources.
         if (hasResults)
         {
             sb.Append("\n   │");
@@ -88,6 +91,16 @@ internal sealed class OpenAIResponsesWebSearchDisplayObserver : ConsoleObserver
             {
                 string connector = i < outputs.Count - 1 ? "├─" : "└─";
                 string line = FormatOutput(outputs[i]);
+                sb.Append($"\n   {connector} {line}");
+            }
+        }
+        else if (search.Sources is { Count: > 0 } sources)
+        {
+            sb.Append("\n   │");
+            for (int i = 0; i < sources.Count; i++)
+            {
+                string connector = i < sources.Count - 1 ? "├─" : "└─";
+                string line = FormatSource(sources[i]);
                 sb.Append($"\n   {connector} {line}");
             }
         }
@@ -114,7 +127,28 @@ internal sealed class OpenAIResponsesWebSearchDisplayObserver : ConsoleObserver
     }
 
     /// <summary>
-    /// Formats a single search result output for display.
+    /// Formats a single search result source from the SDK's <see cref="WebSearchActionSource"/> for display.
+    /// </summary>
+    private static string FormatSource(WebSearchActionSource source)
+    {
+        if (source is WebSearchActionUriSource uriSource)
+        {
+            string url = uriSource.Uri?.AbsoluteUri ?? "(unknown)";
+
+            // WebSearchActionUriSource doesn't expose a title property,
+            // but the API may include one in the raw response JSON.
+            string? title = GetTitleFromRawRepresentation(uriSource);
+
+            return title is not null
+                ? $"{Truncate(title, MaxQueryDisplayLength)} — {url}"
+                : url;
+        }
+
+        return source.ToString() ?? "(unknown source)";
+    }
+
+    /// <summary>
+    /// Formats a single search result output from M.E.AI's <see cref="AIContent"/> for display.
     /// </summary>
     private static string FormatOutput(AIContent output)
     {
@@ -138,6 +172,9 @@ internal sealed class OpenAIResponsesWebSearchDisplayObserver : ConsoleObserver
 
     /// <summary>
     /// Attempts to extract a "title" field from a raw representation object by serializing it to JSON.
+    /// The SDK's <see cref="WebSearchActionUriSource"/> doesn't expose a title property,
+    /// but the API may include one in the raw JSON — this is forward-compatible for when
+    /// the SDK adds title support.
     /// </summary>
     private static string? GetTitleFromRawRepresentation(object? rawRepresentation)
     {
@@ -159,56 +196,6 @@ internal sealed class OpenAIResponsesWebSearchDisplayObserver : ConsoleObserver
         catch
         {
             // Serialization may not be supported for this object type.
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Extracts query strings from a <see cref="WebSearchCallResponseItem"/> by
-    /// reading the "queries" array from the serialized JSON, since the search
-    /// action type is internal to the OpenAI SDK.
-    /// </summary>
-    private static List<string>? GetQueriesFromItem(WebSearchCallResponseItem wscri)
-    {
-        try
-        {
-            var data = System.ClientModel.Primitives.ModelReaderWriter.Write(wscri);
-            using var doc = System.Text.Json.JsonDocument.Parse(data);
-
-            if (!doc.RootElement.TryGetProperty("action", out var actionEl))
-            {
-                return null;
-            }
-
-            // Try the "queries" array first (multiple search queries).
-            if (actionEl.TryGetProperty("queries", out var queriesEl)
-                && queriesEl.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                var queries = new List<string>();
-                foreach (var q in queriesEl.EnumerateArray())
-                {
-                    string? text = q.GetString();
-                    if (text is not null)
-                    {
-                        queries.Add(text);
-                    }
-                }
-
-                return queries;
-            }
-
-            // Fall back to the single "query" field.
-            if (actionEl.TryGetProperty("query", out var queryEl)
-                && queryEl.ValueKind == System.Text.Json.JsonValueKind.String)
-            {
-                string? text = queryEl.GetString();
-                return text is not null ? [text] : null;
-            }
-        }
-        catch
-        {
-            // Serialization may fail (e.g. the null-URI bug on find_in_page actions).
         }
 
         return null;

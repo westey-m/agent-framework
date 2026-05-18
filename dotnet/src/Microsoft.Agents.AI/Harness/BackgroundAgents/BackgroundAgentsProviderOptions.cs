@@ -17,7 +17,7 @@ public sealed class BackgroundAgentsProviderOptions
     /// Gets or sets custom instructions provided to the agent for using the background agent tools.
     /// </summary>
     /// <remarks>
-    /// Use the <c>{sub_agents}</c> placeholder to allow the provider to inject
+    /// Use the <c>{background_agents}</c> placeholder to allow the provider to inject
     /// the formatted list of available background agents.
     /// </remarks>
     /// <value>

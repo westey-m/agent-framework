@@ -826,7 +826,7 @@ public class BackgroundAgentsProviderTests
     {
         // Arrange
         var agent = CreateMockAgent("Research", "Research agent");
-        const string CustomInstructions = "These are custom background agent instructions.\n{sub_agents}";
+        const string CustomInstructions = "These are custom background agent instructions.\n{background_agents}";
         var options = new BackgroundAgentsProviderOptions { Instructions = CustomInstructions };
         var provider = new BackgroundAgentsProvider(new[] { agent }, options);
         var context = CreateInvokingContext();

@@ -19,8 +19,8 @@ internal sealed class TodoCompleteInput
     public int Id { get; set; }
 
     /// <summary>
-    /// Gets or sets an optional reason describing how or why the item was completed.
+    /// Gets or sets the reason describing how or why the item was completed.
     /// </summary>
     [JsonPropertyName("reason")]
-    public string? Reason { get; set; }
+    public string Reason { get; set; } = string.Empty;
 }

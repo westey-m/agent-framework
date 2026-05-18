@@ -268,7 +268,7 @@ public sealed class TodoProvider : AIContextProvider, IDisposable
                 new AIFunctionFactoryOptions
                 {
                     Name = "TodoList_Complete",
-                    Description = "Mark one or more todo items as complete. Each entry has an ID and an optional reason describing how/why the item was completed. Returns the number of items that were found and marked complete.",
+                    Description = "Mark one or more todo items as complete. Each entry has an ID and a reason describing how/why the item was completed. Returns the number of items that were found and marked complete.",
                     SerializerOptions = serializerOptions,
                 }),
 

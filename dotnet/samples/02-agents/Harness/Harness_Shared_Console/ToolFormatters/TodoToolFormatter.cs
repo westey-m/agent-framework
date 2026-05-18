@@ -77,7 +77,11 @@ public sealed class TodoToolFormatter : ToolCallFormatter
         {
             foreach (JsonElement item in jsonArray.EnumerateArray())
             {
-                int id = item.TryGetProperty("id", out JsonElement idElement) ? idElement.GetInt32() : 0;
+                if (!item.TryGetProperty("id", out JsonElement idElement) || !idElement.TryGetInt32(out int id))
+                {
+                    continue;
+                }
+
                 string? reason = item.TryGetProperty("reason", out JsonElement reasonElement)
                     ? reasonElement.GetString()
                     : null;

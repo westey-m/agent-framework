@@ -48,7 +48,7 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
         - Important: Always wait for outstanding tasks to finish before you finish processing.
         - Important: After retrieving results from a completed task, clear it with BackgroundAgents_ClearCompletedTask to free memory, unless you plan to continue it with BackgroundAgents_ContinueTask.
 
-        {sub_agents}
+        {background_agents}
         """;
 
     private readonly Dictionary<string, AIAgent> _agents;
@@ -74,7 +74,7 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
         string agentListText = options?.AgentListBuilder is not null
             ? options.AgentListBuilder(this._agents)
             : BuildDefaultAgentListText(this._agents);
-        this._instructions = baseInstructions.Replace("{sub_agents}", agentListText);
+        this._instructions = baseInstructions.Replace("{background_agents}", agentListText);
 
         this._sessionState = new ProviderSessionState<BackgroundAgentState>(
             _ => new BackgroundAgentState(),

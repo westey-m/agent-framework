@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 // This sample demonstrates a HarnessAgent with ALL features enabled, plus:
 // - Hyperlight CodeAct (HyperlightCodeActProvider) for sandboxed Python code execution

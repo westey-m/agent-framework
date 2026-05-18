@@ -22,13 +22,13 @@ using System.ClientModel.Primitives;
 using Azure.AI.Projects;
 using Azure.Identity;
 using Harness.Shared.Console;
+using HyperlightSandbox.Guest.Python;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hyperlight;
 using Microsoft.Extensions.AI;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
 var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-5.4";
-var guestPath = Environment.GetEnvironmentVariable("HYPERLIGHT_PYTHON_GUEST_PATH") ?? throw new InvalidOperationException("HYPERLIGHT_PYTHON_GUEST_PATH is not set.");
 
 const int MaxContextWindowTokens = 1_050_000;
 const int MaxOutputTokens = 128_000;
@@ -38,9 +38,9 @@ const string TracingSourceName = "Harness.CodeExecution";
 using var tracerProvider = HarnessTracing.CreateFileTracerProvider(TracingSourceName);
 
 // Create the HyperlightCodeActProvider with the Python/Wasm backend.
-// This injects an `execute_code` tool that runs Python in an isolated Hyperlight micro-VM.
-// Requires KVM and the Python guest module (set via HYPERLIGHT_PYTHON_GUEST_PATH).
-using var codeAct = new HyperlightCodeActProvider(HyperlightCodeActProviderOptions.CreateForWasm(guestPath));
+// The guest module path is resolved automatically from the Hyperlight.HyperlightSandbox.Guest.Python NuGet package.
+using var codeAct = new HyperlightCodeActProvider(
+    HyperlightCodeActProviderOptions.CreateForWasm(PythonGuestModule.GetModulePath()));
 
 var instructions =
     """

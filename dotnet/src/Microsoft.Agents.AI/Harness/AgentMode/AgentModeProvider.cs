@@ -73,10 +73,10 @@ public sealed class AgentModeProvider : AIContextProvider
             2. Create a list of todo items.
             3. If needed, use the provided tools to do some exploratory checks to help build a plan and determine what clarifying questions you may need from the user.
             4. Ask for clarifications from the user where needed.
-            1. Ask each clarification one by one.
-            2. When asking for clarification and you have specific options in mind, present them to the user, so they can choose the option instead of having to retype the entire response.
-            3. Do not proceed until you have received all the needed clarifications.
-            4. Do short exploratory research if it helps with being able to ask sensible clarifications from the user.
+              1. Ask each clarification one by one.
+              2. When asking for clarification and you have specific options in mind, present them to the user, so they can choose the option instead of having to retype the entire response.
+              3. Do not proceed until you have received all the needed clarifications.
+              4. Do short exploratory research if it helps with being able to ask sensible clarifications from the user.
             5. Write the plan to a memory file, so that it is retained even if compaction happens. Make sure to update the plan file if the user requests changes.
             6. Present the plan to the user and ask for approval to switch to execute mode and process the plan.
             7. When approval is granted, always switch to execute mode (using the `AgentMode_Set` tool), and follow the steps for *Execute mode*.

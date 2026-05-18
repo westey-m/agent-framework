@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 #pragma warning disable VSTHRD002 // Synchronous waits are required by OpenTelemetry enrichment callbacks.
 

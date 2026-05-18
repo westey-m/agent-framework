@@ -64,12 +64,21 @@ public sealed class HarnessAgentRunner : IDisposable
 
     /// <summary>
     /// Replaces the current session with the specified session. Used by the UX driver
-    /// when importing a serialized session.
+    /// when importing a serialized session. Acquires the input gate to ensure no
+    /// concurrent agent turn is reading the session.
     /// </summary>
     /// <param name="newSession">The new session to use.</param>
-    internal void ReplaceSession(AgentSession newSession)
+    internal async Task ReplaceSessionAsync(AgentSession newSession)
     {
-        this._session = newSession;
+        await this._inputGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            this._session = newSession;
+        }
+        finally
+        {
+            this._inputGate.Release();
+        }
     }
 
     /// <inheritdoc/>

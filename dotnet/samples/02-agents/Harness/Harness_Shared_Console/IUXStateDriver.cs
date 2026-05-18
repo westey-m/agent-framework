@@ -124,5 +124,5 @@ public interface IUXStateDriver
     /// a serialized session from a file).
     /// </summary>
     /// <param name="newSession">The new session to use.</param>
-    void ReplaceSession(AgentSession newSession);
+    Task ReplaceSessionAsync(AgentSession newSession);
 }

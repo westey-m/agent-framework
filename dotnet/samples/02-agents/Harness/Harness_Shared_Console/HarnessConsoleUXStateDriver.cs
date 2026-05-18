@@ -17,7 +17,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     private readonly Func<HarnessAppComponentState> _getState;
     private readonly Action<HarnessAppComponentState> _setState;
     private readonly Action _requestShutdown;
-    private readonly Action<AgentSession> _replaceSession;
+    private readonly Func<AgentSession, Task> _replaceSession;
     private readonly IReadOnlyDictionary<string, ConsoleColor>? _modeColors;
     private readonly List<string> _outputItems = [];
     private readonly object _stateLock = new();
@@ -40,7 +40,7 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
         Func<HarnessAppComponentState> getState,
         Action<HarnessAppComponentState> setState,
         Action requestShutdown,
-        Action<AgentSession> replaceSession,
+        Func<AgentSession, Task> replaceSession,
         IReadOnlyDictionary<string, ConsoleColor>? modeColors = null)
     {
         this._getState = getState;
@@ -412,5 +412,5 @@ internal sealed class HarnessConsoleUXStateDriver : IUXStateDriver
     public void RequestShutdown() => this._requestShutdown();
 
     /// <inheritdoc/>
-    public void ReplaceSession(AgentSession newSession) => this._replaceSession(newSession);
+    public Task ReplaceSessionAsync(AgentSession newSession) => this._replaceSession(newSession);
 }

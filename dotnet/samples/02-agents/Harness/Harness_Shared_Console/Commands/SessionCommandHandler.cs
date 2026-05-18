@@ -28,13 +28,15 @@ public sealed class SessionCommandHandler : CommandHandler
     /// <inheritdoc/>
     public override async ValueTask<bool> TryHandleAsync(string input, AgentSession session, IUXStateDriver ux)
     {
-        if (input.StartsWith("/session-export", StringComparison.OrdinalIgnoreCase))
+        string command = input.Split(' ', 2)[0];
+
+        if (command.Equals("/session-export", StringComparison.OrdinalIgnoreCase))
         {
             await this.HandleExportAsync(input, session, ux).ConfigureAwait(false);
             return true;
         }
 
-        if (input.StartsWith("/session-import", StringComparison.OrdinalIgnoreCase))
+        if (command.Equals("/session-import", StringComparison.OrdinalIgnoreCase))
         {
             await this.HandleImportAsync(input, ux).ConfigureAwait(false);
             return true;
@@ -81,7 +83,7 @@ public sealed class SessionCommandHandler : CommandHandler
             string json = await File.ReadAllTextAsync(filename).ConfigureAwait(false);
             JsonElement element = JsonSerializer.Deserialize<JsonElement>(json);
             AgentSession newSession = await this._agent.DeserializeSessionAsync(element).ConfigureAwait(false);
-            ux.ReplaceSession(newSession);
+            await ux.ReplaceSessionAsync(newSession).ConfigureAwait(false);
             await ux.WriteInfoLineAsync($"Session imported from {filename}").ConfigureAwait(false);
         }
         catch (FileNotFoundException)

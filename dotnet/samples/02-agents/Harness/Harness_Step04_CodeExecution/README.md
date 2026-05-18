@@ -12,7 +12,6 @@ The agent can plan tasks, manage modes, store memories, read/write files, search
 - .NET 10 SDK
 - An Azure AI Foundry project endpoint
 - KVM-capable host (the Hyperlight sandbox runs code in micro-VMs)
-- The `dotnet-hyperlight` devcontainer provides KVM access automatically
 
 ## Environment Variables
 

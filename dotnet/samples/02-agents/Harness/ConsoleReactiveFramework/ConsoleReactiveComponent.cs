@@ -22,6 +22,12 @@ public abstract class ConsoleReactiveComponent
 
     /// <summary>Renders the component to the console at its current position.</summary>
     public abstract void Render();
+
+    /// <summary>
+    /// Invalidates the component's cached render state, causing the next <see cref="Render"/> call
+    /// to proceed even if props and state have not changed. Use after a screen erase to force repaint.
+    /// </summary>
+    public abstract void Invalidate();
 }
 
 /// <summary>
@@ -75,8 +81,8 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
                 return;
             }
 
-            if (this.Props.Equals(this._lastRenderedProps)
-                && this.State?.Equals(this._lastRenderedState) is true)
+            if (EqualityComparer<TProps>.Default.Equals(this.Props, this._lastRenderedProps)
+                && EqualityComparer<TState>.Default.Equals(this.State, this._lastRenderedState))
             {
                 return;
             }
@@ -85,6 +91,16 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
 
             this._lastRenderedProps = this.Props;
             this._lastRenderedState = this.State;
+        }
+    }
+
+    /// <inheritdoc/>
+    public override void Invalidate()
+    {
+        lock (this._renderLock)
+        {
+            this._lastRenderedProps = default;
+            this._lastRenderedState = default;
         }
     }
 

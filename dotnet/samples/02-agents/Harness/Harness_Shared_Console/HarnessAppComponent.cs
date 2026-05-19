@@ -441,10 +441,10 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
         // as they clutter the UI and aren't relevant.
         bool showStatusAndHelp = state.Mode != BottomPanelMode.ListSelection;
         int agentStatusHeight = showStatusAndHelp ? AgentStatus.CalculateHeight(agentStatusProps) : 0;
-        int modeAndHelpHeight = showStatusAndHelp ? AgentModeAndHelp.CalculateHeight(modeAndHelpProps) + 1 : 0; // +1 for bottom padding
+        int modeAndHelpHeight = showStatusAndHelp ? AgentModeAndHelp.CalculateHeight(modeAndHelpProps) : 0;
 
         int ruleHeight = TopBottomRule.CalculateHeight(ruleProps);
-        int nonScrollHeight = ruleHeight + textPanelHeight + agentStatusHeight + queuedPanelHeight + modeAndHelpHeight;
+        int nonScrollHeight = ruleHeight + textPanelHeight + agentStatusHeight + queuedPanelHeight + modeAndHelpHeight + 1; // +1 for bottom padding
         int scrollBottom = Math.Max(1, state.ConsoleHeight - nonScrollHeight);
 
         // If scroll region changed or a clear is needed, reset everything
@@ -457,6 +457,16 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
             System.Console.Write(AnsiEscapes.EraseScrollbackBuffer);
             this._textScrollPanel.Reset();
             this._resizedSinceLastRender = false;
+
+            // Invalidate all children so they re-render even if props haven't changed
+            this._rule.Invalidate();
+            this._textScrollPanel.Invalidate();
+            this._textPanel.Invalidate();
+            this._queuedPanel.Invalidate();
+            this._agentStatus.Invalidate();
+            this._modeAndHelp.Invalidate();
+            this._textInput.Invalidate();
+            this._listSelection.Invalidate();
         }
 
         this._scrollRegionBottom = scrollBottom;
@@ -536,6 +546,9 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
             };
             this._modeAndHelp.Render();
         }
+
+        // Clear the bottom padding line
+        System.Console.Write(AnsiEscapes.MoveAndEraseLine(state.ConsoleHeight));
 
         // Position cursor for natural typing appearance
         this.PositionCursor(state);

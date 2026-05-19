@@ -86,16 +86,12 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, AgentStatu
         }
 
         System.Console.Write(AnsiEscapes.SaveCursor);
-<<<<<<< harness-console-reduce-rerender
-        System.Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y));
-=======
-        System.Console.Write(AnsiEscapes.MoveCursor(this.Y, this.X));
+        System.Console.Write(AnsiEscapes.MoveCursor(props.Y, props.X));
         if (props != this._previousProps)
         {
             System.Console.Write(AnsiEscapes.EraseToEndOfLine);
             this._previousProps = props;
         }
->>>>>>> main
 
         if (props.ShowSpinner)
         {

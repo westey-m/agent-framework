@@ -33,7 +33,9 @@ public static class HarnessConsole
         var modeProvider = agent.GetService<AgentModeProvider>();
         var messageInjector = agent.GetService<MessageInjectingChatClient>();
 
-        AgentSession session = await agent.CreateSessionAsync();
+        AgentSession session = options.SessionFactory is not null
+            ? await options.SessionFactory(agent)
+            : await agent.CreateSessionAsync();
 
         using var component = new HarnessAppComponent(
             placeholder: userPrompt,

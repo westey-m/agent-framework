@@ -37,33 +37,42 @@ public class AgentModeAndHelp : ConsoleReactiveComponent<AgentModeAndHelpProps, 
     /// <inheritdoc />
     public override void RenderCore(AgentModeAndHelpProps props, ConsoleReactiveState state)
     {
-        if (props.Mode is null && string.IsNullOrEmpty(props.HelpText))
-        {
-            return;
-        }
-
         System.Console.Write(AnsiEscapes.SaveCursor);
-        System.Console.Write(AnsiEscapes.MoveAndEraseLine(this.Y));
 
-        bool hasMode = props.Mode is not null;
+        int renderedLines = 0;
 
-        if (hasMode)
+        if (props.Mode is not null || !string.IsNullOrEmpty(props.HelpText))
         {
-            if (props.ModeColor.HasValue)
+            System.Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y));
+
+            bool hasMode = props.Mode is not null;
+
+            if (hasMode)
             {
-                System.Console.Write(AnsiEscapes.SetForegroundColor(props.ModeColor.Value));
+                if (props.ModeColor.HasValue)
+                {
+                    System.Console.Write(AnsiEscapes.SetForegroundColor(props.ModeColor.Value));
+                }
+
+                System.Console.Write($" [{props.Mode}]");
+                System.Console.Write(AnsiEscapes.ResetAttributes);
             }
 
-            System.Console.Write($" [{props.Mode}]");
-            System.Console.Write(AnsiEscapes.ResetAttributes);
+            if (!string.IsNullOrEmpty(props.HelpText))
+            {
+                string prefix = hasMode ? "  " : " ";
+                System.Console.Write(AnsiEscapes.SetForegroundColor(ConsoleColor.DarkGray));
+                System.Console.Write($"{prefix}{props.HelpText}");
+                System.Console.Write(AnsiEscapes.ResetAttributes);
+            }
+
+            renderedLines = 1;
         }
 
-        if (!string.IsNullOrEmpty(props.HelpText))
+        // Clear any remaining lines up to the component's height (handles bottom padding)
+        for (int i = renderedLines; i < props.Height; i++)
         {
-            string prefix = hasMode ? "  " : " ";
-            System.Console.Write(AnsiEscapes.SetForegroundColor(ConsoleColor.DarkGray));
-            System.Console.Write($"{prefix}{props.HelpText}");
-            System.Console.Write(AnsiEscapes.ResetAttributes);
+            System.Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y + i));
         }
 
         System.Console.Write(AnsiEscapes.RestoreCursor);

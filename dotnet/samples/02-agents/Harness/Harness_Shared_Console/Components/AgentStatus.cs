@@ -85,7 +85,7 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, AgentStatu
         }
 
         System.Console.Write(AnsiEscapes.SaveCursor);
-        System.Console.Write(AnsiEscapes.MoveAndEraseLine(this.Y));
+        System.Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y));
 
         if (props.ShowSpinner)
         {

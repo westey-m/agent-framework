@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System.Text;
 using Harness.ConsoleReactiveComponents;
 using Microsoft.Agents.AI;
 
@@ -23,6 +24,8 @@ public static class HarnessConsole
     public static async Task RunAgentAsync(AIAgent agent, string userPrompt, HarnessConsoleOptions? options = null)
     {
         options ??= new();
+
+        System.Console.OutputEncoding = Encoding.UTF8;
 
         // Null means use defaults; an explicit (possibly empty) list means use exactly what was provided.
         var observers = options.Observers

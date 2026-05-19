@@ -86,7 +86,7 @@ public class AgentStatus : ConsoleReactiveComponent<AgentStatusProps, AgentStatu
         }
 
         System.Console.Write(AnsiEscapes.SaveCursor);
-        System.Console.Write(AnsiEscapes.MoveCursor(this.Y, this.X));
+        System.Console.Write(AnsiEscapes.MoveCursor(props.Y, props.X));
         if (props != this._previousProps)
         {
             System.Console.Write(AnsiEscapes.EraseToEndOfLine);

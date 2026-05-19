@@ -63,6 +63,7 @@ public static class HarnessConsole
 
         System.Console.ResetColor();
         System.Console.Write(AnsiEscapes.ResetScrollRegion);
+        System.Console.Write(AnsiEscapes.EraseScrollbackBuffer);
         System.Console.Write(AnsiEscapes.EraseEntireScreen);
         System.Console.Write(AnsiEscapes.MoveCursor(1, 1));
         System.Console.WriteLine("Goodbye!");

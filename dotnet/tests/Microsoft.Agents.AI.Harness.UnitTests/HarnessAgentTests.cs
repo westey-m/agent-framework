@@ -1197,4 +1197,128 @@ public class HarnessAgentTests
     }
 
     #endregion
+
+    #region Feature: BackgroundAgentsProvider
+
+    /// <summary>
+    /// Verify that BackgroundAgentsProvider is included when BackgroundAgents are specified.
+    /// </summary>
+    [Fact]
+    public void BackgroundAgentsProvider_IncludedWhenAgentsSpecified()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var bgAgentMock = new Mock<AIAgent>();
+        bgAgentMock.Setup(a => a.Name).Returns("TestBackgroundAgent");
+        var options = CreateAllDisabledOptions();
+        options.BackgroundAgents = [bgAgentMock.Object];
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
+        var innerAgent = agent.GetService<ChatClientAgent>();
+
+        // Assert
+        Assert.NotNull(innerAgent?.AIContextProviders);
+        Assert.Contains(innerAgent!.AIContextProviders!, p => p is BackgroundAgentsProvider);
+    }
+
+    /// <summary>
+    /// Verify that BackgroundAgentsProvider is not included when BackgroundAgents is null.
+    /// </summary>
+    [Fact]
+    public void BackgroundAgentsProvider_ExcludedWhenAgentsNull()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var options = CreateAllDisabledOptions();
+        options.BackgroundAgents = null;
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
+        var innerAgent = agent.GetService<ChatClientAgent>();
+
+        // Assert
+        Assert.NotNull(innerAgent);
+        if (innerAgent!.AIContextProviders != null)
+        {
+            Assert.DoesNotContain(innerAgent.AIContextProviders, p => p is BackgroundAgentsProvider);
+        }
+    }
+
+    /// <summary>
+    /// Verify that BackgroundAgentsProvider is not included when BackgroundAgents is an empty collection.
+    /// </summary>
+    [Fact]
+    public void BackgroundAgentsProvider_ExcludedWhenAgentsEmpty()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var options = CreateAllDisabledOptions();
+        options.BackgroundAgents = Array.Empty<AIAgent>();
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
+        var innerAgent = agent.GetService<ChatClientAgent>();
+
+        // Assert
+        Assert.NotNull(innerAgent);
+        if (innerAgent!.AIContextProviders != null)
+        {
+            Assert.DoesNotContain(innerAgent.AIContextProviders, p => p is BackgroundAgentsProvider);
+        }
+    }
+
+    /// <summary>
+    /// Verify that BackgroundAgentsProviderOptions is passed through when specified.
+    /// </summary>
+    [Fact]
+    public void BackgroundAgentsProvider_UsesProvidedOptions()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var bgAgentMock = new Mock<AIAgent>();
+        bgAgentMock.Setup(a => a.Name).Returns("TestBackgroundAgent");
+        var providerOptions = new BackgroundAgentsProviderOptions
+        {
+            Instructions = "Custom background agent instructions",
+        };
+        var options = CreateAllDisabledOptions();
+        options.BackgroundAgents = [bgAgentMock.Object];
+        options.BackgroundAgentsProviderOptions = providerOptions;
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
+        var innerAgent = agent.GetService<ChatClientAgent>();
+
+        // Assert
+        Assert.NotNull(innerAgent?.AIContextProviders);
+        var bgProvider = innerAgent!.AIContextProviders!.OfType<BackgroundAgentsProvider>().SingleOrDefault();
+        Assert.NotNull(bgProvider);
+    }
+
+    /// <summary>
+    /// Verify that multiple background agents are all passed to the provider.
+    /// </summary>
+    [Fact]
+    public void BackgroundAgentsProvider_IncludesMultipleAgents()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var agent1Mock = new Mock<AIAgent>();
+        agent1Mock.Setup(a => a.Name).Returns("Agent1");
+        var agent2Mock = new Mock<AIAgent>();
+        agent2Mock.Setup(a => a.Name).Returns("Agent2");
+        var options = CreateAllDisabledOptions();
+        options.BackgroundAgents = [agent1Mock.Object, agent2Mock.Object];
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
+        var innerAgent = agent.GetService<ChatClientAgent>();
+
+        // Assert
+        Assert.NotNull(innerAgent?.AIContextProviders);
+        Assert.Contains(innerAgent!.AIContextProviders!, p => p is BackgroundAgentsProvider);
+    }
+
+    #endregion
 }

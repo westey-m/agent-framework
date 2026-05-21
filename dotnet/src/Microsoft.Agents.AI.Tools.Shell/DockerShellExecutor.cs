@@ -263,10 +263,8 @@ public sealed class DockerShellExecutor : ShellExecutor
     /// wraps the function in <see cref="ApprovalRequiredAIFunction"/>;
     /// <see langword="false"/> opts out and returns the raw function.
     /// </param>
-    public AIFunction AsAIFunction(string name = "run_shell", string? description = null, bool? requireApproval = null)
+    public override AIFunction AsAIFunction(string name = "run_shell", string? description = null, bool requireApproval = true)
     {
-        var effectiveRequireApproval = requireApproval ?? true;
-
         description ??=
             "Execute a single shell command inside an isolated Docker container and return its " +
             "stdout, stderr, and exit code. The container has no network, no host filesystem access " +
@@ -292,7 +290,7 @@ public sealed class DockerShellExecutor : ShellExecutor
             },
             new AIFunctionFactoryOptions { Name = name, Description = description });
 
-        return effectiveRequireApproval ? new ApprovalRequiredAIFunction(fn) : fn;
+        return requireApproval ? new ApprovalRequiredAIFunction(fn) : fn;
     }
 
     /// <summary>

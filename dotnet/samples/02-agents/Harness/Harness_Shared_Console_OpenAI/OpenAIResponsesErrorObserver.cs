@@ -34,7 +34,8 @@ public sealed class OpenAIResponsesErrorObserver : ConsoleObserver
             case StreamingResponseFailedUpdate failedUpdate:
                 // Only display if the response has error details populated.
                 // When error is null, a follow-up StreamingResponseErrorUpdate typically
-                // carries the real error and is handled below.
+                // carries the real error — the SDK surfaces that as ErrorContent,
+                // which is displayed by ErrorDisplayObserver.
                 if (failedUpdate.Response?.Error is { } error)
                 {
                     string errorMessage = error.Message ?? "Unknown error";

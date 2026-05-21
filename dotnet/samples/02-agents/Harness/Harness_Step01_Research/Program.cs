@@ -19,10 +19,10 @@ using System.ClientModel.Primitives;
 using Azure.AI.Projects;
 using Azure.Identity;
 using Harness.Shared.Console;
+using Harness.Shared.Console.OpenAI;
 using Harness.Shared.Console.ToolFormatters;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Harness.Shared.Console.OpenAI;
 using SampleApp;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");

@@ -444,8 +444,6 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
             System.Console.Write(AnsiEscapes.ResetScrollRegion);
             System.Console.Write(AnsiEscapes.EraseEntireScreen);
             System.Console.Write(AnsiEscapes.EraseScrollbackBuffer);
-            this._textScrollPanel.Reset();
-            this._resizedSinceLastRender = false;
 
             // Invalidate all children so they re-render even if props haven't changed
             this._rule.Invalidate();
@@ -455,6 +453,8 @@ public class HarnessAppComponent : ConsoleReactiveComponent<ConsoleReactiveProps
             this._modeAndHelp.Invalidate();
             this._textInput.Invalidate();
             this._listSelection.Invalidate();
+
+            this._resizedSinceLastRender = false;
         }
 
         this._scrollRegionBottom = scrollBottom;

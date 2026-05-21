@@ -23,7 +23,7 @@ public record TextScrollPanelState : ConsoleReactiveState;
 /// A component that renders pre-rendered string items within a scroll area.
 /// The last rendered item is considered dynamic and will be re-rendered on each call.
 /// All prior items are considered finalized and are not re-rendered.
-/// Use <see cref="Reset"/> to force a full re-render.
+/// Use <see cref="Invalidate"/> to force a full re-render.
 /// </summary>
 public class TextScrollPanel : ConsoleReactiveComponent<TextScrollPanelProps, TextScrollPanelState>
 {
@@ -38,20 +38,11 @@ public class TextScrollPanel : ConsoleReactiveComponent<TextScrollPanelProps, Te
         this.State = new TextScrollPanelState();
     }
 
-    /// <summary>
-    /// Resets the panel so all items will be re-rendered on the next Render call.
-    /// </summary>
-    public void Reset()
-    {
-        this.State = new TextScrollPanelState();
-        this._renderedCount = 0;
-        this._lastItemOffsetFromBottom = 0;
-    }
-
     /// <inheritdoc />
     public override void Invalidate()
     {
         this._renderedCount = 0;
+        this._lastItemOffsetFromBottom = 0;
         base.Invalidate();
     }
 

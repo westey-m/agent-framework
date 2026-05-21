@@ -22,6 +22,8 @@ public class ConsoleReactiveMemo<TInput, TOutput>
     /// <returns>The cached or newly computed output.</returns>
     public TOutput Map(TInput input, Func<TInput, TOutput> mapper)
     {
+        ArgumentNullException.ThrowIfNull(mapper);
+
         if (!this._hasValue || !EqualityComparer<TInput>.Default.Equals(input, this._previousInput))
         {
             this._previousInput = input;

@@ -22,6 +22,7 @@ using Harness.Shared.Console;
 using Harness.Shared.Console.ToolFormatters;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Harness.Shared.Console.OpenAI;
 using SampleApp;
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
@@ -107,6 +108,7 @@ await HarnessConsole.RunAgentAsync(
     {
         Observers = [
             new OpenAIResponsesWebSearchDisplayObserver(),
+            new OpenAIResponsesErrorObserver(),
             .. HarnessConsoleOptions.BuildObserversWithPlanning(
                 agent,
                 planModeName: "plan",

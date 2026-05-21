@@ -1394,10 +1394,8 @@ public class HarnessAgentTests
 
         // Assert
         Assert.NotNull(innerAgent);
-        if (innerAgent!.AIContextProviders != null)
-        {
-            Assert.DoesNotContain(innerAgent.AIContextProviders, p => p is ShellEnvironmentProvider);
-        }
+        Assert.NotNull(innerAgent!.AIContextProviders);
+        Assert.DoesNotContain(innerAgent.AIContextProviders!, p => p is ShellEnvironmentProvider);
     }
 
     /// <summary>
@@ -1433,10 +1431,10 @@ public class HarnessAgentTests
     }
 
     /// <summary>
-    /// Verify that ShellEnvironmentProviderOptions is passed through when specified.
+    /// Verify that ShellEnvironmentProvider is present when ShellEnvironmentProviderOptions is also specified.
     /// </summary>
     [Fact]
-    public void ShellEnvironmentProvider_UsesProvidedOptions()
+    public void ShellEnvironmentProvider_PresentWhenOptionsProvided()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;

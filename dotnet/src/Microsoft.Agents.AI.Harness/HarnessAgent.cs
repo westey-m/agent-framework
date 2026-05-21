@@ -250,9 +250,13 @@ public sealed class HarnessAgent : DelegatingAIAgent
             providers.Add(skillsProvider);
         }
 
-        if (options?.BackgroundAgents is IEnumerable<AIAgent> backgroundAgents && backgroundAgents.Any())
+        if (options?.BackgroundAgents is IEnumerable<AIAgent> backgroundAgents)
         {
-            providers.Add(new BackgroundAgentsProvider(backgroundAgents, options.BackgroundAgentsProviderOptions));
+            var materializedAgents = backgroundAgents.ToList();
+            if (materializedAgents.Count > 0)
+            {
+                providers.Add(new BackgroundAgentsProvider(materializedAgents, options.BackgroundAgentsProviderOptions));
+            }
         }
 
         if (options?.AIContextProviders is IEnumerable<AIContextProvider> userProviders)

@@ -1272,15 +1272,16 @@ public class HarnessAgentTests
     /// Verify that BackgroundAgentsProviderOptions is passed through when specified.
     /// </summary>
     [Fact]
-    public void BackgroundAgentsProvider_UsesProvidedOptions()
+    public async Task BackgroundAgentsProvider_UsesProvidedOptionsAsync()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;
         var bgAgentMock = new Mock<AIAgent>();
         bgAgentMock.Setup(a => a.Name).Returns("TestBackgroundAgent");
+        bgAgentMock.Setup(a => a.Description).Returns("A test background agent");
         var providerOptions = new BackgroundAgentsProviderOptions
         {
-            Instructions = "Custom background agent instructions",
+            Instructions = "Custom instructions with {background_agents} list.",
         };
         var options = CreateAllDisabledOptions();
         options.BackgroundAgents = [bgAgentMock.Object];
@@ -1289,35 +1290,60 @@ public class HarnessAgentTests
         // Act
         var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
         var innerAgent = agent.GetService<ChatClientAgent>();
+        var bgProvider = innerAgent!.AIContextProviders!.OfType<BackgroundAgentsProvider>().Single();
 
-        // Assert
-        Assert.NotNull(innerAgent?.AIContextProviders);
-        var bgProvider = innerAgent!.AIContextProviders!.OfType<BackgroundAgentsProvider>().SingleOrDefault();
-        Assert.NotNull(bgProvider);
+#pragma warning disable MAAI001
+        var invokingContext = new AIContextProvider.InvokingContext(
+            new Mock<AIAgent>().Object,
+            new Mock<AgentSession>().Object,
+            new AIContext());
+#pragma warning restore MAAI001
+
+        AIContext result = await bgProvider.InvokingAsync(invokingContext);
+
+        // Assert — custom instructions template is used and agent info is included
+        Assert.NotNull(result.Instructions);
+        Assert.Contains("Custom instructions with", result.Instructions);
+        Assert.Contains("TestBackgroundAgent", result.Instructions);
     }
 
     /// <summary>
     /// Verify that multiple background agents are all passed to the provider.
     /// </summary>
     [Fact]
-    public void BackgroundAgentsProvider_IncludesMultipleAgents()
+    public async Task BackgroundAgentsProvider_IncludesMultipleAgentsAsync()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;
         var agent1Mock = new Mock<AIAgent>();
         agent1Mock.Setup(a => a.Name).Returns("Agent1");
+        agent1Mock.Setup(a => a.Description).Returns("First agent");
         var agent2Mock = new Mock<AIAgent>();
         agent2Mock.Setup(a => a.Name).Returns("Agent2");
+        agent2Mock.Setup(a => a.Description).Returns("Second agent");
         var options = CreateAllDisabledOptions();
         options.BackgroundAgents = [agent1Mock.Object, agent2Mock.Object];
 
         // Act
         var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
         var innerAgent = agent.GetService<ChatClientAgent>();
+        var bgProvider = innerAgent!.AIContextProviders!.OfType<BackgroundAgentsProvider>().Single();
 
-        // Assert
-        Assert.NotNull(innerAgent?.AIContextProviders);
-        Assert.Contains(innerAgent!.AIContextProviders!, p => p is BackgroundAgentsProvider);
+#pragma warning disable MAAI001
+        var invokingContext = new AIContextProvider.InvokingContext(
+            new Mock<AIAgent>().Object,
+            new Mock<AgentSession>().Object,
+            new AIContext());
+#pragma warning restore MAAI001
+
+        AIContext result = await bgProvider.InvokingAsync(invokingContext);
+
+        // Assert — both agents appear in the provider's instructions
+        Assert.NotNull(result.Instructions);
+        Assert.Contains("Agent1", result.Instructions);
+        Assert.Contains("First agent", result.Instructions);
+        Assert.Contains("Agent2", result.Instructions);
+        Assert.Contains("Second agent", result.Instructions);
     }
 
     #endregion

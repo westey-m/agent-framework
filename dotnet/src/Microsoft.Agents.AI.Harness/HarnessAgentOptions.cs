@@ -226,6 +226,9 @@ public sealed class HarnessAgentOptions
     /// When non-null and non-empty, a <see cref="BackgroundAgentsProvider"/> is automatically included in the
     /// agent's context providers, enabling the agent to start, monitor, and retrieve results from background tasks.
     /// When <see langword="null"/> or empty, no <see cref="BackgroundAgentsProvider"/> is configured.
+    /// Each agent in the collection must have a non-empty <see cref="AIAgent.Name"/> and names must be unique
+    /// (case-insensitive). If these requirements are not met, <see cref="BackgroundAgentsProvider"/> will throw
+    /// an <see cref="System.ArgumentException"/> during construction.
     /// </remarks>
     public IEnumerable<AIAgent>? BackgroundAgents { get; set; }
 

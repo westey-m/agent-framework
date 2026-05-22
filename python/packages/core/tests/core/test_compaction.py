@@ -980,31 +980,33 @@ async def test_context_window_strategy_noop_under_threshold() -> None:
 
 
 async def test_context_window_strategy_tool_eviction_triggers_at_threshold() -> None:
-    """Tool eviction fires when tokens exceed 50% but not 80% — truncation should not fire."""
-    # input_budget = 2000 - 200 = 1800
-    # tool eviction at 50% = 900 tokens; truncation at 80% = 1440 tokens
-    # CharacterEstimatorTokenizer: 4 chars/token → need >3600 chars to exceed 900 tokens
-    # We'll create messages totaling ~1000 tokens (4000 chars) — over 900, under 1440
+    """Tool eviction fires when tokens exceed 50% but truncation does not."""
+    # input_budget = 20000 - 200 = 19800
+    # tool eviction at 50% = 9900 tokens; truncation at 80% = 15840 tokens
+    # CharacterEstimatorTokenizer: 4 chars/token
+    # Each tool result: "x" * 8000 = 8000 chars = 2000 tokens
+    # 5 groups * ~2000 = ~10000+ tokens (exceeds 9900, under 15840)
+    # Tool eviction collapses older groups; truncation threshold not reached.
     messages = [
         Message(role="system", contents=["system prompt"]),
         Message(role="user", contents=["u1"]),
         _assistant_function_call("c1"),
-        _tool_result("c1", "result1 " * 100),  # ~800 chars = 200 tokens
+        _tool_result("c1", "x" * 8000),
         Message(role="user", contents=["u2"]),
         _assistant_function_call("c2"),
-        _tool_result("c2", "result2 " * 100),  # ~800 chars = 200 tokens
+        _tool_result("c2", "x" * 8000),
         Message(role="user", contents=["u3"]),
         _assistant_function_call("c3"),
-        _tool_result("c3", "result3 " * 100),  # ~800 chars = 200 tokens
+        _tool_result("c3", "x" * 8000),
         Message(role="user", contents=["u4"]),
         _assistant_function_call("c4"),
-        _tool_result("c4", "result4 " * 100),  # ~800 chars = 200 tokens
+        _tool_result("c4", "x" * 8000),
         Message(role="user", contents=["u5"]),
         _assistant_function_call("c5"),
-        _tool_result("c5", "result5 " * 100),  # ~800 chars = 200 tokens
+        _tool_result("c5", "x" * 8000),
     ]
     strategy = ContextWindowCompactionStrategy(
-        max_context_window_tokens=2000,
+        max_context_window_tokens=20000,
         max_output_tokens=200,
         keep_last_tool_call_groups=2,
     )
@@ -1012,12 +1014,15 @@ async def test_context_window_strategy_tool_eviction_triggers_at_threshold() -> 
     changed = await strategy(messages)
 
     assert changed is True
-    # The most recent 2 tool groups (c4, c5) should be kept verbatim;
-    # older ones (c1, c2, c3) should be collapsed into summaries.
     projected = included_messages(messages)
-    # Verify that some tool results have been compacted (summary messages present).
+    # Verify that tool results were compacted (summary messages present).
     summary_msgs = [m for m in projected if m.text and "[Tool results:" in m.text]
     assert len(summary_msgs) > 0
+    # Verify that the truncation phase did NOT fire — no messages excluded with "truncation" reason.
+    from agent_framework._compaction import EXCLUDE_REASON_KEY
+
+    truncation_excluded = [m for m in messages if m.additional_properties.get(EXCLUDE_REASON_KEY) == "truncation"]
+    assert len(truncation_excluded) == 0
 
 
 async def test_context_window_strategy_truncation_triggers_above_80_pct() -> None:

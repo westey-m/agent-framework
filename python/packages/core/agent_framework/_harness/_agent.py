@@ -13,10 +13,10 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, overload
 
-from .._agents import AgentSession, BaseAgent
+from .._agents import BaseAgent
 from .._compaction import CompactionProvider, ContextWindowCompactionStrategy, ToolResultCompactionStrategy
 from .._feature_stage import ExperimentalFeature, experimental
-from .._sessions import ContextProvider, HistoryProvider, InMemoryHistoryProvider
+from .._sessions import AgentSession, ContextProvider, HistoryProvider, InMemoryHistoryProvider
 from .._skills import SkillsProvider
 from .._types import AgentResponse, AgentResponseUpdate, AgentRunInputs, ResponseStream
 from ._memory import MemoryContextProvider, MemoryStore
@@ -53,15 +53,14 @@ def _assemble_instructions(
 ) -> str | None:
     """Assemble final instructions from harness + agent instructions."""
     harness = harness_instructions if harness_instructions is not None else DEFAULT_HARNESS_INSTRUCTIONS
-    agent = agent_instructions
 
-    if not harness and not agent:
-        return DEFAULT_HARNESS_INSTRUCTIONS
-    if not harness:
-        return agent
-    if not agent:
+    if harness and agent_instructions:
+        return f"{harness}\n\n{agent_instructions}"
+    if harness:
         return harness
-    return f"{harness}\n\n{agent}"
+    if agent_instructions:
+        return agent_instructions
+    return None
 
 
 def _assemble_compaction_provider(
@@ -396,7 +395,7 @@ class HarnessAgent(BaseAgent):
             When stream=False: An awaitable AgentResponse.
             When stream=True: A ResponseStream of AgentResponseUpdate items.
         """
-        return self._inner_agent.run(
+        return self._inner_agent.run(  # type: ignore[return-value, call-overload, no-any-return, misc]
             messages,
             stream=stream,  # type: ignore[arg-type]
             session=session,

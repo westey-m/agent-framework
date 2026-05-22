@@ -1,16 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-import asyncio
-
-from agent_framework import HarnessAgent
-from agent_framework.foundry import FoundryChatClient
-from azure.identity import AzureCliCredential
-from dotenv import load_dotenv
-
-load_dotenv()
-
-"""
-HarnessAgent Research Assistant
+"""HarnessAgent Research Assistant.
 
 Demonstrates ``HarnessAgent`` — a pre-configured bundled agent that automatically
 wires up function invocation, per-service-call history persistence, compaction,
@@ -40,6 +30,13 @@ Authentication:
     Run ``az login`` before running this sample.
 """
 
+import asyncio
+
+from agent_framework import HarnessAgent
+from agent_framework.foundry import FoundryChatClient
+from azure.identity import AzureCliCredential
+from dotenv import load_dotenv
+
 RESEARCH_INSTRUCTIONS = """\
 ## Research Assistant Instructions
 
@@ -65,6 +62,8 @@ When presenting your final findings:
 
 
 async def main() -> None:
+    load_dotenv()
+
     # Create the chat client.
     # For authentication, run `az login` in terminal or replace AzureCliCredential
     # with your preferred authentication option.

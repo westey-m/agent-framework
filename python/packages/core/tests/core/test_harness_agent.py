@@ -102,16 +102,60 @@ def test_harness_agent_disable_mode() -> None:
 
 
 def test_harness_agent_disable_memory() -> None:
-    """disable_memory=True should exclude MemoryContextProvider."""
+    """disable_memory=True should exclude MemoryContextProvider even when memory_store is provided."""
     from agent_framework import MemoryContextProvider
+    from agent_framework._harness._memory import MemoryStore
 
-    agent = HarnessAgent(
+    class _FakeMemoryStore(MemoryStore):
+        def list_topics(self, session, *, source_id):
+            return []
+
+        def get_topic(self, session, *, source_id, topic):
+            raise NotImplementedError
+
+        def write_topic(self, session, record, *, source_id):
+            pass
+
+        def delete_topic(self, session, *, source_id, topic):
+            pass
+
+        def get_index_text(self, session, *, source_id):
+            return ""
+
+        def get_transcripts_directory(self, session, *, source_id):
+            return ""
+
+        def read_state(self, session, *, source_id):
+            return {}
+
+        def rebuild_index(self, session, *, source_id):
+            pass
+
+        def search_transcripts(self, session, *, source_id, query):
+            return []
+
+        def write_state(self, session, state, *, source_id):
+            pass
+
+    # With memory_store provided and disable_memory=False, MemoryContextProvider should be present.
+    agent_with_memory = HarnessAgent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
+        memory_store=_FakeMemoryStore(),
+    )
+    provider_types = [type(p) for p in agent_with_memory.context_providers]
+    assert MemoryContextProvider in provider_types
+
+    # With memory_store provided and disable_memory=True, MemoryContextProvider should be absent.
+    agent_disabled = HarnessAgent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        memory_store=_FakeMemoryStore(),
         disable_memory=True,
     )
-    provider_types = [type(p) for p in agent.context_providers]
+    provider_types = [type(p) for p in agent_disabled.context_providers]
     assert MemoryContextProvider not in provider_types
 
 
@@ -262,6 +306,20 @@ def test_harness_agent_create_session_with_id() -> None:
     )
     session = agent.create_session(session_id="custom-id")
     assert session.session_id == "custom-id"
+
+
+async def test_harness_agent_run_returns_response() -> None:
+    """agent.run() should delegate to inner agent and return a response."""
+    agent = HarnessAgent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        disable_skills=True,
+    )
+    session = agent.create_session()
+    response = await agent.run("hello", session=session)
+    assert response.messages
+    assert response.messages[-1].role == "assistant"
 
 
 # --- Protocol Tests ---

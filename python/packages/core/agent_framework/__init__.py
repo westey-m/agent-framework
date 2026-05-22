@@ -45,6 +45,7 @@ from ._compaction import (
     CharacterEstimatorTokenizer,
     CompactionProvider,
     CompactionStrategy,
+    ContextWindowCompactionStrategy,
     SelectiveToolCallCompactionStrategy,
     SlidingWindowStrategy,
     SummarizationStrategy,
@@ -79,6 +80,10 @@ from ._evaluation import (
     tool_calls_present,
 )
 from ._feature_stage import ExperimentalFeature, ReleaseCandidateFeature
+from ._harness._agent import (
+    DEFAULT_HARNESS_INSTRUCTIONS,
+    HarnessAgent,
+)
 from ._harness._memory import (
     DEFAULT_MEMORY_SOURCE_ID,
     MemoryContextProvider,
@@ -297,6 +302,7 @@ __all__ = [
     "AGENT_FRAMEWORK_USER_AGENT",
     "APP_INFO",
     "COMPACTION_STATE_KEY",
+    "DEFAULT_HARNESS_INSTRUCTIONS",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MEMORY_SOURCE_ID",
     "DEFAULT_MODE_SOURCE_ID",
@@ -352,6 +358,7 @@ __all__ = [
     "CompactionStrategy",
     "Content",
     "ContextProvider",
+    "ContextWindowCompactionStrategy",
     "ContinuationToken",
     "ConversationSplit",
     "ConversationSplitter",
@@ -396,6 +403,7 @@ __all__ = [
     "FunctionalWorkflowAgent",
     "GeneratedEmbeddings",
     "GraphConnectivityError",
+    "HarnessAgent",
     "HistoryProvider",
     "InMemoryCheckpointStorage",
     "InMemoryHistoryProvider",

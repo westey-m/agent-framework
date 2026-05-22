@@ -19,6 +19,7 @@ from agent_framework import (
     ChatResponse,
     CompactionProvider,
     Content,
+    ContextWindowCompactionStrategy,
     Message,
     SelectiveToolCallCompactionStrategy,
     SlidingWindowStrategy,
@@ -952,3 +953,154 @@ async def test_in_memory_history_provider_default_loads_all() -> None:
 
     loaded = await provider.get_messages(session_id="test", state=state)
     assert len(loaded) == 3
+
+
+# --- ContextWindowCompactionStrategy tests ---
+
+
+async def test_context_window_strategy_noop_under_threshold() -> None:
+    """No compaction when total tokens are below 50% of input budget."""
+    # input_budget = 1000 - 200 = 800; tool eviction threshold = 50% = 400 tokens
+    # CharacterEstimatorTokenizer: 4 chars/token
+    # Each short message ~4-5 tokens, total well under 400
+    messages = [
+        Message(role="system", contents=["sys"]),
+        Message(role="user", contents=["hello"]),
+        Message(role="assistant", contents=["hi"]),
+    ]
+    strategy = ContextWindowCompactionStrategy(
+        max_context_window_tokens=1000,
+        max_output_tokens=200,
+    )
+
+    changed = await strategy(messages)
+
+    assert changed is False
+    assert len(included_messages(messages)) == 3
+
+
+async def test_context_window_strategy_tool_eviction_triggers_at_threshold() -> None:
+    """Tool eviction fires when tokens exceed 50% but not 80% — truncation should not fire."""
+    # input_budget = 2000 - 200 = 1800
+    # tool eviction at 50% = 900 tokens; truncation at 80% = 1440 tokens
+    # CharacterEstimatorTokenizer: 4 chars/token → need >3600 chars to exceed 900 tokens
+    # We'll create messages totaling ~1000 tokens (4000 chars) — over 900, under 1440
+    messages = [
+        Message(role="system", contents=["system prompt"]),
+        Message(role="user", contents=["u1"]),
+        _assistant_function_call("c1"),
+        _tool_result("c1", "result1 " * 100),  # ~800 chars = 200 tokens
+        Message(role="user", contents=["u2"]),
+        _assistant_function_call("c2"),
+        _tool_result("c2", "result2 " * 100),  # ~800 chars = 200 tokens
+        Message(role="user", contents=["u3"]),
+        _assistant_function_call("c3"),
+        _tool_result("c3", "result3 " * 100),  # ~800 chars = 200 tokens
+        Message(role="user", contents=["u4"]),
+        _assistant_function_call("c4"),
+        _tool_result("c4", "result4 " * 100),  # ~800 chars = 200 tokens
+        Message(role="user", contents=["u5"]),
+        _assistant_function_call("c5"),
+        _tool_result("c5", "result5 " * 100),  # ~800 chars = 200 tokens
+    ]
+    strategy = ContextWindowCompactionStrategy(
+        max_context_window_tokens=2000,
+        max_output_tokens=200,
+        keep_last_tool_call_groups=2,
+    )
+
+    changed = await strategy(messages)
+
+    assert changed is True
+    # The most recent 2 tool groups (c4, c5) should be kept verbatim;
+    # older ones (c1, c2, c3) should be collapsed into summaries.
+    projected = included_messages(messages)
+    # Verify that some tool results have been compacted (summary messages present).
+    summary_msgs = [m for m in projected if m.text and "[Tool results:" in m.text]
+    assert len(summary_msgs) > 0
+
+
+async def test_context_window_strategy_truncation_triggers_above_80_pct() -> None:
+    """Truncation fires when tokens exceed 80% of input budget."""
+    # input_budget = 1000 - 100 = 900
+    # tool eviction at 50% = 450 tokens; truncation at 80% = 720 tokens
+    # We'll create messages with no tool calls (so tool eviction does nothing)
+    # but exceeding 720 tokens total (>2880 chars)
+    messages = [
+        Message(role="system", contents=["sys"]),
+        Message(role="user", contents=["u1 " * 400]),  # ~1200 chars = 300 tokens
+        Message(role="assistant", contents=["a1 " * 400]),  # ~1200 chars = 300 tokens
+        Message(role="user", contents=["u2 " * 400]),  # ~1200 chars = 300 tokens
+        Message(role="assistant", contents=["a2 " * 400]),  # ~1200 chars = 300 tokens
+    ]
+    strategy = ContextWindowCompactionStrategy(
+        max_context_window_tokens=1000,
+        max_output_tokens=100,
+    )
+
+    changed = await strategy(messages)
+
+    assert changed is True
+    projected = included_messages(messages)
+    # System message should always be preserved
+    assert projected[0].role == "system"
+    # Some messages should have been excluded
+    assert len(projected) < 5
+
+
+async def test_context_window_strategy_keep_last_tool_call_groups_respected() -> None:
+    """The keep_last_tool_call_groups parameter controls how many groups are retained."""
+    # Create enough tokens to trigger tool eviction (>50% of input budget)
+    # input_budget = 1000 - 100 = 900; threshold = 450 tokens
+    messages = [
+        Message(role="system", contents=["sys"]),
+        Message(role="user", contents=["u1"]),
+        _assistant_function_call("c1"),
+        _tool_result("c1", "r1 " * 200),
+        Message(role="user", contents=["u2"]),
+        _assistant_function_call("c2"),
+        _tool_result("c2", "r2 " * 200),
+        Message(role="user", contents=["u3"]),
+        _assistant_function_call("c3"),
+        _tool_result("c3", "r3 " * 200),
+    ]
+    # keep_last_tool_call_groups=1: only the last group (c3) should be kept verbatim
+    strategy = ContextWindowCompactionStrategy(
+        max_context_window_tokens=1000,
+        max_output_tokens=100,
+        keep_last_tool_call_groups=1,
+    )
+
+    changed = await strategy(messages)
+
+    assert changed is True
+    projected = included_messages(messages)
+    # The last tool call group (c3) should be in the projected messages
+    has_c3 = any(
+        c.call_id == "c3" for m in projected for c in m.contents if c.type in ("function_call", "function_result")
+    )
+    assert has_c3
+
+
+def test_context_window_strategy_validates_thresholds() -> None:
+    """Invalid threshold combinations raise ValueError."""
+    import pytest
+
+    with pytest.raises(ValueError, match="max_context_window_tokens must be positive"):
+        ContextWindowCompactionStrategy(max_context_window_tokens=0, max_output_tokens=0)
+
+    with pytest.raises(ValueError, match="max_output_tokens must be >= 0"):
+        ContextWindowCompactionStrategy(max_context_window_tokens=1000, max_output_tokens=1000)
+
+    with pytest.raises(ValueError, match="tool_eviction_threshold must be in"):
+        ContextWindowCompactionStrategy(
+            max_context_window_tokens=1000, max_output_tokens=100, tool_eviction_threshold=0.0
+        )
+
+    with pytest.raises(ValueError, match="truncation_threshold must be >= tool_eviction_threshold"):
+        ContextWindowCompactionStrategy(
+            max_context_window_tokens=1000,
+            max_output_tokens=100,
+            tool_eviction_threshold=0.8,
+            truncation_threshold=0.5,
+        )

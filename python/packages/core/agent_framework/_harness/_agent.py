@@ -322,7 +322,7 @@ class HarnessAgent(BaseAgent):
             assembled_tools.append(client.get_web_search_tool())
         if tools is not None:
             if isinstance(tools, Sequence):
-                assembled_tools.extend(tools)
+                assembled_tools.extend(tools)  # pyright: ignore[reportUnknownArgumentType]
             else:
                 assembled_tools.append(tools)
         final_tools: list[ToolTypes | Callable[..., Any]] | None = assembled_tools or None

@@ -15,7 +15,7 @@ public sealed class ModeToolFormatter : ToolCallFormatter
     /// <inheritdoc/>
     public override string? FormatDetail(FunctionCallContent call) => call.Name switch
     {
-        "AgentMode_Set" => FormatStringArg(call, "mode"),
+        "mode_set" => FormatStringArg(call, "mode"),
         _ => null,
     };
 

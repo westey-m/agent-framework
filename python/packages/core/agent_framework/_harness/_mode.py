@@ -315,7 +315,7 @@ class AgentModeProvider(ContextProvider):
         if isinstance(previous_mode, str) and previous_mode != current_mode:
             # Inject a user-role message announcing the external mode change. System instructions
             # always render first in the chat history, so the agent can otherwise stay anchored to
-            # the most recent ``set_mode`` tool call rather than the new mode.
+            # the most recent ``mode_set`` tool call rather than the new mode.
             previous_display = self._mode_display_names.get(previous_mode, previous_mode)
             current_display = self._mode_display_names.get(current_mode, current_mode)
             notification = DEFAULT_MODE_CHANGE_NOTIFICATION.format(

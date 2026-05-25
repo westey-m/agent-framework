@@ -10,10 +10,10 @@ and retrieve results. Each background task runs in its own session concurrently.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from .._agents import SupportsAgentRun
 from .._feature_stage import ExperimentalFeature, experimental
@@ -22,7 +22,6 @@ from .._tools import tool
 from .._types import AgentResponse, Message
 
 DEFAULT_BACKGROUND_AGENTS_SOURCE_ID = "background_agents"
-DEFAULT_BACKGROUND_AGENTS_RUNTIME_SOURCE_ID = "background_agents_runtime"
 
 DEFAULT_BACKGROUND_AGENTS_INSTRUCTIONS = """\
 ## Background Agents
@@ -91,13 +90,22 @@ class BackgroundTaskInfo:
 class _RuntimeState:
     """Non-serializable per-session runtime state for background tasks."""
 
-    in_flight_tasks: dict[int, asyncio.Task[AgentResponse[Any]]] = field(default_factory=dict)
-    background_sessions: dict[int, AgentSession] = field(default_factory=dict)
+    in_flight_tasks: dict[int, asyncio.Task[AgentResponse[Any]]] = field(
+        default_factory=lambda: {}  # pyright: ignore[reportUnknownLambdaType]
+    )
+    background_sessions: dict[int, AgentSession] = field(
+        default_factory=lambda: {}  # pyright: ignore[reportUnknownLambdaType]
+    )
 
 
 # ---------------------------------------------------------------------------
 # Module-level helper functions (following ModeProvider pattern)
 # ---------------------------------------------------------------------------
+
+
+async def _run_agent(awaitable: Awaitable[AgentResponse[Any]]) -> AgentResponse[Any]:
+    """Wrap an Awaitable in a proper coroutine for use with asyncio.create_task."""
+    return await awaitable
 
 
 def _validate_and_build_agent_dict(agents: Sequence[SupportsAgentRun]) -> dict[str, SupportsAgentRun]:
@@ -138,9 +146,10 @@ def _get_provider_state(session: AgentSession, *, source_id: str) -> dict[str, A
     """Load or initialize serializable provider state from session."""
     state = session.state.get(source_id)
     if state is None:
-        state = {"next_task_id": 1, "tasks": []}
-        session.state[source_id] = state
-    return state  # type: ignore[return-value]
+        initial: dict[str, Any] = {"next_task_id": 1, "tasks": []}
+        session.state[source_id] = initial
+        return initial
+    return cast(dict[str, Any], state)
 
 
 def _save_provider_state(session: AgentSession, state: dict[str, Any], *, source_id: str) -> None:
@@ -164,16 +173,17 @@ def _finalize_task(
     runtime: _RuntimeState,
 ) -> None:
     """Extract results from a completed asyncio task and update task info."""
-    exception = completed_task.exception()
-    if exception is not None:
-        task_info.status = BackgroundTaskStatus.FAILED
-        task_info.error_text = str(exception)
-    elif completed_task.cancelled():
+    if completed_task.cancelled():
         task_info.status = BackgroundTaskStatus.FAILED
         task_info.error_text = "Task was canceled."
     else:
-        task_info.status = BackgroundTaskStatus.COMPLETED
-        task_info.result_text = completed_task.result().text
+        exception = completed_task.exception()
+        if exception is not None:
+            task_info.status = BackgroundTaskStatus.FAILED
+            task_info.error_text = str(exception)
+        else:
+            task_info.status = BackgroundTaskStatus.COMPLETED
+            task_info.result_text = completed_task.result().text
     runtime.in_flight_tasks.pop(task_info.id, None)
 
 
@@ -233,7 +243,6 @@ class BackgroundAgentsProvider(ContextProvider):
         agents: Sequence[SupportsAgentRun],
         *,
         source_id: str = DEFAULT_BACKGROUND_AGENTS_SOURCE_ID,
-        runtime_source_id: str | None = None,
         instructions: str | None = None,
     ) -> None:
         """Initialize the background agents provider.
@@ -244,9 +253,6 @@ class BackgroundAgentsProvider(ContextProvider):
 
         Keyword Args:
             source_id: Unique source ID for serializable task state in session.
-            runtime_source_id: Unique source ID for non-serializable runtime state
-                (in-flight asyncio tasks and background sessions). Defaults to
-                ``"{source_id}_runtime"``.
             instructions: Optional instruction override. May include ``{background_agents}``
                 placeholder which will be replaced with the agent listing.
 
@@ -256,20 +262,17 @@ class BackgroundAgentsProvider(ContextProvider):
         super().__init__(source_id)
 
         self._agents = _validate_and_build_agent_dict(agents)
-        self._runtime_source_id = runtime_source_id or f"{source_id}_runtime"
 
         # Build instructions with agent listing.
         base_instructions = instructions if instructions is not None else DEFAULT_BACKGROUND_AGENTS_INSTRUCTIONS
         agent_list_text = _build_agent_list_text(self._agents)
         self._instructions = base_instructions.replace("{background_agents}", agent_list_text)
 
-        # Per-session runtime state (non-serializable), keyed by runtime_source_id.
+        # Per-session runtime state (non-serializable), keyed by session_id.
+        # Note: Runtime state (in-flight asyncio.Task objects, child AgentSession handles)
+        # is inherently non-serializable and cannot survive process restarts. If the provider
+        # instance is lost, _refresh_task_state() marks orphaned tasks as LOST.
         self._runtime: dict[str, _RuntimeState] = {}
-
-    @property
-    def runtime_source_id(self) -> str:
-        """The source ID used for non-serializable runtime state."""
-        return self._runtime_source_id
 
     def _get_runtime(self, session: AgentSession) -> _RuntimeState:
         """Get or create runtime state for a session."""
@@ -318,7 +321,7 @@ class BackgroundAgentsProvider(ContextProvider):
             sub_session = bg_agent.create_session()
 
             # Start the task concurrently.
-            async_task = asyncio.create_task(bg_agent.run(input, session=sub_session))
+            async_task = asyncio.create_task(_run_agent(bg_agent.run(input, session=sub_session)))
             runtime.in_flight_tasks[task_id] = async_task
             runtime.background_sessions[task_id] = sub_session
 
@@ -441,7 +444,7 @@ class BackgroundAgentsProvider(ContextProvider):
             task_info.error_text = None
             _save_tasks(provider_state, tasks)
 
-            async_task = asyncio.create_task(bg_agent.run(text, session=sub_session))
+            async_task = asyncio.create_task(_run_agent(bg_agent.run(text, session=sub_session)))
             runtime.in_flight_tasks[task_id] = async_task
 
             _save_provider_state(session, provider_state, source_id=source_id)
@@ -485,7 +488,8 @@ class BackgroundAgentsProvider(ContextProvider):
         )
 
         # Include current task status as context message if there are tasks.
-        tasks = _get_tasks(provider_state)
+        # Refresh first to get accurate statuses for any tasks that completed between turns.
+        tasks = _refresh_task_state(session, provider_state, runtime, source_id=source_id)
         if tasks:
             status_lines = ["### Current background tasks"]
             for t in tasks:

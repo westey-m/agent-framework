@@ -80,7 +80,6 @@ from ._evaluation import (
 )
 from ._feature_stage import ExperimentalFeature, ReleaseCandidateFeature
 from ._harness._background_agents import (
-    DEFAULT_BACKGROUND_AGENTS_RUNTIME_SOURCE_ID,
     DEFAULT_BACKGROUND_AGENTS_SOURCE_ID,
     BackgroundAgentsProvider,
     BackgroundTaskInfo,
@@ -304,7 +303,6 @@ __all__ = [
     "AGENT_FRAMEWORK_USER_AGENT",
     "APP_INFO",
     "COMPACTION_STATE_KEY",
-    "DEFAULT_BACKGROUND_AGENTS_RUNTIME_SOURCE_ID",
     "DEFAULT_BACKGROUND_AGENTS_SOURCE_ID",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MEMORY_SOURCE_ID",

@@ -17,6 +17,10 @@ from agent_framework import (
 )
 from agent_framework._sessions import SessionContext
 
+# Suppress "coroutine was never awaited" warnings from task cancellation in tests.
+# This occurs when cancelling tasks that wrap coroutines through _run_agent().
+pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning:asyncio")
+
 # --- Test Helpers ---
 
 
@@ -114,20 +118,6 @@ def test_constructor_custom_source_id() -> None:
     """Should accept custom source_id."""
     provider = BackgroundAgentsProvider([_FakeAgent("Agent1")], source_id="custom_bg")
     assert provider.source_id == "custom_bg"
-    assert provider.runtime_source_id == "custom_bg_runtime"
-
-
-def test_constructor_custom_runtime_source_id() -> None:
-    """Should accept explicit runtime_source_id."""
-    provider = BackgroundAgentsProvider([_FakeAgent("Agent1")], source_id="custom_bg", runtime_source_id="my_runtime")
-    assert provider.source_id == "custom_bg"
-    assert provider.runtime_source_id == "my_runtime"
-
-
-def test_constructor_default_runtime_source_id() -> None:
-    """Default runtime_source_id should be derived from source_id."""
-    provider = BackgroundAgentsProvider([_FakeAgent("Agent1")])
-    assert provider.runtime_source_id == "background_agents_runtime"
 
 
 # --- Tool Injection Tests ---
@@ -335,11 +325,17 @@ async def test_get_task_results_running() -> None:
         input="query",
         description="slow task",
     )
-    result = await _invoke_tool(
-        tools["background_agents_get_task_results"],
-        task_id=1,
-    )
-    assert "still running" in result.lower()
+    try:
+        result = await _invoke_tool(
+            tools["background_agents_get_task_results"],
+            task_id=1,
+        )
+        assert "still running" in result.lower()
+    finally:
+        runtime = provider._get_runtime(session)
+        for task in list(runtime.in_flight_tasks.values()):
+            task.cancel()
+        await asyncio.gather(*runtime.in_flight_tasks.values(), return_exceptions=True)
 
 
 async def test_get_task_results_failed() -> None:
@@ -417,12 +413,18 @@ async def test_continue_task_still_running() -> None:
         input="input",
         description="running",
     )
-    result = await _invoke_tool(
-        tools["background_agents_continue_task"],
-        task_id=1,
-        text="follow up",
-    )
-    assert "still running" in result.lower()
+    try:
+        result = await _invoke_tool(
+            tools["background_agents_continue_task"],
+            task_id=1,
+            text="follow up",
+        )
+        assert "still running" in result.lower()
+    finally:
+        runtime = provider._get_runtime(session)
+        for task in list(runtime.in_flight_tasks.values()):
+            task.cancel()
+        await asyncio.gather(*runtime.in_flight_tasks.values(), return_exceptions=True)
 
 
 async def test_continue_task_not_found() -> None:
@@ -481,11 +483,17 @@ async def test_clear_running_task_error() -> None:
         input="task",
         description="still going",
     )
-    result = await _invoke_tool(
-        tools["background_agents_clear_completed_task"],
-        task_id=1,
-    )
-    assert "still running" in result.lower()
+    try:
+        result = await _invoke_tool(
+            tools["background_agents_clear_completed_task"],
+            task_id=1,
+        )
+        assert "still running" in result.lower()
+    finally:
+        runtime = provider._get_runtime(session)
+        for task in list(runtime.in_flight_tasks.values()):
+            task.cancel()
+        await asyncio.gather(*runtime.in_flight_tasks.values(), return_exceptions=True)
 
 
 async def test_clear_not_found() -> None:

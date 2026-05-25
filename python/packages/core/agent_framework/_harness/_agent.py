@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 from .._agents import BaseAgent
+from .._clients import SupportsWebSearchTool
 from .._compaction import CompactionProvider, ContextWindowCompactionStrategy, ToolResultCompactionStrategy
 from .._feature_stage import ExperimentalFeature, experimental
 from .._sessions import AgentSession, ContextProvider, HistoryProvider, InMemoryHistoryProvider
@@ -216,6 +217,7 @@ class HarnessAgent(BaseAgent):
         disable_skills: bool = False,
         skills_provider: SkillsProvider | None = None,
         skills_paths: Sequence[str] | None = None,
+        disable_web_search: bool = False,
         disable_telemetry: bool = False,
         otel_provider_name: str | None = None,
         context_providers: Sequence[ContextProvider] | None = None,
@@ -255,6 +257,9 @@ class HarnessAgent(BaseAgent):
             skills_provider: Custom SkillsProvider instance. Ignored when disable_skills is True.
             skills_paths: Paths for file-based skill discovery.
                 Ignored when skills_provider is set or disable_skills is True.
+            disable_web_search: When True, skip automatic web search tool inclusion.
+                When False (default), the web search tool is automatically added if the
+                client implements SupportsWebSearchTool.
             disable_telemetry: When True, use RawAgent (no telemetry layer) instead of Agent.
             otel_provider_name: Custom OpenTelemetry provider/source name.
             context_providers: Additional context providers to include after the built-in ones.
@@ -311,6 +316,17 @@ class HarnessAgent(BaseAgent):
         # Build instructions.
         instructions = _assemble_instructions(harness_instructions, agent_instructions)
 
+        # Assemble tools, auto-adding web search if supported.
+        assembled_tools: list[ToolTypes | Callable[..., Any]] = []
+        if not disable_web_search and isinstance(client, SupportsWebSearchTool):
+            assembled_tools.append(client.get_web_search_tool())
+        if tools is not None:
+            if isinstance(tools, Sequence):
+                assembled_tools.extend(tools)
+            else:
+                assembled_tools.append(tools)
+        final_tools: list[ToolTypes | Callable[..., Any]] | None = assembled_tools or None
+
         # Build default options dict.
         default_opts: dict[str, Any] = dict(default_options) if default_options else {}
         default_opts.setdefault("max_tokens", max_output_tokens)
@@ -333,7 +349,7 @@ class HarnessAgent(BaseAgent):
             id=self.id,
             name=self.name,
             description=self.description,
-            tools=tools,
+            tools=final_tools,
             default_options=default_opts,  # type: ignore[arg-type]
             context_providers=assembled_providers,
             middleware=list(middleware) if middleware else None,

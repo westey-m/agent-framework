@@ -354,3 +354,50 @@ def test_harness_agent_extra_context_providers() -> None:
         context_providers=[custom],
     )
     assert custom in agent.context_providers
+
+
+# --- Web Search Tool Tests ---
+
+
+class _FakeWebSearchClient(_FakeChatClient):
+    """Fake client that supports web search tool."""
+
+    def get_web_search_tool(self, **kwargs: Any) -> str:
+        return "web_search_tool_instance"
+
+
+def test_harness_agent_auto_adds_web_search_tool() -> None:
+    """Web search tool should be auto-added when client supports it."""
+    agent = HarnessAgent(
+        client=_FakeWebSearchClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        disable_skills=True,
+    )
+    tools = agent._inner_agent.default_options.get("tools", [])
+    assert "web_search_tool_instance" in tools
+
+
+def test_harness_agent_disable_web_search() -> None:
+    """disable_web_search=True should skip auto-adding the web search tool."""
+    agent = HarnessAgent(
+        client=_FakeWebSearchClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        disable_web_search=True,
+        disable_skills=True,
+    )
+    tools = agent._inner_agent.default_options.get("tools", [])
+    assert "web_search_tool_instance" not in tools
+
+
+def test_harness_agent_no_web_search_when_unsupported() -> None:
+    """Web search tool should NOT be added when client does not support it."""
+    agent = HarnessAgent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        disable_skills=True,
+    )
+    tools = agent._inner_agent.default_options.get("tools", [])
+    assert "web_search_tool_instance" not in tools

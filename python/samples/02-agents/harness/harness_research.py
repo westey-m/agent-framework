@@ -69,11 +69,8 @@ async def main() -> None:
     # with your preferred authentication option.
     client = FoundryChatClient(credential=AzureCliCredential())
 
-    # Get the web search tool from the Foundry client for real-time information retrieval.
-    web_search_tool = client.get_web_search_tool()
-
     # Create a HarnessAgent with research-specific instructions.
-    # All other features (todo, mode, compaction, skills, telemetry) are
+    # All other features (todo, mode, compaction, skills, telemetry, web search) are
     # automatically configured with sensible defaults.
     agent = HarnessAgent(
         client=client,
@@ -82,7 +79,6 @@ async def main() -> None:
         name="ResearchAgent",
         description="A research assistant that plans and executes research tasks.",
         agent_instructions=RESEARCH_INSTRUCTIONS,
-        tools=[web_search_tool],
         disable_skills=True,  # No SKILL.md files in this sample directory.
     )
 

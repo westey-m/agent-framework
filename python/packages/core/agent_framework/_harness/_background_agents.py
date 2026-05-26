@@ -10,13 +10,14 @@ and retrieve results. Each background task runs in its own session concurrently.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from .._agents import SupportsAgentRun
 from .._feature_stage import ExperimentalFeature, experimental
+from .._serialization import SerializationMixin
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._tools import tool
 from .._types import AgentResponse, Message
@@ -48,33 +49,53 @@ class BackgroundTaskStatus(str, Enum):
 
 
 @experimental(feature_id=ExperimentalFeature.HARNESS)
-@dataclass
-class BackgroundTaskInfo:
+class BackgroundTaskInfo(SerializationMixin):
     """Metadata for a single background task."""
+
+    DEFAULT_EXCLUDE: ClassVar[set[str]] = set()
 
     id: int
     agent_name: str
     description: str
-    status: BackgroundTaskStatus = BackgroundTaskStatus.RUNNING
-    result_text: str | None = None
-    error_text: str | None = None
+    status: BackgroundTaskStatus
+    result_text: str | None
+    error_text: str | None
+    __slots__ = ("agent_name", "description", "error_text", "id", "result_text", "status")
 
-    def to_dict(self) -> dict[str, Any]:
+    def __init__(
+        self,
+        id: int,
+        agent_name: str,
+        description: str,
+        status: BackgroundTaskStatus = BackgroundTaskStatus.RUNNING,
+        result_text: str | None = None,
+        error_text: str | None = None,
+    ) -> None:
+        """Initialize a background task info entry."""
+        self.id = id
+        self.agent_name = agent_name
+        self.description = description
+        self.status = status
+        self.result_text = result_text
+        self.error_text = error_text
+
+    def to_dict(self, *, exclude: set[str] | None = None, exclude_none: bool = True) -> dict[str, Any]:
         """Serialize for session state persistence."""
+        del exclude
         data: dict[str, Any] = {
             "id": self.id,
             "agent_name": self.agent_name,
             "description": self.description,
             "status": self.status.value,
         }
-        if self.result_text is not None:
+        if not exclude_none or self.result_text is not None:
             data["result_text"] = self.result_text
-        if self.error_text is not None:
+        if not exclude_none or self.error_text is not None:
             data["error_text"] = self.error_text
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> BackgroundTaskInfo:
+    def from_dict(cls, data: MutableMapping[str, Any], **kwargs: Any) -> BackgroundTaskInfo:
         """Deserialize from session state."""
         return cls(
             id=data["id"],

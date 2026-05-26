@@ -55,12 +55,7 @@ def _assemble_instructions(
     """Assemble final instructions from harness + agent instructions."""
     harness = harness_instructions if harness_instructions is not None else DEFAULT_HARNESS_INSTRUCTIONS
 
-    if harness and agent_instructions:
-        return f"{harness}\n\n{agent_instructions}"
-    if harness:
-        return harness
-    if agent_instructions:
-        return agent_instructions
+    return f"{harness}\n\n{agent_instructions or ''}".strip()
     return None
 
 
@@ -442,4 +437,4 @@ class HarnessAgent(BaseAgent):
         Returns:
             An AgentSession instance with the service_session_id set.
         """
-        return self._inner_agent.get_session(service_session_id, session_id=session_id)
+        return self._inner_agent.get_session(service_session_id=service_session_id, session_id=session_id)

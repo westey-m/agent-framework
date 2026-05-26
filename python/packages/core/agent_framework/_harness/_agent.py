@@ -55,8 +55,7 @@ def _assemble_instructions(
     """Assemble final instructions from harness + agent instructions."""
     harness = harness_instructions if harness_instructions is not None else DEFAULT_HARNESS_INSTRUCTIONS
 
-    return f"{harness}\n\n{agent_instructions or ''}".strip()
-    return None
+    return f"{harness}\n\n{agent_instructions or ''}".strip() or None
 
 
 def _assemble_compaction_provider(
@@ -162,7 +161,7 @@ class HarnessAgent(BaseAgent):
             from agent_framework.openai import OpenAIChatClient
 
             agent = HarnessAgent(
-                client=OpenAIChatClient(model="gpt-4o"),
+                OpenAIChatClient(model="gpt-4o"),
                 max_context_window_tokens=128_000,
                 max_output_tokens=16_384,
             )
@@ -189,9 +188,9 @@ class HarnessAgent(BaseAgent):
     def __init__(
         self,
         client: SupportsChatGetResponse[Any],
+        *,
         max_context_window_tokens: int,
         max_output_tokens: int,
-        *,
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
@@ -213,7 +212,6 @@ class HarnessAgent(BaseAgent):
         skills_provider: SkillsProvider | None = None,
         skills_paths: Sequence[str] | None = None,
         disable_web_search: bool = False,
-        disable_telemetry: bool = False,
         otel_provider_name: str | None = None,
         context_providers: Sequence[ContextProvider] | None = None,
         middleware: Sequence[MiddlewareTypes] | None = None,
@@ -223,10 +221,10 @@ class HarnessAgent(BaseAgent):
 
         Args:
             client: The chat client providing access to the underlying AI model.
-            max_context_window_tokens: Maximum tokens the model's context window supports.
-            max_output_tokens: Maximum output tokens per response.
 
         Keyword Args:
+            max_context_window_tokens: Maximum tokens the model's context window supports.
+            max_output_tokens: Maximum output tokens per response.
             id: Optional agent ID (auto-generated UUID if omitted).
             name: Optional agent name.
             description: Optional agent description.
@@ -255,8 +253,7 @@ class HarnessAgent(BaseAgent):
             disable_web_search: When True, skip automatic web search tool inclusion.
                 When False (default), the web search tool is automatically added if the
                 client implements SupportsWebSearchTool.
-            disable_telemetry: When True, use RawAgent (no telemetry layer) instead of Agent.
-            otel_provider_name: Custom OpenTelemetry provider/source name.
+            otel_provider_name: Custom OpenTelemetry provider/source name for telemetry.
             context_providers: Additional context providers to include after the built-in ones.
             middleware: Additional middleware to include.
             default_options: Provider-specific chat options (temperature, max_tokens, etc.).
@@ -326,19 +323,15 @@ class HarnessAgent(BaseAgent):
         default_opts: dict[str, Any] = dict(default_options) if default_options else {}
         default_opts.setdefault("max_tokens", max_output_tokens)
 
-        # Determine agent class based on telemetry preference.
-        from .._agents import Agent as FullAgent
-        from .._agents import RawAgent
-
-        agent_cls: type[RawAgent[Any]] = FullAgent if not disable_telemetry else RawAgent
-
         # Build additional kwargs for telemetry.
+        from .._agents import Agent as FullAgent
+
         agent_kwargs: dict[str, Any] = {}
-        if agent_cls is FullAgent and otel_provider_name:
+        if otel_provider_name:
             agent_kwargs["otel_agent_provider_name"] = otel_provider_name
 
         # Build the inner agent.
-        self._inner_agent = agent_cls(
+        self._inner_agent = FullAgent(
             client,
             instructions,
             id=self.id,

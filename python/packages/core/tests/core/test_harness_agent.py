@@ -183,21 +183,6 @@ def test_harness_agent_disable_compaction() -> None:
     assert CompactionProvider not in provider_types
 
 
-def test_harness_agent_disable_telemetry_uses_raw_agent() -> None:
-    """disable_telemetry=True should use RawAgent instead of Agent."""
-    from agent_framework._agents import Agent as FullAgent
-    from agent_framework._agents import RawAgent
-
-    agent = HarnessAgent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
-        max_context_window_tokens=128_000,
-        max_output_tokens=16_384,
-        disable_telemetry=True,
-    )
-    assert isinstance(agent._inner_agent, RawAgent)
-    assert not isinstance(agent._inner_agent, FullAgent)
-
-
 def test_harness_agent_default_uses_full_agent() -> None:
     """Default assembly should use Agent (with telemetry)."""
     from agent_framework._agents import Agent as FullAgent
@@ -249,7 +234,7 @@ def test_harness_agent_rejects_output_gte_context() -> None:
 def test_default_instructions() -> None:
     """None args should produce default harness instructions."""
     result = _assemble_instructions(None, None)
-    assert result == DEFAULT_HARNESS_INSTRUCTIONS
+    assert result == DEFAULT_HARNESS_INSTRUCTIONS.strip()
 
 
 def test_custom_agent_instructions_appended() -> None:

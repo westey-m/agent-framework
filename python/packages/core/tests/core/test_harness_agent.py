@@ -11,11 +11,11 @@ from agent_framework import (
     AgentSession,
     ChatResponse,
     CompactionProvider,
-    HarnessAgent,
     InMemoryHistoryProvider,
     Message,
     SkillsProvider,
     TodoProvider,
+    create_harness_agent,
 )
 from agent_framework._harness._agent import DEFAULT_HARNESS_INSTRUCTIONS, _assemble_instructions
 from agent_framework._harness._mode import AgentModeProvider
@@ -49,20 +49,19 @@ class _FakeChatClient:
 # --- Assembly Tests ---
 
 
-def test_harness_agent_creates_with_defaults() -> None:
-    """HarnessAgent should assemble successfully with default options."""
-    agent = HarnessAgent(
+def test_create_harness_agent_with_defaults() -> None:
+    """create_harness_agent should assemble successfully with default options."""
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
     assert agent.id is not None
-    assert agent._inner_agent is not None
 
 
-def test_harness_agent_includes_all_default_providers() -> None:
+def test_create_harness_agent_includes_all_default_providers() -> None:
     """Default assembly should include history, compaction, todo, mode, skills."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -77,9 +76,9 @@ def test_harness_agent_includes_all_default_providers() -> None:
     assert SkillsProvider in provider_types
 
 
-def test_harness_agent_disable_todo() -> None:
+def test_create_harness_agent_disable_todo() -> None:
     """disable_todo=True should exclude TodoProvider."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -89,9 +88,9 @@ def test_harness_agent_disable_todo() -> None:
     assert TodoProvider not in provider_types
 
 
-def test_harness_agent_disable_mode() -> None:
+def test_create_harness_agent_disable_mode() -> None:
     """disable_mode=True should exclude AgentModeProvider."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -101,7 +100,7 @@ def test_harness_agent_disable_mode() -> None:
     assert AgentModeProvider not in provider_types
 
 
-def test_harness_agent_disable_memory() -> None:
+def test_create_harness_agent_disable_memory() -> None:
     """disable_memory=True should exclude MemoryContextProvider even when memory_store is provided."""
     from agent_framework import MemoryContextProvider
     from agent_framework._harness._memory import MemoryStore
@@ -138,7 +137,7 @@ def test_harness_agent_disable_memory() -> None:
             pass
 
     # With memory_store provided and disable_memory=False, MemoryContextProvider should be present.
-    agent_with_memory = HarnessAgent(
+    agent_with_memory = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -148,7 +147,7 @@ def test_harness_agent_disable_memory() -> None:
     assert MemoryContextProvider in provider_types
 
     # With memory_store provided and disable_memory=True, MemoryContextProvider should be absent.
-    agent_disabled = HarnessAgent(
+    agent_disabled = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -159,9 +158,9 @@ def test_harness_agent_disable_memory() -> None:
     assert MemoryContextProvider not in provider_types
 
 
-def test_harness_agent_disable_skills() -> None:
+def test_create_harness_agent_disable_skills() -> None:
     """disable_skills=True should exclude SkillsProvider."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -171,9 +170,9 @@ def test_harness_agent_disable_skills() -> None:
     assert SkillsProvider not in provider_types
 
 
-def test_harness_agent_disable_compaction() -> None:
+def test_create_harness_agent_disable_compaction() -> None:
     """disable_compaction=True should exclude CompactionProvider."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -183,45 +182,45 @@ def test_harness_agent_disable_compaction() -> None:
     assert CompactionProvider not in provider_types
 
 
-def test_harness_agent_default_uses_full_agent() -> None:
-    """Default assembly should use Agent (with telemetry)."""
+def test_create_harness_agent_returns_full_agent() -> None:
+    """Factory should return an Agent instance (with telemetry)."""
     from agent_framework._agents import Agent as FullAgent
 
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
-    assert isinstance(agent._inner_agent, FullAgent)
+    assert isinstance(agent, FullAgent)
 
 
 # --- Validation Tests ---
 
 
-def test_harness_agent_rejects_invalid_context_tokens() -> None:
+def test_create_harness_agent_rejects_invalid_context_tokens() -> None:
     """max_context_window_tokens must be positive."""
     with pytest.raises(ValueError, match="max_context_window_tokens must be positive"):
-        HarnessAgent(
+        create_harness_agent(
             client=_FakeChatClient(),  # type: ignore[arg-type]
             max_context_window_tokens=0,
             max_output_tokens=100,
         )
 
 
-def test_harness_agent_rejects_negative_output_tokens() -> None:
+def test_create_harness_agent_rejects_negative_output_tokens() -> None:
     """max_output_tokens must be non-negative."""
     with pytest.raises(ValueError, match="max_output_tokens must be non-negative"):
-        HarnessAgent(
+        create_harness_agent(
             client=_FakeChatClient(),  # type: ignore[arg-type]
             max_context_window_tokens=1000,
             max_output_tokens=-1,
         )
 
 
-def test_harness_agent_rejects_output_gte_context() -> None:
+def test_create_harness_agent_rejects_output_gte_context() -> None:
     """max_output_tokens must be less than max_context_window_tokens."""
     with pytest.raises(ValueError, match="max_output_tokens must be less than"):
-        HarnessAgent(
+        create_harness_agent(
             client=_FakeChatClient(),  # type: ignore[arg-type]
             max_context_window_tokens=1000,
             max_output_tokens=1000,
@@ -253,9 +252,9 @@ def test_empty_harness_instructions_uses_agent_only() -> None:
 # --- Identity Tests ---
 
 
-def test_harness_agent_custom_identity() -> None:
+def test_create_harness_agent_custom_identity() -> None:
     """Custom id, name, description should propagate."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -271,9 +270,9 @@ def test_harness_agent_custom_identity() -> None:
 # --- Session Tests ---
 
 
-def test_harness_agent_create_session() -> None:
+def test_create_harness_agent_create_session() -> None:
     """create_session should return an AgentSession."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -282,9 +281,9 @@ def test_harness_agent_create_session() -> None:
     assert isinstance(session, AgentSession)
 
 
-def test_harness_agent_create_session_with_id() -> None:
+def test_create_harness_agent_create_session_with_id() -> None:
     """create_session should accept a custom session_id."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -293,9 +292,9 @@ def test_harness_agent_create_session_with_id() -> None:
     assert session.session_id == "custom-id"
 
 
-async def test_harness_agent_run_returns_response() -> None:
-    """agent.run() should delegate to inner agent and return a response."""
-    agent = HarnessAgent(
+async def test_create_harness_agent_run_returns_response() -> None:
+    """agent.run() should return a response."""
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -310,11 +309,11 @@ async def test_harness_agent_run_returns_response() -> None:
 # --- Protocol Tests ---
 
 
-def test_harness_agent_satisfies_protocol() -> None:
-    """HarnessAgent should satisfy SupportsAgentRun protocol."""
+def test_create_harness_agent_satisfies_protocol() -> None:
+    """Returned agent should satisfy SupportsAgentRun protocol."""
     from agent_framework import SupportsAgentRun
 
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -325,14 +324,14 @@ def test_harness_agent_satisfies_protocol() -> None:
 # --- Additional providers ---
 
 
-def test_harness_agent_extra_context_providers() -> None:
+def test_create_harness_agent_extra_context_providers() -> None:
     """Additional context_providers should be appended."""
 
     class _CustomProvider(ContextProvider):
         pass
 
     custom = _CustomProvider("custom")
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -351,38 +350,38 @@ class _FakeWebSearchClient(_FakeChatClient):
         return "web_search_tool_instance"
 
 
-def test_harness_agent_auto_adds_web_search_tool() -> None:
+def test_create_harness_agent_auto_adds_web_search_tool() -> None:
     """Web search tool should be auto-added when client supports it."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeWebSearchClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_skills=True,
     )
-    tools = agent._inner_agent.default_options.get("tools", [])
+    tools = agent.default_options.get("tools", [])
     assert "web_search_tool_instance" in tools
 
 
-def test_harness_agent_disable_web_search() -> None:
+def test_create_harness_agent_disable_web_search() -> None:
     """disable_web_search=True should skip auto-adding the web search tool."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeWebSearchClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
         disable_skills=True,
     )
-    tools = agent._inner_agent.default_options.get("tools", [])
+    tools = agent.default_options.get("tools", [])
     assert "web_search_tool_instance" not in tools
 
 
-def test_harness_agent_no_web_search_when_unsupported() -> None:
+def test_create_harness_agent_no_web_search_when_unsupported() -> None:
     """Web search tool should NOT be added when client does not support it."""
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_skills=True,
     )
-    tools = agent._inner_agent.default_options.get("tools", [])
+    tools = agent.default_options.get("tools", [])
     assert "web_search_tool_instance" not in tools

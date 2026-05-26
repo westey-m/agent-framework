@@ -82,7 +82,7 @@ from ._evaluation import (
 from ._feature_stage import ExperimentalFeature, ReleaseCandidateFeature
 from ._harness._agent import (
     DEFAULT_HARNESS_INSTRUCTIONS,
-    HarnessAgent,
+    create_harness_agent,
 )
 from ._harness._memory import (
     DEFAULT_MEMORY_SOURCE_ID,
@@ -403,7 +403,6 @@ __all__ = [
     "FunctionalWorkflowAgent",
     "GeneratedEmbeddings",
     "GraphConnectivityError",
-    "HarnessAgent",
     "HistoryProvider",
     "InMemoryCheckpointStorage",
     "InMemoryHistoryProvider",
@@ -507,6 +506,7 @@ __all__ = [
     "apply_compaction",
     "chat_middleware",
     "create_edge_runner",
+    "create_harness_agent",
     "detect_media_type_from_base64",
     "evaluate_agent",
     "evaluate_workflow",

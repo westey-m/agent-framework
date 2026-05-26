@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""HarnessAgent: a pre-configured bundled agent with batteries included.
+"""Harness agent factory: a pre-configured bundled agent with batteries included.
 
-This module provides :class:`HarnessAgent`, a convenience class that assembles
+This module provides :func:`create_harness_agent`, a factory function that assembles
 the full agent pipeline from a chat client, wiring up function invocation,
 per-service-call history persistence, compaction, and a rich set of default
 context providers (todo, mode, memory, skills).
@@ -10,21 +10,22 @@ context providers (todo, mode, memory, skills).
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Literal, overload
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
-from .._agents import BaseAgent
+from .._agents import Agent
 from .._clients import SupportsWebSearchTool
 from .._compaction import CompactionProvider, ContextWindowCompactionStrategy, ToolResultCompactionStrategy
 from .._feature_stage import ExperimentalFeature, experimental
-from .._sessions import AgentSession, ContextProvider, HistoryProvider, InMemoryHistoryProvider
+from .._sessions import ContextProvider, HistoryProvider, InMemoryHistoryProvider
 from .._skills import SkillsProvider
-from .._types import AgentResponse, AgentResponseUpdate, AgentRunInputs, ResponseStream
 from ._memory import MemoryContextProvider, MemoryStore
 from ._mode import AgentModeProvider
 from ._todo import TodoProvider
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .._clients import SupportsChatGetResponse
     from .._compaction import CompactionStrategy, TokenizerProtocol
     from .._middleware import MiddlewareTypes
@@ -134,12 +135,44 @@ def _assemble_context_providers(
     return providers
 
 
-@experimental(feature_id=ExperimentalFeature.HARNESS)
-class HarnessAgent(BaseAgent):
-    """A pre-configured agent that bundles function invocation, history persistence, compaction, and context providers.
+HARNESS_AGENT_PROVIDER_NAME = "microsoft.agent_framework.harness"
 
-    ``HarnessAgent`` assembles an :class:`~agent_framework.Agent` pipeline from a
-    caller-supplied chat client, automatically wiring:
+
+@experimental(feature_id=ExperimentalFeature.HARNESS)
+def create_harness_agent(
+    client: SupportsChatGetResponse[Any],
+    *,
+    id: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    harness_instructions: str | None = None,
+    agent_instructions: str | None = None,
+    tools: ToolTypes | Callable[..., Any] | Sequence[ToolTypes | Callable[..., Any]] | None = None,
+    max_context_window_tokens: int,
+    max_output_tokens: int,
+    history_provider: HistoryProvider | None = None,
+    disable_compaction: bool = False,
+    before_compaction_strategy: CompactionStrategy | None = None,
+    after_compaction_strategy: CompactionStrategy | None = None,
+    tokenizer: TokenizerProtocol | None = None,
+    disable_todo: bool = False,
+    todo_provider: TodoProvider | None = None,
+    disable_mode: bool = False,
+    mode_provider: AgentModeProvider | None = None,
+    disable_memory: bool = False,
+    memory_store: MemoryStore | None = None,
+    disable_skills: bool = False,
+    skills_provider: SkillsProvider | None = None,
+    skills_paths: Sequence[str] | None = None,
+    disable_web_search: bool = False,
+    otel_provider_name: str | None = None,
+    context_providers: Sequence[ContextProvider] | None = None,
+    middleware: Sequence[MiddlewareTypes] | None = None,
+    default_options: Mapping[str, Any] | None = None,
+) -> Agent[Any]:
+    """Create a pre-configured agent with batteries included.
+
+    Assembles an :class:`~agent_framework.Agent` from a chat client, automatically wiring:
 
     - **Function invocation** — automatic tool calling loop
     - **Per-service-call history persistence** — persists history after every model call
@@ -157,10 +190,10 @@ class HarnessAgent(BaseAgent):
 
         .. code-block:: python
 
-            from agent_framework import HarnessAgent
+            from agent_framework import create_harness_agent
             from agent_framework.openai import OpenAIChatClient
 
-            agent = HarnessAgent(
+            agent = create_harness_agent(
                 OpenAIChatClient(model="gpt-4o"),
                 max_context_window_tokens=128_000,
                 max_output_tokens=16_384,
@@ -172,7 +205,7 @@ class HarnessAgent(BaseAgent):
 
         .. code-block:: python
 
-            agent = HarnessAgent(
+            agent = create_harness_agent(
                 client=client,
                 max_context_window_tokens=200_000,
                 max_output_tokens=32_000,
@@ -181,253 +214,122 @@ class HarnessAgent(BaseAgent):
                 disable_todo=True,
                 skills_paths=["./skills", "./custom-skills"],
             )
+
+    Args:
+        client: The chat client providing access to the underlying AI model.
+
+    Keyword Args:
+        id: Optional agent ID (auto-generated UUID if omitted).
+        name: Optional agent name.
+        description: Optional agent description.
+        harness_instructions: Override the default harness-level instructions.
+            Set to empty string to omit harness instructions entirely.
+        agent_instructions: Agent-specific instructions appended after harness instructions.
+        tools: Additional tools to include in the agent's toolset.
+        max_context_window_tokens: Maximum tokens the model's context window supports.
+        max_output_tokens: Maximum output tokens per response.
+        history_provider: Custom history provider. When None, an InMemoryHistoryProvider is used.
+        disable_compaction: When True, skip compaction provider setup.
+        before_compaction_strategy: Custom before-run compaction strategy.
+            Defaults to ContextWindowCompactionStrategy (token-budget aware).
+        after_compaction_strategy: Custom after-run compaction strategy.
+            Defaults to ToolResultCompactionStrategy.
+        tokenizer: Custom tokenizer for compaction strategies.
+        disable_todo: When True, skip the TodoProvider.
+        todo_provider: Custom TodoProvider instance. Ignored when disable_todo is True.
+        disable_mode: When True, skip the AgentModeProvider.
+        mode_provider: Custom AgentModeProvider instance. Ignored when disable_mode is True.
+        disable_memory: When True, skip the MemoryContextProvider.
+        memory_store: Memory store instance. When provided (and disable_memory is False),
+            a MemoryContextProvider is added.
+        disable_skills: When True, skip the SkillsProvider.
+        skills_provider: Custom SkillsProvider instance. Ignored when disable_skills is True.
+        skills_paths: Paths for file-based skill discovery.
+            Ignored when skills_provider is set or disable_skills is True.
+        disable_web_search: When True, skip automatic web search tool inclusion.
+            When False (default), the web search tool is automatically added if the
+            client implements SupportsWebSearchTool.
+        otel_provider_name: Custom OpenTelemetry provider/source name for telemetry.
+        context_providers: Additional context providers to include after the built-in ones.
+        middleware: Additional middleware to include.
+        default_options: Provider-specific chat options (temperature, max_tokens, etc.).
+
+    Returns:
+        A fully configured :class:`~agent_framework.Agent` instance.
+
+    Raises:
+        ValueError: If max_context_window_tokens <= 0 or max_output_tokens < 0
+            or max_output_tokens >= max_context_window_tokens.
     """
+    if max_context_window_tokens <= 0:
+        raise ValueError("max_context_window_tokens must be positive.")
+    if max_output_tokens < 0:
+        raise ValueError("max_output_tokens must be non-negative.")
+    if max_output_tokens >= max_context_window_tokens:
+        raise ValueError("max_output_tokens must be less than max_context_window_tokens.")
 
-    AGENT_PROVIDER_NAME = "microsoft.agent_framework.harness"
+    # Build history provider.
+    resolved_history = history_provider or InMemoryHistoryProvider()
 
-    def __init__(
-        self,
-        client: SupportsChatGetResponse[Any],
-        *,
-        max_context_window_tokens: int,
-        max_output_tokens: int,
-        id: str | None = None,
-        name: str | None = None,
-        description: str | None = None,
-        harness_instructions: str | None = None,
-        agent_instructions: str | None = None,
-        tools: ToolTypes | Callable[..., Any] | Sequence[ToolTypes | Callable[..., Any]] | None = None,
-        history_provider: HistoryProvider | None = None,
-        disable_compaction: bool = False,
-        before_compaction_strategy: CompactionStrategy | None = None,
-        after_compaction_strategy: CompactionStrategy | None = None,
-        tokenizer: TokenizerProtocol | None = None,
-        disable_todo: bool = False,
-        todo_provider: TodoProvider | None = None,
-        disable_mode: bool = False,
-        mode_provider: AgentModeProvider | None = None,
-        disable_memory: bool = False,
-        memory_store: MemoryStore | None = None,
-        disable_skills: bool = False,
-        skills_provider: SkillsProvider | None = None,
-        skills_paths: Sequence[str] | None = None,
-        disable_web_search: bool = False,
-        otel_provider_name: str | None = None,
-        context_providers: Sequence[ContextProvider] | None = None,
-        middleware: Sequence[MiddlewareTypes] | None = None,
-        default_options: Mapping[str, Any] | None = None,
-    ) -> None:
-        """Initialize a HarnessAgent.
+    # Build compaction provider.
+    compaction_provider = _assemble_compaction_provider(
+        disable_compaction=disable_compaction,
+        max_context_window_tokens=max_context_window_tokens,
+        max_output_tokens=max_output_tokens,
+        history_source_id=resolved_history.source_id,
+        before_compaction_strategy=before_compaction_strategy,
+        after_compaction_strategy=after_compaction_strategy,
+        tokenizer=tokenizer,
+    )
 
-        Args:
-            client: The chat client providing access to the underlying AI model.
+    # Build context providers.
+    assembled_providers = _assemble_context_providers(
+        history_provider=resolved_history,
+        compaction_provider=compaction_provider,
+        disable_todo=disable_todo,
+        todo_provider=todo_provider,
+        disable_mode=disable_mode,
+        mode_provider=mode_provider,
+        disable_memory=disable_memory,
+        memory_store=memory_store,
+        disable_skills=disable_skills,
+        skills_provider=skills_provider,
+        skills_paths=skills_paths,
+        extra_context_providers=context_providers,
+    )
 
-        Keyword Args:
-            max_context_window_tokens: Maximum tokens the model's context window supports.
-            max_output_tokens: Maximum output tokens per response.
-            id: Optional agent ID (auto-generated UUID if omitted).
-            name: Optional agent name.
-            description: Optional agent description.
-            harness_instructions: Override the default harness-level instructions.
-                Set to empty string to omit harness instructions entirely.
-            agent_instructions: Agent-specific instructions appended after harness instructions.
-            tools: Additional tools to include in the agent's toolset.
-            history_provider: Custom history provider. When None, an InMemoryHistoryProvider is used.
-            disable_compaction: When True, skip compaction provider setup.
-            before_compaction_strategy: Custom before-run compaction strategy.
-                Defaults to ContextWindowCompactionStrategy (token-budget aware).
-            after_compaction_strategy: Custom after-run compaction strategy.
-                Defaults to ToolResultCompactionStrategy.
-            tokenizer: Custom tokenizer for compaction strategies.
-            disable_todo: When True, skip the TodoProvider.
-            todo_provider: Custom TodoProvider instance. Ignored when disable_todo is True.
-            disable_mode: When True, skip the AgentModeProvider.
-            mode_provider: Custom AgentModeProvider instance. Ignored when disable_mode is True.
-            disable_memory: When True, skip the MemoryContextProvider.
-            memory_store: Memory store instance. When provided (and disable_memory is False),
-                a MemoryContextProvider is added.
-            disable_skills: When True, skip the SkillsProvider.
-            skills_provider: Custom SkillsProvider instance. Ignored when disable_skills is True.
-            skills_paths: Paths for file-based skill discovery.
-                Ignored when skills_provider is set or disable_skills is True.
-            disable_web_search: When True, skip automatic web search tool inclusion.
-                When False (default), the web search tool is automatically added if the
-                client implements SupportsWebSearchTool.
-            otel_provider_name: Custom OpenTelemetry provider/source name for telemetry.
-            context_providers: Additional context providers to include after the built-in ones.
-            middleware: Additional middleware to include.
-            default_options: Provider-specific chat options (temperature, max_tokens, etc.).
+    # Build instructions.
+    instructions = _assemble_instructions(harness_instructions, agent_instructions)
 
-        Raises:
-            ValueError: If max_context_window_tokens <= 0 or max_output_tokens < 0
-                or max_output_tokens >= max_context_window_tokens.
-        """
-        if max_context_window_tokens <= 0:
-            raise ValueError("max_context_window_tokens must be positive.")
-        if max_output_tokens < 0:
-            raise ValueError("max_output_tokens must be non-negative.")
-        if max_output_tokens >= max_context_window_tokens:
-            raise ValueError("max_output_tokens must be less than max_context_window_tokens.")
+    # Assemble tools, auto-adding web search if supported.
+    assembled_tools: list[ToolTypes | Callable[..., Any]] = []
+    if not disable_web_search and isinstance(client, SupportsWebSearchTool):
+        assembled_tools.append(client.get_web_search_tool())
+    if tools is not None:
+        if isinstance(tools, Sequence):
+            assembled_tools.extend(tools)  # pyright: ignore[reportUnknownArgumentType]
+        else:
+            assembled_tools.append(tools)
+    final_tools: list[ToolTypes | Callable[..., Any]] | None = assembled_tools or None
 
-        super().__init__(
-            id=id,
-            name=name,
-            description=description,
-        )
+    # Build default options dict.
+    default_opts: dict[str, Any] = dict(default_options) if default_options else {}
+    default_opts.setdefault("max_tokens", max_output_tokens)
 
-        # Build history provider.
-        resolved_history = history_provider or InMemoryHistoryProvider()
+    agent = Agent(
+        client,
+        instructions,
+        id=id,
+        name=name,
+        description=description,
+        tools=final_tools,
+        default_options=default_opts,  # type: ignore[arg-type]
+        context_providers=assembled_providers,
+        middleware=list(middleware) if middleware else None,
+        require_per_service_call_history_persistence=True,
+    )
 
-        # Build compaction provider.
-        compaction_provider = _assemble_compaction_provider(
-            disable_compaction=disable_compaction,
-            max_context_window_tokens=max_context_window_tokens,
-            max_output_tokens=max_output_tokens,
-            history_source_id=resolved_history.source_id,
-            before_compaction_strategy=before_compaction_strategy,
-            after_compaction_strategy=after_compaction_strategy,
-            tokenizer=tokenizer,
-        )
+    # Set the telemetry provider name after construction.
+    agent.otel_provider_name = otel_provider_name or HARNESS_AGENT_PROVIDER_NAME
 
-        # Build context providers.
-        assembled_providers = _assemble_context_providers(
-            history_provider=resolved_history,
-            compaction_provider=compaction_provider,
-            disable_todo=disable_todo,
-            todo_provider=todo_provider,
-            disable_mode=disable_mode,
-            mode_provider=mode_provider,
-            disable_memory=disable_memory,
-            memory_store=memory_store,
-            disable_skills=disable_skills,
-            skills_provider=skills_provider,
-            skills_paths=skills_paths,
-            extra_context_providers=context_providers,
-        )
-
-        # Build instructions.
-        instructions = _assemble_instructions(harness_instructions, agent_instructions)
-
-        # Assemble tools, auto-adding web search if supported.
-        assembled_tools: list[ToolTypes | Callable[..., Any]] = []
-        if not disable_web_search and isinstance(client, SupportsWebSearchTool):
-            assembled_tools.append(client.get_web_search_tool())
-        if tools is not None:
-            if isinstance(tools, Sequence):
-                assembled_tools.extend(tools)  # pyright: ignore[reportUnknownArgumentType]
-            else:
-                assembled_tools.append(tools)
-        final_tools: list[ToolTypes | Callable[..., Any]] | None = assembled_tools or None
-
-        # Build default options dict.
-        default_opts: dict[str, Any] = dict(default_options) if default_options else {}
-        default_opts.setdefault("max_tokens", max_output_tokens)
-
-        # Build additional kwargs for telemetry.
-        from .._agents import Agent as FullAgent
-
-        agent_kwargs: dict[str, Any] = {}
-        if otel_provider_name:
-            agent_kwargs["otel_agent_provider_name"] = otel_provider_name
-
-        # Build the inner agent.
-        self._inner_agent = FullAgent(
-            client,
-            instructions,
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            tools=final_tools,
-            default_options=default_opts,  # type: ignore[arg-type]
-            context_providers=assembled_providers,
-            middleware=list(middleware) if middleware else None,
-            require_per_service_call_history_persistence=True,
-            **agent_kwargs,
-        )
-
-        # Store for introspection.
-        self.max_context_window_tokens = max_context_window_tokens
-        self.max_output_tokens = max_output_tokens
-        self.context_providers = self._inner_agent.context_providers
-
-    @overload
-    def run(
-        self,
-        messages: AgentRunInputs | None = None,
-        *,
-        stream: Literal[False] = ...,
-        session: AgentSession | None = None,
-        function_invocation_kwargs: Mapping[str, Any] | None = None,
-        client_kwargs: Mapping[str, Any] | None = None,
-    ) -> Awaitable[AgentResponse[Any]]: ...
-
-    @overload
-    def run(
-        self,
-        messages: AgentRunInputs | None = None,
-        *,
-        stream: Literal[True],
-        session: AgentSession | None = None,
-        function_invocation_kwargs: Mapping[str, Any] | None = None,
-        client_kwargs: Mapping[str, Any] | None = None,
-    ) -> ResponseStream[AgentResponseUpdate, AgentResponse[Any]]: ...
-
-    def run(
-        self,
-        messages: AgentRunInputs | None = None,
-        *,
-        stream: bool = False,
-        session: AgentSession | None = None,
-        function_invocation_kwargs: Mapping[str, Any] | None = None,
-        client_kwargs: Mapping[str, Any] | None = None,
-    ) -> Awaitable[AgentResponse[Any]] | ResponseStream[AgentResponseUpdate, AgentResponse[Any]]:
-        """Run the harness agent.
-
-        Delegates to the inner agent, which includes function invocation,
-        per-service-call persistence, compaction, and all configured providers.
-
-        Args:
-            messages: The message(s) to send to the agent.
-
-        Keyword Args:
-            stream: Whether to stream the response.
-            session: The conversation session.
-            function_invocation_kwargs: Keyword arguments forwarded to tool invocation.
-            client_kwargs: Additional client-specific keyword arguments.
-
-        Returns:
-            When stream=False: An awaitable AgentResponse.
-            When stream=True: A ResponseStream of AgentResponseUpdate items.
-        """
-        return self._inner_agent.run(  # type: ignore[return-value, call-overload, no-any-return, misc]
-            messages,
-            stream=stream,  # type: ignore[arg-type]
-            session=session,
-            function_invocation_kwargs=function_invocation_kwargs,
-            client_kwargs=client_kwargs,
-        )
-
-    def create_session(self, *, session_id: str | None = None) -> AgentSession:
-        """Create a new conversation session.
-
-        Keyword Args:
-            session_id: Optional session ID (generated if not provided).
-
-        Returns:
-            A new AgentSession instance.
-        """
-        return self._inner_agent.create_session(session_id=session_id)
-
-    def get_session(self, service_session_id: str, *, session_id: str | None = None) -> AgentSession:
-        """Get a session for a service-managed session ID.
-
-        Args:
-            service_session_id: The service-managed session ID.
-
-        Keyword Args:
-            session_id: Optional local session ID.
-
-        Returns:
-            An AgentSession instance with the service_session_id set.
-        """
-        return self._inner_agent.get_session(service_session_id=service_session_id, session_id=session_id)
+    return agent

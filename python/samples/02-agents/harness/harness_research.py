@@ -1,10 +1,11 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""HarnessAgent Research Assistant.
+"""Harness Research Assistant.
 
-Demonstrates ``HarnessAgent`` — a pre-configured bundled agent that automatically
-wires up function invocation, per-service-call history persistence, compaction,
-and a rich set of context providers:
+Demonstrates ``create_harness_agent`` — a factory function that builds a
+pre-configured agent with batteries included, automatically wiring up function
+invocation, per-service-call history persistence, compaction, and a rich set of
+context providers:
 
 - **TodoProvider** — the agent can create, track, and complete work items
 - **AgentModeProvider** — plan/execute mode tracking (interactive vs. autonomous)
@@ -32,7 +33,7 @@ Authentication:
 
 import asyncio
 
-from agent_framework import HarnessAgent
+from agent_framework import create_harness_agent
 from agent_framework.foundry import FoundryChatClient
 from azure.identity import AzureCliCredential
 from dotenv import load_dotenv
@@ -69,10 +70,10 @@ async def main() -> None:
     # with your preferred authentication option.
     client = FoundryChatClient(credential=AzureCliCredential())
 
-    # Create a HarnessAgent with research-specific instructions.
+    # Create a harness agent with research-specific instructions.
     # All other features (todo, mode, compaction, skills, telemetry, web search) are
     # automatically configured with sensible defaults.
-    agent = HarnessAgent(
+    agent = create_harness_agent(
         client=client,
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
@@ -85,7 +86,7 @@ async def main() -> None:
     # Create a session to maintain conversation state across turns.
     session = agent.create_session()
 
-    print("Research Assistant (powered by HarnessAgent)")
+    print("Research Assistant (powered by create_harness_agent)")
     print("=" * 50)
     print("Enter a research topic to get started.")
     print("Type /exit to end the session.\n")

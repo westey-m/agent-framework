@@ -1,11 +1,12 @@
-# HarnessAgent Samples
+# Harness Agent Samples
 
-This folder demonstrates the `HarnessAgent` — a pre-configured, batteries-included
-agent that automatically assembles the full agent pipeline from a chat client.
+This folder demonstrates `create_harness_agent` — a factory function that builds a
+pre-configured, batteries-included agent by assembling the full agent pipeline
+from a chat client.
 
-## What is HarnessAgent?
+## What is `create_harness_agent`?
 
-`HarnessAgent` bundles the following features into a single class:
+`create_harness_agent` bundles the following features into a single `Agent` instance:
 
 | Feature | Description |
 |---------|-------------|
@@ -44,14 +45,14 @@ python samples/02-agents/harness/harness_research.py
 
 ### Minimal Setup
 
-`HarnessAgent` requires only a chat client and token budget parameters:
+`create_harness_agent` requires only a chat client and token budget parameters:
 
 ```python
-from agent_framework import HarnessAgent
+from agent_framework import create_harness_agent
 from agent_framework.foundry import FoundryChatClient
 from azure.identity import AzureCliCredential
 
-agent = HarnessAgent(
+agent = create_harness_agent(
     client=FoundryChatClient(credential=AzureCliCredential()),
     max_context_window_tokens=128_000,
     max_output_tokens=16_384,
@@ -63,7 +64,7 @@ agent = HarnessAgent(
 Disable or customize any feature:
 
 ```python
-agent = HarnessAgent(
+agent = create_harness_agent(
     client=client,
     max_context_window_tokens=128_000,
     max_output_tokens=16_384,
@@ -72,7 +73,6 @@ agent = HarnessAgent(
     disable_todo=True,          # Skip todo management
     disable_mode=True,          # Skip plan/execute modes
     disable_compaction=True,    # Skip compaction
-    disable_telemetry=True,     # Skip OpenTelemetry
 )
 ```
 

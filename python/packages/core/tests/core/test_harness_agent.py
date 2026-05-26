@@ -60,7 +60,7 @@ def test_create_harness_agent_with_defaults() -> None:
 
 
 def test_create_harness_agent_includes_all_default_providers() -> None:
-    """Default assembly should include history, compaction, todo, mode, skills."""
+    """Default assembly should include history, compaction, todo, mode (no skills by default)."""
     agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
@@ -73,7 +73,7 @@ def test_create_harness_agent_includes_all_default_providers() -> None:
     assert CompactionProvider in provider_types
     assert TodoProvider in provider_types
     assert AgentModeProvider in provider_types
-    assert SkillsProvider in provider_types
+    assert SkillsProvider not in provider_types
 
 
 def test_create_harness_agent_disable_todo() -> None:
@@ -158,16 +158,16 @@ def test_create_harness_agent_disable_memory() -> None:
     assert MemoryContextProvider not in provider_types
 
 
-def test_create_harness_agent_disable_skills() -> None:
-    """disable_skills=True should exclude SkillsProvider."""
+def test_create_harness_agent_skills_paths_adds_provider() -> None:
+    """skills_paths should add a SkillsProvider."""
     agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        disable_skills=True,
+        skills_paths=["./test-skills"],
     )
     provider_types = [type(p) for p in agent.context_providers]
-    assert SkillsProvider not in provider_types
+    assert SkillsProvider in provider_types
 
 
 def test_create_harness_agent_disable_compaction() -> None:
@@ -298,7 +298,6 @@ async def test_create_harness_agent_run_returns_response() -> None:
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        disable_skills=True,
     )
     session = agent.create_session()
     response = await agent.run("hello", session=session)
@@ -356,7 +355,6 @@ def test_create_harness_agent_auto_adds_web_search_tool() -> None:
         client=_FakeWebSearchClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        disable_skills=True,
     )
     tools = agent.default_options.get("tools", [])
     assert "web_search_tool_instance" in tools
@@ -369,7 +367,6 @@ def test_create_harness_agent_disable_web_search() -> None:
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
-        disable_skills=True,
     )
     tools = agent.default_options.get("tools", [])
     assert "web_search_tool_instance" not in tools
@@ -381,7 +378,19 @@ def test_create_harness_agent_no_web_search_when_unsupported() -> None:
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        disable_skills=True,
     )
     tools = agent.default_options.get("tools", [])
     assert "web_search_tool_instance" not in tools
+
+
+def test_create_harness_agent_logs_warning_when_no_web_search(caplog: pytest.LogCaptureFixture) -> None:
+    """A warning should be logged when client doesn't support web search."""
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="agent_framework._harness._agent"):
+        create_harness_agent(
+            client=_FakeChatClient(),  # type: ignore[arg-type]
+            max_context_window_tokens=128_000,
+            max_output_tokens=16_384,
+        )
+    assert any("SupportsWebSearchTool" in msg for msg in caplog.messages)

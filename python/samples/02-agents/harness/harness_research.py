@@ -80,7 +80,6 @@ async def main() -> None:
         name="ResearchAgent",
         description="A research assistant that plans and executes research tasks.",
         agent_instructions=RESEARCH_INSTRUCTIONS,
-        disable_skills=True,  # No SKILL.md files in this sample directory.
     )
 
     # Create a session to maintain conversation state across turns.

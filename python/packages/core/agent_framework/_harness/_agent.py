@@ -10,6 +10,7 @@ context providers (todo, mode, memory, skills).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
     from .._compaction import CompactionStrategy, TokenizerProtocol
     from .._middleware import MiddlewareTypes
     from .._tools import ToolTypes
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_HARNESS_INSTRUCTIONS = """\
 You are a helpful AI assistant that uses tools to complete tasks.
@@ -98,7 +101,6 @@ def _assemble_context_providers(
     mode_provider: AgentModeProvider | None,
     disable_memory: bool,
     memory_store: MemoryStore | None,
-    disable_skills: bool,
     skills_provider: SkillsProvider | None,
     skills_paths: Sequence[str] | None,
     extra_context_providers: Sequence[ContextProvider] | None,
@@ -122,11 +124,11 @@ def _assemble_context_providers(
     if not disable_memory and memory_store is not None:
         providers.append(MemoryContextProvider(store=memory_store))
 
-    if not disable_skills:
-        skills: SkillsProvider | None = skills_provider
-        if skills is None:
-            skills = SkillsProvider.from_paths(*skills_paths) if skills_paths else SkillsProvider.from_paths(".")
-        providers.append(skills)
+    # Skills are opt-in: only added when skills_provider or skills_paths is provided.
+    if skills_provider:
+        providers.append(skills_provider)
+    if skills_paths:
+        providers.append(SkillsProvider.from_paths(*skills_paths))
 
     # Append any user-supplied additional providers.
     if extra_context_providers:
@@ -161,7 +163,6 @@ def create_harness_agent(
     mode_provider: AgentModeProvider | None = None,
     disable_memory: bool = False,
     memory_store: MemoryStore | None = None,
-    disable_skills: bool = False,
     skills_provider: SkillsProvider | None = None,
     skills_paths: Sequence[str] | None = None,
     disable_web_search: bool = False,
@@ -222,9 +223,14 @@ def create_harness_agent(
         id: Optional agent ID (auto-generated UUID if omitted).
         name: Optional agent name.
         description: Optional agent description.
-        harness_instructions: Override the default harness-level instructions.
-            Set to empty string to omit harness instructions entirely.
-        agent_instructions: Agent-specific instructions appended after harness instructions.
+        harness_instructions: Override the default harness-level system instructions that
+            govern agent behavior (how to use tools, report progress, structure responses).
+            These provide general "operating guidelines" independent of any specific task.
+            When None, ``DEFAULT_HARNESS_INSTRUCTIONS`` is used. Set to empty string ``""``
+            to omit harness instructions entirely.
+        agent_instructions: Domain or task-specific instructions appended after harness
+            instructions. Use this for the agent's purpose, persona, or specialization
+            (e.g., "You are a research assistant focused on academic sources.").
         tools: Additional tools to include in the agent's toolset.
         max_context_window_tokens: Maximum tokens the model's context window supports.
         max_output_tokens: Maximum output tokens per response.
@@ -242,13 +248,15 @@ def create_harness_agent(
         disable_memory: When True, skip the MemoryContextProvider.
         memory_store: Memory store instance. When provided (and disable_memory is False),
             a MemoryContextProvider is added.
-        disable_skills: When True, skip the SkillsProvider.
-        skills_provider: Custom SkillsProvider instance. Ignored when disable_skills is True.
-        skills_paths: Paths for file-based skill discovery.
-            Ignored when skills_provider is set or disable_skills is True.
+        skills_provider: Custom SkillsProvider instance for code-defined skills.
+            Can be combined with ``skills_paths`` to aggregate file and code-based skills.
+        skills_paths: Paths for file-based skill discovery (looks for SKILL.md files).
+            Can be combined with ``skills_provider``. When neither ``skills_provider``
+            nor ``skills_paths`` is provided, no SkillsProvider is added.
         disable_web_search: When True, skip automatic web search tool inclusion.
             When False (default), the web search tool is automatically added if the
-            client implements SupportsWebSearchTool.
+            client implements SupportsWebSearchTool. A warning is logged if the client
+            does not support web search.
         otel_provider_name: Custom OpenTelemetry provider/source name for telemetry.
         context_providers: Additional context providers to include after the built-in ones.
         middleware: Additional middleware to include.
@@ -292,7 +300,6 @@ def create_harness_agent(
         mode_provider=mode_provider,
         disable_memory=disable_memory,
         memory_store=memory_store,
-        disable_skills=disable_skills,
         skills_provider=skills_provider,
         skills_paths=skills_paths,
         extra_context_providers=context_providers,
@@ -303,8 +310,15 @@ def create_harness_agent(
 
     # Assemble tools, auto-adding web search if supported.
     assembled_tools: list[ToolTypes | Callable[..., Any]] = []
-    if not disable_web_search and isinstance(client, SupportsWebSearchTool):
-        assembled_tools.append(client.get_web_search_tool())
+    if not disable_web_search:
+        if isinstance(client, SupportsWebSearchTool):
+            assembled_tools.append(client.get_web_search_tool())
+        else:
+            logger.warning(
+                "Web search tool not available: client %r does not implement SupportsWebSearchTool. "
+                "Set disable_web_search=True to suppress this warning.",
+                type(client).__name__,
+            )
     if tools is not None:
         if isinstance(tools, Sequence):
             assembled_tools.extend(tools)  # pyright: ignore[reportUnknownArgumentType]

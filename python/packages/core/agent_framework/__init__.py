@@ -84,6 +84,12 @@ from ._harness._agent import (
     DEFAULT_HARNESS_INSTRUCTIONS,
     create_harness_agent,
 )
+from ._harness._background_agents import (
+    DEFAULT_BACKGROUND_AGENTS_SOURCE_ID,
+    BackgroundAgentsProvider,
+    BackgroundTaskInfo,
+    BackgroundTaskStatus,
+)
 from ._harness._memory import (
     DEFAULT_MEMORY_SOURCE_ID,
     MemoryContextProvider,
@@ -302,6 +308,7 @@ __all__ = [
     "AGENT_FRAMEWORK_USER_AGENT",
     "APP_INFO",
     "COMPACTION_STATE_KEY",
+    "DEFAULT_BACKGROUND_AGENTS_SOURCE_ID",
     "DEFAULT_HARNESS_INSTRUCTIONS",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MEMORY_SOURCE_ID",
@@ -338,6 +345,9 @@ __all__ = [
     "AgentSession",
     "AggregatingSkillsSource",
     "Annotation",
+    "BackgroundAgentsProvider",
+    "BackgroundTaskInfo",
+    "BackgroundTaskStatus",
     "BaseAgent",
     "BaseChatClient",
     "BaseEmbeddingClient",

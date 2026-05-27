@@ -32,11 +32,12 @@ DEFAULT_TODO_INSTRUCTIONS = (
     "When a user changes the topic or changes their mind, ensure that you update the todo list accordingly "
     "by removing irrelevant items or adding new ones as needed.\n\n"
     "Use these tools to manage your tasks:\n"
-    "- Use add_todos to break down complex work into trackable items (supports adding one or many at once).\n"
-    "- Use complete_todos to mark items as done when finished (supports one or many at once).\n"
-    "- Use get_remaining_todos to check what work is still pending.\n"
-    "- Use get_all_todos to review the full list including completed items.\n"
-    "- Use remove_todos to remove items that are no longer needed (supports one or many at once)."
+    "- Use todos_add to break down complex work into trackable items (supports adding one or many at once).\n"
+    "- Use todos_complete to mark items as done when finished (supports one or many at once). "
+    "Include a reason describing how the items were completed.\n"
+    "- Use todos_get_remaining to check what work is still pending.\n"
+    "- Use todos_get_all to review the full list including completed items.\n"
+    "- Use todos_remove to remove items that are no longer needed (supports one or many at once)."
 )
 
 
@@ -137,6 +138,43 @@ class TodoInput(SerializationMixin):
         return cls(title=title, description=description)
 
 
+@experimental(feature_id=ExperimentalFeature.HARNESS)
+class TodoCompleteInput(SerializationMixin):
+    """Describe one todo item to mark as complete."""
+
+    id: int
+    reason: str
+    __slots__ = ("id", "reason")
+
+    def __init__(self, id: int, reason: str) -> None:
+        """Initialize one todo complete input."""
+        if not isinstance(id, int):
+            raise ValueError("Todo complete input id must be an integer.")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("Todo complete input reason must be a non-empty string.")
+        self.id = id
+        self.reason = reason.strip()
+
+    def to_dict(self, *, exclude: set[str] | None = None, exclude_none: bool = True) -> dict[str, Any]:
+        """Serialize the todo complete input."""
+        del exclude, exclude_none
+        return {"id": self.id, "reason": self.reason}
+
+    @classmethod
+    def from_dict(
+        cls, raw_item: MutableMapping[str, Any], /, *, dependencies: MutableMapping[str, Any] | None = None
+    ) -> TodoCompleteInput:
+        """Parse one todo complete input from tool arguments."""
+        del dependencies
+        item_id = raw_item.get("id")
+        reason = raw_item.get("reason")
+        if not isinstance(item_id, int):
+            raise ValueError("Todo complete input id must be an integer.")
+        if not isinstance(reason, str):
+            raise ValueError("Todo complete input reason must be a string.")
+        return cls(id=item_id, reason=reason)
+
+
 def _parse_todo_items(items_payload: list[Any], *, source_description: str) -> list[TodoItem]:
     """Parse persisted todo item payloads with clear corruption errors."""
     items: list[TodoItem] = []
@@ -156,6 +194,15 @@ def _coerce_todo_input(todo: TodoInput | dict[str, Any] | Any) -> TodoInput:
     if isinstance(todo, MutableMapping):
         return TodoInput.from_dict(cast(MutableMapping[str, Any], todo))
     raise ValueError("Todo input must be a TodoInput instance or JSON object.")
+
+
+def _coerce_todo_complete_input(item: TodoCompleteInput | dict[str, Any] | Any) -> TodoCompleteInput:
+    """Normalize tool-provided complete input into a TodoCompleteInput model."""
+    if isinstance(item, TodoCompleteInput):
+        return item
+    if isinstance(item, MutableMapping):
+        return TodoCompleteInput.from_dict(cast(MutableMapping[str, Any], item))
+    raise ValueError("Todo complete input must be a TodoCompleteInput instance or JSON object.")
 
 
 def _safe_next_id(items: list[TodoItem], next_id: int) -> int:
@@ -393,11 +440,11 @@ class TodoProvider(ContextProvider):
     can provide ``TodoFileStore`` or another store implementation for file-backed or custom persistence.
 
     This provider exposes the following tools to the agent:
-    - ``add_todos``: Add one or more todo items, each with a title and optional description.
-    - ``complete_todos``: Mark one or more todo items as complete by their IDs.
-    - ``remove_todos``: Remove one or more todo items by their IDs.
-    - ``get_remaining_todos``: Retrieve only incomplete todo items.
-    - ``get_all_todos``: Retrieve all todo items, complete and incomplete.
+    - ``todos_add``: Add one or more todo items, each with a title and optional description.
+    - ``todos_complete``: Mark one or more todo items as complete by their IDs and reasons.
+    - ``todos_remove``: Remove one or more todo items by their IDs.
+    - ``todos_get_remaining``: Retrieve only incomplete todo items.
+    - ``todos_get_all``: Retrieve all todo items, complete and incomplete.
     """
 
     def __init__(
@@ -442,8 +489,8 @@ class TodoProvider(ContextProvider):
         """Inject todo tools and instructions before the model runs."""
         del agent, state
 
-        @tool(name="add_todos", approval_mode="never_require")
-        async def add_todos(todos: list[dict[str, Any]]) -> str:
+        @tool(name="todos_add", approval_mode="never_require")
+        async def todos_add(todos: list[dict[str, Any]]) -> str:
             """Add one or more todo items for the current session."""
             if not todos:
                 raise ValueError("todos must contain at least one item.")
@@ -465,18 +512,24 @@ class TodoProvider(ContextProvider):
                 await self.store.save_state(session, existing_items, next_id=next_id, source_id=self.source_id)
             return json.dumps([item.to_dict(exclude_none=False) for item in created_items])
 
-        @tool(name="complete_todos", approval_mode="never_require")
-        async def complete_todos(ids: list[int]) -> str:
-            """Mark one or more todo items as complete by ID."""
-            if not ids:
-                raise ValueError("ids must contain at least one todo ID.")
+        @tool(name="todos_complete", approval_mode="never_require")
+        async def todos_complete(items: list[dict[str, Any]]) -> str:
+            """Mark one or more todo items as complete.
+
+            Each entry has an id (int) and a reason (string) describing how/why the item was completed.
+            """
+            if not items:
+                raise ValueError("items must contain at least one entry.")
+
+            parsed = [_coerce_todo_complete_input(entry) for entry in items]
+            ids = [entry.id for entry in parsed]
 
             async with self._mutation_lock(session):
-                items, next_id = await self.store.load_state(session, source_id=self.source_id)
+                existing_items, next_id = await self.store.load_state(session, source_id=self.source_id)
                 id_set = set(ids)
                 completed_count = 0
                 updated_items: list[TodoItem] = []
-                for item in items:
+                for item in existing_items:
                     if not item.is_complete and item.id in id_set:
                         updated_items.append(
                             TodoItem(
@@ -494,8 +547,8 @@ class TodoProvider(ContextProvider):
                     await self.store.save_state(session, updated_items, next_id=next_id, source_id=self.source_id)
             return json.dumps({"completed": completed_count})
 
-        @tool(name="remove_todos", approval_mode="never_require")
-        async def remove_todos(ids: list[int]) -> str:
+        @tool(name="todos_remove", approval_mode="never_require")
+        async def todos_remove(ids: list[int]) -> str:
             """Remove one or more todo items by ID."""
             if not ids:
                 raise ValueError("ids must contain at least one todo ID.")
@@ -508,16 +561,16 @@ class TodoProvider(ContextProvider):
                     await self.store.save_state(session, remaining_items, next_id=next_id, source_id=self.source_id)
             return json.dumps({"removed": removed_count})
 
-        @tool(name="get_remaining_todos", approval_mode="never_require")
-        async def get_remaining_todos() -> str:
+        @tool(name="todos_get_remaining", approval_mode="never_require")
+        async def todos_get_remaining() -> str:
             """Retrieve only incomplete todo items for the current session."""
             items = [
                 item for item in await self.store.load_items(session, source_id=self.source_id) if not item.is_complete
             ]
             return json.dumps([item.to_dict(exclude_none=False) for item in items])
 
-        @tool(name="get_all_todos", approval_mode="never_require")
-        async def get_all_todos() -> str:
+        @tool(name="todos_get_all", approval_mode="never_require")
+        async def todos_get_all() -> str:
             """Retrieve all todo items for the current session."""
             items = await self.store.load_items(session, source_id=self.source_id)
             return json.dumps([item.to_dict(exclude_none=False) for item in items])
@@ -525,7 +578,7 @@ class TodoProvider(ContextProvider):
         context.extend_instructions(self.source_id, [self.instructions])
         context.extend_tools(
             self.source_id,
-            [add_todos, complete_todos, remove_todos, get_remaining_todos, get_all_todos],
+            [todos_add, todos_complete, todos_remove, todos_get_remaining, todos_get_all],
         )
         current_items = await self.store.load_items(session, source_id=self.source_id)
         context.extend_messages(

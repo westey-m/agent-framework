@@ -27,7 +27,7 @@ namespace Microsoft.Agents.AI;
 /// This provider exposes the following tools to the agent:
 /// <list type="bullet">
 /// <item><description><c>todos_add</c> — Add one or more todo items, each with a title and optional description.</description></item>
-/// <item><description><c>todos_complete</c> — Mark one or more todo items as complete by their IDs.</description></item>
+/// <item><description><c>todos_complete</c> — Mark one or more todo items as complete by their IDs and reasons.</description></item>
 /// <item><description><c>todos_remove</c> — Remove one or more todo items by their IDs.</description></item>
 /// <item><description><c>todos_get_remaining</c> — Retrieve only incomplete todo items.</description></item>
 /// <item><description><c>todos_get_all</c> — Retrieve all todo items (complete and incomplete).</description></item>

@@ -12,6 +12,8 @@ from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
+from typing_extensions import NotRequired, TypedDict
+
 from .._feature_stage import ExperimentalFeature, experimental
 from .._serialization import SerializationMixin
 from .._sessions import AgentSession, ContextProvider, SessionContext
@@ -49,7 +51,6 @@ class TodoItem(SerializationMixin):
     title: str
     description: str | None
     is_complete: bool
-    __slots__ = ("description", "id", "is_complete", "title")
 
     def __init__(self, id: int, title: str, description: str | None = None, is_complete: bool = False) -> None:
         """Initialize one todo item."""
@@ -107,7 +108,6 @@ class TodoInput(SerializationMixin):
 
     title: str
     description: str | None
-    __slots__ = ("description", "title")
 
     def __init__(self, title: str, description: str | None = None) -> None:
         """Initialize one todo input."""
@@ -144,7 +144,6 @@ class TodoCompleteInput(SerializationMixin):
 
     id: int
     reason: str
-    __slots__ = ("id", "reason")
 
     def __init__(self, id: int, reason: str) -> None:
         """Initialize one todo complete input."""
@@ -173,6 +172,20 @@ class TodoCompleteInput(SerializationMixin):
         if not isinstance(reason, str):
             raise ValueError("Todo complete input reason must be a string.")
         return cls(id=item_id, reason=reason)
+
+
+class _TodoAddItemSchema(TypedDict):
+    """Schema for a single todo item in the todos_add tool."""
+
+    title: str
+    description: NotRequired[str]
+
+
+class _TodoCompleteItemSchema(TypedDict):
+    """Schema for a single item in the todos_complete tool."""
+
+    id: int
+    reason: str
 
 
 def _parse_todo_items(items_payload: list[Any], *, source_description: str) -> list[TodoItem]:
@@ -490,7 +503,7 @@ class TodoProvider(ContextProvider):
         del agent, state
 
         @tool(name="todos_add", approval_mode="never_require")
-        async def todos_add(todos: list[dict[str, Any]]) -> str:
+        async def todos_add(todos: list[_TodoAddItemSchema]) -> str:
             """Add one or more todo items for the current session."""
             if not todos:
                 raise ValueError("todos must contain at least one item.")
@@ -513,7 +526,7 @@ class TodoProvider(ContextProvider):
             return json.dumps([item.to_dict(exclude_none=False) for item in created_items])
 
         @tool(name="todos_complete", approval_mode="never_require")
-        async def todos_complete(items: list[dict[str, Any]]) -> str:
+        async def todos_complete(items: list[_TodoCompleteItemSchema]) -> str:
             """Mark one or more todo items as complete.
 
             Each entry has an id (int) and a reason (string) describing how/why the item was completed.

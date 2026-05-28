@@ -410,8 +410,13 @@ class _FakeBackgroundAgent:
     def create_session(self, *, session_id: str | None = None) -> AgentSession:
         return AgentSession(session_id=session_id)
 
-    async def run(self, *args: Any, **kwargs: Any) -> Any:
-        return None
+    def get_session(self, service_session_id: str, *, session_id: str | None = None) -> AgentSession:
+        return AgentSession(service_session_id=service_session_id, session_id=session_id)
+
+    async def run(self, messages: Any = None, *, stream: bool = False, session: Any = None, **kwargs: Any) -> Any:
+        from agent_framework import AgentResponse
+
+        return AgentResponse(messages=[], response_id="fake-bg-response")
 
 
 def test_create_harness_agent_no_background_agents_by_default() -> None:
@@ -438,7 +443,7 @@ def test_create_harness_agent_adds_background_agents_provider() -> None:
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
-        background_agents=[bg_agent],  # type: ignore[list-item]
+        background_agents=[bg_agent],
     )
     providers = agent.context_providers or []
     bg_providers = [p for p in providers if isinstance(p, BackgroundAgentsProvider)]
@@ -456,7 +461,7 @@ def test_create_harness_agent_background_agents_custom_instructions() -> None:
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
-        background_agents=[bg_agent],  # type: ignore[list-item]
+        background_agents=[bg_agent],
         background_agents_instructions=custom_instructions,
     )
     providers = agent.context_providers or []

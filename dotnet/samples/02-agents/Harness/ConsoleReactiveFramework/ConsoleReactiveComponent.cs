@@ -40,7 +40,7 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
     where TProps : ConsoleReactiveProps
     where TState : ConsoleReactiveState
 {
-    private readonly object _renderLock = new();
+    private static readonly object s_renderLock = new();
     private TProps? _lastRenderedProps;
     private TState? _lastRenderedState;
 
@@ -74,7 +74,7 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
     /// </summary>
     public override void Render()
     {
-        lock (this._renderLock)
+        lock (s_renderLock)
         {
             if (this.Props is null)
             {
@@ -97,7 +97,7 @@ public abstract class ConsoleReactiveComponent<TProps, TState> : ConsoleReactive
     /// <inheritdoc/>
     public override void Invalidate()
     {
-        lock (this._renderLock)
+        lock (s_renderLock)
         {
             this._lastRenderedProps = default;
             this._lastRenderedState = default;

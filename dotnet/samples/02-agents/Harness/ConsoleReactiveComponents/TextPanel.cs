@@ -23,16 +23,18 @@ public record TextPanelProps : ConsoleReactiveProps
 public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiveState>
 {
     /// <summary>
-    /// Calculates the height (in lines) needed to render all items.
+    /// Calculates the height (in lines) needed to render all items,
+    /// accounting for terminal line wrapping at the specified width.
     /// </summary>
     /// <param name="items">The items to measure.</param>
-    /// <returns>The total number of lines all items will occupy.</returns>
-    public static int CalculateHeight(IReadOnlyList<string> items)
+    /// <param name="terminalWidth">The terminal width in columns. When 0 or negative, wrapping is ignored.</param>
+    /// <returns>The total number of physical lines all items will occupy.</returns>
+    public static int CalculateHeight(IReadOnlyList<string> items, int terminalWidth = 0)
     {
         int total = 0;
         for (int i = 0; i < items.Count; i++)
         {
-            total += CountLines(items[i]);
+            total += CountPhysicalLines(items[i], terminalWidth);
         }
 
         return total;
@@ -47,9 +49,9 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
         {
             string text = props.Items[i];
             string[] lines = text.Split('\n');
-            int lineCount = CountLines(text);
+            int lineCount = CountPhysicalLines(text, props.Width);
 
-            for (int j = 0; j < lineCount; j++)
+            for (int j = 0; j < lines.Length && currentRow < lineCount; j++)
             {
                 Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y + currentRow));
                 Console.Write(lines[j]);
@@ -67,28 +69,51 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
         }
     }
 
-    private static int CountLines(string text)
+    /// <summary>
+    /// Counts the number of physical terminal rows a text item will occupy,
+    /// accounting for both explicit newlines and terminal line wrapping.
+    /// </summary>
+    private static int CountPhysicalLines(string text, int terminalWidth)
     {
         if (string.IsNullOrEmpty(text))
         {
             return 0;
         }
 
-        int count = 1;
-        for (int i = 0; i < text.Length; i++)
+        if (terminalWidth <= 0)
         {
-            if (text[i] == '\n')
+            terminalWidth = int.MaxValue;
+        }
+
+        int physicalLines = 0;
+        int lineStart = 0;
+
+        for (int i = 0; i <= text.Length; i++)
+        {
+            if (i == text.Length || text[i] == '\n')
             {
-                count++;
+                string logicalLine = text[lineStart..i];
+                int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
+
+                if (visibleWidth == 0)
+                {
+                    physicalLines += 1;
+                }
+                else
+                {
+                    physicalLines += (visibleWidth + terminalWidth - 1) / terminalWidth;
+                }
+
+                lineStart = i + 1;
             }
         }
 
         // If text ends with a newline, don't count the trailing empty line
         if (text[text.Length - 1] == '\n')
         {
-            count--;
+            physicalLines--;
         }
 
-        return count;
+        return physicalLines;
     }
 }

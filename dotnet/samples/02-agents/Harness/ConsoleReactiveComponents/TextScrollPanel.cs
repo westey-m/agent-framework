@@ -77,36 +77,61 @@ public class TextScrollPanel : ConsoleReactiveComponent<TextScrollPanelProps, Te
             Console.Write(props.Items[i]);
         }
 
-        // Calculate the offset from bottom for the start of the new last item
-        int lastItemLines = CountLines(props.Items[^1]);
+        // Calculate the offset from bottom for the start of the new last item,
+        // accounting for terminal line wrapping at the available width.
+        int lastItemLines = CountPhysicalLines(props.Items[^1], props.Width);
         this._lastItemOffsetFromBottom = lastItemLines > 0 ? lastItemLines - 1 : 0;
 
         // Update rendered count
         this._renderedCount = props.Items.Count;
     }
 
-    private static int CountLines(string text)
+    /// <summary>
+    /// Counts the number of physical terminal rows a text item will occupy,
+    /// accounting for both explicit newlines and terminal line wrapping.
+    /// </summary>
+    private static int CountPhysicalLines(string text, int terminalWidth)
     {
         if (string.IsNullOrEmpty(text))
         {
             return 0;
         }
 
-        int count = 1;
-        for (int i = 0; i < text.Length; i++)
+        if (terminalWidth <= 0)
         {
-            if (text[i] == '\n')
+            terminalWidth = int.MaxValue;
+        }
+
+        int physicalLines = 0;
+        int lineStart = 0;
+
+        for (int i = 0; i <= text.Length; i++)
+        {
+            if (i == text.Length || text[i] == '\n')
             {
-                count++;
+                // End of a logical line — measure its visible width to determine wrapped rows.
+                string logicalLine = text[lineStart..i];
+                int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
+
+                if (visibleWidth == 0)
+                {
+                    physicalLines += 1;
+                }
+                else
+                {
+                    physicalLines += (visibleWidth + terminalWidth - 1) / terminalWidth;
+                }
+
+                lineStart = i + 1;
             }
         }
 
         // If text ends with a newline, don't count the trailing empty line
         if (text[text.Length - 1] == '\n')
         {
-            count--;
+            physicalLines--;
         }
 
-        return count;
+        return physicalLines;
     }
 }

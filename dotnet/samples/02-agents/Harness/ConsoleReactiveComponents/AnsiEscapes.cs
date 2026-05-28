@@ -72,6 +72,40 @@ public static class AnsiEscapes
     /// </summary>
     public static string ResetAttributes => "\x1b[0m";
 
+    /// <summary>
+    /// Returns the visible (printed) length of a string after stripping ANSI escape sequences.
+    /// Escape sequences are zero-width on screen but occupy characters in the raw string.
+    /// </summary>
+    public static int VisibleLength(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        int length = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\x1b' && i + 1 < text.Length && text[i + 1] == '[')
+            {
+                // Skip the ESC[ and all characters up to and including the final byte (0x40–0x7E).
+                i += 2;
+                while (i < text.Length && text[i] < 0x40)
+                {
+                    i++;
+                }
+
+                // i now points to the final byte of the escape sequence; the for-loop will advance past it.
+            }
+            else if (text[i] != '\n' && text[i] != '\r')
+            {
+                length++;
+            }
+        }
+
+        return length;
+    }
+
     private static int ConsoleColorToAnsi(ConsoleColor color) => color switch
     {
         ConsoleColor.Black => 30,

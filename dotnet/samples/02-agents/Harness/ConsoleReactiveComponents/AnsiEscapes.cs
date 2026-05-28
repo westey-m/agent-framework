@@ -76,6 +76,12 @@ public static class AnsiEscapes
     /// Returns the visible (printed) length of a string after stripping ANSI escape sequences.
     /// Escape sequences are zero-width on screen but occupy characters in the raw string.
     /// </summary>
+    /// <remarks>
+    /// This counts UTF-16 code units (chars) rather than terminal display cells. Emoji,
+    /// combining characters, variation selectors, and East Asian wide characters may be
+    /// measured incorrectly. For the console harness this is acceptable since content is
+    /// predominantly ASCII, and emoji are padded with surrounding spaces.
+    /// </remarks>
     public static int VisibleLength(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -104,6 +110,55 @@ public static class AnsiEscapes
         }
 
         return length;
+    }
+
+    /// <summary>
+    /// Counts the number of physical terminal rows a text item will occupy,
+    /// accounting for both explicit newlines and terminal line wrapping.
+    /// </summary>
+    /// <param name="text">The text to measure.</param>
+    /// <param name="terminalWidth">The terminal width in columns. If &lt;= 0, wrapping is ignored (1 row per logical line).</param>
+    /// <returns>The number of physical rows the text occupies.</returns>
+    public static int CountPhysicalLines(string text, int terminalWidth)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        int physicalLines = 0;
+        int lineStart = 0;
+
+        for (int i = 0; i <= text.Length; i++)
+        {
+            if (i == text.Length || text[i] == '\n')
+            {
+                if (terminalWidth <= 0)
+                {
+                    // No wrapping — each logical line is one physical row
+                    physicalLines += 1;
+                }
+                else
+                {
+                    string logicalLine = text[lineStart..i];
+                    int visibleWidth = VisibleLength(logicalLine);
+
+                    physicalLines += visibleWidth == 0
+                        ? 1
+                        : (visibleWidth - 1) / terminalWidth + 1;
+                }
+
+                lineStart = i + 1;
+            }
+        }
+
+        // If text ends with a newline, don't count the trailing empty line
+        if (text[text.Length - 1] == '\n')
+        {
+            physicalLines--;
+        }
+
+        return physicalLines;
     }
 
     private static int ConsoleColorToAnsi(ConsoleColor color) => color switch

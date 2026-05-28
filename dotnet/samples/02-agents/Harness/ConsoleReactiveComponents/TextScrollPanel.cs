@@ -79,56 +79,10 @@ public class TextScrollPanel : ConsoleReactiveComponent<TextScrollPanelProps, Te
 
         // Calculate the offset from bottom for the start of the new last item,
         // accounting for terminal line wrapping at the available width.
-        int lastItemLines = CountPhysicalLines(props.Items[^1], props.Width);
+        int lastItemLines = AnsiEscapes.CountPhysicalLines(props.Items[^1], props.Width);
         this._lastItemOffsetFromBottom = lastItemLines > 0 ? lastItemLines - 1 : 0;
 
         // Update rendered count
         this._renderedCount = props.Items.Count;
-    }
-
-    /// <summary>
-    /// Counts the number of physical terminal rows a text item will occupy,
-    /// accounting for both explicit newlines and terminal line wrapping.
-    /// </summary>
-    private static int CountPhysicalLines(string text, int terminalWidth)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
-
-        int physicalLines = 0;
-        int lineStart = 0;
-
-        for (int i = 0; i <= text.Length; i++)
-        {
-            if (i == text.Length || text[i] == '\n')
-            {
-                if (terminalWidth <= 0)
-                {
-                    // No wrapping — each logical line is one physical row
-                    physicalLines += 1;
-                }
-                else
-                {
-                    string logicalLine = text[lineStart..i];
-                    int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
-
-                    physicalLines += visibleWidth == 0
-                        ? 1
-                        : (visibleWidth - 1) / terminalWidth + 1;
-                }
-
-                lineStart = i + 1;
-            }
-        }
-
-        // If text ends with a newline, don't count the trailing empty line
-        if (text[text.Length - 1] == '\n')
-        {
-            physicalLines--;
-        }
-
-        return physicalLines;
     }
 }

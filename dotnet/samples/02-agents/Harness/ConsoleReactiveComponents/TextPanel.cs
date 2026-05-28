@@ -34,7 +34,7 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
         int total = 0;
         for (int i = 0; i < items.Count; i++)
         {
-            total += CountPhysicalLines(items[i], terminalWidth);
+            total += AnsiEscapes.CountPhysicalLines(items[i], terminalWidth);
         }
 
         return total;
@@ -49,7 +49,7 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
         {
             string text = props.Items[i];
             string[] lines = text.Split('\n');
-            int itemLineCount = CountPhysicalLines(text, props.Width);
+            int itemLineCount = AnsiEscapes.CountPhysicalLines(text, props.Width);
             int itemRow = 0;
 
             for (int j = 0; j < lines.Length && itemRow < itemLineCount; j++)
@@ -74,51 +74,5 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
                 Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y + i));
             }
         }
-    }
-
-    /// <summary>
-    /// Counts the number of physical terminal rows a text item will occupy,
-    /// accounting for both explicit newlines and terminal line wrapping.
-    /// </summary>
-    private static int CountPhysicalLines(string text, int terminalWidth)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
-
-        int physicalLines = 0;
-        int lineStart = 0;
-
-        for (int i = 0; i <= text.Length; i++)
-        {
-            if (i == text.Length || text[i] == '\n')
-            {
-                if (terminalWidth <= 0)
-                {
-                    // No wrapping — each logical line is one physical row
-                    physicalLines += 1;
-                }
-                else
-                {
-                    string logicalLine = text[lineStart..i];
-                    int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
-
-                    physicalLines += visibleWidth == 0
-                        ? 1
-                        : (visibleWidth - 1) / terminalWidth + 1;
-                }
-
-                lineStart = i + 1;
-            }
-        }
-
-        // If text ends with a newline, don't count the trailing empty line
-        if (text[text.Length - 1] == '\n')
-        {
-            physicalLines--;
-        }
-
-        return physicalLines;
     }
 }

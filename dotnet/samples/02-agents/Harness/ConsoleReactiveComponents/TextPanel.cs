@@ -49,13 +49,20 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
         {
             string text = props.Items[i];
             string[] lines = text.Split('\n');
-            int lineCount = CountPhysicalLines(text, props.Width);
+            int itemLineCount = CountPhysicalLines(text, props.Width);
+            int itemRow = 0;
 
-            for (int j = 0; j < lines.Length && currentRow < lineCount; j++)
+            for (int j = 0; j < lines.Length && itemRow < itemLineCount; j++)
             {
+                int linePhysicalRows = props.Width > 0
+                    ? Math.Max(1, (AnsiEscapes.VisibleLength(lines[j]) - 1) / props.Width + 1)
+                    : 1;
+
                 Console.Write(AnsiEscapes.MoveAndEraseLine(props.Y + currentRow));
                 Console.Write(lines[j]);
-                currentRow++;
+
+                currentRow += linePhysicalRows;
+                itemRow += linePhysicalRows;
             }
         }
 
@@ -80,11 +87,6 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
             return 0;
         }
 
-        if (terminalWidth <= 0)
-        {
-            terminalWidth = int.MaxValue;
-        }
-
         int physicalLines = 0;
         int lineStart = 0;
 
@@ -92,16 +94,19 @@ public class TextPanel : ConsoleReactiveComponent<TextPanelProps, ConsoleReactiv
         {
             if (i == text.Length || text[i] == '\n')
             {
-                string logicalLine = text[lineStart..i];
-                int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
-
-                if (visibleWidth == 0)
+                if (terminalWidth <= 0)
                 {
+                    // No wrapping — each logical line is one physical row
                     physicalLines += 1;
                 }
                 else
                 {
-                    physicalLines += (visibleWidth + terminalWidth - 1) / terminalWidth;
+                    string logicalLine = text[lineStart..i];
+                    int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
+
+                    physicalLines += visibleWidth == 0
+                        ? 1
+                        : (visibleWidth - 1) / terminalWidth + 1;
                 }
 
                 lineStart = i + 1;

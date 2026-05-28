@@ -97,11 +97,6 @@ public class TextScrollPanel : ConsoleReactiveComponent<TextScrollPanelProps, Te
             return 0;
         }
 
-        if (terminalWidth <= 0)
-        {
-            terminalWidth = int.MaxValue;
-        }
-
         int physicalLines = 0;
         int lineStart = 0;
 
@@ -109,17 +104,19 @@ public class TextScrollPanel : ConsoleReactiveComponent<TextScrollPanelProps, Te
         {
             if (i == text.Length || text[i] == '\n')
             {
-                // End of a logical line — measure its visible width to determine wrapped rows.
-                string logicalLine = text[lineStart..i];
-                int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
-
-                if (visibleWidth == 0)
+                if (terminalWidth <= 0)
                 {
+                    // No wrapping — each logical line is one physical row
                     physicalLines += 1;
                 }
                 else
                 {
-                    physicalLines += (visibleWidth + terminalWidth - 1) / terminalWidth;
+                    string logicalLine = text[lineStart..i];
+                    int visibleWidth = AnsiEscapes.VisibleLength(logicalLine);
+
+                    physicalLines += visibleWidth == 0
+                        ? 1
+                        : (visibleWidth - 1) / terminalWidth + 1;
                 }
 
                 lineStart = i + 1;

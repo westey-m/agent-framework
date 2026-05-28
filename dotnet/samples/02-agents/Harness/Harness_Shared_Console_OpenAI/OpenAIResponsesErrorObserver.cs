@@ -56,11 +56,11 @@ public sealed class OpenAIResponsesErrorObserver : ConsoleObserver
                 string? reason = incompleteUpdate.Response?.IncompleteStatusDetails?.Reason?.ToString();
                 if (string.Equals(reason, "content_filter", StringComparison.OrdinalIgnoreCase))
                 {
+                    string detail = GetContentFilterDetails(incompleteUpdate);
+                    const string Message = "🛡️  The service's built-in content filter guardrails were triggered and the response was cut short.";
                     await ux.WriteInfoLineAsync(
-                        "🛡️ The service's built-in content filter guardrails were triggered and the response was cut short.",
+                        string.IsNullOrEmpty(detail) ? Message : $"{Message}\n{detail}",
                         ConsoleColor.Yellow);
-
-                    await WriteContentFilterDetailsAsync(ux, incompleteUpdate);
                 }
                 else
                 {
@@ -73,11 +73,11 @@ public sealed class OpenAIResponsesErrorObserver : ConsoleObserver
     }
 
     /// <summary>
-    /// Extracts and displays content filter details from the serialized response JSON.
-    /// Parses the <c>content_filters[].content_filter_results</c> to show which specific
-    /// categories were triggered (e.g. hate, sexual, violence, self_harm, protected_material).
+    /// Extracts content filter details from the serialized response JSON and returns
+    /// a formatted string showing which specific categories were triggered.
+    /// Returns <see cref="string.Empty"/> if details cannot be extracted.
     /// </summary>
-    private static async Task WriteContentFilterDetailsAsync(IUXStateDriver ux, StreamingResponseIncompleteUpdate incompleteUpdate)
+    private static string GetContentFilterDetails(StreamingResponseIncompleteUpdate incompleteUpdate)
     {
         try
         {
@@ -91,7 +91,7 @@ public sealed class OpenAIResponsesErrorObserver : ConsoleObserver
             if (!responseElement.TryGetProperty("content_filters", out var filtersArray)
                 || filtersArray.ValueKind != JsonValueKind.Array)
             {
-                return;
+                return string.Empty;
             }
 
             foreach (var filter in filtersArray.EnumerateArray())
@@ -116,8 +116,9 @@ public sealed class OpenAIResponsesErrorObserver : ConsoleObserver
                     categories.Add((category.Name, filtered, severity));
                 }
 
-                // Calculate column widths for alignment.
+                // Build all category lines into a single string.
                 int maxNameLen = categories.Count > 0 ? categories.Max(c => c.Name.Length) : 0;
+                var lines = new List<string>();
 
                 foreach (var (name, filtered, severity) in categories)
                 {
@@ -125,17 +126,22 @@ public sealed class OpenAIResponsesErrorObserver : ConsoleObserver
                     string icon = filtered ? "❌" : "✅";
                     string statusText = filtered ? "Filtered    " : "Not Filtered";
                     string severityText = severity is not null ? $"   Severity: {severity}" : "";
-                    ConsoleColor color = filtered ? ConsoleColor.Red : ConsoleColor.DarkGray;
 
-                    await ux.WriteInfoLineAsync(
-                        $"    {icon} {paddedName}  {statusText}{severityText}",
-                        color);
+                    lines.Add($"    {icon} {paddedName}  {statusText}{severityText}");
+                }
+
+                if (lines.Count > 0)
+                {
+                    return string.Join("\n", lines);
                 }
             }
+
+            return string.Empty;
         }
         catch
         {
             // Parsing not critical — skip silently if it fails.
+            return string.Empty;
         }
     }
 }

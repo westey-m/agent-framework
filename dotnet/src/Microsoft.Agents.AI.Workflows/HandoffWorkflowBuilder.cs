@@ -39,7 +39,8 @@ public sealed class HandoffWorkflowBuilder(AIAgent initialAgent) : HandoffWorkfl
 /// Provides a builder for specifying the handoff relationships between agents and building the resulting workflow.
 /// </summary>
 [Experimental(DiagnosticConstants.ExperimentalFeatureDiagnostic)]
-public class HandoffWorkflowBuilderCore<TBuilder> where TBuilder : HandoffWorkflowBuilderCore<TBuilder>
+public class HandoffWorkflowBuilderCore<TBuilder> : OrchestrationBuilderBase<TBuilder>
+    where TBuilder : HandoffWorkflowBuilderCore<TBuilder>
 {
     /// <summary>
     /// The prefix for function calls that trigger handoffs to other agents; the full name is then `{FunctionPrefix}&lt;agent_id&gt;`,
@@ -55,8 +56,6 @@ public class HandoffWorkflowBuilderCore<TBuilder> where TBuilder : HandoffWorkfl
     private bool _emitAgentResponseUpdateEvents;
     private HandoffToolCallFilteringBehavior _toolCallFilteringBehavior = HandoffToolCallFilteringBehavior.HandoffOnly;
     private bool _returnToPrevious;
-    private string? _name;
-    private string? _description;
 
     // Autonomous mode configuration. When enabled, an agent's response that doesn't include a
     // handoff triggers another invocation of that same agent with the continuation prompt, up to
@@ -113,20 +112,6 @@ public class HandoffWorkflowBuilderCore<TBuilder> where TBuilder : HandoffWorkfl
     public TBuilder WithHandoffInstructions(string? instructions)
     {
         this.HandoffInstructions = instructions ?? DefaultHandoffInstructions;
-        return (TBuilder)this;
-    }
-
-    /// <inheritdoc cref="WorkflowBuilder.WithName(string)"/>
-    public TBuilder WithName(string name)
-    {
-        this._name = name;
-        return (TBuilder)this;
-    }
-
-    /// <inheritdoc cref="WorkflowBuilder.WithDescription(string)"/>
-    public TBuilder WithDescription(string description)
-    {
-        this._description = description;
         return (TBuilder)this;
     }
 
@@ -631,16 +616,31 @@ public class HandoffWorkflowBuilderCore<TBuilder> where TBuilder : HandoffWorkfl
             });
         }
 
-        if (!string.IsNullOrWhiteSpace(this._name))
+        // Ensure the end executor is bound regardless of whether it ends up as an output
+        // designation source — the user may take full control of output designations.
+        builder.BindExecutor(end);
+
+        // Build the AIAgent -> ExecutorBinding map the base helper expects.
+        Dictionary<AIAgent, ExecutorBinding> agentMap = new(AIAgentIDEqualityComparer.Instance);
+        foreach (AIAgent agent in this._allAgents)
         {
-            builder.WithName(this._name);
+            agentMap[agent] = executors[agent.Id];
         }
 
-        if (!string.IsNullOrWhiteSpace(this._description))
+        this.ApplyMetadata(builder);
+        this.ApplyOutputDesignations(builder, agentMap, "handoff", () =>
         {
-            builder.WithDescription(this._description);
-        }
+            // Defaults (matches Python's Handoff orchestration):
+            //   end                  -> terminal output
+            //   every handoff agent  -> intermediate output
+            builder.WithOutputFrom(end);
+            List<ExecutorBinding> agentBindings = [.. executors.Values];
+            if (agentBindings.Count > 0)
+            {
+                builder.WithIntermediateOutputFrom(agentBindings);
+            }
+        });
 
-        return builder.WithOutputFrom(end).Build();
+        return builder.Build();
     }
 }

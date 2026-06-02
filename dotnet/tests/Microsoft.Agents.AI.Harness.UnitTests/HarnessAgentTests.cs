@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Agents.AI.Tools.Shell;
 #endif
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Microsoft.Agents.AI.UnitTests;
@@ -1460,4 +1461,78 @@ public class HarnessAgentTests
 
     #endregion
 #endif
+
+    #region LoggerFactory and ServiceProvider
+
+    /// <summary>
+    /// Verify that the constructor succeeds when loggerFactory is provided.
+    /// </summary>
+    [Fact]
+    public void Constructor_SucceedsWithLoggerFactory()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var loggerFactory = new Mock<ILoggerFactory>().Object;
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, CreateAllDisabledOptions(), loggerFactory);
+
+        // Assert
+        Assert.NotNull(agent);
+    }
+
+    /// <summary>
+    /// Verify that the constructor succeeds when serviceProvider is provided.
+    /// </summary>
+    [Fact]
+    public void Constructor_SucceedsWithServiceProvider()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var services = new Mock<IServiceProvider>().Object;
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, CreateAllDisabledOptions(), services: services);
+
+        // Assert
+        Assert.NotNull(agent);
+    }
+
+    /// <summary>
+    /// Verify that the constructor succeeds when both loggerFactory and serviceProvider are provided.
+    /// </summary>
+    [Fact]
+    public void Constructor_SucceedsWithLoggerFactoryAndServiceProvider()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var loggerFactory = new Mock<ILoggerFactory>().Object;
+        var services = new Mock<IServiceProvider>().Object;
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, CreateAllDisabledOptions(), loggerFactory, services);
+
+        // Assert
+        Assert.NotNull(agent);
+    }
+
+    /// <summary>
+    /// Verify that AsHarnessAgent extension method accepts loggerFactory and serviceProvider.
+    /// </summary>
+    [Fact]
+    public void AsHarnessAgent_SucceedsWithLoggerFactoryAndServiceProvider()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var loggerFactory = new Mock<ILoggerFactory>().Object;
+        var services = new Mock<IServiceProvider>().Object;
+
+        // Act
+        var agent = chatClient.AsHarnessAgent(TestMaxContextWindowTokens, TestMaxOutputTokens, CreateAllDisabledOptions(), loggerFactory, services);
+
+        // Assert
+        Assert.NotNull(agent);
+    }
+
+    #endregion
 }

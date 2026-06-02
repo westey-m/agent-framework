@@ -1534,5 +1534,58 @@ public class HarnessAgentTests
         Assert.NotNull(agent);
     }
 
+    /// <summary>
+    /// Verify that ILoggerFactory is threaded to downstream components by confirming CreateLogger is called.
+    /// </summary>
+    [Fact]
+    public void Constructor_LoggerFactoryIsUsedByDownstreamComponents()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var mockLoggerFactory = new Mock<ILoggerFactory>();
+        mockLoggerFactory
+            .Setup(lf => lf.CreateLogger(It.IsAny<string>()))
+            .Returns(new Mock<ILogger>().Object);
+
+        // Act — use options that leave CompactionProvider and AgentSkillsProvider enabled
+        var options = new HarnessAgentOptions
+        {
+            DisableToolApproval = true,
+            DisableOpenTelemetry = true,
+            DisableFileMemory = true,
+            DisableFileAccess = true,
+            DisableWebSearch = true,
+            DisableTodoProvider = true,
+            DisableAgentModeProvider = true,
+        };
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options, mockLoggerFactory.Object);
+
+        // Assert — CreateLogger should have been called by one or more downstream components
+        Assert.NotNull(agent);
+        mockLoggerFactory.Verify(lf => lf.CreateLogger(It.IsAny<string>()), Times.AtLeastOnce());
+    }
+
+    /// <summary>
+    /// Verify that IServiceProvider is propagated through the agent pipeline by confirming
+    /// it is queried during agent construction.
+    /// </summary>
+    [Fact]
+    public void Constructor_ServiceProviderIsQueriedDuringBuild()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var mockServices = new Mock<IServiceProvider>();
+        mockServices
+            .Setup(sp => sp.GetService(It.IsAny<Type>()))
+            .Returns(null!);
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, CreateAllDisabledOptions(), services: mockServices.Object);
+
+        // Assert — the service provider should have been queried during pipeline construction
+        Assert.NotNull(agent);
+        mockServices.Verify(sp => sp.GetService(It.IsAny<Type>()), Times.AtLeastOnce());
+    }
+
     #endregion
 }

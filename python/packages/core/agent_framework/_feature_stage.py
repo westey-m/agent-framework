@@ -50,6 +50,7 @@ class ExperimentalFeature(str, Enum):
     on enum membership or attribute presence over time.
     """
 
+    DECLARATIVE_AGENTS = "DECLARATIVE_AGENTS"
     EVALS = "EVALS"
     FILE_HISTORY = "FILE_HISTORY"
     FIDES = "FIDES"
@@ -57,6 +58,7 @@ class ExperimentalFeature(str, Enum):
     FOUNDRY_PREVIEW_TOOLS = "FOUNDRY_PREVIEW_TOOLS"
     FUNCTIONAL_WORKFLOWS = "FUNCTIONAL_WORKFLOWS"
     HARNESS = "HARNESS"
+    PROGRESSIVE_TOOLS = "PROGRESSIVE_TOOLS"
     SKILLS = "SKILLS"
     TO_PROMPT_AGENT = "TO_PROMPT_AGENT"
 

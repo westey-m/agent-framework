@@ -203,7 +203,7 @@ async def test_raw_foundry_agent_chat_client_prepare_options_accepts_function_to
 
 
 async def test_raw_foundry_agent_chat_client_prepare_options_strips_client_side_fields() -> None:
-    """Test that _prepare_options strips model and tool-loop fields from run_options."""
+    """Test that _prepare_options strips tool-loop fields but preserves model for non-session requests."""
 
     mock_project = MagicMock()
     mock_openai = MagicMock()
@@ -235,14 +235,47 @@ async def test_raw_foundry_agent_chat_client_prepare_options_strips_client_side_
             options={"tools": [my_func]},
         )
 
-    assert "model" not in result
+    # model is preserved for non-session (PromptAgent) requests
+    assert result["model"] == "gpt-4.1"
     assert "tools" not in result
     assert "tool_choice" not in result
     assert "parallel_tool_calls" not in result
     # agent_reference is required so the Responses API can resolve model server-side; see #5582.
     assert result == {
+        "model": "gpt-4.1",
         "extra_body": {"agent_reference": {"name": "test-agent", "type": "agent_reference"}},
     }
+
+
+async def test_raw_foundry_agent_chat_client_prepare_options_strips_model_for_hosted_session() -> None:
+    """Test that model is stripped when using a hosted agent session (not a PromptAgent)."""
+
+    mock_project = MagicMock()
+    mock_openai = MagicMock()
+    mock_project.get_openai_client.return_value = mock_openai
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    with patch(
+        "agent_framework_openai._chat_client.RawOpenAIChatClient._prepare_options",
+        new_callable=AsyncMock,
+        return_value={
+            "model": "gpt-4.1",
+            "previous_response_id": "resp_abc",
+        },
+    ):
+        result = await client._prepare_options(
+            messages=[Message(role="user", contents="hi")],
+            options={"conversation_id": "agent-session-123"},
+        )
+
+    assert "model" not in result
+    assert "previous_response_id" not in result
+    assert result["extra_body"]["agent_session_id"] == "agent-session-123"
+    assert result["extra_body"]["agent_reference"] == {"name": "test-agent", "type": "agent_reference"}
 
 
 async def test_raw_foundry_agent_chat_client_prepare_options_injects_agent_reference_first_turn() -> None:
@@ -272,7 +305,6 @@ async def test_raw_foundry_agent_chat_client_prepare_options_injects_agent_refer
             options={},
         )
 
-    assert "model" not in result
     assert result["extra_body"] == {
         "agent_reference": {"name": "test-agent", "type": "agent_reference", "version": "2"},
     }
@@ -333,7 +365,8 @@ async def test_raw_foundry_agent_chat_client_prepare_options_skips_agent_referen
             options={},
         )
 
-    assert "model" not in result
+    # model is preserved for non-session requests (platform tolerates it for hosted agents)
+    assert result["model"] == "gpt-4.1"
     # No extra_body at all is the cleanest signal — agent_reference must not be injected here.
     assert "extra_body" not in result
 
@@ -361,6 +394,39 @@ async def test_raw_foundry_agent_chat_client_prepare_options_respects_caller_age
         )
 
     assert result["extra_body"]["agent_reference"] == caller_reference
+
+
+async def test_raw_foundry_agent_chat_client_prepare_options_preserves_model_for_resp_continuation() -> None:
+    """Test that model is preserved when conversation_id is a resp_* continuation (HostedAgent v1 / v2-no-session)."""
+
+    mock_project = MagicMock()
+    mock_openai = MagicMock()
+    mock_project.get_openai_client.return_value = mock_openai
+
+    client = RawFoundryAgentChatClient(
+        project_client=mock_project,
+        agent_name="test-agent",
+    )
+
+    with patch(
+        "agent_framework_openai._chat_client.RawOpenAIChatClient._prepare_options",
+        new_callable=AsyncMock,
+        return_value={
+            "model": "gpt-4.1",
+            "previous_response_id": "resp_abc123",
+        },
+    ):
+        result = await client._prepare_options(
+            messages=[Message(role="user", contents="hi")],
+            options={"conversation_id": "resp_abc123"},
+        )
+
+    # model preserved — resp_* is standard Responses API continuity, not a hosted session
+    assert result["model"] == "gpt-4.1"
+    # previous_response_id preserved — not stripped outside hosted session path
+    assert result["previous_response_id"] == "resp_abc123"
+    # no agent_session_id injected
+    assert "extra_body" not in result or "agent_session_id" not in result.get("extra_body", {})
 
 
 async def test_raw_foundry_agent_chat_client_prepare_options_maps_agent_session_id_to_extra_body() -> None:
@@ -505,6 +571,40 @@ def test_raw_foundry_agent_init_creates_client() -> None:
     assert agent.client.agent_name == "test-agent"
 
 
+def test_raw_foundry_agent_init_passes_default_headers_to_client() -> None:
+    """Test that RawFoundryAgent passes default_headers to the underlying client."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+    default_headers = {"x-ms-user-isolation-key": "user-1"}
+
+    RawFoundryAgent(
+        project_client=mock_project,
+        agent_name="hosted-agent",
+        default_headers=default_headers,
+    )
+
+    mock_project.get_openai_client.assert_called_once()
+    assert mock_project.get_openai_client.call_args.kwargs["default_headers"] == default_headers
+
+
+def test_foundry_agent_init_passes_default_headers_to_client() -> None:
+    """Test that FoundryAgent passes default_headers to the underlying client."""
+
+    mock_project = MagicMock()
+    mock_project.get_openai_client.return_value = MagicMock()
+    default_headers = {"x-ms-user-isolation-key": "user-1"}
+
+    FoundryAgent(
+        project_client=mock_project,
+        agent_name="hosted-agent",
+        default_headers=default_headers,
+    )
+
+    mock_project.get_openai_client.assert_called_once()
+    assert mock_project.get_openai_client.call_args.kwargs["default_headers"] == default_headers
+
+
 def test_raw_foundry_agent_init_with_custom_client_type() -> None:
     """Test that client_type parameter is respected."""
 
@@ -523,6 +623,7 @@ def test_raw_foundry_agent_init_with_custom_client_type() -> None:
 def test_raw_foundry_agent_init_uses_explicit_parameters() -> None:
     signature = inspect.signature(RawFoundryAgent.__init__)
 
+    assert "default_headers" in signature.parameters
     assert "instructions" in signature.parameters
     assert "default_options" in signature.parameters
     assert "compaction_strategy" in signature.parameters
@@ -534,6 +635,7 @@ def test_raw_foundry_agent_init_uses_explicit_parameters() -> None:
 def test_foundry_agent_init_uses_explicit_parameters() -> None:
     signature = inspect.signature(FoundryAgent.__init__)
 
+    assert "default_headers" in signature.parameters
     assert "instructions" in signature.parameters
     assert "default_options" in signature.parameters
     assert "compaction_strategy" in signature.parameters

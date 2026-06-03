@@ -11,6 +11,7 @@ using Microsoft.Agents.AI.Workflows.Declarative.ObjectModel;
 using Microsoft.Agents.AI.Workflows.Declarative.PowerFx;
 using Microsoft.Agents.ObjectModel;
 using Microsoft.Extensions.AI;
+using Microsoft.PowerFx.Types;
 using Moq;
 
 namespace Microsoft.Agents.AI.Workflows.Declarative.UnitTests.ObjectModel;
@@ -842,6 +843,205 @@ public sealed class InvokeMcpToolExecutorTest(ITestOutputHelper output) : Workfl
 
     #endregion
 
+    #region Approval Snapshot Security Tests
+
+    /// <summary>
+    /// Verifies that mutating the tool name variable after approval does not change
+    /// which tool is actually invoked. The originally-approved tool name must be used.
+    /// </summary>
+    [Fact]
+    public async Task InvokeMcpToolCaptureResponseUsesApprovedToolNameNotMutatedAsync()
+    {
+        // Arrange
+        const string ApprovedToolName = "safe_readonly_query";
+        const string MutatedToolName = "dangerous_admin_tool";
+
+        this.State.Set("TargetTool", FormulaValue.New(ApprovedToolName));
+        this.State.InitializeSystem();
+        this.State.Bind();
+
+        InvokeMcpTool model = this.CreateModelWithVariableToolName(
+            displayName: nameof(InvokeMcpToolCaptureResponseUsesApprovedToolNameNotMutatedAsync),
+            serverUrl: TestServerUrl,
+            variableName: "TargetTool");
+
+        string? capturedToolName = null;
+        Mock<IMcpToolHandler> mockProvider = new();
+        mockProvider.Setup(provider => provider.InvokeToolAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string>(),
+                It.IsAny<IDictionary<string, object?>?>(),
+                It.IsAny<IDictionary<string, string>?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string?, string, IDictionary<string, object?>?, IDictionary<string, string>?, string?, CancellationToken>(
+                (_, _, toolName, _, _, _, _) => capturedToolName = toolName)
+            .ReturnsAsync(new McpServerToolResultContent("capture-call-id")
+            {
+                Outputs = [new TextContent("result")]
+            });
+        MockAgentProvider mockAgentProvider = new();
+        InvokeMcpToolExecutor action = new(model, mockProvider.Object, mockAgentProvider.Object, this.State);
+
+        // Act - trigger ExecuteAsync to store the approval snapshot
+        Mock<IWorkflowContext> mockContext = CreateMockWorkflowContext();
+        await action.HandleAsync(new ActionExecutorResult(action.Id), mockContext.Object, CancellationToken.None);
+
+        // Simulate parallel branch mutating state during the approval window
+        this.State.Set("TargetTool", FormulaValue.New(MutatedToolName));
+        this.State.Bind();
+
+        // User clicks approve (they saw "safe_readonly_query" in the approval UI)
+        McpServerToolCallContent toolCall = new(action.Id, ApprovedToolName, TestServerUrl);
+        ToolApprovalRequestContent approvalRequest = new(action.Id, toolCall);
+        ToolApprovalResponseContent approvalResponse = approvalRequest.CreateResponse(approved: true);
+        ExternalInputResponse response = new(new ChatMessage(ChatRole.User, [approvalResponse]));
+
+        // Resume after approval
+        await action.CaptureResponseAsync(mockContext.Object, response, CancellationToken.None);
+
+        // Assert - the originally-approved tool name must be used, not the mutated one
+        Assert.NotNull(capturedToolName);
+        Assert.Equal(ApprovedToolName, capturedToolName);
+    }
+
+    /// <summary>
+    /// Verifies that mutating an argument variable after approval does not change
+    /// the arguments actually passed to the MCP tool. The originally-approved arguments must be used.
+    /// </summary>
+    [Fact]
+    public async Task InvokeMcpToolCaptureResponseUsesApprovedArgumentsNotMutatedAsync()
+    {
+        // Arrange
+        const string ApprovedQuery = "SELECT * FROM users LIMIT 10";
+        const string MutatedQuery = "DROP TABLE users CASCADE; --";
+
+        this.State.Set("SqlQuery", FormulaValue.New(ApprovedQuery));
+        this.State.InitializeSystem();
+        this.State.Bind();
+
+        InvokeMcpTool model = this.CreateModelWithVariableArgument(
+            displayName: nameof(InvokeMcpToolCaptureResponseUsesApprovedArgumentsNotMutatedAsync),
+            serverUrl: TestServerUrl,
+            toolName: TestToolName,
+            argumentKey: "query",
+            variableName: "SqlQuery");
+
+        IDictionary<string, object?>? capturedArguments = null;
+        Mock<IMcpToolHandler> mockProvider = new();
+        mockProvider.Setup(provider => provider.InvokeToolAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string>(),
+                It.IsAny<IDictionary<string, object?>?>(),
+                It.IsAny<IDictionary<string, string>?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string?, string, IDictionary<string, object?>?, IDictionary<string, string>?, string?, CancellationToken>(
+                (_, _, _, arguments, _, _, _) => capturedArguments = arguments)
+            .ReturnsAsync(new McpServerToolResultContent("capture-call-id")
+            {
+                Outputs = [new TextContent("result")]
+            });
+        MockAgentProvider mockAgentProvider = new();
+        InvokeMcpToolExecutor action = new(model, mockProvider.Object, mockAgentProvider.Object, this.State);
+
+        // Act - trigger ExecuteAsync to store the approval snapshot
+        Mock<IWorkflowContext> mockContext = CreateMockWorkflowContext();
+        await action.HandleAsync(new ActionExecutorResult(action.Id), mockContext.Object, CancellationToken.None);
+
+        // Simulate parallel branch mutating state during the approval window
+        this.State.Set("SqlQuery", FormulaValue.New(MutatedQuery));
+        this.State.Bind();
+
+        // User clicks approve
+        McpServerToolCallContent toolCall = new(action.Id, TestToolName, TestServerUrl);
+        ToolApprovalRequestContent approvalRequest = new(action.Id, toolCall);
+        ToolApprovalResponseContent approvalResponse = approvalRequest.CreateResponse(approved: true);
+        ExternalInputResponse response = new(new ChatMessage(ChatRole.User, [approvalResponse]));
+
+        // Resume after approval
+        await action.CaptureResponseAsync(mockContext.Object, response, CancellationToken.None);
+
+        // Assert - the originally-approved argument must be used, not the mutated one
+        Assert.NotNull(capturedArguments);
+        Assert.Equal(ApprovedQuery, capturedArguments["query"]?.ToString());
+    }
+
+    /// <summary>
+    /// Verifies that mutating the server URL variable after approval does not redirect
+    /// the MCP tool call to a different server. The originally-approved server URL must be used.
+    /// </summary>
+    [Fact]
+    public async Task InvokeMcpToolCaptureResponseUsesApprovedServerUrlNotMutatedAsync()
+    {
+        // Arrange
+        const string ApprovedServerUrl = "https://internal-mcp.corp";
+        const string MutatedServerUrl = "https://attacker.evil/steal";
+
+        this.State.Set("McpEndpoint", FormulaValue.New(ApprovedServerUrl));
+        this.State.InitializeSystem();
+        this.State.Bind();
+
+        InvokeMcpTool model = this.CreateModelWithVariableServerUrl(
+            displayName: nameof(InvokeMcpToolCaptureResponseUsesApprovedServerUrlNotMutatedAsync),
+            variableName: "McpEndpoint",
+            toolName: TestToolName);
+
+        string? capturedServerUrl = null;
+        Mock<IMcpToolHandler> mockProvider = new();
+        mockProvider.Setup(provider => provider.InvokeToolAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string>(),
+                It.IsAny<IDictionary<string, object?>?>(),
+                It.IsAny<IDictionary<string, string>?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string?, string, IDictionary<string, object?>?, IDictionary<string, string>?, string?, CancellationToken>(
+                (serverUrl, _, _, _, _, _, _) => capturedServerUrl = serverUrl)
+            .ReturnsAsync(new McpServerToolResultContent("capture-call-id")
+            {
+                Outputs = [new TextContent("result")]
+            });
+        MockAgentProvider mockAgentProvider = new();
+        InvokeMcpToolExecutor action = new(model, mockProvider.Object, mockAgentProvider.Object, this.State);
+
+        // Act - trigger ExecuteAsync to store the approval snapshot
+        Mock<IWorkflowContext> mockContext = CreateMockWorkflowContext();
+        await action.HandleAsync(new ActionExecutorResult(action.Id), mockContext.Object, CancellationToken.None);
+
+        // Simulate parallel branch mutating state during the approval window
+        this.State.Set("McpEndpoint", FormulaValue.New(MutatedServerUrl));
+        this.State.Bind();
+
+        // User clicks approve
+        McpServerToolCallContent toolCall = new(action.Id, TestToolName, ApprovedServerUrl);
+        ToolApprovalRequestContent approvalRequest = new(action.Id, toolCall);
+        ToolApprovalResponseContent approvalResponse = approvalRequest.CreateResponse(approved: true);
+        ExternalInputResponse response = new(new ChatMessage(ChatRole.User, [approvalResponse]));
+
+        // Resume after approval
+        await action.CaptureResponseAsync(mockContext.Object, response, CancellationToken.None);
+
+        // Assert - the originally-approved server URL must be used, not the mutated one
+        Assert.NotNull(capturedServerUrl);
+        Assert.Equal(ApprovedServerUrl, capturedServerUrl);
+    }
+
+    private static Mock<IWorkflowContext> CreateMockWorkflowContext()
+    {
+        Mock<IWorkflowContext> mockContext = new();
+        mockContext.Setup(c => c.AddEventAsync(It.IsAny<WorkflowEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        mockContext.Setup(c => c.QueueStateUpdateAsync(It.IsAny<string>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+        return mockContext;
+    }
+
+    #endregion
+
     #region CompleteAsync Tests
 
     [Fact]
@@ -948,6 +1148,50 @@ public sealed class InvokeMcpToolExecutorTest(ITestOutputHelper output) : Workfl
             builder.Headers.Add(headerKey, new StringExpression.Builder(StringExpression.Literal(headerValue)));
         }
 
+        return AssignParent<InvokeMcpTool>(builder);
+    }
+
+    private InvokeMcpTool CreateModelWithVariableToolName(string displayName, string serverUrl, string variableName)
+    {
+        InvokeMcpTool.Builder builder = new()
+        {
+            Id = this.CreateActionId(),
+            DisplayName = this.FormatDisplayName(displayName),
+            ServerUrl = new StringExpression.Builder(StringExpression.Literal(serverUrl)),
+            ToolName = new StringExpression.Builder(
+                StringExpression.Variable(PropertyPath.TopicVariable(variableName))),
+            RequireApproval = new BoolExpression.Builder(BoolExpression.Literal(true)),
+        };
+        return AssignParent<InvokeMcpTool>(builder);
+    }
+
+    private InvokeMcpTool CreateModelWithVariableArgument(
+        string displayName, string serverUrl, string toolName, string argumentKey, string variableName)
+    {
+        InvokeMcpTool.Builder builder = new()
+        {
+            Id = this.CreateActionId(),
+            DisplayName = this.FormatDisplayName(displayName),
+            ServerUrl = new StringExpression.Builder(StringExpression.Literal(serverUrl)),
+            ToolName = new StringExpression.Builder(StringExpression.Literal(toolName)),
+            RequireApproval = new BoolExpression.Builder(BoolExpression.Literal(true)),
+        };
+        builder.Arguments.Add(argumentKey,
+            ValueExpression.Variable(PropertyPath.TopicVariable(variableName)));
+        return AssignParent<InvokeMcpTool>(builder);
+    }
+
+    private InvokeMcpTool CreateModelWithVariableServerUrl(string displayName, string variableName, string toolName)
+    {
+        InvokeMcpTool.Builder builder = new()
+        {
+            Id = this.CreateActionId(),
+            DisplayName = this.FormatDisplayName(displayName),
+            ServerUrl = new StringExpression.Builder(
+                StringExpression.Variable(PropertyPath.TopicVariable(variableName))),
+            ToolName = new StringExpression.Builder(StringExpression.Literal(toolName)),
+            RequireApproval = new BoolExpression.Builder(BoolExpression.Literal(true)),
+        };
         return AssignParent<InvokeMcpTool>(builder);
     }
 

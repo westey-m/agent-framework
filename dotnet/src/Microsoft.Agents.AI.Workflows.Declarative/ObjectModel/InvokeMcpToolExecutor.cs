@@ -28,6 +28,12 @@ internal sealed class InvokeMcpToolExecutor(
     DeclarativeActionExecutor<InvokeMcpTool>(model, state)
 {
     /// <summary>
+    /// Snapshot of evaluated parameters at approval-request time.
+    /// Used to prevent TOCTOU attacks where state mutates during the approval window.
+    /// </summary>
+    private ApprovalSnapshot? _approvalSnapshot;
+
+    /// <summary>
     /// Step identifiers for the MCP tool invocation workflow.
     /// </summary>
     public static class Steps
@@ -75,6 +81,10 @@ internal sealed class InvokeMcpToolExecutor(
 
         if (requireApproval)
         {
+            // Snapshot the evaluated parameters to prevent TOCTOU attacks.
+            // If state mutates during the approval window, the approved values are used on resume.
+            this._approvalSnapshot = new ApprovalSnapshot(serverUrl, serverLabel, toolName, arguments, connectionName);
+
             // Create tool call content for approval request.
             // Transport headers (e.g. Authorization) are intentionally excluded from the
             // approval event: they must not cross into the externally-surfaced approval request.
@@ -137,13 +147,14 @@ internal sealed class InvokeMcpToolExecutor(
             return;
         }
 
-        // Approved - now invoke the tool
-        string serverUrl = this.GetServerUrl();
-        string? serverLabel = this.GetServerLabel();
-        string toolName = this.GetToolName();
-        Dictionary<string, object?>? arguments = this.GetArguments();
+        // Approved - use the snapshot from approval-request time to prevent TOCTOU attacks.
+        // Headers are re-evaluated (they may contain auth secrets that should not be persisted).
+        string serverUrl = this._approvalSnapshot?.ServerUrl ?? this.GetServerUrl();
+        string? serverLabel = this._approvalSnapshot?.ServerLabel ?? this.GetServerLabel();
+        string toolName = this._approvalSnapshot?.ToolName ?? this.GetToolName();
+        Dictionary<string, object?>? arguments = this._approvalSnapshot?.Arguments ?? this.GetArguments();
         Dictionary<string, string>? headers = this.GetHeaders();
-        string? connectionName = this.GetConnectionName();
+        string? connectionName = this._approvalSnapshot?.ConnectionName ?? this.GetConnectionName();
 
         McpServerToolResultContent resultContent = await mcpToolHandler.InvokeToolAsync(
             serverUrl,
@@ -364,5 +375,24 @@ internal sealed class InvokeMcpToolExecutor(
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Stores the evaluated parameters at approval-request time so that
+    /// <see cref="CaptureResponseAsync"/> uses the values the user reviewed,
+    /// even if <see cref="WorkflowFormulaState"/> mutates during the approval window.
+    /// </summary>
+    private readonly struct ApprovalSnapshot(
+        string serverUrl,
+        string? serverLabel,
+        string toolName,
+        Dictionary<string, object?>? arguments,
+        string? connectionName)
+    {
+        public string ServerUrl { get; } = serverUrl;
+        public string? ServerLabel { get; } = serverLabel;
+        public string ToolName { get; } = toolName;
+        public Dictionary<string, object?>? Arguments { get; } = arguments;
+        public string? ConnectionName { get; } = connectionName;
     }
 }

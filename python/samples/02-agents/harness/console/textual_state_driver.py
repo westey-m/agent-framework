@@ -334,6 +334,14 @@ class HarnessConsoleUXStateDriver:
         self._state.accumulated_follow_up_responses.clear()
         return responses
 
+    def has_pending_questions(self) -> bool:
+        """Check if there are pending follow-up questions.
+
+        Returns:
+            True if unanswered questions exist in the queue.
+        """
+        return len(self._state.pending_questions) > 0
+
     # --- Queued messages (message injection) ---
 
     def set_queued_messages(self, pending: list[str]) -> None:

@@ -53,6 +53,8 @@ def get_argument_value(call: Content, param_name: str) -> Any:
             args_dict = json.loads(call.arguments)
         except (json.JSONDecodeError, TypeError):
             return None
+        if not isinstance(args_dict, dict):
+            return None
     elif isinstance(call.arguments, dict):
         args_dict = call.arguments
     else:

@@ -15,7 +15,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical
 from textual.css.query import NoMatches
-from textual.widgets import Static
+from textual.widgets import Input, Static
 
 from .app_state import (
     BottomPanelMode,
@@ -60,7 +60,7 @@ class HarnessApp(App[None]):
     }
 
     #bottom-panel {
-        height: 1;
+        height: auto;
     }
 
     #text-input-container {
@@ -70,7 +70,7 @@ class HarnessApp(App[None]):
 
     #list-selection-container {
         height: auto;
-        max-height: 10;
+        max-height: 12;
         display: none;
     }
 
@@ -372,13 +372,11 @@ class HarnessApp(App[None]):
         # Advance to next question
         self._ux_driver.advance_follow_up_question()
 
-        # If no more questions, check if we need another agent turn
+        # If no more questions, resume the agent with accumulated responses
         if not self._app_state.pending_questions:
             responses = self._ux_driver.take_follow_up_responses()
             if responses and self._runner:
-                # Start another agent turn with accumulated responses
-                # For now, just complete the turn
-                pass
+                await self._runner.start_agent_turn(responses, session=self._session)
 
         self._sync_ui_from_state()
 
@@ -401,6 +399,10 @@ class HarnessApp(App[None]):
 
         # Update bottom panel mode
         self._sync_bottom_panel(state.mode)
+
+        # Hide status bar and mode/help during list selection (matching C#)
+        is_list_mode = state.mode == BottomPanelMode.LIST_SELECTION
+        self._sync_chrome_visibility(not is_list_mode)
 
         # Update status bar
         self._sync_status_bar()
@@ -445,12 +447,17 @@ class HarnessApp(App[None]):
         if mode == BottomPanelMode.TEXT_INPUT:
             text_container.display = True
             list_container.display = False
+            # Restore focus to text input
+            try:
+                text_input = self.query_one("#text-input", HarnessTextInput)
+                text_input.focus()
+            except NoMatches:
+                pass
         elif mode == BottomPanelMode.LIST_SELECTION:
             text_container.display = False
             list_container.display = True
             self._sync_list_selection()
         elif mode == BottomPanelMode.STREAMING:
-            # Keep text input visible but disabled
             text_container.display = True
             list_container.display = False
 
@@ -462,8 +469,19 @@ class HarnessApp(App[None]):
             return
 
         state = self._app_state
-        if state.list_selection_options:
-            list_widget.options = state.list_selection_options
+        list_widget.title = state.list_selection_title or ""
+        list_widget.options = list(state.list_selection_options)
+        list_widget.allow_custom_text = state.list_selection_custom_text_placeholder is not None
+
+        if state.list_selection_custom_text_placeholder:
+            try:
+                custom_input = list_widget.query_one("#custom-input", Input)
+                custom_input.placeholder = state.list_selection_custom_text_placeholder
+            except Exception:
+                pass
+
+        # Focus the option list so keyboard navigation works immediately
+        list_widget.focus_list()
 
     def _sync_status_bar(self) -> None:
         """Sync the status bar with state."""
@@ -501,6 +519,22 @@ class HarnessApp(App[None]):
             bottom_rule.rule_color = color
         except NoMatches:
             pass
+
+    def _sync_chrome_visibility(self, visible: bool) -> None:
+        """Show or hide chrome elements (status bar, mode/help).
+
+        During list selection mode, these are hidden to give more vertical
+        space to the scroll panel and list picker.
+
+        Args:
+            visible: Whether chrome elements should be visible.
+        """
+        import contextlib
+
+        with contextlib.suppress(NoMatches):
+            self.query_one("#status-bar", AgentStatus).display = visible
+        with contextlib.suppress(NoMatches):
+            self.query_one("#mode-help", AgentModeAndHelp).display = visible
 
     # --- Rendering count tracking ---
 

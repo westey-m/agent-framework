@@ -103,6 +103,33 @@ class IUXStateDriver(Protocol):
         """
         ...
 
+    def has_pending_questions(self) -> bool:
+        """Check if there are pending follow-up questions awaiting user answers.
+
+        Returns:
+            True if there are unanswered questions in the queue.
+        """
+        ...
+
+    def take_follow_up_responses(self) -> list:
+        """Take and clear all accumulated follow-up response messages.
+
+        Returns:
+            List of Message objects accumulated from follow-up actions.
+        """
+        ...
+
+    async def write_no_text_warning(self, has_follow_up_actions: bool) -> None:
+        """Write a warning if the agent produced no text output.
+
+        Called after streaming completes. If no text was received and no
+        follow-up actions exist, writes a "(no text response)" footer.
+
+        Args:
+            has_follow_up_actions: Whether follow-up actions exist.
+        """
+        ...
+
     def set_mode(self, mode: str | None, mode_color: str | None = None) -> None:
         """Set the current agent mode.
 
@@ -273,6 +300,19 @@ class SimpleConsoleStateDriver:
         """
         action_type = type(action).__name__
         print(f"[Follow-up queued: {action_type}]")
+
+    def has_pending_questions(self) -> bool:
+        """Check if there are pending follow-up questions."""
+        return False
+
+    def take_follow_up_responses(self) -> list:
+        """Take and clear all accumulated follow-up responses."""
+        return []
+
+    async def write_no_text_warning(self, has_follow_up_actions: bool) -> None:
+        """Write a warning if no text was produced."""
+        if not has_follow_up_actions:
+            print("[▪ (no text response from agent)]")
 
     def update_last_entry(self, entry_type, new_text: str) -> None:
         """Update the last output entry (placeholder for now).

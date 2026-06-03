@@ -13,6 +13,7 @@ from .harness_console import run_agent_async
 from .observers import (
     ConsoleObserver,
     build_default_observers,
+    build_observers_with_planning,
 )
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "ToolCallFormatter",
     "build_default_command_handlers",
     "build_default_observers",
+    "build_observers_with_planning",
     "run_agent_async",
 ]

@@ -33,7 +33,7 @@ import asyncio
 from agent_framework import create_harness_agent
 from agent_framework.foundry import FoundryChatClient
 from azure.identity import AzureCliCredential
-from console import build_default_observers, run_agent_async
+from console import build_observers_with_planning, run_agent_async
 from dotenv import load_dotenv
 
 RESEARCH_INSTRUCTIONS = """\
@@ -89,7 +89,7 @@ async def main() -> None:
     await run_agent_async(
         agent,
         session=agent.create_session(),
-        observers=build_default_observers(),
+        observers=build_observers_with_planning(agent),
         initial_mode="plan",
         title="🔬 Research Assistant",
         placeholder="Enter a research topic...",

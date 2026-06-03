@@ -1,6 +1,11 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Tool approval observer for user confirmation of tool calls."""
+"""Tool approval observer for user confirmation of tool calls.
+
+Detects function_approval_request content items during streaming, displays
+approval notifications, and after the stream completes presents one
+ChoiceFollowUpQuestion per pending approval request.
+"""
 
 from __future__ import annotations
 
@@ -18,14 +23,15 @@ if TYPE_CHECKING:
 class ToolApprovalObserver(ConsoleObserver):
     """Asks user to approve tool calls before execution.
 
-    Collects all tool calls during streaming and asks the user to approve
-    or reject them after the stream completes. This provides an opportunity
-    to review what the agent wants to do before it takes action.
+    Collects `function_approval_request` content during streaming and presents
+    a multi-choice approval question for each after the stream completes.
+    The continuation builds a `function_approval_response` Content to inject
+    into the next agent turn.
     """
 
     def __init__(self) -> None:
         """Initialize the tool approval observer."""
-        self._pending_tool_calls: list[Content] = []
+        self._approval_requests: list[Content] = []
 
     async def on_content(
         self,
@@ -34,17 +40,18 @@ class ToolApprovalObserver(ConsoleObserver):
         agent: Agent,
         session: Any,
     ) -> None:
-        """Collect tool calls for approval.
+        """Collect function_approval_request content for approval.
 
         Args:
             ux: The UX state driver for UI updates.
-            content: The content item to check for function calls.
+            content: The content item to check.
             agent: The AI agent.
             session: The agent session.
         """
-        # Collect function call content for approval
-        if content.type == "function_call":
-            self._pending_tool_calls.append(content)
+        if content.type == "function_approval_request":
+            self._approval_requests.append(content)
+            tool_name = self._format_tool_name(content)
+            ux.append_info_line(f"⚠️ Approval needed: {tool_name}", "yellow")
 
     async def on_stream_complete(
         self,
@@ -52,7 +59,7 @@ class ToolApprovalObserver(ConsoleObserver):
         agent: Agent,
         session: Any,
     ) -> list[FollowUpAction] | None:
-        """Ask user to approve collected tool calls.
+        """Build approval questions for collected requests.
 
         Args:
             ux: The UX state driver for UI updates.
@@ -60,61 +67,78 @@ class ToolApprovalObserver(ConsoleObserver):
             session: The agent session.
 
         Returns:
-            List containing a ChoiceFollowUpQuestion for approval, or None if
-            no tools were called.
+            List of ChoiceFollowUpQuestions, one per approval request.
         """
-        if not self._pending_tool_calls:
+        if not self._approval_requests:
             return None
 
-        # Build list of tool names for display
-        tool_names = [
-            call.name if hasattr(call, "name") else str(call) for call in self._pending_tool_calls
+        actions: list[FollowUpAction] = []
+        for request in self._approval_requests:
+            actions.append(self._build_approval_question(request))
+
+        self._approval_requests.clear()
+        return actions
+
+    def _build_approval_question(self, request: Content) -> ChoiceFollowUpQuestion:
+        """Build a multi-choice approval question for a single request."""
+        tool_name = self._format_tool_name(request)
+        prompt = f"🔐 Tool approval: {tool_name}"
+
+        choices = [
+            "Approve this call",
+            "Always approve this tool (any arguments)",
+            "Always approve this tool with these arguments",
+            "Deny",
         ]
-        call_count = len(tool_names)
 
-        # Create approval prompt
-        if call_count == 1:
-            prompt = f"Approve tool call: {tool_names[0]}?"
-        else:
-            prompt = f"Approve {call_count} tool calls: {', '.join(tool_names)}?"
+        async def continuation(
+            selection: str,
+            ux: IUXStateDriver,
+        ) -> Message | None:
+            from agent_framework import Message
 
-        # Create choice question with approval/rejection options
-        question = ChoiceFollowUpQuestion(
+            if selection == "Deny":
+                response_content = request.to_function_approval_response(approved=False)
+                action_label = "❌ Denied"
+                color = "red"
+            else:
+                response_content = request.to_function_approval_response(approved=True)
+                if selection == "Always approve this tool (any arguments)":
+                    action_label = "✅ Always approved (any args)"
+                elif selection == "Always approve this tool with these arguments":
+                    action_label = "✅ Always approved (these args)"
+                else:
+                    action_label = "✅ Approved"
+                color = "green"
+
+            ux.append_info_line(
+                f"🔹 {prompt}\n   └─ [{color}]{action_label}[/{color}]",
+                "dim",
+            )
+
+            return Message(role="user", contents=[response_content])
+
+        return ChoiceFollowUpQuestion(
             prompt=prompt,
-            choices=["Approve", "Reject"],
+            choices=choices,
             allow_custom_text=False,
-            continuation=self._handle_approval,
+            continuation=continuation,
         )
 
-        # Clear pending tools (they're now in the question's closure)
-        self._pending_tool_calls.clear()
+    @staticmethod
+    def _format_tool_name(content: Content) -> str:
+        """Extract a readable tool name from approval request content."""
+        # The function_call is stored on the approval request content
+        function_call = getattr(content, "function_call", None)
+        if function_call is not None:
+            from ..formatters import build_default_formatters, format_tool_call
 
-        return [question]
-
-    async def _handle_approval(
-        self,
-        answer: str,
-        ux: IUXStateDriver,
-    ) -> Message | None:
-        """Handle approval response from the user.
-
-        Args:
-            answer: The user's choice ("Approve" or "Reject").
-            ux: The UX state driver for UI updates.
-
-        Returns:
-            Optional message to inject into the next agent turn. Returns None
-            for approval (let execution continue), or a message for rejection
-            (ask agent to try a different approach).
-        """
-        if answer == "Approve":
-            ux.append_info_line("✓ Tools approved", "green")
-            return None  # Continue with tool execution
-        ux.append_info_line("✗ Tools rejected", "red")
-        # Return a message asking the agent to try a different approach
-        from agent_framework import Message
-
-        return Message(
-            role="user",
-            contents=["The user rejected the tool calls. Please try a different approach without using tools."],
-        )
+            try:
+                return format_tool_call(build_default_formatters(), function_call)
+            except (AttributeError, TypeError):
+                pass
+            # Fall back to name attribute
+            name = getattr(function_call, "name", None)
+            if name:
+                return str(name)
+        return "unknown tool"

@@ -69,11 +69,12 @@ async def run_agent_async(
         "plan": "cyan",
         "execute": "green",
     }
+    resolved_session = session or agent.create_session()
 
     app = HarnessApp(
         agent=agent,
         observers=resolved_observers,
-        session=session,
+        session=resolved_session,
         mode_colors=resolved_mode_colors,
         initial_mode=initial_mode,
         placeholder=placeholder,

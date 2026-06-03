@@ -19,10 +19,11 @@ class HarnessScrollPanel(RichLog):
     Rich text formatting support. Automatically scrolls to the bottom when
     new entries are added.
 
-    For streaming text, the panel uses a delta-append strategy: it tracks
-    how much of the streaming entry has already been written to the RichLog
-    and only appends new text. This avoids expensive clear+rewrite cycles
-    that can cause visual truncation due to Textual frame timing.
+    For streaming text, the panel uses a truncate-and-rewrite strategy: it
+    tracks where streaming began in the RichLog lines list, and on each update
+    truncates back to that point and rewrites the full accumulated text as a
+    single write. This ensures consistent rendering without line-break artifacts
+    between streamed chunks.
     """
 
     def __init__(self, **kwargs) -> None:

@@ -52,7 +52,7 @@ class ReasoningDisplayObserver(ConsoleObserver):
             The reasoning text, or None if no reasoning is present.
         """
         # Check for reasoning content type
-        if hasattr(content, "type") and content.type == "reasoning":
+        if hasattr(content, "type") and content.type in {"text_reasoning", "reasoning"}:
             if hasattr(content, "text"):
                 return content.text
             content_attr = getattr(content, "content", None)

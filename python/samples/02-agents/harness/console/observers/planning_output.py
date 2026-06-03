@@ -218,6 +218,7 @@ class PlanningOutputObserver(ConsoleObserver):
 
                 set_agent_mode(session, self._execution_mode_name)
                 exec_color = self._mode_colors.get(self._execution_mode_name)
+                ux.set_mode(self._execution_mode_name, exec_color)
                 ux.append_info_line(
                     f"✅ Switched to {self._execution_mode_name} mode.",
                     exec_color,

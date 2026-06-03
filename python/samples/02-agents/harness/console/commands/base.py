@@ -36,6 +36,7 @@ class CommandHandler(ABC):
         Returns:
             Help text like '/todos (show todo list)', or None.
         """
+        ...
 
     @abstractmethod
     async def try_handle(
@@ -54,3 +55,4 @@ class CommandHandler(ABC):
         Returns:
             True if this handler handled the input; False otherwise.
         """
+        ...

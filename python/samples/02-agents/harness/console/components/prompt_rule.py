@@ -27,4 +27,5 @@ class PromptRule(Static):
             Formatted string with Rich markup.
         """
         color = self.rule_color
-        return f"[{color}]{'─' * 200}[/{color}]"
+        width = self.size.width or 80
+        return f"[{color}]{'─' * width}[/{color}]"

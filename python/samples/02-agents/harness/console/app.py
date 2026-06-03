@@ -450,7 +450,7 @@ class HarnessApp(App[None]):
             # Restore focus to text input
             try:
                 text_input = self.query_one("#text-input", HarnessTextInput)
-                text_input.focus()
+                text_input.focus_input()
             except NoMatches:
                 pass
         elif mode == BottomPanelMode.LIST_SELECTION:

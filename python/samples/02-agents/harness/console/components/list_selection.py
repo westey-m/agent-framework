@@ -62,9 +62,10 @@ class HarnessListSelection(Widget):
     }
 
     HarnessListSelection #custom-input {
-        height: 1;
+        height: auto;
+        min-height: 1;
         margin-top: 0;
-        border: none;
+        border: tall transparent;
     }
 
     HarnessListSelection #custom-input:focus {

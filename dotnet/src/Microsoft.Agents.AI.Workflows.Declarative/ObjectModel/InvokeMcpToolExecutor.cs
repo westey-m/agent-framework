@@ -27,6 +27,8 @@ internal sealed class InvokeMcpToolExecutor(
     WorkflowFormulaState state) :
     DeclarativeActionExecutor<InvokeMcpTool>(model, state)
 {
+    private const string ApprovalSnapshotStateKey = nameof(_approvalSnapshot);
+
     /// <summary>
     /// Snapshot of evaluated parameters at approval-request time.
     /// Used to prevent TOCTOU attacks where state mutates during the approval window.
@@ -173,7 +175,31 @@ internal sealed class InvokeMcpToolExecutor(
     /// </summary>
     public async ValueTask CompleteAsync(IWorkflowContext context, ActionExecutorResult message, CancellationToken cancellationToken)
     {
+        // Clear the approval snapshot after successful completion.
+        this._approvalSnapshot = null;
+        await ClearSnapshotStateAsync(context, cancellationToken).ConfigureAwait(false);
+
         await context.RaiseCompletionEventAsync(this.Model, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Persists the approval snapshot to workflow state so it survives checkpoint/restore cycles.
+    /// </remarks>
+    protected override async ValueTask OnCheckpointingAsync(IWorkflowContext context, CancellationToken cancellationToken = default)
+    {
+        await context.QueueStateUpdateAsync(ApprovalSnapshotStateKey, this._approvalSnapshot, null, cancellationToken).ConfigureAwait(false);
+        await base.OnCheckpointingAsync(context, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Restores the approval snapshot from workflow state after a checkpoint restore.
+    /// </remarks>
+    protected override async ValueTask OnCheckpointRestoredAsync(IWorkflowContext context, CancellationToken cancellationToken = default)
+    {
+        await base.OnCheckpointRestoredAsync(context, cancellationToken).ConfigureAwait(false);
+        this._approvalSnapshot = await context.ReadStateAsync<ApprovalSnapshot>(ApprovalSnapshotStateKey, null, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask ProcessResultAsync(IWorkflowContext context, McpServerToolResultContent resultContent, CancellationToken cancellationToken)
@@ -378,21 +404,22 @@ internal sealed class InvokeMcpToolExecutor(
     }
 
     /// <summary>
+    /// Clears the persisted approval snapshot state after a successful tool invocation.
+    /// </summary>
+    private static async ValueTask ClearSnapshotStateAsync(IWorkflowContext context, CancellationToken cancellationToken)
+    {
+        await context.QueueStateUpdateAsync<ApprovalSnapshot?>(ApprovalSnapshotStateKey, null, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Stores the evaluated parameters at approval-request time so that
     /// <see cref="CaptureResponseAsync"/> uses the values the user reviewed,
     /// even if <see cref="WorkflowFormulaState"/> mutates during the approval window.
     /// </summary>
-    private readonly struct ApprovalSnapshot(
-        string serverUrl,
-        string? serverLabel,
-        string toolName,
-        Dictionary<string, object?>? arguments,
-        string? connectionName)
-    {
-        public string ServerUrl { get; } = serverUrl;
-        public string? ServerLabel { get; } = serverLabel;
-        public string ToolName { get; } = toolName;
-        public Dictionary<string, object?>? Arguments { get; } = arguments;
-        public string? ConnectionName { get; } = connectionName;
-    }
+    internal sealed record ApprovalSnapshot(
+        string ServerUrl,
+        string? ServerLabel,
+        string ToolName,
+        Dictionary<string, object?>? Arguments,
+        string? ConnectionName);
 }

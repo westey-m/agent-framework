@@ -644,6 +644,28 @@ public class HarnessAgentTests
         Assert.Null(agent.GetService<ToolApprovalAgent>());
     }
 
+    /// <summary>
+    /// Verify that ToolApprovalAgentOptions are passed through when provided.
+    /// </summary>
+    [Fact]
+    public void ToolApproval_OptionsPassedThrough()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var options = CreateAllDisabledOptions();
+        options.DisableToolApproval = false;
+        options.ToolApprovalAgentOptions = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [_ => new ValueTask<bool>(true)]
+        };
+
+        // Act
+        var agent = new HarnessAgent(chatClient, TestMaxContextWindowTokens, TestMaxOutputTokens, options);
+
+        // Assert
+        Assert.NotNull(agent.GetService<ToolApprovalAgent>());
+    }
+
     #endregion
 
     #region Feature: OpenTelemetry

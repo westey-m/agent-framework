@@ -47,14 +47,14 @@ public class ToolApprovalAgentTests
     }
 
     /// <summary>
-    /// Verify that constructor accepts custom JsonSerializerOptions.
+    /// Verify that constructor accepts custom options.
     /// </summary>
     [Fact]
-    public void Constructor_CustomJsonSerializerOptions_CreatesInstanceAsync()
+    public void Constructor_CustomOptions_CreatesInstance()
     {
         // Arrange
         var innerAgent = new Mock<AIAgent>().Object;
-        var options = new JsonSerializerOptions();
+        var options = new ToolApprovalAgentOptions { JsonSerializerOptions = new JsonSerializerOptions() };
 
         // Act
         var agent = new ToolApprovalAgent(innerAgent, options);
@@ -1532,6 +1532,243 @@ public class ToolApprovalAgentTests
             yield return item;
             await Task.Yield();
         }
+    }
+
+    #endregion
+
+    #region Auto-Approval Rules (Heuristics)
+
+    /// <summary>
+    /// Verify that an auto-approval rule can approve a function call that would otherwise need user approval.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_AutoApprovalRule_ApprovesMatchingToolAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "ReadTool"));
+
+        // Inner agent: first call returns approval request, second returns final response.
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                if (callCount == 1)
+                {
+                    return new AgentResponse([new ChatMessage(ChatRole.Assistant, [approvalRequest])]);
+                }
+
+                return new AgentResponse([new ChatMessage(ChatRole.Assistant, "Done")]);
+            });
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "ReadTool")]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var response = await agent.RunAsync(
+            [new ChatMessage(ChatRole.User, "Hi")],
+            session);
+
+        // Assert — the approval request was auto-approved, inner agent called twice
+        Assert.Equal(2, callCount);
+        Assert.Equal("Done", response.Text);
+    }
+
+    /// <summary>
+    /// Verify that when auto-approval rule does not match, request is surfaced to the caller.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_AutoApprovalRule_DoesNotMatchSurfacesToCallerAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "DangerousTool"));
+
+        var innerAgent = CreateMockAgent(new AgentResponse([new ChatMessage(ChatRole.Assistant, [approvalRequest])]));
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "ReadTool")]  // Only approves ReadTool
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var response = await agent.RunAsync(
+            [new ChatMessage(ChatRole.User, "Hi")],
+            session);
+
+        // Assert — request surfaced to caller since heuristic doesn't match
+        var requests = response.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().ToList();
+        Assert.Single(requests);
+        Assert.Equal("DangerousTool", ((FunctionCallContent)requests[0].ToolCall).Name);
+    }
+
+    /// <summary>
+    /// Verify that multiple auto-approval rules are evaluated in order; first match wins.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_MultipleAutoApprovalRules_FirstMatchWinsAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "SpecialTool"));
+
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                if (callCount == 1)
+                {
+                    return new AgentResponse([new ChatMessage(ChatRole.Assistant, [approvalRequest])]);
+                }
+
+                return new AgentResponse([new ChatMessage(ChatRole.Assistant, "Done")]);
+            });
+
+        var rule1Called = false;
+        var rule2Called = false;
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules =
+            [
+                fcc => { rule1Called = true; return new ValueTask<bool>(fcc.Name == "SpecialTool"); },
+                fcc => { rule2Called = true; return new ValueTask<bool>(true); }  // Should not be reached
+            ]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert — first rule matched, second was never called
+        Assert.True(rule1Called);
+        Assert.False(rule2Called);
+    }
+
+    /// <summary>
+    /// Verify that standing rules are evaluated before auto-approval rules.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_StandingRuleTakesPrecedenceOverAutoApprovalRuleAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "MyTool"));
+
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                if (callCount <= 2)
+                {
+                    return new AgentResponse([new ChatMessage(ChatRole.Assistant, [approvalRequest])]);
+                }
+
+                return new AgentResponse([new ChatMessage(ChatRole.Assistant, "Done")]);
+            });
+
+        var heuristicCalled = false;
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [fcc => { heuristicCalled = true; return new ValueTask<bool>(true); }]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Call 1: heuristic should be called (no standing rule yet)
+        var response1 = await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+        Assert.True(heuristicCalled);
+        Assert.Equal("Done", response1.Text);
+
+        // Now establish a standing rule by sending AlwaysApprove
+        heuristicCalled = false;
+        callCount = 0;
+        var alwaysApprove = new AlwaysApproveToolApprovalResponseContent(
+            approvalRequest.CreateResponse(approved: true),
+            alwaysApproveTool: true,
+            alwaysApproveToolWithArguments: false);
+
+        // Call 2: standing rule should match first, heuristic should NOT be called
+        var response2 = await agent.RunAsync(
+            [new ChatMessage(ChatRole.User, [alwaysApprove])],
+            session);
+        Assert.False(heuristicCalled);
+        Assert.Equal("Done", response2.Text);
+    }
+
+    /// <summary>
+    /// Verify that auto-approval rules work in the streaming path.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_AutoApprovalRule_ApprovesMatchingToolAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "ReadTool"));
+
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<IAsyncEnumerable<AgentResponseUpdate>>("RunCoreStreamingAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Returns(() =>
+            {
+                callCount++;
+                if (callCount == 1)
+                {
+                    return ToAsyncEnumerableAsync([new AgentResponseUpdate(ChatRole.Assistant, [approvalRequest])]);
+                }
+
+                return ToAsyncEnumerableAsync([new AgentResponseUpdate(ChatRole.Assistant, "Done")]);
+            });
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "ReadTool")]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var updates = new List<AgentResponseUpdate>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "Hi")], session))
+        {
+            updates.Add(update);
+        }
+
+        // Assert — the approval request was auto-approved, inner agent streamed twice
+        Assert.Equal(2, callCount);
+        Assert.Single(updates);
+        Assert.Equal("Done", updates[0].Text);
     }
 
     #endregion

@@ -246,7 +246,7 @@ internal static class AgentsSamples
             ExpectedOutputDescription =
             [
                 "The output should contain information about both the current time and the weather in Seattle.",
-                "The weather information should reference the plugin result: cloudy with a high of 15°C.",
+                "The weather information should be similar to: cloudy with a high of 15°C. Exact phrasing may vary.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -353,6 +353,25 @@ internal static class AgentsSamples
             MustContain =
             [
                 "Converting units with file-based skills",
+                "Agent:",
+            ],
+            ExpectedOutputDescription =
+            [
+                "The output should show the agent converting 26.2 miles to kilometers and 75 kilograms to pounds.",
+                "The response should contain approximate numeric values for both conversions.",
+                "The output should not contain error messages or stack traces.",
+            ],
+        },
+
+        new SampleDefinition
+        {
+            Name = "Agent_Step06_McpBasedSkills",
+            ProjectPath = "samples/02-agents/AgentSkills/Agent_Step06_McpBasedSkills",
+            RequiredEnvironmentVariables = ["AZURE_OPENAI_ENDPOINT"],
+            OptionalEnvironmentVariables = ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+            MustContain =
+            [
+                "Discovering MCP-based skills",
                 "Agent:",
             ],
             ExpectedOutputDescription =
@@ -521,7 +540,7 @@ internal static class AgentsSamples
             OptionalEnvironmentVariables = ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
             ExpectedOutputDescription =
             [
-                "The output should demonstrate server-side conversation sessions with non-streaming and streaming turns.",
+                "The output should contain multiple joke responses showing a multi-turn conversation.",
                 "The output should not contain error messages or stack traces.",
             ],
         },
@@ -1149,6 +1168,25 @@ internal static class AgentsSamples
             RequiredEnvironmentVariables = ["AZURE_OPENAI_ENDPOINT"],
             OptionalEnvironmentVariables = ["AZURE_OPENAI_DEPLOYMENT_NAME"],
             SkipReason = "Runs as an MCP stdio server that does not exit on its own.",
+        },
+
+        new SampleDefinition
+        {
+            Name = "Agent_MCP_LongRunningTask_Client",
+            ProjectPath = "samples/02-agents/ModelContextProtocol/Agent_MCP_LongRunningTask_Client",
+            RequiredEnvironmentVariables = ["AZURE_OPENAI_ENDPOINT"],
+            OptionalEnvironmentVariables = ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+            MustContain =
+            [
+                "=== Transparent long-running MCP task (RunAsync) ===",
+                "=== Transparent long-running MCP task (RunStreamingAsync) ===",
+            ],
+            ExpectedOutputDescription =
+            [
+                "The output should show an agent analyzing a dataset named 'sales-2025-q1' and producing a summary mentioning rows, revenue, anomalies, or outliers.",
+                "The output should contain both a non-streaming response (after RunAsync) and a streaming response (after RunStreamingAsync) for the same analysis question.",
+                "The output should not contain error messages or stack traces.",
+            ],
         },
 
         new SampleDefinition

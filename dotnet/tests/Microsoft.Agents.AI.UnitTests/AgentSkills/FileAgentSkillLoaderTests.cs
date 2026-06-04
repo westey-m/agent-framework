@@ -15,7 +15,7 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
     private static readonly string[] s_customExtensions = [".custom"];
     private static readonly string[] s_validExtensions = [".md", ".json", ".custom"];
     private static readonly string[] s_mixedValidInvalidExtensions = [".md", "json"];
-    private static readonly AgentFileSkillScriptRunner s_noOpExecutor = (skill, script, args, ct) => Task.FromResult<object?>(null);
+    private static readonly AgentFileSkillScriptRunner s_noOpExecutor = (skill, script, args, sp, ct) => Task.FromResult<object?>(null);
 
     private readonly string _testRoot;
 
@@ -67,6 +67,69 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         Assert.Single(skills);
         Assert.Equal("quoted-skill", skills[0].Frontmatter.Name);
         Assert.Equal("A quoted description", skills[0].Frontmatter.Description);
+    }
+
+    [Fact]
+    public async Task GetSkillsAsync_BlockScalarDescription_ParsesMultilineValueAsync()
+    {
+        // Arrange
+        string skillDir = Path.Combine(this._testRoot, "block-scalar-skill");
+        Directory.CreateDirectory(skillDir);
+        File.WriteAllText(
+            Path.Combine(skillDir, "SKILL.md"),
+            "---\nname: block-scalar-skill\ndescription: |\n  This is a multiline\n  description for the skill.\n---\nBody text.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
+
+        // Act
+        var skills = await source.GetSkillsAsync();
+
+        // Assert
+        Assert.Single(skills);
+        Assert.Equal("This is a multiline\ndescription for the skill.", skills[0].Frontmatter.Description);
+    }
+
+    [Fact]
+    public async Task GetSkillsAsync_FoldedScalarDescription_ParsesMultilineValueAsync()
+    {
+        // Arrange
+        string skillDir = Path.Combine(this._testRoot, "folded-scalar-skill");
+        Directory.CreateDirectory(skillDir);
+        File.WriteAllText(
+            Path.Combine(skillDir, "SKILL.md"),
+            "---\nname: folded-scalar-skill\ndescription: >\n  This is a multiline\n  description for the skill.\n---\nBody text.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
+
+        // Act
+        var skills = await source.GetSkillsAsync();
+
+        // Assert
+        Assert.Single(skills);
+        Assert.Equal("This is a multiline description for the skill.", skills[0].Frontmatter.Description);
+    }
+
+    [Theory]
+    [InlineData("|-", "This is a multiline\ndescription for the skill.")]
+    [InlineData("|+", "This is a multiline\ndescription for the skill.\n")]
+    [InlineData(">-", "This is a multiline description for the skill.")]
+    [InlineData(">+", "This is a multiline description for the skill.\n")]
+    public async Task GetSkillsAsync_ScalarDescriptionWithChompingIndicator_ParsesValueAsync(string indicator, string expectedDescription)
+    {
+        // Arrange
+        string chomping = indicator[1] == '+' ? "keep" : "strip";
+        string skillName = "chomping-scalar-skill-" + (indicator[0] == '|' ? "literal-" : "folded-") + chomping;
+        string skillDir = Path.Combine(this._testRoot, skillName);
+        Directory.CreateDirectory(skillDir);
+        File.WriteAllText(
+            Path.Combine(skillDir, "SKILL.md"),
+            $"---\nname: {skillName}\ndescription: {indicator}\n  This is a multiline\n  description for the skill.\n---\nBody text.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
+
+        // Act
+        var skills = await source.GetSkillsAsync();
+
+        // Assert
+        Assert.Single(skills);
+        Assert.Equal(expectedDescription, skills[0].Frontmatter.Description);
     }
 
     [Fact]
@@ -199,7 +262,7 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
     [Fact]
     public async Task GetSkillsAsync_FilesWithMatchingExtensions_DiscoveredAsResourcesAsync()
     {
-        // Arrange — create resource files in spec-defined sub-folders
+        // Arrange — create resource files in spec-defined subdirectories
         string skillDir = Path.Combine(this._testRoot, "resource-skill");
         string refsDir = Path.Combine(skillDir, "references");
         string assetsDir = Path.Combine(skillDir, "assets");
@@ -218,15 +281,15 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Equal(2, skill.Resources!.Count);
-        Assert.Contains(skill.Resources!, r => r.Name.Equals("references/FAQ.md", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(skill.Resources!, r => r.Name.Equals("assets/data.json", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, skill.GetTestResources()!.Count);
+        Assert.Contains(skill.GetTestResources()!, r => r.Name.Equals("references/FAQ.md", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(skill.GetTestResources()!, r => r.Name.Equals("assets/data.json", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public async Task GetSkillsAsync_FilesWithNonMatchingExtensions_NotDiscoveredAsync()
     {
-        // Arrange — create a file with an extension not in the default list inside a spec folder
+        // Arrange — create a file with an extension not in the default list inside a spec directory
         string skillDir = Path.Combine(this._testRoot, "ext-skill");
         string refsDir = Path.Combine(skillDir, "references");
         Directory.CreateDirectory(refsDir);
@@ -243,8 +306,8 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Single(skill.Resources!);
-        Assert.Equal("references/data.json", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("references/data.json", skill.GetTestResources()![0].Name);
     }
 
     [Fact]
@@ -266,8 +329,8 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Single(skill.Resources!);
-        Assert.Equal("references/notes.md", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("references/notes.md", skill.GetTestResources()![0].Name);
     }
 
     [Fact]
@@ -292,15 +355,15 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert — only the file directly in references/ is discovered; the nested file is not
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Single(skill.Resources!);
-        Assert.Contains(skill.Resources!, r => r.Name.Equals("references/top.md", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(skill.Resources!, r => r.Name.Contains("deep.md", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Contains(skill.GetTestResources()!, r => r.Name.Equals("references/top.md", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(skill.GetTestResources()!, r => r.Name.Contains("deep.md", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public async Task GetSkillsAsync_CustomResourceExtensions_UsedForDiscoveryAsync()
     {
-        // Arrange — use a source with custom extensions; files placed in spec folder
+        // Arrange — use a source with custom extensions; files placed in spec directory
         string skillDir = Path.Combine(this._testRoot, "custom-ext-skill");
         string refsDir = Path.Combine(skillDir, "references");
         Directory.CreateDirectory(refsDir);
@@ -317,8 +380,8 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert — only .custom files should be discovered, not .json
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Single(skill.Resources!);
-        Assert.Equal("references/data.custom", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("references/data.custom", skill.GetTestResources()![0].Name);
     }
 
     [Theory]
@@ -343,7 +406,7 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
 
         // Assert — default extensions include .md
         var skills = await source.GetSkillsAsync();
-        Assert.Single(skills[0].Resources!);
+        Assert.Single(skills[0].GetTestResources()!);
     }
 
     [Fact]
@@ -362,9 +425,9 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetSkillsAsync_ResourceInSkillRoot_NotDiscoveredByDefaultAsync()
+    public async Task GetSkillsAsync_ResourceInSkillRoot_DiscoveredByDefaultAsync()
     {
-        // Arrange — resource files directly in the skill directory (not in a spec sub-folder)
+        // Arrange — resource files directly in the skill directory are discovered with default depth=2
         string skillDir = Path.Combine(this._testRoot, "root-resource-skill");
         Directory.CreateDirectory(skillDir);
         File.WriteAllText(Path.Combine(skillDir, "guide.md"), "guide content");
@@ -377,62 +440,54 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — root-level files are NOT discovered unless "." is in ResourceFolders
-        Assert.Single(skills);
-        Assert.Empty(skills[0].Resources!);
-    }
-
-    [Fact]
-    public async Task GetSkillsAsync_ResourceInSkillRoot_DiscoveredWhenRootFolderConfiguredAsync()
-    {
-        // Arrange — "." in ResourceFolders opts into root-level resource discovery
-        string skillDir = Path.Combine(this._testRoot, "root-opt-in-skill");
-        Directory.CreateDirectory(skillDir);
-        File.WriteAllText(Path.Combine(skillDir, "guide.md"), "guide content");
-        File.WriteAllText(Path.Combine(skillDir, "config.json"), "{}");
-        File.WriteAllText(
-            Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: root-opt-in-skill\ndescription: Root opt-in\n---\nBody.");
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = ["references", "assets", "."] });
-
-        // Act
-        var skills = await source.GetSkillsAsync();
-
-        // Assert — both root-level resource files (and SKILL.md excluded) should be discovered
+        // Assert — root-level files are discovered by default (depth=2 includes root)
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Equal(2, skill.Resources!.Count);
-        Assert.Contains(skill.Resources!, r => r.Name.Equals("guide.md", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(skill.Resources!, r => r.Name.Equals("config.json", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, skill.GetTestResources()!.Count);
+        Assert.Contains(skill.GetTestResources()!, r => r.Name.Equals("guide.md", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(skill.GetTestResources()!, r => r.Name.Equals("config.json", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task GetSkillsAsync_ResourceInNonSpecFolder_NotDiscoveredByDefaultAsync()
+    public void Constructor_SearchDepthBelowOne_Throws()
     {
-        // Arrange — resource in a non-spec folder (neither references/ nor assets/)
+        // Arrange / Act / Assert — SearchDepth must be >= 1
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
+                new AgentFileSkillsSourceOptions { SearchDepth = 0 }));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
+                new AgentFileSkillsSourceOptions { SearchDepth = -1 }));
+    }
+
+    [Fact]
+    public async Task GetSkillsAsync_ResourceInSubdirectory_DiscoveredByDefaultAsync()
+    {
+        // Arrange — resource in any subdirectory is discovered with default depth=2
         string skillDir = Path.Combine(this._testRoot, "non-spec-skill");
         string customDir = Path.Combine(skillDir, "docs");
         Directory.CreateDirectory(customDir);
         File.WriteAllText(Path.Combine(customDir, "readme.md"), "docs content");
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: non-spec-skill\ndescription: Non-spec folder\n---\nBody.");
+            "---\nname: non-spec-skill\ndescription: Non-spec directory\n---\nBody.");
         var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — non-spec folders are not scanned by default
+        // Assert — subdirectory files are discovered by default
         Assert.Single(skills);
-        Assert.Empty(skills[0].Resources!);
+        Assert.Single(skills[0].GetTestResources()!);
+        Assert.Equal("docs/readme.md", skills[0].GetTestResources()![0].Name);
     }
 
     [Fact]
-    public async Task GetSkillsAsync_CustomResourceFolders_ReplacesDefaultsAsync()
+    public async Task GetSkillsAsync_ResourceFilter_ExcludesFilteredFilesAsync()
     {
-        // Arrange — custom ResourceFolders replaces the spec defaults
-        string skillDir = Path.Combine(this._testRoot, "custom-folder-skill");
+        // Arrange — ResourceFilter excludes files in the "docs" subdirectory
+        string skillDir = Path.Combine(this._testRoot, "custom-directory-skill");
         string customDir = Path.Combine(skillDir, "docs");
         string refsDir = Path.Combine(skillDir, "references");
         Directory.CreateDirectory(customDir);
@@ -441,18 +496,18 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         File.WriteAllText(Path.Combine(refsDir, "ref.md"), "ref content");
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: custom-folder-skill\ndescription: Custom folder\n---\nBody.");
+            "---\nname: custom-directory-skill\ndescription: Custom directory\n---\nBody.");
         var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = ["docs"] });
+            new AgentFileSkillsSourceOptions { ResourceFilter = ctx => !ctx.RelativeFilePath.StartsWith("docs/", StringComparison.OrdinalIgnoreCase) });
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — only docs/ is scanned; references/ is NOT scanned
+        // Assert — only references/ resource is included; docs/ is excluded by filter
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Single(skill.Resources!);
-        Assert.Equal("docs/readme.md", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("references/ref.md", skill.GetTestResources()![0].Name);
     }
 
     [Fact]
@@ -467,7 +522,7 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
 
         // Assert
         Assert.Single(skills);
-        Assert.Empty(skills[0].Resources!);
+        Assert.Empty(skills[0].GetTestResources()!);
     }
 
     [Fact]
@@ -518,14 +573,14 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
     [Fact]
     public async Task ReadSkillResourceAsync_ValidResource_ReturnsContentAsync()
     {
-        // Arrange — create a skill with a resource file discovered from the references folder
+        // Arrange — create a skill with a resource file discovered from the references directory
         string skillDir = this.CreateSkillDirectory("read-skill", "A skill", "See docs for details.");
         string refsDir = Path.Combine(skillDir, "references");
         Directory.CreateDirectory(refsDir);
         File.WriteAllText(Path.Combine(refsDir, "doc.md"), "Document content here.");
         var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
         var skills = await source.GetSkillsAsync();
-        var resource = skills[0].Resources!.First(r => r.Name == "references/doc.md");
+        var resource = skills[0].GetTestResources()!.First(r => r.Name == "references/doc.md");
 
         // Act
         var content = await resource.ReadAsync();
@@ -609,17 +664,17 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert — skill should still load, the symlinked references/ is skipped, assets/legit.md is found
         var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "symlink-escape-skill");
         Assert.NotNull(skill);
-        Assert.Single(skill.Resources!);
-        Assert.Equal("assets/legit.md", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("assets/legit.md", skill.GetTestResources()![0].Name);
     }
 
     [Fact]
-    public async Task GetSkillsAsync_SymlinkedResourceFolder_SkipsWithoutEnumeratingAsync()
+    public async Task GetSkillsAsync_SymlinkedResourceDirectory_SkipsWithoutEnumeratingAsync()
     {
         // Arrange — references/ is a symlink pointing outside the skill directory.
         // The directory-level check should skip it entirely (no file enumeration),
         // so even files with valid extensions in the target are not discovered.
-        string skillDir = Path.Combine(this._testRoot, "symlink-folder-skip");
+        string skillDir = Path.Combine(this._testRoot, "symlink-directory-skip");
         string assetsDir = Path.Combine(skillDir, "assets");
         Directory.CreateDirectory(assetsDir);
         File.WriteAllText(Path.Combine(assetsDir, "legit.md"), "legit content");
@@ -642,21 +697,21 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
 
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: symlink-folder-skip\ndescription: Symlinked folder skip\n---\nBody.");
+            "---\nname: symlink-directory-skip\ndescription: Symlinked directory skip\n---\nBody.");
         var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — only assets/legit.md is found; the symlinked references/ folder is skipped entirely
-        var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "symlink-folder-skip");
+        // Assert — only assets/legit.md is found; the symlinked references/ directory is skipped entirely
+        var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "symlink-directory-skip");
         Assert.NotNull(skill);
-        Assert.Single(skill.Resources!);
-        Assert.Equal("assets/legit.md", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("assets/legit.md", skill.GetTestResources()![0].Name);
     }
 
     [Fact]
-    public async Task GetSkillsAsync_SymlinkedScriptFolder_SkipsWithoutEnumeratingAsync()
+    public async Task GetSkillsAsync_SymlinkedScriptDirectory_SkipsWithoutEnumeratingAsync()
     {
         // Arrange — scripts/ is a symlink pointing outside the skill directory.
         // The directory-level check should skip it entirely.
@@ -679,22 +734,22 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
 
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: symlink-script-skip\ndescription: Symlinked script folder\n---\nBody.");
+            "---\nname: symlink-script-skip\ndescription: Symlinked script directory\n---\nBody.");
         var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — skill loads but scripts from the symlinked folder are not discovered
+        // Assert — skill loads but scripts from the symlinked directory are not discovered
         var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "symlink-script-skip");
         Assert.NotNull(skill);
-        Assert.Empty(skill.Scripts!);
+        Assert.Null(await skill.GetScriptAsync("any-script"));
     }
 
     [Fact]
-    public async Task GetSkillsAsync_SymlinkedIntermediateSegment_SkipsCustomFolderAsync()
+    public async Task GetSkillsAsync_SymlinkedIntermediateSegment_SkipsSymlinkedDirectoryAsync()
     {
-        // Arrange — custom resource folder "sub/resources" where "sub" is a symlink.
+        // Arrange — "sub" directory is a symlink pointing outside the skill directory.
         // The directory-level HasSymlinkInPath check should detect the intermediate symlink.
         string skillDir = Path.Combine(this._testRoot, "symlink-intermediate");
         Directory.CreateDirectory(skillDir);
@@ -720,15 +775,15 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         var source = new AgentFileSkillsSource(
             this._testRoot,
             s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = ["sub/resources"] });
+            new AgentFileSkillsSourceOptions { SearchDepth = 4 });
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — the symlinked intermediate segment causes the folder to be skipped
+        // Assert — the symlinked intermediate segment causes the directory to be skipped
         var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "symlink-intermediate");
         Assert.NotNull(skill);
-        Assert.Empty(skill.Resources!);
+        Assert.Empty(skill.GetTestResources()!);
     }
 #endif
 
@@ -894,100 +949,54 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         Assert.Null(fm.Metadata);
     }
 
-    [Theory]
-    [InlineData("..")]
-    [InlineData("../escape")]
-    [InlineData("sub/../escape")]
-    [InlineData("/absolute")]
-    [InlineData("\\absolute")]
-    public void Constructor_InvalidFolderName_SkipsInvalidFolders(string badFolder)
+    [Fact]
+    public async Task GetSkillsAsync_SearchDepthOne_OnlyRootFilesDiscoveredAsync()
     {
-        // Arrange & Act — invalid folders are skipped with a warning rather than throwing
-        var source1 = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor, new AgentFileSkillsSourceOptions { ScriptFolders = [badFolder] });
-        var source2 = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor, new AgentFileSkillsSourceOptions { ResourceFolders = [badFolder] });
+        // Arrange — with SearchDepth = 1, only root-level files are discovered
+        string skillDir = Path.Combine(this._testRoot, "depth-one-skill");
+        string scriptsDir = Path.Combine(skillDir, "scripts");
+        Directory.CreateDirectory(scriptsDir);
+        File.WriteAllText(Path.Combine(scriptsDir, "run.py"), "print('hello')");
+        File.WriteAllText(
+            Path.Combine(skillDir, "SKILL.md"),
+            "---\nname: depth-one-skill\ndescription: Depth one\n---\nBody.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
+            new AgentFileSkillsSourceOptions { SearchDepth = 1 });
 
-        // Assert
-        Assert.NotNull(source1);
-        Assert.NotNull(source2);
-    }
+        // Act
+        var skills = await source.GetSkillsAsync();
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_NullOrWhitespaceFolderName_ThrowsArgumentException(string? badFolder)
-    {
-        // Arrange & Act & Assert — null/whitespace is a contract violation, not a config error
-        Assert.Throws<ArgumentException>(() => new AgentFileSkillsSource(this._testRoot, s_noOpExecutor, new AgentFileSkillsSourceOptions { ScriptFolders = [badFolder!] }));
-        Assert.Throws<ArgumentException>(() => new AgentFileSkillsSource(this._testRoot, s_noOpExecutor, new AgentFileSkillsSourceOptions { ResourceFolders = [badFolder!] }));
-    }
-
-    [Theory]
-    [InlineData("scripts")]
-    [InlineData("my-scripts")]
-    [InlineData("sub/folder")]
-    [InlineData(".")]
-    [InlineData("./scripts")]
-    [InlineData("./scripts/f1")]
-    [InlineData("my..scripts")]
-    public void Constructor_ValidFolderName_DoesNotThrow(string validFolder)
-    {
-        // Arrange & Act & Assert
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor, new AgentFileSkillsSourceOptions { ScriptFolders = [validFolder] });
-        Assert.NotNull(source);
+        // Assert — scripts in subdirectories are NOT discovered at depth 1
+        Assert.Single(skills);
+        Assert.Null(await skills[0].GetScriptAsync("scripts/run.py"));
     }
 
     [Fact]
-    public async Task GetSkillsAsync_DuplicateFoldersAfterNormalization_NoDuplicateResourcesAsync()
+    public async Task GetSkillsAsync_ResourceInSubdirectory_DiscoveredWithDefaultDepthAsync()
     {
-        // Arrange — "references" and "./references" refer to the same directory;
-        // after normalization they should be deduplicated so resources appear only once.
-        string skillDir = Path.Combine(this._testRoot, "dedup-folder-skill");
+        // Arrange — resources in a subdirectory are discovered by default (depth=2)
+        string skillDir = Path.Combine(this._testRoot, "dedup-directory-skill");
         string refsDir = Path.Combine(skillDir, "references");
         Directory.CreateDirectory(refsDir);
         File.WriteAllText(Path.Combine(refsDir, "FAQ.md"), "FAQ content");
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: dedup-folder-skill\ndescription: Dedup test\n---\nBody.");
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = ["references", "./references"] });
+            "---\nname: dedup-directory-skill\ndescription: Dedup test\n---\nBody.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — only one copy of the resource despite two equivalent folder entries
+        // Assert — resource is discovered once
         Assert.Single(skills);
-        Assert.Single(skills[0].Resources!);
-        Assert.Equal("references/FAQ.md", skills[0].Resources![0].Name);
+        Assert.Single(skills[0].GetTestResources()!);
+        Assert.Equal("references/FAQ.md", skills[0].GetTestResources()![0].Name);
     }
 
     [Fact]
-    public async Task GetSkillsAsync_TrailingSlashFolderNormalized_NoDuplicateResourcesAsync()
+    public async Task GetSkillsAsync_ScriptInSubdirectory_DiscoveredWithDefaultDepthAsync()
     {
-        // Arrange — "references/" should be normalized to "references"
-        string skillDir = Path.Combine(this._testRoot, "trailing-slash-skill");
-        string refsDir = Path.Combine(skillDir, "references");
-        Directory.CreateDirectory(refsDir);
-        File.WriteAllText(Path.Combine(refsDir, "data.json"), "{}");
-        File.WriteAllText(
-            Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: trailing-slash-skill\ndescription: Trailing slash test\n---\nBody.");
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = ["references", "references/"] });
-
-        // Act
-        var skills = await source.GetSkillsAsync();
-
-        // Assert — trailing slash variant deduplicated
-        Assert.Single(skills);
-        Assert.Single(skills[0].Resources!);
-        Assert.Equal("references/data.json", skills[0].Resources![0].Name);
-    }
-
-    [Fact]
-    public async Task GetSkillsAsync_BackslashFolderNormalized_NoDuplicateScriptsAsync()
-    {
-        // Arrange — ".\\scripts" should be normalized to "scripts"
+        // Arrange — scripts in a subdirectory are discovered by default (depth=2)
         string skillDir = Path.Combine(this._testRoot, "backslash-skill");
         string scriptsDir = Path.Combine(skillDir, "scripts");
         Directory.CreateDirectory(scriptsDir);
@@ -995,67 +1004,87 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
             "---\nname: backslash-skill\ndescription: Backslash test\n---\nBody.");
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ScriptFolders = ["scripts", ".\\scripts"] });
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — backslash variant deduplicated
+        // Assert — script is discovered
         Assert.Single(skills);
-        Assert.Single(skills[0].Scripts!);
-        Assert.Equal("scripts/run.py", skills[0].Scripts![0].Name);
+        var script = await skills[0].GetScriptAsync("scripts/run.py");
+        Assert.NotNull(script);
+        Assert.Equal("scripts/run.py", script!.Name);
     }
 
-    [Theory]
-    [InlineData("./references")]
-    [InlineData("./assets/docs")]
-    public async Task GetSkillsAsync_ResourceFolderWithDotSlashPrefix_DiscoversResourcesAsync(string folder)
+    [Fact]
+    public async Task GetSkillsAsync_ResourceFilterWhitelist_OnlyMatchingFilesDiscoveredAsync()
     {
-        // Arrange — "./references" and "./assets/docs" are equivalent to "references" and "assets/docs";
-        // the leading "./" is transparently normalized by Path.GetFullPath during file enumeration.
-        string folderWithoutDotSlash = folder.Substring(2); // strip "./"
+        // Arrange — ResourceFilter acts as whitelist: only references/ paths included
         string skillDir = Path.Combine(this._testRoot, "dotslash-res-skill");
-        string targetDir = Path.Combine(skillDir, folderWithoutDotSlash.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(targetDir);
-        File.WriteAllText(Path.Combine(targetDir, "data.json"), "{}");
+        string refsDir = Path.Combine(skillDir, "references");
+        string assetsDir = Path.Combine(skillDir, "assets");
+        Directory.CreateDirectory(refsDir);
+        Directory.CreateDirectory(assetsDir);
+        File.WriteAllText(Path.Combine(refsDir, "data.json"), "{}");
+        File.WriteAllText(Path.Combine(assetsDir, "image.txt"), "data");
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
             "---\nname: dotslash-res-skill\ndescription: Dot-slash prefix\n---\nBody.");
         var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = [folder] });
+            new AgentFileSkillsSourceOptions { ResourceFilter = ctx => ctx.RelativeFilePath.StartsWith("references/", StringComparison.OrdinalIgnoreCase) });
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — the resource is discovered with a name identical to using the folder without "./"
+        // Assert — only the references/ resource is included
         Assert.Single(skills);
-        Assert.Single(skills[0].Resources!);
-        Assert.Equal($"{folderWithoutDotSlash}/data.json", skills[0].Resources![0].Name);
+        Assert.Single(skills[0].GetTestResources()!);
+        Assert.Equal("references/data.json", skills[0].GetTestResources()![0].Name);
     }
 
     [Fact]
-    public async Task GetSkillsAsync_ResourceFoldersWithNestedPath_DiscoversResourcesAsync()
+    public async Task GetSkillsAsync_DeepResource_NotDiscoveredWithDefaultDepthAsync()
     {
-        // Arrange — ResourceFolders configured with a multi-segment relative path (f1/f2/f3)
-        string skillDir = Path.Combine(this._testRoot, "nested-folder-skill");
+        // Arrange — resource at depth 3 (f1/f2/f3/data.json) exceeds default depth=2
+        string skillDir = Path.Combine(this._testRoot, "nested-directory-skill");
         string nestedDir = Path.Combine(skillDir, "f1", "f2", "f3");
         Directory.CreateDirectory(nestedDir);
         File.WriteAllText(Path.Combine(nestedDir, "data.json"), "{}");
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
-            "---\nname: nested-folder-skill\ndescription: Nested folder\n---\nBody.");
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ResourceFolders = ["f1/f2/f3"] });
+            "---\nname: nested-directory-skill\ndescription: Nested directory\n---\nBody.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — resource file inside the deeply nested folder is discovered
+        // Assert — resource at depth 4 is NOT discovered with default depth=2
+        Assert.Single(skills);
+        Assert.Empty(skills[0].GetTestResources()!);
+    }
+
+    [Fact]
+    public async Task GetSkillsAsync_DeepResource_DiscoveredWithHigherDepthAsync()
+    {
+        // Arrange — resource at depth 4 (f1/f2/f3/data.json) discovered with SearchDepth=5
+        string skillDir = Path.Combine(this._testRoot, "deep-res-skill");
+        string nestedDir = Path.Combine(skillDir, "f1", "f2", "f3");
+        Directory.CreateDirectory(nestedDir);
+        File.WriteAllText(Path.Combine(nestedDir, "data.json"), "{}");
+        File.WriteAllText(
+            Path.Combine(skillDir, "SKILL.md"),
+            "---\nname: deep-res-skill\ndescription: Deep resource\n---\nBody.");
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
+            new AgentFileSkillsSourceOptions { SearchDepth = 5 });
+
+        // Act
+        var skills = await source.GetSkillsAsync();
+
+        // Assert — resource file inside the deeply nested directory is discovered
         Assert.Single(skills);
         var skill = skills[0];
-        Assert.Single(skill.Resources!);
-        Assert.Equal("f1/f2/f3/data.json", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("f1/f2/f3/data.json", skill.GetTestResources()![0].Name);
     }
 
     private string CreateSkillDirectory(string name, string description, string body)
@@ -1107,31 +1136,31 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetSkillsAsync_ScriptInSkillRoot_DiscoveredWhenRootFolderConfiguredAsync()
+    public async Task GetSkillsAsync_ScriptInSkillRoot_DiscoveredByDefaultAsync()
     {
-        // Arrange — script file directly in the skill directory with ScriptFolders = ["."]
+        // Arrange — script file directly in the skill directory is discovered with default depth=2
         string skillDir = Path.Combine(this._testRoot, "root-script-skill");
         Directory.CreateDirectory(skillDir);
         File.WriteAllText(Path.Combine(skillDir, "run.py"), "print('hello')");
         File.WriteAllText(
             Path.Combine(skillDir, "SKILL.md"),
             "---\nname: root-script-skill\ndescription: Root script\n---\nBody.");
-        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor,
-            new AgentFileSkillsSourceOptions { ScriptFolders = ["."] });
+        var source = new AgentFileSkillsSource(this._testRoot, s_noOpExecutor);
 
         // Act
         var skills = await source.GetSkillsAsync();
 
-        // Assert — script at the skill root should be discovered
+        // Assert — script at the skill root is discovered by default
         var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "root-script-skill");
         Assert.NotNull(skill);
-        Assert.Single(skill.Scripts!);
-        Assert.Equal("run.py", skill.Scripts![0].Name);
+        var script = await skill.GetScriptAsync("run.py");
+        Assert.NotNull(script);
+        Assert.Equal("run.py", script!.Name);
     }
 
 #if NET
     [Fact]
-    public async Task GetSkillsAsync_SymlinkedFileInRealFolder_SkipsSymlinkedFileAsync()
+    public async Task GetSkillsAsync_SymlinkedFileInRealDirectory_SkipsSymlinkedFileAsync()
     {
         // Arrange — references/ is a real directory, but one file inside it is a symlink
         // pointing outside the skill directory. The per-file symlink check should skip it.
@@ -1166,8 +1195,8 @@ public sealed class FileAgentSkillLoaderTests : IDisposable
         // Assert — only legit.md should be discovered; the symlinked leak.md is skipped
         var skill = skills.FirstOrDefault(s => s.Frontmatter.Name == "symlink-file-skill");
         Assert.NotNull(skill);
-        Assert.Single(skill.Resources!);
-        Assert.Equal("references/legit.md", skill.Resources![0].Name);
+        Assert.Single(skill.GetTestResources()!);
+        Assert.Equal("references/legit.md", skill.GetTestResources()![0].Name);
     }
 #endif
 }

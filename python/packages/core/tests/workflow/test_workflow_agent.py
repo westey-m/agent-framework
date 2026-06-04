@@ -1,7 +1,9 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+import json
 import uuid
 from collections.abc import Awaitable, Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, overload
 
 import pytest
@@ -14,6 +16,7 @@ from agent_framework import (
     AgentSession,
     Content,
     Executor,
+    HistoryProvider,
     InMemoryHistoryProvider,
     Message,
     ResponseStream,
@@ -22,6 +25,7 @@ from agent_framework import (
     WorkflowAgent,
     WorkflowBuilder,
     WorkflowContext,
+    WorkflowEvent,
     executor,
     handler,
     response_handler,
@@ -292,6 +296,33 @@ class TestWorkflowAgent:
         # Verify cleanup - pending requests should be cleared after function response handling
         assert len(agent.pending_requests) == 0
 
+    def test_request_info_dataclass_arguments_are_serialized_when_content_is_created(self) -> None:
+        """Test WorkflowAgent prepares request_info arguments before observability captures messages."""
+
+        @dataclass
+        class HandoffRequest:
+            target_agent: str
+            reason: str
+
+        executor = SimpleExecutor(id="executor1", response_text="Response")
+        workflow = WorkflowBuilder(start_executor=executor).build()
+        agent = WorkflowAgent(workflow=workflow, name="Request Test Agent")
+        event = WorkflowEvent.request_info(
+            request_id="request_123",
+            source_executor_id="executor1",
+            request_data=HandoffRequest(target_agent="helper", reason="overflow"),
+            response_type=str,
+        )
+
+        function_call, approval_request = agent._process_request_info_event(event)  # pyright: ignore[reportPrivateUsage]
+
+        assert function_call.arguments == {
+            "request_id": "request_123",
+            "data": {"target_agent": "helper", "reason": "overflow"},
+        }
+        assert approval_request.function_call is function_call
+        assert json.loads(json.dumps(function_call.arguments)) == function_call.arguments
+
     def test_workflow_as_agent_method(self) -> None:
         """Test that Workflow.as_agent() creates a properly configured WorkflowAgent."""
         # Create a simple workflow
@@ -311,6 +342,37 @@ class TestWorkflowAgent:
         agent_no_name = workflow.as_agent()
         assert isinstance(agent_no_name, WorkflowAgent)
         assert agent_no_name.workflow is workflow
+
+    def test_workflow_as_agent_with_description_and_context_providers(self) -> None:
+        """Test that Workflow.as_agent() forwards description and context_providers."""
+        executor = SimpleExecutor(id="executor1", response_text="Response")
+        workflow = WorkflowBuilder(start_executor=executor).build()
+
+        history_provider = InMemoryHistoryProvider()
+        agent = workflow.as_agent(
+            name="MyAgent",
+            description="A test agent",
+            context_providers=[history_provider],
+        )
+
+        assert isinstance(agent, WorkflowAgent)
+        assert agent.name == "MyAgent"
+        assert agent.description == "A test agent"
+        assert history_provider in agent.context_providers
+
+    def test_workflow_as_agent_defaults_name_and_description_from_workflow(self) -> None:
+        """Test that as_agent() defaults name and description to the workflow's own values."""
+        executor = SimpleExecutor(id="executor1", response_text="Response")
+        workflow = WorkflowBuilder(
+            start_executor=executor,
+            name="my-workflow",
+            description="Workflow description",
+        ).build()
+
+        agent = workflow.as_agent()
+
+        assert agent.name == "my-workflow"
+        assert agent.description == "Workflow description"
 
     def test_workflow_as_agent_cannot_handle_agent_inputs(self) -> None:
         """Test that Workflow.as_agent() raises an error if the start executor cannot handle agent inputs."""
@@ -678,6 +740,110 @@ class TestWorkflowAgent:
 
         assert agent.context_providers == [explicit_provider]
 
+    async def test_no_history_provider_injected_when_session_is_none(self) -> None:
+        """Test that InMemoryHistoryProvider is NOT injected when session is None."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="no_session_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        agent = WorkflowAgent(workflow=workflow, name="No Session Agent")
+
+        await agent.run("hello")
+
+        assert not any(isinstance(p, InMemoryHistoryProvider) for p in agent.context_providers)
+
+    async def test_no_history_provider_injected_when_session_is_none_streaming(self) -> None:
+        """Test that InMemoryHistoryProvider is NOT injected when session is None (streaming)."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="no_session_stream_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        agent = WorkflowAgent(workflow=workflow, name="No Session Stream Agent")
+
+        async for _ in agent.run("hello", stream=True):
+            pass
+
+        assert not any(isinstance(p, InMemoryHistoryProvider) for p in agent.context_providers)
+
+    async def test_no_injection_when_history_provider_with_load_messages_exists(self) -> None:
+        """Test that no InMemoryHistoryProvider is injected when an existing HistoryProvider has load_messages=True."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="existing_provider_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        existing_provider = InMemoryHistoryProvider("custom", load_messages=True)
+        agent = WorkflowAgent(
+            workflow=workflow,
+            name="Existing Provider Agent",
+            context_providers=[existing_provider],
+        )
+        session = AgentSession()
+
+        await agent.run("hello", session=session)
+
+        # Should still have only the original provider
+        history_providers = [p for p in agent.context_providers if isinstance(p, HistoryProvider)]
+        assert len(history_providers) == 1
+        assert history_providers[0] is existing_provider
+
+    async def test_injection_when_history_provider_with_load_messages_false(self) -> None:
+        """Test that InMemoryHistoryProvider IS injected when existing HistoryProvider has load_messages=False."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="no_load_provider_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        audit_provider = InMemoryHistoryProvider("audit", load_messages=False)
+        agent = WorkflowAgent(
+            workflow=workflow,
+            name="Audit Provider Agent",
+            context_providers=[audit_provider],
+        )
+        session = AgentSession()
+
+        await agent.run("hello", session=session)
+
+        # Should have injected an additional InMemoryHistoryProvider with load_messages=True
+        history_providers = [p for p in agent.context_providers if isinstance(p, HistoryProvider)]
+        assert len(history_providers) == 2
+        loading_providers = [p for p in history_providers if p.load_messages]
+        assert len(loading_providers) == 1
+        assert isinstance(loading_providers[0], InMemoryHistoryProvider)
+
+    async def test_no_duplicate_injection_on_multiple_runs(self) -> None:
+        """Test that calling run() multiple times does not keep adding InMemoryHistoryProvider."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="no_dup_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        agent = WorkflowAgent(workflow=workflow, name="No Dup Agent")
+        session = AgentSession()
+
+        await agent.run("first", session=session)
+        await agent.run("second", session=session)
+        await agent.run("third", session=session)
+
+        history_providers = [p for p in agent.context_providers if isinstance(p, InMemoryHistoryProvider)]
+        assert len(history_providers) == 1
+
+    async def test_no_duplicate_injection_on_multiple_runs_streaming(self) -> None:
+        """Test that calling run(stream=True) multiple times does not keep adding InMemoryHistoryProvider."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="no_dup_stream_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        agent = WorkflowAgent(workflow=workflow, name="No Dup Stream Agent")
+        session = AgentSession()
+
+        async for _ in agent.run("first", stream=True, session=session):
+            pass
+        async for _ in agent.run("second", stream=True, session=session):
+            pass
+        async for _ in agent.run("third", stream=True, session=session):
+            pass
+
+        history_providers = [p for p in agent.context_providers if isinstance(p, InMemoryHistoryProvider)]
+        assert len(history_providers) == 1
+
+    async def test_injection_with_session_in_streaming_mode(self) -> None:
+        """Test that InMemoryHistoryProvider is injected when session is provided in streaming mode."""
+        capturing_executor = ConversationHistoryCapturingExecutor(id="stream_inject_test")
+        workflow = WorkflowBuilder(start_executor=capturing_executor).build()
+        agent = WorkflowAgent(workflow=workflow, name="Stream Inject Agent")
+        session = AgentSession()
+
+        async for _ in agent.run("hello", stream=True, session=session):
+            pass
+
+        assert any(isinstance(p, InMemoryHistoryProvider) for p in agent.context_providers)
+
     async def test_checkpoint_storage_passed_to_workflow(self) -> None:
         """Test that checkpoint_storage parameter is passed through to the workflow."""
         from agent_framework import InMemoryCheckpointStorage
@@ -787,7 +953,7 @@ class TestWorkflowAgent:
 
         # Build workflow: start -> agent1 (no output) -> agent2 (output visible)
         workflow = (
-            WorkflowBuilder(start_executor=start_exec, output_executors=[start_exec, agent2])
+            WorkflowBuilder(start_executor=start_exec, output_from=[start_exec, agent2])
             .add_edge(start_exec, agent1)
             .add_edge(agent1, agent2)
             .build()

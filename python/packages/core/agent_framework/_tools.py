@@ -12,6 +12,7 @@ from collections.abc import (
     AsyncIterable,
     Awaitable,
     Callable,
+    Iterable,
     Mapping,
     Sequence,
 )
@@ -89,8 +90,36 @@ logger = logging.getLogger("agent_framework")
 DEFAULT_MAX_ITERATIONS: Final[int] = 40
 DEFAULT_MAX_CONSECUTIVE_ERRORS_PER_REQUEST: Final[int] = 3
 SHELL_TOOL_KIND_VALUE: Final[str] = "shell"
+ApprovalMode: TypeAlias = Literal["always_require", "never_require"]
 ChatClientT = TypeVar("ChatClientT", bound="SupportsChatGetResponse[Any]")
 ResponseModelBoundT = TypeVar("ResponseModelBoundT", bound=BaseModel)
+
+
+class _SkipParsingSentinel:
+    """Sentinel signaling that :meth:`FunctionTool.invoke` should return the raw value.
+
+    When passed as ``result_parser`` to :class:`FunctionTool` (or the ``@tool`` decorator),
+    the default :meth:`FunctionTool.parse_result` is bypassed and the wrapped function's
+    return value is returned unchanged from :meth:`FunctionTool.invoke`. Callers may also
+    request the raw value on a per-call basis by passing ``skip_parsing=True`` to
+    :meth:`FunctionTool.invoke`.
+
+    Use the module-level ``SKIP_PARSING`` singleton — do not instantiate this class.
+    """
+
+    _instance: ClassVar[_SkipParsingSentinel | None] = None
+
+    def __new__(cls) -> _SkipParsingSentinel:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "SKIP_PARSING"
+
+
+SKIP_PARSING: Final[_SkipParsingSentinel] = _SkipParsingSentinel()
+"""Sentinel for ``FunctionTool(result_parser=...)`` meaning "do not parse the result"."""
 
 # region Helpers
 
@@ -263,6 +292,7 @@ class FunctionTool(SerializationMixin):
         "_cached_parameters",
         "_input_schema",
         "_schema_supplied",
+        "_invoke_sync_on_event_loop",
     }
 
     def __init__(
@@ -270,14 +300,14 @@ class FunctionTool(SerializationMixin):
         *,
         name: str,
         description: str = "",
-        approval_mode: Literal["always_require", "never_require"] | None = None,
+        approval_mode: ApprovalMode | None = None,
         kind: str | None = None,
         max_invocations: int | None = None,
         max_invocation_exceptions: int | None = None,
         additional_properties: dict[str, Any] | None = None,
         func: Callable[..., Any] | None = None,
         input_model: type[BaseModel] | Mapping[str, Any] | None = None,
-        result_parser: Callable[[Any], str | list[Content]] | None = None,
+        result_parser: Callable[[Any], str | list[Content]] | _SkipParsingSentinel | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the FunctionTool.
@@ -325,9 +355,11 @@ class FunctionTool(SerializationMixin):
             result_parser: An optional callable with signature ``Callable[[Any], str]`` that
                 overrides the default result parsing behavior. When provided, this callable
                 is used to convert the raw function return value to a string instead of the
-                built-in :meth:`parse_result` logic. Depending on your function, it may be
-                easiest to just do the serialization directly in the function body rather
-                than providing a custom ``result_parser``.
+                built-in :meth:`parse_result` logic. Pass the :data:`SKIP_PARSING` sentinel
+                instead of a callable to opt out of parsing entirely; in that case
+                :meth:`invoke` returns the wrapped function's raw return value. Depending
+                on your function, it may be easiest to just do the serialization directly
+                in the function body rather than providing a custom ``result_parser``.
             **kwargs: Additional keyword arguments.
         """
         # Core attributes (formerly from BaseTool)
@@ -335,6 +367,7 @@ class FunctionTool(SerializationMixin):
         self.description = description
         self.kind = kind
         self.additional_properties = additional_properties
+        self._invoke_sync_on_event_loop = False
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -506,31 +539,75 @@ class FunctionTool(SerializationMixin):
             self.invocation_exception_count += 1
             raise
 
+    async def _invoke_function(self, call_kwargs: Mapping[str, Any]) -> Any:
+        """Run sync tools off the event loop during async invocation."""
+        func = self.func.func if isinstance(self.func, FunctionTool) else self.func
+        if inspect.iscoroutinefunction(func) or getattr(self, "_invoke_sync_on_event_loop", False):
+            res = self.__call__(**call_kwargs)
+            return await res if inspect.isawaitable(res) else res
+
+        res = await asyncio.to_thread(self.__call__, **call_kwargs)
+        return await res if inspect.isawaitable(res) else res
+
+    @overload
     async def invoke(
         self,
         *,
         arguments: BaseModel | Mapping[str, Any] | None = None,
         context: FunctionInvocationContext | None = None,
         tool_call_id: str | None = None,
+        skip_parsing: Literal[True],
         **kwargs: Any,
-    ) -> list[Content]:
+    ) -> Any: ...
+
+    @overload
+    async def invoke(
+        self,
+        *,
+        arguments: BaseModel | Mapping[str, Any] | None = None,
+        context: FunctionInvocationContext | None = None,
+        tool_call_id: str | None = None,
+        skip_parsing: Literal[False] = False,
+        **kwargs: Any,
+    ) -> list[Content]: ...
+
+    async def invoke(
+        self,
+        *,
+        arguments: BaseModel | Mapping[str, Any] | None = None,
+        context: FunctionInvocationContext | None = None,
+        tool_call_id: str | None = None,
+        skip_parsing: bool = False,
+        **kwargs: Any,
+    ) -> list[Content] | Any:
         """Run the AI function with the provided arguments as a Pydantic model.
 
         The raw return value of the wrapped function is automatically parsed into a
         ``list[Content]`` using :meth:`parse_result` or the custom ``result_parser``
-        if one was provided.  Every result — text, rich media, or serialized objects —
-        is represented uniformly as Content items.
+        configured on the tool. Every result — text, rich media, or serialized
+        objects — is represented uniformly as Content items.
+
+        Parsing can be skipped in two ways: configure the tool with
+        ``result_parser=SKIP_PARSING`` to always skip parsing, or pass
+        ``skip_parsing=True`` per call. Either way the wrapped function's raw value
+        is returned. This is intended for callers (e.g. sandboxed runtimes) that
+        consume the value from Python directly and would otherwise undo the
+        ``Content`` wrapping.
 
         Keyword Args:
             arguments: A mapping or model instance containing the arguments for the function.
             context: Explicit function invocation context carrying runtime kwargs.
             tool_call_id: Optional tool call identifier used for telemetry and tracing.
+            skip_parsing: When ``True``, bypass parsing and return the wrapped function's
+                raw value instead of a ``list[Content]``. Defaults to ``False``.
             kwargs: Direct function argument values. When provided, every keyword
                 must match a declared tool parameter. Runtime data must be passed
                 via ``context``.
 
         Returns:
-            A list of Content items representing the tool output.
+            ``list[Content]`` by default. The raw function return value (``Any``) when
+            ``skip_parsing=True`` (or the tool was constructed with
+            ``result_parser=SKIP_PARSING``).
 
         Raises:
             TypeError: If arguments is not mapping-like or fails schema checks.
@@ -542,7 +619,9 @@ class FunctionTool(SerializationMixin):
         from ._types import Content
         from .observability import OBSERVABILITY_SETTINGS
 
-        parser = self.result_parser or FunctionTool.parse_result
+        configured_parser = self.result_parser
+        skip_parsing = skip_parsing or configured_parser is SKIP_PARSING
+        parser = configured_parser if callable(configured_parser) else FunctionTool.parse_result
 
         parameter_names = set(self.parameters().get("properties", {}).keys())
         direct_argument_kwargs = (
@@ -612,8 +691,11 @@ class FunctionTool(SerializationMixin):
         if not OBSERVABILITY_SETTINGS.ENABLED:  # type: ignore[name-defined]
             logger.info(f"Function name: {self.name}")
             logger.debug(f"Function arguments: {observable_kwargs}")
-            res = self.__call__(**call_kwargs)
-            result = await res if inspect.isawaitable(res) else res
+            result = await self._invoke_function(call_kwargs)
+            if skip_parsing:
+                logger.info(f"Function {self.name} succeeded.")
+                logger.debug(f"Function result: {type(result).__name__}")
+                return result
             try:
                 parsed = parser(result)
             except Exception:
@@ -659,8 +741,7 @@ class FunctionTool(SerializationMixin):
             start_time_stamp = perf_counter()
             end_time_stamp: float | None = None
             try:
-                res = self.__call__(**call_kwargs)
-                result = await res if inspect.isawaitable(res) else res
+                result = await self._invoke_function(call_kwargs)
                 end_time_stamp = perf_counter()
             except Exception as exception:
                 end_time_stamp = perf_counter()
@@ -669,6 +750,13 @@ class FunctionTool(SerializationMixin):
                 logger.error(f"Function failed. Error: {exception}")
                 raise
             else:
+                if skip_parsing:
+                    logger.info(f"Function {self.name} succeeded.")
+                    if OBSERVABILITY_SETTINGS.SENSITIVE_DATA_ENABLED:  # type: ignore[name-defined]
+                        result_str = str(result)
+                        span.set_attribute(OtelAttr.TOOL_RESULT, result_str)
+                        logger.debug(f"Function result: {result_str}")
+                    return result
                 try:
                     parsed = parser(result)
                 except Exception:
@@ -858,6 +946,15 @@ def normalize_tools(
     Returns:
         A normalized list where callable inputs are converted to ``FunctionTool``
         using :func:`tool`, and existing tool objects are passed through unchanged.
+
+    Tool-collection wrappers are flattened in two forms:
+
+    - non-tool, non-callable iterables
+    - mapping-like objects that expose a ``.tools`` collection (for example
+      ``ToolboxVersionObject`` from azure-ai-projects)
+
+    This lets callers write ``tools=[toolbox, my_func]`` and have the
+    toolbox's contents spread in alongside individual tools.
     """
     if not tools:
         return []
@@ -882,6 +979,24 @@ def normalize_tools(
         if callable(tool_item):  # type: ignore[reportUnknownArgumentType]
             normalized.append(tool(tool_item))
             continue
+        # Mapping-like tool collections (for example ToolboxVersionObject) are
+        # not flattened by the generic Iterable branch below because they are
+        # also Mapping instances. If they expose a ``tools`` collection, spread
+        # that collection into the normalized list.
+        collection_tools = getattr(tool_item, "tools", None)  # type: ignore[reportUnknownArgumentType]
+        if isinstance(collection_tools, Iterable) and not isinstance(
+            collection_tools, (str, bytes, bytearray, Mapping)
+        ):
+            normalized.extend(normalize_tools(list(collection_tools)))  # type: ignore[reportUnknownArgumentType]
+            continue
+        # Tool-collection wrapper (e.g. FoundryToolbox): a non-tool, non-callable
+        # iterable. Flatten its contents so ``tools=[toolbox, my_func]`` works.
+        # Strings, mappings, and Pydantic BaseModel are excluded — BaseModel
+        # instances iterate over (field, value) tuples, not tools, so they
+        # should pass through as leaf tool specs (handled below).
+        if isinstance(tool_item, Iterable) and not isinstance(tool_item, (str, bytes, bytearray, Mapping, BaseModel)):
+            normalized.extend(normalize_tools(list(tool_item)))  # type: ignore[reportUnknownArgumentType]
+            continue
         normalized.append(tool_item)  # type: ignore[reportUnknownArgumentType]
     return normalized
 
@@ -905,6 +1020,9 @@ def _tools_to_dict(  # pyright: ignore[reportUnusedFunction]
     for tool_item in normalized_tools:
         if isinstance(tool_item, FunctionTool):
             results.append(tool_item.to_json_schema_spec())
+            continue
+        if isinstance(tool_item, BaseModel):
+            results.append(tool_item.model_dump(exclude_none=True))
             continue
         if isinstance(tool_item, SerializationMixin):
             results.append(tool_item.to_dict())
@@ -1030,12 +1148,12 @@ def tool(
     name: str | None = None,
     description: str | None = None,
     schema: type[BaseModel] | Mapping[str, Any] | None = None,
-    approval_mode: Literal["always_require", "never_require"] | None = None,
+    approval_mode: ApprovalMode | None = None,
     kind: str | None = None,
     max_invocations: int | None = None,
     max_invocation_exceptions: int | None = None,
     additional_properties: dict[str, Any] | None = None,
-    result_parser: Callable[[Any], str | list[Content]] | None = None,
+    result_parser: Callable[[Any], str | list[Content]] | _SkipParsingSentinel | None = None,
 ) -> FunctionTool: ...
 
 
@@ -1046,12 +1164,12 @@ def tool(
     name: str | None = None,
     description: str | None = None,
     schema: type[BaseModel] | Mapping[str, Any] | None = None,
-    approval_mode: Literal["always_require", "never_require"] | None = None,
+    approval_mode: ApprovalMode | None = None,
     kind: str | None = None,
     max_invocations: int | None = None,
     max_invocation_exceptions: int | None = None,
     additional_properties: dict[str, Any] | None = None,
-    result_parser: Callable[[Any], str | list[Content]] | None = None,
+    result_parser: Callable[[Any], str | list[Content]] | _SkipParsingSentinel | None = None,
 ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
 
@@ -1061,12 +1179,12 @@ def tool(
     name: str | None = None,
     description: str | None = None,
     schema: type[BaseModel] | Mapping[str, Any] | None = None,
-    approval_mode: Literal["always_require", "never_require"] | None = None,
+    approval_mode: ApprovalMode | None = None,
     kind: str | None = None,
     max_invocations: int | None = None,
     max_invocation_exceptions: int | None = None,
     additional_properties: dict[str, Any] | None = None,
-    result_parser: Callable[[Any], str | list[Content]] | None = None,
+    result_parser: Callable[[Any], str | list[Content]] | _SkipParsingSentinel | None = None,
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
     """Decorate a function to turn it into a FunctionTool that can be passed to models and executed automatically.
 
@@ -1310,6 +1428,7 @@ async def _auto_invoke_function(
     sequence_index: int | None = None,
     request_index: int | None = None,
     middleware_pipeline: FunctionMiddlewarePipeline | None = None,
+    live_tools: list[ToolTypes] | None = None,
 ) -> Content:
     """Invoke a function call requested by the agent, applying middleware that is defined.
 
@@ -1324,6 +1443,8 @@ async def _auto_invoke_function(
         sequence_index: The index of the function call in the sequence.
         request_index: The index of the request iteration.
         middleware_pipeline: Optional middleware pipeline to apply during execution.
+        live_tools: The live, mutable tools list for the current agent run, exposed on
+            the FunctionInvocationContext so tools can add/remove tools at runtime.
 
     Returns:
         The function result content.
@@ -1340,6 +1461,8 @@ async def _auto_invoke_function(
     # non-declaration-only functions.
 
     tool: FunctionTool | None = None
+    approval_response: Content | None = None
+
     if function_call_content.type == "function_call":
         tool = tool_map.get(function_call_content.name)  # type: ignore[arg-type]
         # Tool should exist because _try_execute_function_calls validates this
@@ -1354,14 +1477,20 @@ async def _auto_invoke_function(
     else:
         # Note: Unapproved tools (approved=False) are handled in _replace_approval_contents_with_results
         # and never reach this function, so we only handle approved=True cases here.
-        inner_call = function_call_content.function_call  # type: ignore[attr-defined]
-        if inner_call.type != "function_call":  # type: ignore[union-attr]
+        approved_function_call = function_call_content.function_call  # type: ignore[attr-defined]
+        if (
+            approved_function_call is None
+            or approved_function_call.type != "function_call"
+            or approved_function_call.name is None
+        ):
             return function_call_content
-        tool = tool_map.get(inner_call.name)  # type: ignore[attr-defined, union-attr, arg-type]
+        tool = tool_map.get(approved_function_call.name)
         if tool is None:
             # we assume it is a hosted tool
             return function_call_content
-        function_call_content = inner_call  # type: ignore[assignment]
+
+        approval_response = function_call_content
+        function_call_content = approved_function_call
 
     parsed_args: dict[str, Any] = dict(function_call_content.parse_arguments() or {})
 
@@ -1407,6 +1536,7 @@ async def _auto_invoke_function(
                     arguments=args,
                     session=invocation_session,
                     kwargs=runtime_kwargs.copy(),
+                    tools=live_tools,
                 )
             function_result = await tool.invoke(
                 arguments=args,
@@ -1421,6 +1551,10 @@ async def _auto_invoke_function(
         except UserInputRequiredException:
             raise
         except Exception as exc:
+            logger.warning(
+                f"Function '{tool.name}' raised an exception; returning an error result to the "
+                f"model. Set include_detailed_errors=True for the full detail. Exception: {exc!r}"
+            )
             message = "Error: Function failed."
             if config.get("include_detailed_errors", False):
                 message = f"{message} Exception: {exc}"
@@ -1436,38 +1570,67 @@ async def _auto_invoke_function(
         arguments=args,
         session=invocation_session,
         kwargs=runtime_kwargs.copy(),
+        tools=live_tools,
     )
+
+    call_id = function_call_content.call_id
+    if call_id is None:
+        raise KeyError(f'Function "{function_call_content.name}" is missing call_id.')
+
+    # Always pass call_id to middleware for policy violation approval flow
+    middleware_context.metadata["call_id"] = call_id
+
+    # Pass through the original approval response so middleware can decide whether
+    # this replay corresponds to a middleware-specific approval flow.
+    if approval_response is not None:
+        middleware_context.metadata["approval_response"] = approval_response
 
     async def final_function_handler(context_obj: Any) -> Any:
         return await tool.invoke(
             arguments=context_obj.arguments,
             context=context_obj,
-            tool_call_id=function_call_content.call_id,
+            tool_call_id=call_id,
         )
 
     from ._middleware import MiddlewareTermination
 
     # MiddlewareTermination bubbles up to signal loop termination
     try:
-        function_result = await middleware_pipeline.execute(middleware_context, final_function_handler)
-        return Content.from_function_result(
-            call_id=function_call_content.call_id,  # type: ignore[arg-type]
-            result=function_result,
-            additional_properties=function_call_content.additional_properties,
+        function_result = await middleware_pipeline.execute(
+            context=middleware_context,
+            final_handler=final_function_handler,
         )
+
+        # Pass through function_approval_request directly (e.g., from security middleware)
+        if isinstance(function_result, Content) and function_result.type == "function_approval_request":
+            return function_result
+
+        return Content.from_function_result(call_id=call_id, result=function_result)
     except MiddlewareTermination as term_exc:
         # Re-raise to signal loop termination, but first capture any result set by middleware
         if middleware_context.result is not None:
-            # Store result in exception for caller to extract
-            term_exc.result = Content.from_function_result(
-                call_id=function_call_content.call_id,  # type: ignore[arg-type]
-                result=middleware_context.result,
-                additional_properties=function_call_content.additional_properties,
-            )
+            # Pass through function_approval_request directly (e.g., from security policy middleware)
+            # so the approval flow in _handle_function_call_results activates correctly.
+            if (
+                isinstance(middleware_context.result, Content)
+                and middleware_context.result.type == "function_approval_request"
+            ):
+                term_exc.result = middleware_context.result
+            else:
+                # Store result in exception for caller to extract
+                term_exc.result = Content.from_function_result(
+                    call_id=call_id,
+                    result=middleware_context.result,
+                    additional_properties=function_call_content.additional_properties,
+                )
         raise
     except UserInputRequiredException:
         raise
     except Exception as exc:
+        logger.warning(
+            f"Function '{tool.name}' raised an exception; returning an error result to the "
+            f"model. Set include_detailed_errors=True for the full detail. Exception: {exc!r}"
+        )
         message = "Error: Function failed."
         if config.get("include_detailed_errors", False):
             message = f"{message} Exception: {exc}"
@@ -1519,6 +1682,9 @@ async def _try_execute_function_calls(
     from ._types import Content
 
     tool_map = _get_tool_map(tools)
+    # The live tools list (when tools is the run-local list) is exposed on the
+    # FunctionInvocationContext so tools can add/remove tools during the run.
+    live_tools: list[ToolTypes] | None = cast("list[ToolTypes]", tools) if isinstance(tools, list) else None
     approval_tools = [tool_name for tool_name, tool in tool_map.items() if tool.approval_mode == "always_require"]
     logger.debug(
         "_try_execute_function_calls: tool_map keys=%s, approval_tools=%s",
@@ -1593,6 +1759,7 @@ async def _try_execute_function_calls(
                 request_index=attempt_idx,
                 middleware_pipeline=middleware_pipeline,
                 config=config,
+                live_tools=live_tools,
             )
             return (result, False)
         except MiddlewareTermination as exc:
@@ -1769,12 +1936,24 @@ def _replace_approval_contents_with_results(
     fcc_todo: dict[str, Content],
     approved_function_results: list[Content],
 ) -> None:
-    """Replace approval request/response contents with function call/result contents in-place."""
+    """Replace approval request/response contents with function call/result contents in-place.
+
+    Also replaces placeholder tool results (marked with [APPROVAL_PENDING]) with actual results.
+    """
     from ._types import (
         Content,
     )
 
-    result_idx = 0
+    # Match results back to approvals by actual call_id instead of relying on
+    # approval/result iteration order.
+    result_by_call_id: dict[str, Content] = {}
+    for approved_result in approved_function_results:
+        if approved_result.call_id is not None and approved_result.call_id not in result_by_call_id:
+            result_by_call_id[approved_result.call_id] = approved_result
+
+    # Track which call_ids had their placeholders replaced
+    placeholders_replaced: set[str] = set()
+
     for msg in messages:
         # First pass - collect existing function call IDs to avoid duplicates
         existing_call_ids = {
@@ -1792,22 +1971,31 @@ def _replace_approval_contents_with_results(
                 if _is_hosted_tool_approval(content):
                     continue
                 # Don't add the function call if it already exists (would create duplicate)
-                if content.function_call.call_id in existing_call_ids:  # type: ignore[attr-defined, union-attr, operator]
+                if content.function_call is not None and content.function_call.call_id in existing_call_ids:
                     # Just mark for removal - the function call already exists
                     contents_to_remove.append(content_idx)
-                else:
+                elif content.function_call is not None:
                     # Put back the function call content only if it doesn't exist
-                    msg.contents[content_idx] = content.function_call  # type: ignore[attr-defined, assignment]
+                    msg.contents[content_idx] = content.function_call
             elif content.type == "function_approval_response":
                 # Skip hosted tool approvals — they must pass through to the API unchanged
                 if _is_hosted_tool_approval(content):
                     continue
-                if content.approved and content.id in fcc_todo:  # type: ignore[attr-defined]
-                    # Replace with the corresponding result
-                    if result_idx < len(approved_function_results):
-                        msg.contents[content_idx] = approved_function_results[result_idx]
-                        result_idx += 1
-                        msg.role = "tool"
+                if content.function_call is None or content.function_call.call_id is None:
+                    continue
+                call_id = content.function_call.call_id
+                if content.approved and content.id in fcc_todo:
+                    # Check if we already replaced a placeholder for this call_id
+                    if call_id in placeholders_replaced:
+                        # Placeholder was replaced - just remove the approval response
+                        contents_to_remove.append(content_idx)
+                    else:
+                        # No placeholder - replace approval response with result directly
+                        # This handles the original approval_mode="always_require" case
+                        replacement_result = result_by_call_id.get(call_id)
+                        if replacement_result is not None:
+                            msg.contents[content_idx] = replacement_result
+                            msg.role = "tool"
                 else:
                     # Create a "not approved" result for rejected calls
                     # Use function_call.call_id (the function's ID), not content.id (approval's ID)
@@ -1816,10 +2004,30 @@ def _replace_approval_contents_with_results(
                         result="Error: Tool call invocation was rejected by user.",
                     )
                     msg.role = "tool"
+            elif content.type == "function_result":
+                # Check if this is a placeholder result that should be replaced
+                if (
+                    hasattr(content, "result")
+                    and isinstance(content.result, str)
+                    and "[APPROVAL_PENDING]" in content.result
+                    and content.call_id in result_by_call_id
+                ):
+                    # Replace placeholder with actual result
+                    msg.contents[content_idx] = result_by_call_id[content.call_id]
+                    placeholders_replaced.add(content.call_id)
 
-        # Remove approval requests that were duplicates (in reverse order to preserve indices)
+        # Remove contents marked for removal (in reverse order to preserve indices)
         for idx in reversed(contents_to_remove):
             msg.contents.pop(idx)
+
+    # Second pass: Remove messages that are now empty after content removal
+    # We need to iterate in reverse to safely remove by index
+    messages_to_remove: list[int] = []
+    for msg_idx, msg in enumerate(messages):
+        if not msg.contents:
+            messages_to_remove.append(msg_idx)
+    for msg_idx in reversed(messages_to_remove):
+        messages.pop(msg_idx)
 
 
 def _get_result_hooks_from_stream(stream: Any) -> list[Callable[[Any], Any]]:
@@ -2190,6 +2398,13 @@ class FunctionInvocationLayer(Generic[OptionsCoT]):
                 function_invocation_kwargs=function_invocation_kwargs,
                 client_kwargs=filtered_kwargs,
             )
+        # Establish a single, run-local mutable tools list so that tools can add or remove
+        # tools during the run (progressive tool exposure). A fresh list is created via
+        # normalize_tools so the caller's original tools container is never mutated, while
+        # the same list object is shared with the model (options["tools"]) and the tool map
+        # rebuilt on every loop iteration.
+        if mutable_options.get("tools"):
+            mutable_options["tools"] = normalize_tools(mutable_options["tools"])
         if not stream:
 
             async def _get_response() -> ChatResponse[Any]:
@@ -2487,3 +2702,7 @@ class FunctionInvocationLayer(Generic[OptionsCoT]):
             return ChatResponse.from_updates(updates, output_format_type=response_format)
 
         return ResponseStream(_stream(), finalizer=_finalize)
+
+
+# Alias for the @tool decorator, used by security tools and samples
+ai_function = tool

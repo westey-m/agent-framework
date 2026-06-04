@@ -7,6 +7,7 @@ The foundation package containing all core abstractions, types, and built-in Ope
 ```
 agent_framework/
 ├── __init__.py          # Public API exports
+├── security.py          # Public security primitives, middleware, and tools
 ├── _agents.py           # Agent implementations
 ├── _clients.py          # Chat client base classes and protocols
 ├── _types.py            # Core types (Message, ChatResponse, Content, etc.)
@@ -55,7 +56,7 @@ agent_framework/
 - **`AgentMiddleware`** - Intercepts agent `run()` calls
 - **`ChatMiddleware`** - Intercepts chat client `get_response()` calls
 - **`FunctionMiddleware`** - Intercepts function/tool invocations
-- **`AgentContext`** / **`ChatContext`** / **`FunctionInvocationContext`** - Context objects passed through middleware
+- **`AgentContext`** / **`ChatContext`** / **`FunctionInvocationContext`** - Context objects passed through middleware. A tool can declare a `FunctionInvocationContext` parameter to receive it; `context.tools` is the live, mutable tools list for the run, and `context.add_tools(...)` / `context.remove_tools(...)` enable progressive tool exposure (changes apply on the next function-calling iteration).
 
 ### Sessions (`_sessions.py`)
 
@@ -63,19 +64,37 @@ agent_framework/
 - **`SessionContext`** - Context object for session-scoped data during agent runs
 - **`ContextProvider`** - Base class for context providers (RAG, memory systems)
 - **`HistoryProvider`** - Base class for conversation history storage
+- **`InMemoryHistoryProvider`** - Built-in session-state history provider for local runs
+- **`FileHistoryProvider`** - JSON Lines file-backed history provider storing one file per session with one message record per line
 
 ### Skills (`_skills.py`)
 
-- **`Skill`** - A skill definition bundling instructions (`content`) with metadata, resources, and scripts. Supports `@skill.resource` and `@skill.script` decorators for adding components.
+- **`Skill`** - Abstract base for a skill definition bundling instructions (`content`) with frontmatter metadata, resources, and scripts. Concrete subclasses (`InlineSkill`, `FileSkill`, `ClassSkill`) accept a `frontmatter=SkillFrontmatter(...)` argument carrying the spec fields. Adding new spec fields is done in one place — on `SkillFrontmatter` — keeping the subclass constructors stable.
+- **`SkillFrontmatter`** - L1 discovery metadata for a skill (`name`, `description`, `license`, `compatibility`, `allowed_tools`, `metadata`). All fields are mutable plain attributes; the constructor validates `name`, `description`, and `compatibility` against the spec but post-construction assignments are not re-validated. Spec fields are reachable on every skill via `skill.frontmatter`.
 - **`SkillResource`** - Named supplementary content attached to a skill; holds either static `content` or a dynamic `function` (sync or async). Exactly one must be provided.
 - **`SkillScript`** - An executable script attached to a skill; holds either an inline `function` (code-defined, runs in-process) or a `path` to a file on disk (file-based, delegated to a runner). Exactly one must be provided.
 - **`SkillScriptRunner`** - Protocol for file-based script execution. Any callable matching `(skill, script, args) -> Any` satisfies it. Code-defined scripts do not use a runner.
 - **`SkillsProvider`** - Context provider (extends `ContextProvider`) that discovers file-based skills from `SKILL.md` files and/or accepts code-defined `Skill` instances. Follows progressive disclosure: advertise → load → read resources / run scripts.
 
+### File Access Harness (`_harness/_file_access.py`)
+
+- **`AgentFileStore`** - Abstract async store backing the file-access harness. Implementations expose `write_file`, `read_file`, `delete_file`, `list_files`, `file_exists`, `search_files`, and `create_directory` over forward-slash relative paths.
+- **`InMemoryAgentFileStore`** - Dict-backed store suitable for tests and lightweight scenarios.
+- **`FileSystemAgentFileStore`** - Disk-backed store rooted under a configurable directory. Enforces relative-path normalization, root containment, and rejects symlink/reparse-point segments to prevent escape.
+- **`FileSearchResult`** / **`FileSearchMatch`** - `SerializationMixin` DTOs returned by `search_files`, carrying the matching file name, a context snippet, and the matching lines with 1-based line numbers.
+- **`FileAccessProvider`** - `ContextProvider` that adds shared file-access tools (`file_access_save_file`, `file_access_read_file`, `file_access_delete_file`, `file_access_list_files`, `file_access_search_files`) plus default usage instructions to each invocation. Unlike `MemoryContextProvider`, the store is intentionally shared across sessions and agents.
+
 ### Workflows (`_workflows/`)
 
 - **`Workflow`** - Graph-based workflow definition
-- **`WorkflowBuilder`** - Fluent API for building workflows
+- **`WorkflowBuilder`** - Fluent API for building workflows, including explicit
+  `output_from` / `intermediate_output_from` selection for caller-facing emissions. `output_from`
+  is an allow-list for **Workflow Output**; unselected executor payloads are hidden unless
+  `intermediate_output_from` selects them as **Intermediate Output**. Use `output_from="all"` for
+  explicit all-output behavior and `intermediate_output_from="all_other"` for visible progress from
+  every output-capable executor not selected by `output_from`.
+- **`WorkflowRunResult`** - Non-streaming workflow result with Workflow Output `get_outputs()`
+  and Intermediate Output `get_intermediate_outputs()` accessors
 - **Orchestrators**: `SequentialOrchestrator`, `ConcurrentOrchestrator`, `GroupChatOrchestrator`, `MagenticOrchestrator`, `HandoffOrchestrator`
 
 ## Built-in Providers

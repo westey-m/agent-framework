@@ -16,7 +16,7 @@ using OpenAI.Responses;
 
 // --- Configuration ---
 string endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
-string deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-4o-mini";
+string deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-5.4-mini";
 
 // --- Skills Provider ---
 // Discovers skills from the 'skills' directory containing SKILL.md files.
@@ -24,6 +24,7 @@ string deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYM
 var skillsProvider = new AgentSkillsProvider(
     Path.Combine(AppContext.BaseDirectory, "skills"),
     SubprocessScriptRunner.RunAsync);
+
 // --- Agent Setup ---
 AIAgent agent = new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential())
     .GetResponsesClient()

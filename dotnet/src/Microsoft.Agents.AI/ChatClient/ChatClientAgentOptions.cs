@@ -192,7 +192,7 @@ public sealed class ChatClientAgentOptions
     /// items to <see cref="ToolApprovalRequestContent"/>, even for tools that do not require approval.
     /// </para>
     /// <para>
-    /// Setting this property to <see langword="true"/> injects an <see cref="AutoApprovedFunctionRemovingChatClient"/>
+    /// Setting this property to <see langword="true"/> injects an <see cref="NonApprovalRequiredFunctionBypassingChatClient"/>
     /// decorator above <see cref="FunctionInvokingChatClient"/> in the pipeline. This decorator identifies approval
     /// requests for non-approval-required tools, removes them from the response, and stores them in the session.
     /// On the next request, the stored items are automatically re-injected as approved, so the caller only needs
@@ -200,8 +200,8 @@ public sealed class ChatClientAgentOptions
     /// </para>
     /// <para>
     /// This option has no effect when <see cref="UseProvidedChatClientAsIs"/> is <see langword="true"/>.
-    /// When using a custom chat client stack, you can add an <see cref="AutoApprovedFunctionRemovingChatClient"/>
-    /// manually via the <see cref="ChatClientBuilderExtensions.UseAutoApprovedFunctionRemoval"/>
+    /// When using a custom chat client stack, you can add an <see cref="NonApprovalRequiredFunctionBypassingChatClient"/>
+    /// manually via the <see cref="ChatClientBuilderExtensions.UseNonApprovalRequiredFunctionBypassing"/>
     /// extension method.
     /// </para>
     /// </remarks>
@@ -209,7 +209,7 @@ public sealed class ChatClientAgentOptions
     /// Default is <see langword="false"/>.
     /// </value>
     [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public bool StoreAutoApprovedFunctionCalls { get; set; }
+    public bool EnableNonApprovalRequiredFunctionBypassing { get; set; }
 
     /// <summary>
     /// Creates a new instance of <see cref="ChatClientAgentOptions"/> with the same values as this instance.
@@ -229,5 +229,6 @@ public sealed class ChatClientAgentOptions
             ThrowOnChatHistoryProviderConflict = this.ThrowOnChatHistoryProviderConflict,
             RequirePerServiceCallChatHistoryPersistence = this.RequirePerServiceCallChatHistoryPersistence,
             EnableMessageInjection = this.EnableMessageInjection,
+            EnableNonApprovalRequiredFunctionBypassing = this.EnableNonApprovalRequiredFunctionBypassing,
         };
 }

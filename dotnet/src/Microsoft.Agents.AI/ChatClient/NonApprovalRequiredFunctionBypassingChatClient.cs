@@ -36,7 +36,7 @@ namespace Microsoft.Agents.AI;
 /// run context or session is available.
 /// </para>
 /// </remarks>
-internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatClient
+internal sealed class NonApprovalRequiredFunctionBypassingChatClient : DelegatingChatClient
 {
     /// <summary>
     /// The key used in <see cref="AgentSessionStateBag"/> to store pending auto-approved function calls
@@ -45,10 +45,10 @@ internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatCli
     internal const string StateBagKey = "_autoApprovedFunctionCalls";
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AutoApprovedFunctionRemovingChatClient"/> class.
+    /// Initializes a new instance of the <see cref="NonApprovalRequiredFunctionBypassingChatClient"/> class.
     /// </summary>
     /// <param name="innerClient">The underlying chat client (typically a <see cref="FunctionInvokingChatClient"/>).</param>
-    public AutoApprovedFunctionRemovingChatClient(IChatClient innerClient)
+    public NonApprovalRequiredFunctionBypassingChatClient(IChatClient innerClient)
         : base(innerClient)
     {
     }
@@ -62,7 +62,7 @@ internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatCli
         var session = GetRequiredSession();
         var autoApprovableNames = this.GetAutoApprovableToolNames(options);
 
-        messages = InjectPendingAutoApprovals(messages, session, autoApprovableNames);
+        messages = InjectPendingAutoApprovals(messages, session);
 
         var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
@@ -80,20 +80,25 @@ internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatCli
         var session = GetRequiredSession();
         var autoApprovableNames = this.GetAutoApprovableToolNames(options);
 
-        messages = InjectPendingAutoApprovals(messages, session, autoApprovableNames);
+        messages = InjectPendingAutoApprovals(messages, session);
         List<ToolApprovalRequestContent>? autoApproved = null;
 
-        await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
+        try
         {
-            if (FilterUpdateContents(update, autoApprovableNames, ref autoApproved))
+            await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
             {
-                yield return update;
+                if (FilterUpdateContents(update, autoApprovableNames, ref autoApproved))
+                {
+                    yield return update;
+                }
             }
         }
-
-        if (autoApproved is { Count: > 0 })
+        finally
         {
-            session.StateBag.SetValue(StateBagKey, autoApproved, AgentJsonUtilities.DefaultOptions);
+            if (autoApproved is { Count: > 0 })
+            {
+                session.StateBag.SetValue(StateBagKey, autoApproved, AgentJsonUtilities.DefaultOptions);
+            }
         }
     }
 
@@ -105,12 +110,12 @@ internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatCli
     {
         var runContext = AIAgent.CurrentRunContext
             ?? throw new InvalidOperationException(
-                $"{nameof(AutoApprovedFunctionRemovingChatClient)} can only be used within the context of a running AIAgent. " +
+                $"{nameof(NonApprovalRequiredFunctionBypassingChatClient)} can only be used within the context of a running AIAgent. " +
                 "Ensure that the chat client is being invoked as part of an AIAgent.RunAsync or AIAgent.RunStreamingAsync call.");
 
         return runContext.Session
             ?? throw new InvalidOperationException(
-                $"{nameof(AutoApprovedFunctionRemovingChatClient)} requires a session. " +
+                $"{nameof(NonApprovalRequiredFunctionBypassingChatClient)} requires a session. " +
                 "Ensure the agent has a resolved session before invoking the chat client.");
     }
 
@@ -118,10 +123,13 @@ internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatCli
     /// Checks the session for stored auto-approvals from a previous turn and injects them as
     /// a user message containing <see cref="ToolApprovalResponseContent"/> items appended to the input messages.
     /// </summary>
+    /// <remarks>
+    /// All stored requests are unconditionally injected as approved responses regardless of whether the
+    /// tool set has changed, because the LLM requires a complete set of tool call responses for a prior turn.
+    /// </remarks>
     private static IEnumerable<ChatMessage> InjectPendingAutoApprovals(
         IEnumerable<ChatMessage> messages,
-        AgentSession session,
-        HashSet<string> autoApprovableNames)
+        AgentSession session)
     {
         if (!session.StateBag.TryGetValue<List<ToolApprovalRequestContent>>(
             StateBagKey,
@@ -137,15 +145,7 @@ internal sealed class AutoApprovedFunctionRemovingChatClient : DelegatingChatCli
         List<AIContent> approvalResponses = [];
         foreach (var request in pendingRequests)
         {
-            if (IsAutoApprovable(request, autoApprovableNames))
-            {
-                approvalResponses.Add(request.CreateResponse(approved: true));
-            }
-        }
-
-        if (approvalResponses.Count == 0)
-        {
-            return messages;
+            approvalResponses.Add(request.CreateResponse(approved: true));
         }
 
         var userMessage = new ChatMessage(ChatRole.User, approvalResponses);

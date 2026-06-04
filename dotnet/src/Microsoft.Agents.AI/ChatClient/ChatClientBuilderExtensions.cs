@@ -150,7 +150,7 @@ public static class ChatClientBuilderExtensions
     }
 
     /// <summary>
-    /// Adds an <see cref="AutoApprovedFunctionRemovingChatClient"/> to the chat client pipeline.
+    /// Adds an <see cref="NonApprovalRequiredFunctionBypassingChatClient"/> to the chat client pipeline.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -165,7 +165,7 @@ public static class ChatClientBuilderExtensions
     /// <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="true"/>.
     /// When <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="false"/> (the default),
     /// the <see cref="ChatClientAgent"/> automatically injects this decorator when
-    /// <see cref="ChatClientAgentOptions.StoreAutoApprovedFunctionCalls"/> is <see langword="true"/>.
+    /// <see cref="ChatClientAgentOptions.EnableNonApprovalRequiredFunctionBypassing"/> is <see langword="true"/>.
     /// </para>
     /// <para>
     /// This decorator only works within the context of a running <see cref="ChatClientAgent"/> with
@@ -175,8 +175,8 @@ public static class ChatClientBuilderExtensions
     /// <param name="builder">The <see cref="ChatClientBuilder"/> to add the decorator to.</param>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public static ChatClientBuilder UseAutoApprovedFunctionRemoval(this ChatClientBuilder builder)
+    public static ChatClientBuilder UseNonApprovalRequiredFunctionBypassing(this ChatClientBuilder builder)
     {
-        return builder.Use(innerClient => new AutoApprovedFunctionRemovingChatClient(innerClient));
+        return builder.Use(innerClient => new NonApprovalRequiredFunctionBypassingChatClient(innerClient));
     }
 }

@@ -1723,6 +1723,76 @@ public class ToolApprovalAgentTests
     }
 
     /// <summary>
+    /// Verify that when a batch contains a mix of heuristic-approved and standing-rule-approved
+    /// requests, the collected approval responses preserve the original request order rather than
+    /// being grouped by approval kind.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_MixedAutoApprovals_PreserveOriginalOrderAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+
+        // Batch ordering: first request is approved by a heuristic, second by a standing rule.
+        var heuristicRequest = new ToolApprovalRequestContent("reqA", new FunctionCallContent("callA", "HeuristicTool"));
+        var standingRequest = new ToolApprovalRequestContent("reqB", new FunctionCallContent("callB", "StandingTool"));
+
+        var batchResponse = new AgentResponse([new ChatMessage(ChatRole.Assistant, [heuristicRequest, standingRequest])]);
+        var finalResponse = new AgentResponse([new ChatMessage(ChatRole.Assistant, "Done")]);
+
+        var callCount = 0;
+        List<ChatMessage>? secondCallMessages = null;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Callback<IEnumerable<ChatMessage>, AgentSession?, AgentRunOptions?, CancellationToken>((msgs, _, _, _) =>
+            {
+                callCount++;
+                if (callCount == 2)
+                {
+                    secondCallMessages = msgs.ToList();
+                }
+            })
+            .ReturnsAsync(() => callCount == 1 ? batchResponse : finalResponse);
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "HeuristicTool")]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Establish a standing rule for "StandingTool" via an AlwaysApprove response in the same call.
+        var alwaysApprove = standingRequest.CreateAlwaysApproveToolResponse("User said always");
+
+        // Act — both requests auto-approve (heuristic + standing rule), so the inner agent is re-invoked.
+        var response = await agent.RunAsync(
+            [new ChatMessage(ChatRole.User, [alwaysApprove])],
+            session);
+
+        // Assert — inner agent re-called and final response returned.
+        Assert.Equal(2, callCount);
+        Assert.Equal("Done", response.Text);
+
+        // The injected approval responses must preserve the original request order: reqA before reqB,
+        // even though reqA was approved by a heuristic and reqB by a standing rule.
+        Assert.NotNull(secondCallMessages);
+        var injected = secondCallMessages!
+            .SelectMany(m => m.Contents)
+            .OfType<ToolApprovalResponseContent>()
+            .Where(r => r.RequestId is "reqA" or "reqB")
+            .ToList();
+        Assert.Equal(2, injected.Count);
+        Assert.Equal("reqA", injected[0].RequestId);
+        Assert.Equal("reqB", injected[1].RequestId);
+        Assert.All(injected, r => Assert.True(r.Approved));
+    }
+
+    /// <summary>
     /// Verify that auto-approval rules work in the streaming path.
     /// </summary>
     [Fact]

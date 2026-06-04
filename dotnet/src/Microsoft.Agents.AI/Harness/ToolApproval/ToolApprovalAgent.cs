@@ -404,11 +404,13 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
         ToolApprovalState state,
         AgentSession? session)
     {
-        // Pass 1: Scan all response messages and classify each approval request as
-        //         auto-approved (matches a standing rule or auto-approval rule) or unapproved (needs caller decision).
-        var autoApprovedByRule = new List<ToolApprovalRequestContent>();
-        var autoApprovedByHeuristic = new List<ToolApprovalRequestContent>();
+        // Pass 1: Scan all response messages and classify each approval request.
+        //         Auto-approved requests (matching a standing rule or auto-approval rule) have their
+        //         responses collected immediately, preserving the original request order, and are
+        //         marked for removal. Unapproved requests are collected for the caller to decide.
+        var toRemove = new HashSet<ToolApprovalRequestContent>();
         var unapproved = new List<ToolApprovalRequestContent>();
+        int autoApprovedCount = 0;
 
         foreach (var message in responseMessages)
         {
@@ -418,11 +420,17 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
                 {
                     if (MatchesRule(tarc, state.Rules, this._jsonSerializerOptions))
                     {
-                        autoApprovedByRule.Add(tarc);
+                        state.CollectedApprovalResponses.Add(
+                            tarc.CreateResponse(approved: true, reason: "Auto-approved by standing rule"));
+                        toRemove.Add(tarc);
+                        autoApprovedCount++;
                     }
                     else if (await this.MatchesAutoApprovalRuleAsync(tarc).ConfigureAwait(false))
                     {
-                        autoApprovedByHeuristic.Add(tarc);
+                        state.CollectedApprovalResponses.Add(
+                            tarc.CreateResponse(approved: true, reason: "Auto-approved by auto-approval rule"));
+                        toRemove.Add(tarc);
+                        autoApprovedCount++;
                     }
                     else
                     {
@@ -432,25 +440,11 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
             }
         }
 
-        int totalAutoApproved = autoApprovedByRule.Count + autoApprovedByHeuristic.Count;
-
         // Nothing to process: no auto-approved items and at most one unapproved (no queueing needed).
-        if (totalAutoApproved == 0 && unapproved.Count <= 1)
+        // No responses were collected above in this case, so state is unmodified and safe to leave.
+        if (autoApprovedCount == 0 && unapproved.Count <= 1)
         {
             return false;
-        }
-
-        // Store auto-approved responses for later injection into the inner agent.
-        foreach (var tarc in autoApprovedByRule)
-        {
-            state.CollectedApprovalResponses.Add(
-                tarc.CreateResponse(approved: true, reason: "Auto-approved by standing rule"));
-        }
-
-        foreach (var tarc in autoApprovedByHeuristic)
-        {
-            state.CollectedApprovalResponses.Add(
-                tarc.CreateResponse(approved: true, reason: "Auto-approved by auto-approval rule"));
         }
 
         // If every approval request was auto-approved, strip them all and signal the caller
@@ -465,18 +459,10 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
         // Pass 2: Keep only the first unapproved request in the response (for the caller to decide).
         //         Queue the remaining unapproved requests for subsequent one-at-a-time delivery.
         //         Remove all auto-approved and queued items from the response messages.
-        var toRemove = new HashSet<ToolApprovalRequestContent>(autoApprovedByRule);
-        foreach (var tarc in autoApprovedByHeuristic)
+        for (int i = 1; i < unapproved.Count; i++)
         {
-            toRemove.Add(tarc);
-        }
-        if (unapproved.Count > 1)
-        {
-            for (int i = 1; i < unapproved.Count; i++)
-            {
-                toRemove.Add(unapproved[i]);
-                state.QueuedApprovalRequests.Add(unapproved[i]);
-            }
+            toRemove.Add(unapproved[i]);
+            state.QueuedApprovalRequests.Add(unapproved[i]);
         }
 
         // Walk messages in reverse and strip marked items.

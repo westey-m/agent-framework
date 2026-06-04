@@ -51,7 +51,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
 {
     private readonly ProviderSessionState<ToolApprovalState> _sessionState;
     private readonly JsonSerializerOptions _jsonSerializerOptions;
-    private readonly IEnumerable<Func<FunctionCallContent, ValueTask<bool>>>? _autoApprovalRules;
+    private readonly Func<FunctionCallContent, ValueTask<bool>>[]? _autoApprovalRules;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ToolApprovalAgent"/> class.
@@ -66,7 +66,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
         : base(innerAgent)
     {
         this._jsonSerializerOptions = options?.JsonSerializerOptions ?? AgentJsonUtilities.DefaultOptions;
-        this._autoApprovalRules = options?.AutoApprovalRules;
+        this._autoApprovalRules = options?.AutoApprovalRules?.ToArray();
         this._sessionState = new ProviderSessionState<ToolApprovalState>(
             _ => new ToolApprovalState(),
             "toolApprovalState",
@@ -702,7 +702,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
     /// </returns>
     private async ValueTask<bool> MatchesAutoApprovalRuleAsync(ToolApprovalRequestContent request)
     {
-        if (this._autoApprovalRules is null)
+        if (this._autoApprovalRules is not { Length: > 0 })
         {
             return false;
         }

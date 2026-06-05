@@ -1,0 +1,740 @@
+﻿// Copyright (c) Microsoft. All rights reserved.
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Moq.Protected;
+
+using static Microsoft.Agents.AI.UnitTests.LoopTestHelpers;
+
+namespace Microsoft.Agents.AI.UnitTests;
+
+/// <summary>
+/// Unit tests for the <see cref="LoopAgent"/> class.
+/// </summary>
+public class LoopAgentTests
+{
+    #region Constructor
+
+    /// <summary>
+    /// Verify that the constructor throws when innerAgent is null.
+    /// </summary>
+    [Fact]
+    public void Constructor_NullInnerAgent_Throws()
+    {
+        // Arrange
+        var evaluator = While(static _ => false);
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>("innerAgent", () => new LoopAgent(null!, evaluator));
+    }
+
+    /// <summary>
+    /// Verify that the constructor throws when the evaluator is null.
+    /// </summary>
+    [Fact]
+    public void Constructor_NullEvaluator_Throws()
+    {
+        // Arrange
+        var innerAgent = new Mock<AIAgent>().Object;
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>("evaluator", () => new LoopAgent(innerAgent, (LoopEvaluator)null!));
+    }
+
+    /// <summary>
+    /// Verify that the constructor throws when the evaluators collection is null.
+    /// </summary>
+    [Fact]
+    public void Constructor_NullEvaluators_Throws()
+    {
+        // Arrange
+        var innerAgent = new Mock<AIAgent>().Object;
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>("evaluators", () => new LoopAgent(innerAgent, (IEnumerable<LoopEvaluator>)null!));
+    }
+
+    /// <summary>
+    /// Verify that the constructor throws when the evaluators collection is empty.
+    /// </summary>
+    [Fact]
+    public void Constructor_EmptyEvaluators_Throws()
+    {
+        // Arrange
+        var innerAgent = new Mock<AIAgent>().Object;
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>("evaluators", () => new LoopAgent(innerAgent, Array.Empty<LoopEvaluator>()));
+    }
+
+    /// <summary>
+    /// Verify that the constructor throws when the evaluators collection contains a null element.
+    /// </summary>
+    [Fact]
+    public void Constructor_NullEvaluatorElement_Throws()
+    {
+        // Arrange
+        var innerAgent = new Mock<AIAgent>().Object;
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>("evaluators", () => new LoopAgent(innerAgent, new LoopEvaluator[] { null! }));
+    }
+
+    /// <summary>
+    /// Verify that the constructor throws when MaxIterations is less than 1.
+    /// </summary>
+    [Fact]
+    public void Constructor_InvalidMaxIterations_Throws()
+    {
+        // Arrange
+        var innerAgent = new Mock<AIAgent>().Object;
+        var evaluator = While(static _ => false);
+        var options = new LoopAgentOptions { MaxIterations = 0 };
+
+        // Act & Assert
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LoopAgent(innerAgent, evaluator, options));
+    }
+
+    /// <summary>
+    /// Verify that the constructor creates a valid instance with default options.
+    /// </summary>
+    [Fact]
+    public void Constructor_ValidArguments_CreatesInstance()
+    {
+        // Arrange
+        var innerAgent = new Mock<AIAgent>().Object;
+        var evaluator = While(static _ => false);
+
+        // Act
+        var agent = new LoopAgent(innerAgent, evaluator);
+
+        // Assert
+        Assert.NotNull(agent);
+    }
+
+    #endregion
+
+    #region RunAsync - core loop behavior
+
+    /// <summary>
+    /// Verify that when the evaluator stops immediately the inner agent is invoked exactly once.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_EvaluatorStopsImmediately_InvokesOnceAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "done")]));
+        var evaluator = While(static _ => false);
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal("done", response.Text);
+        Assert.Equal(1, capture.CallCount);
+    }
+
+    /// <summary>
+    /// Verify that the loop re-invokes while the predicate returns true and returns the final response.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_PredicateLoopsUntilFalse_ReturnsFinalResponseAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(call =>
+            new AgentResponse([new ChatMessage(ChatRole.Assistant, $"iteration {call}")]));
+
+        // Continue while the latest response is not "iteration 3".
+        var evaluator = While(ctx => ctx.LastResponse.Text != "iteration 3");
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal("iteration 3", response.Text);
+        Assert.Equal(3, capture.CallCount);
+    }
+
+    /// <summary>
+    /// Verify that the caller's initial messages are sent once and a re-invocation without feedback sends none.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ContinueWithoutFeedback_SendsInitialOnceThenNoneAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue() : LoopEvaluation.Stop()));
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal("original", capture.MessagesPerCall[0].Single().Text);
+        Assert.Empty(capture.MessagesPerCall[1]);
+    }
+
+    /// <summary>
+    /// Verify that feedback supplied by the evaluator is injected verbatim on re-invocation (non-fresh mode).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_EvaluatorSuppliesFeedback_InjectsItVerbatimAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("custom follow-up") : LoopEvaluation.Stop()));
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal("custom follow-up", capture.MessagesPerCall[1].Single().Text);
+    }
+
+    /// <summary>
+    /// Verify that an evaluator using <see cref="LoopEvaluation.ContinueWithMessages"/> sends the messages verbatim and
+    /// records no feedback entry.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ContinueWithMessages_SendsMessagesVerbatimAndRecordsNoFeedbackAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        IReadOnlyList<string?>? feedbackSnapshot = null;
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+        {
+            if (ctx.Iteration < 2)
+            {
+                return new ValueTask<LoopEvaluation>(LoopEvaluation.ContinueWithMessages(
+                    [new ChatMessage(ChatRole.System, "sys"), new ChatMessage(ChatRole.User, "explicit")]));
+            }
+
+            feedbackSnapshot = ctx.Feedback.ToList();
+            return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
+        });
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal(["sys", "explicit"], capture.MessagesPerCall[1].Select(static m => m.Text));
+        Assert.NotNull(feedbackSnapshot);
+        Assert.Empty(feedbackSnapshot!);
+    }
+
+    /// <summary>
+    /// Verify that the global safety cap stops the loop even when the evaluator always continues.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_AlwaysContinue_StopsAtGlobalCapAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "working")]));
+        var evaluator = While(static _ => true);
+        var options = new LoopAgentOptions { MaxIterations = 3 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal("working", response.Text);
+        Assert.Equal(3, capture.CallCount);
+    }
+
+    /// <summary>
+    /// Verify that a pending tool-approval request terminates the loop and returns that response.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_PendingApprovalRequest_StopsLoopAsync()
+    {
+        // Arrange
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "MyTool"));
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, [approvalRequest])]));
+        var evaluator = While(static _ => true);
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(1, capture.CallCount);
+        Assert.Contains(response.Messages.SelectMany(static m => m.Contents), static c => c is ToolApprovalRequestContent);
+    }
+
+    /// <summary>
+    /// Verify that when no session is supplied the loop creates one and invokes the agent.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NoSessionSupplied_CreatesSessionAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "done")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var evaluator = While(static _ => false);
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
+
+        // Assert
+        Assert.Equal("done", response.Text);
+        capture.Mock.Protected().Verify("CreateSessionCoreAsync", Times.Once(), ItExpr.IsAny<CancellationToken>());
+    }
+
+    #endregion
+
+    #region RunAsync - feedback log
+
+    /// <summary>
+    /// Verify that in the default (non-fresh) mode the latest feedback is injected verbatim as the next input.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NonFresh_InjectsLatestFeedbackVerbatimAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial")]));
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("fix it")));
+        var options = new LoopAgentOptions { MaxIterations = 2 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal("fix it", capture.MessagesPerCall[1].Single().Text);
+    }
+
+    /// <summary>
+    /// Verify that when the latest iteration produces no feedback, no stale earlier feedback is re-injected (non-fresh).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NonFresh_LatestEmpty_DoesNotReinjectStaleFeedbackAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial")]));
+
+        // Provide feedback only on the first iteration; the second records nothing.
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(LoopEvaluation.Continue(ctx.Iteration == 1 ? "feedback 1" : null)));
+        var options = new LoopAgentOptions { MaxIterations = 3 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Equal("feedback 1", capture.MessagesPerCall[1].Single().Text);
+        Assert.Empty(capture.MessagesPerCall[2]);
+    }
+
+    /// <summary>
+    /// Verify that the accumulated feedback log is exposed read-only and shared across all evaluators in a run.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_FeedbackLog_IsSharedAcrossEvaluatorsAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial")]));
+        var observed = new List<int>();
+        var producer = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 3 ? LoopEvaluation.Continue($"fb {ctx.Iteration}") : LoopEvaluation.Stop()));
+        var observer = new DelegateLoopEvaluator((ctx, _) =>
+        {
+            // The observer runs only when the producer stops; it sees the full feedback log.
+            observed.Add(ctx.Feedback.Count);
+            return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
+        });
+        var options = new LoopAgentOptions { MaxIterations = 5 };
+        var agent = new LoopAgent(capture.Agent, new LoopEvaluator[] { producer, observer }, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        // On the third iteration the producer stops, the observer runs and sees two recorded feedback entries.
+        Assert.Equal([2], observed);
+    }
+
+    #endregion
+
+    #region RunAsync - fresh context
+
+    /// <summary>
+    /// Verify that without fresh context the loop reuses a single session across all iterations.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_NonFresh_ReusesSameSessionAcrossIterationsAsync()
+    {
+        // Arrange
+        var loopSession = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask<AgentSession>(loopSession));
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
+        var options = new LoopAgentOptions { MaxIterations = 3 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act (no session supplied by caller)
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Same(loopSession, capture.SessionsPerCall[0]);
+        Assert.Same(loopSession, capture.SessionsPerCall[1]);
+        Assert.Same(loopSession, capture.SessionsPerCall[2]);
+    }
+
+    /// <summary>
+    /// Verify that with fresh context each iteration is rebuilt from the original messages plus the aggregated feedback log.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_RebuildsFromInitialMessagesAndAggregatedFeedbackAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue($"fb {ctx.Iteration}")));
+        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act (no session supplied by caller)
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "original task")]);
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        var secondCall = capture.MessagesPerCall[1];
+        Assert.Contains(secondCall, static m => m.Text == "original task");
+        Assert.Contains(secondCall, static m => m.Text.Contains("## Feedback") && m.Text.Contains("fb 1"));
+        var thirdCall = capture.MessagesPerCall[2];
+        Assert.Contains(thirdCall, static m => m.Text == "original task");
+        Assert.Contains(thirdCall, static m => m.Text.Contains("fb 1") && m.Text.Contains("fb 2"));
+    }
+
+    /// <summary>
+    /// Verify that with fresh context and a loop-owned session, a new session is created for each iteration.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_RecreatesSessionEachIterationAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
+        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act (no session supplied by caller)
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.NotSame(capture.SessionsPerCall[0], capture.SessionsPerCall[1]);
+        Assert.NotSame(capture.SessionsPerCall[1], capture.SessionsPerCall[2]);
+    }
+
+    /// <summary>
+    /// Verify that with fresh context but a caller-supplied session, the caller's session is reused and a warning is logged.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_WithCallerSession_WarnsAndDoesNotRecreateAsync()
+    {
+        // Arrange
+        var callerSession = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        var loggerFactory = new CapturingLoggerFactory();
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
+        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options, loggerFactory);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Same(callerSession, capture.SessionsPerCall[0]);
+        Assert.Same(callerSession, capture.SessionsPerCall[2]);
+        capture.Mock.Protected().Verify("CreateSessionCoreAsync", Times.Never(), ItExpr.IsAny<CancellationToken>());
+        Assert.Contains(loggerFactory.Entries, static e => e.Level == LogLevel.Warning && e.Message.Contains("FreshContextPerIteration"));
+    }
+
+    /// <summary>
+    /// Verify that the fresh-context caller-session warning is logged at the start of the run, even when the loop
+    /// stops after the first iteration and never re-invokes.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_WithCallerSession_WarnsEvenWhenStoppingImmediatelyAsync()
+    {
+        // Arrange
+        var callerSession = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        var loggerFactory = new CapturingLoggerFactory();
+        var evaluator = While(static _ => false);
+        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options, loggerFactory);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
+
+        // Assert
+        Assert.Equal(1, capture.CallCount);
+        Assert.Contains(loggerFactory.Entries, static e => e.Level == LogLevel.Warning && e.Message.Contains("FreshContextPerIteration"));
+    }
+
+    /// <summary>
+    /// Verify that no fresh-context warning is logged when the loop owns the session (fresh context is fully honored).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_WithLoopOwnedSession_DoesNotWarnAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var loggerFactory = new CapturingLoggerFactory();
+        var evaluator = While(static _ => false);
+        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options, loggerFactory);
+
+        // Act (no session supplied by caller)
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
+
+        // Assert
+        Assert.DoesNotContain(loggerFactory.Entries, static e => e.Level == LogLevel.Warning && e.Message.Contains("FreshContextPerIteration"));
+    }
+
+    /// <summary>
+    /// Verify that the first evaluator that asks to re-invoke wins and the remaining evaluators are not evaluated.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_MultipleEvaluators_FirstReinvokeWinsAndShortCircuitsAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+
+        var firstEvaluated = 0;
+        var secondEvaluated = 0;
+        var first = new DelegateLoopEvaluator((ctx, _) =>
+        {
+            firstEvaluated++;
+            return new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("from first") : LoopEvaluation.Stop());
+        });
+        var second = new DelegateLoopEvaluator((_, _) =>
+        {
+            secondEvaluated++;
+            return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
+        });
+        var agent = new LoopAgent(capture.Agent, new LoopEvaluator[] { first, second });
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal("from first", capture.MessagesPerCall[1].Single().Text);
+        Assert.Equal(2, firstEvaluated);
+        // The second evaluator is only evaluated on the iteration where the first one stops.
+        Assert.Equal(1, secondEvaluated);
+    }
+
+    /// <summary>
+    /// Verify that a later evaluator can cause re-invocation when an earlier evaluator asks to stop, confirming that
+    /// <see cref="LoopEvaluation.Stop"/> is not a veto.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_MultipleEvaluators_LaterEvaluatorCanContinueAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        var alwaysStop = While(static _ => false);
+        var continueOnce = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("from second") : LoopEvaluation.Stop()));
+        var agent = new LoopAgent(capture.Agent, new LoopEvaluator[] { alwaysStop, continueOnce });
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal("from second", capture.MessagesPerCall[1].Single().Text);
+    }
+
+    /// <summary>
+    /// Verify that the loop stops when every evaluator asks to stop.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_MultipleEvaluators_AllStop_StopsAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "done")]));
+        var first = While(static _ => false);
+        var second = While(static _ => false);
+        var agent = new LoopAgent(capture.Agent, new LoopEvaluator[] { first, second });
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(1, capture.CallCount);
+    }
+
+    #endregion
+
+    #region RunAsync - AIJudge evaluator integration
+
+    /// <summary>
+    /// Verify that an <see cref="AIJudgeLoopEvaluator"/> (non-fresh) injects its templated feedback message verbatim
+    /// on re-invocation.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithAIJudgeEvaluator_NonFresh_InjectsTemplatedFeedbackMessageAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial")]));
+        var judgeClient = CreateJudgeClient("{\"answered\":false,\"gapAnalysis\":\"the cost estimate is missing\"}");
+        var evaluator = new AIJudgeLoopEvaluator(judgeClient);
+        var options = new LoopAgentOptions { MaxIterations = 2 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+        string expected = AIJudgeLoopEvaluator.DefaultFeedbackMessageTemplate
+            .Replace(AIJudgeLoopEvaluator.GapAnalysisPlaceholder, "the cost estimate is missing");
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "question")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal(expected, capture.MessagesPerCall[1].Single().Text);
+    }
+
+    #endregion
+
+    #region RunStreamingAsync
+
+    /// <summary>
+    /// Verify that streaming surfaces updates from every iteration and stops when the evaluator stops.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_MultipleIterations_StreamsAllUpdatesAsync()
+    {
+        // Arrange
+        var capture = new InnerStreamingCapture(call =>
+            [new AgentResponseUpdate(ChatRole.Assistant, $"chunk {call}")]);
+        var evaluator = While(ctx => ctx.Iteration < 3);
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        var texts = new List<string>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession()))
+        {
+            texts.Add(update.Text);
+        }
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Equal(["chunk 1", "chunk 2", "chunk 3"], texts);
+    }
+
+    /// <summary>
+    /// Verify that the streaming path enforces the global safety cap like the non-streaming path.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_AlwaysContinue_StopsAtGlobalCapAsync()
+    {
+        // Arrange
+        var capture = new InnerStreamingCapture(call => [new AgentResponseUpdate(ChatRole.Assistant, $"chunk {call}")]);
+        var evaluator = While(static _ => true);
+        var options = new LoopAgentOptions { MaxIterations = 4 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await foreach (var _ in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession()))
+        {
+        }
+
+        // Assert
+        Assert.Equal(4, capture.CallCount);
+    }
+
+    /// <summary>
+    /// Verify that the streaming path sends the initial messages once and no messages on a feedback-less re-invocation.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_ContinueWithoutFeedback_SendsInitialOnceThenNoneAsync()
+    {
+        // Arrange
+        var capture = new InnerStreamingCapture(_ => [new AgentResponseUpdate(ChatRole.Assistant, "ack")]);
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue() : LoopEvaluation.Stop()));
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        await foreach (var _ in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession()))
+        {
+        }
+
+        // Assert
+        Assert.Equal(2, capture.CallCount);
+        Assert.Equal("original", capture.MessagesPerCall[0].Single().Text);
+        Assert.Empty(capture.MessagesPerCall[1]);
+    }
+
+    /// <summary>
+    /// Verify that the streaming path stops after the iteration that produces a pending approval request.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_PendingApprovalRequest_StopsLoopAsync()
+    {
+        // Arrange
+        var approvalRequest = new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "MyTool"));
+        var capture = new InnerStreamingCapture(_ => [new AgentResponseUpdate(ChatRole.Assistant, [approvalRequest])]);
+        var evaluator = While(static _ => true);
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        await foreach (var _ in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession()))
+        {
+        }
+
+        // Assert
+        Assert.Equal(1, capture.CallCount);
+    }
+
+    #endregion
+}

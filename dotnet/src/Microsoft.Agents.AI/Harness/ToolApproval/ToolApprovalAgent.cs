@@ -708,6 +708,7 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
 
         return false;
     }
+
     private static bool ArgumentsMatch(IDictionary<string, string> ruleArguments, IDictionary<string, object?>? callArguments, JsonSerializerOptions jsonSerializerOptions)
     {
         if (callArguments is null)

@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from rich.markup import escape
+
 from ..app_state import (
     ChoiceFollowUpQuestion,
     FollowUpAction,
@@ -87,7 +89,7 @@ class PlanningOutputObserver(ConsoleObserver):
         if self._is_planning_mode_from_ux(ux):
             self._text_collector.append(text)
         else:
-            ux.write_text(text)
+            ux.write_text(escape(text))
 
     async def on_stream_complete(
         self,
@@ -111,7 +113,7 @@ class PlanningOutputObserver(ConsoleObserver):
             planning_response = PlanningResponse.model_validate_json(collected_text)
         except (json.JSONDecodeError, ValueError):
             # JSON parsing failed — fall back to rendering as regular text
-            ux.write_text(collected_text)
+            ux.write_text(escape(collected_text))
             return None
 
         if planning_response.type == PlanningResponseType.CLARIFICATION:
@@ -125,7 +127,7 @@ class PlanningOutputObserver(ConsoleObserver):
             return [self._build_approval_action(question, session)]
 
         # Unexpected type — fall back to rendering as regular text
-        ux.write_text(collected_text)
+        ux.write_text(escape(collected_text))
         return None
 
     def _is_planning_mode(self, session: Any) -> bool:

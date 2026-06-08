@@ -8,6 +8,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
+from textual.css.query import NoMatches
 from textual.events import Key
 from textual.message import Message
 from textual.reactive import reactive
@@ -179,7 +180,7 @@ class HarnessListSelection(Widget):
             label = self.query_one("#selection-title", Label)
             label.update(new_title)
             label.display = bool(new_title)
-        except Exception:
+        except NoMatches:
             pass
 
     def watch_options(self, new_options: list[str]) -> None:
@@ -190,7 +191,7 @@ class HarnessListSelection(Widget):
         """
         import contextlib
 
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(NoMatches):
             self._update_options()
 
     def watch_allow_custom_text(self, allow: bool) -> None:
@@ -202,7 +203,7 @@ class HarnessListSelection(Widget):
         try:
             custom_input = self.query_one("#custom-input", Input)
             custom_input.display = allow
-        except Exception:
+        except NoMatches:
             pass
 
     def _update_options(self) -> None:
@@ -214,7 +215,7 @@ class HarnessListSelection(Widget):
             for i, option_text in enumerate(self.options):
                 display_text = f"{i + 1}. {option_text}" if i < 9 else f"   {option_text}"
                 option_list.add_option(Option(display_text, id=str(i)))
-        except Exception:
+        except NoMatches:
             pass
 
     @on(OptionList.OptionSelected)
@@ -255,7 +256,7 @@ class HarnessListSelection(Widget):
         try:
             option_list = self.query_one("#option-list", OptionList)
             option_list.focus()
-        except Exception:
+        except NoMatches:
             pass
 
     def focus_custom_input(self) -> None:
@@ -264,5 +265,5 @@ class HarnessListSelection(Widget):
             try:
                 custom_input = self.query_one("#custom-input", Input)
                 custom_input.focus()
-            except Exception:
+            except NoMatches:
                 pass

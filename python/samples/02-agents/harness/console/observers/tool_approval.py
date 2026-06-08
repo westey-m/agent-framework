@@ -84,10 +84,10 @@ class ToolApprovalObserver(ConsoleObserver):
         tool_name = self._format_tool_name(request)
         prompt = f"🔐 Tool approval: {tool_name}"
 
+        # TODO(westey-m): Add "Always approve" options when the framework supports
+        # CreateAlwaysApproveToolResponse / CreateAlwaysApproveToolWithArgumentsResponse.
         choices = [
             "Approve this call",
-            "Always approve this tool (any arguments)",
-            "Always approve this tool with these arguments",
             "Deny",
         ]
 
@@ -103,12 +103,7 @@ class ToolApprovalObserver(ConsoleObserver):
                 color = "red"
             else:
                 response_content = request.to_function_approval_response(approved=True)
-                if selection == "Always approve this tool (any arguments)":
-                    action_label = "✅ Always approved (any args)"
-                elif selection == "Always approve this tool with these arguments":
-                    action_label = "✅ Always approved (these args)"
-                else:
-                    action_label = "✅ Approved"
+                action_label = "✅ Approved"
                 color = "green"
 
             ux.append_info_line(

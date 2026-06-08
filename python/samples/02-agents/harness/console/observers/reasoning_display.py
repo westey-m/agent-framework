@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from rich.markup import escape
+
 from .base import ConsoleObserver
 
 if TYPE_CHECKING:
@@ -40,7 +42,7 @@ class ReasoningDisplayObserver(ConsoleObserver):
         reasoning_text = self._extract_reasoning(content)
         if reasoning_text:
             # Display reasoning in dim style to differentiate from main output
-            ux.append_info_line(f"💭 {reasoning_text}", "dim")
+            ux.append_info_line(f"💭 {escape(reasoning_text)}", "dim")
 
     def _extract_reasoning(self, content: Content) -> str | None:
         """Extract reasoning text from content.

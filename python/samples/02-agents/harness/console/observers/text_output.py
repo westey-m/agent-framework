@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from rich.markup import escape
+
 from .base import ConsoleObserver
 
 if TYPE_CHECKING:
@@ -36,7 +38,7 @@ class TextOutputObserver(ConsoleObserver):
             agent: The AI agent.
             session: The agent session.
         """
-        ux.write_text(text)
+        ux.write_text(escape(text))
 
     async def on_stream_complete(
         self,

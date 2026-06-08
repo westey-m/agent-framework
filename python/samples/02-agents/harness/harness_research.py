@@ -1,3 +1,16 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "agent-framework",
+#     "textual>=6.2.1",
+#     "rich>=13.7.1",
+#     "azure-identity",
+#     "python-dotenv",
+# ]
+# ///
+# Run with any PEP 723 compatible runner, e.g.:
+#   uv run samples/02-agents/harness/harness_research.py
+
 # Copyright (c) Microsoft. All rights reserved.
 
 """Harness Research Assistant with Console UI.

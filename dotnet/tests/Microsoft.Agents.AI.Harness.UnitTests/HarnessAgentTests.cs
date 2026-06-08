@@ -719,7 +719,6 @@ public class HarnessAgentTests
 
         // Disable ToolApproval so the approval requests surface in the response instead of being handled.
         var options = CreateAllDisabledOptions();
-        options.DisableNonApprovalRequiredFunctionBypassing = false;
         options.ChatOptions = new ChatOptions { Tools = [normalTool, approvalTool] };
 
         var agent = new HarnessAgent(mockClient.Object, TestMaxContextWindowTokens, TestMaxOutputTokens, options);

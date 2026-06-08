@@ -115,8 +115,9 @@ public sealed class HarnessAgentOptions
     /// require approval is disabled.
     /// </summary>
     /// <remarks>
-    /// When <see langword="false"/> (the default), the underlying chat client pipeline includes a
-    /// <see cref="NonApprovalRequiredFunctionBypassingChatClient"/> above the function invocation middleware.
+    /// When <see langword="false"/> (the default), the underlying chat client pipeline includes the decorator
+    /// added by <see cref="ChatClientBuilderExtensions.UseNonApprovalRequiredFunctionBypassing"/> above the
+    /// function invocation middleware.
     /// This stores automatically approved function calls for tools that do not require approval in the session
     /// state when they are returned alongside tools that do, so that only tools that truly require human
     /// approval are surfaced to the caller.

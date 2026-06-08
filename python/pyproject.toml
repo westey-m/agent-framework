@@ -185,7 +185,7 @@ omit = [
 ]
 
 [tool.pyright]
-exclude = ["**/tests/**", "**/.venv/**", "packages/devui/frontend/**"]
+exclude = ["**/tests/**", "**/.venv/**", "packages/devui/frontend/**", "samples/02-agents/harness/**"]
 typeCheckingMode = "strict"
 reportUnnecessaryIsInstance = false
 reportMissingTypeStubs = false

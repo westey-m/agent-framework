@@ -15,8 +15,12 @@ public class ClaimsIdentitySessionIsolationKeyProviderOptions
     /// <remarks>
     /// <para>
     /// Defaults to <see cref="ClaimTypes.NameIdentifier"/>, which corresponds to a stable, unique
-    /// subject identifier for the authenticated principal (e.g., the <c>sub</c>/<c>oid</c> claim
-    /// for OpenID Connect tokens such as those issued by Microsoft Entra ID).
+    /// subject identifier for the authenticated principal. For OpenID Connect tokens (including those
+    /// issued by Microsoft Entra ID), this is typically populated from the <c>sub</c> claim via the
+    /// default JWT inbound claim mapping. Note that <c>sub</c> is distinct from Entra's object
+    /// identifier (<c>oid</c>) claim; if you require the <c>oid</c> claim, or your provider does not map
+    /// a unique identifier onto <see cref="ClaimTypes.NameIdentifier"/>, override <see cref="ClaimType"/>
+    /// with the appropriate claim type.
     /// </para>
     /// <para>
     /// <strong>Security warning:</strong> The configured claim must uniquely identify the principal

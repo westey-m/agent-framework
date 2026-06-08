@@ -26,7 +26,13 @@ public static class ServiceCollectionExtensions
     /// </para>
     /// <para>
     /// When <paramref name="options"/> is not supplied, the isolation key is derived from the
-    /// <see cref="ClaimTypes.NameIdentifier"/> claim, a stable unique subject identifier.
+    /// <see cref="ClaimTypes.NameIdentifier"/> claim, a stable unique subject identifier. For OpenID
+    /// Connect tokens (including Microsoft Entra ID), this is typically mapped from the <c>sub</c> claim
+    /// by the default JWT inbound claim mapping. Authentication schemes that do not project a unique
+    /// identifier onto <see cref="ClaimTypes.NameIdentifier"/> (or hosts that require a different claim
+    /// such as Entra's <c>oid</c>) should override
+    /// <see cref="ClaimsIdentitySessionIsolationKeyProviderOptions.ClaimType"/>; otherwise the key may be
+    /// absent, which causes strict-mode session stores to fail.
     /// </para>
     /// <para>
     /// <strong>Security warning:</strong> If you override

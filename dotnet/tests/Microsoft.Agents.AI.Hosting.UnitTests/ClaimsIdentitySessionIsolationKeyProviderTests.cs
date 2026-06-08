@@ -16,6 +16,7 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
     private const string TestUserId = "test-user-id";
     private const string CustomClaimType = "custom-claim-type";
     private const string CustomClaimValue = "custom-claim-value";
+    private const string TestAuthenticationType = "TestAuth";
 
     private readonly Mock<IHttpContextAccessor> _httpContextAccessorMock;
 
@@ -213,7 +214,7 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
             new Claim(ClaimTypes.NameIdentifier, FirstValue),
             new Claim(ClaimTypes.NameIdentifier, SecondValue),
         };
-        var identity = new ClaimsIdentity(claims);
+        var identity = new ClaimsIdentity(claims, TestAuthenticationType);
         var principal = new ClaimsPrincipal(identity);
 
         var httpContext = new DefaultHttpContext
@@ -284,6 +285,30 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
         Assert.NotEqual(principalAKey, principalBKey);
     }
 
+    /// <summary>
+    /// Verify that GetSessionIsolationKeyAsync returns null when the request's user is not authenticated,
+    /// even if a claim of the configured type is present. The provider must not derive an isolation key
+    /// from claims on an unauthenticated identity.
+    /// </summary>
+    [Fact]
+    public async Task GetSessionIsolationKeyAsyncReturnsNullWhenUserNotAuthenticatedAsync()
+    {
+        // Arrange - identity has the claim but no authentication type, so IsAuthenticated is false.
+        var claims = new[] { new Claim(ClaimTypes.NameIdentifier, TestUserId) };
+        var unauthenticatedIdentity = new ClaimsIdentity(claims);
+        var principal = new ClaimsPrincipal(unauthenticatedIdentity);
+        var httpContext = new DefaultHttpContext { User = principal };
+        this._httpContextAccessorMock.Setup(x => x.HttpContext).Returns(httpContext);
+        var provider = new ClaimsIdentitySessionIsolationKeyProvider(this._httpContextAccessorMock.Object);
+
+        // Act
+        string? result = await provider.GetSessionIsolationKeyAsync();
+
+        // Assert
+        Assert.False(unauthenticatedIdentity.IsAuthenticated);
+        Assert.Null(result);
+    }
+
     #endregion
 
     #region Helper Methods
@@ -291,7 +316,7 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
     private void SetupHttpContextWithClaim(string claimType, string claimValue)
     {
         var claims = new[] { new Claim(claimType, claimValue) };
-        var identity = new ClaimsIdentity(claims);
+        var identity = new ClaimsIdentity(claims, TestAuthenticationType);
         var principal = new ClaimsPrincipal(identity);
 
         var httpContext = new DefaultHttpContext
@@ -303,7 +328,7 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
     }
 
     private static ClaimsPrincipal CreatePrincipal(params Claim[] claims)
-        => new(new ClaimsIdentity(claims));
+        => new(new ClaimsIdentity(claims, TestAuthenticationType));
 
     #endregion
 }

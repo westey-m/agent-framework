@@ -101,7 +101,7 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
     public async Task GetSessionIsolationKeyAsyncExtractsDefaultClaimTypeAsync()
     {
         // Arrange
-        this.SetupHttpContextWithClaim(ClaimsIdentity.DefaultNameClaimType, TestUserId);
+        this.SetupHttpContextWithClaim(ClaimTypes.NameIdentifier, TestUserId);
         var provider = new ClaimsIdentitySessionIsolationKeyProvider(this._httpContextAccessorMock.Object);
 
         // Act
@@ -109,6 +109,25 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
 
         // Assert
         Assert.Equal(TestUserId, result);
+    }
+
+    /// <summary>
+    /// Verify that the default claim type is the stable, unique NameIdentifier claim rather than the
+    /// non-unique display name claim. This guards against the session-isolation collision described in
+    /// the security report where two principals sharing the same name claim received the same key.
+    /// </summary>
+    [Fact]
+    public async Task GetSessionIsolationKeyAsyncIgnoresNameClaimByDefaultAsync()
+    {
+        // Arrange - only a display-name claim is present; the default provider must not use it.
+        this.SetupHttpContextWithClaim(ClaimsIdentity.DefaultNameClaimType, TestUserId);
+        var provider = new ClaimsIdentitySessionIsolationKeyProvider(this._httpContextAccessorMock.Object);
+
+        // Act
+        string? result = await provider.GetSessionIsolationKeyAsync();
+
+        // Assert
+        Assert.Null(result);
     }
 
     /// <summary>
@@ -191,8 +210,8 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
         const string SecondValue = "second-value";
         var claims = new[]
         {
-            new Claim(ClaimsIdentity.DefaultNameClaimType, FirstValue),
-            new Claim(ClaimsIdentity.DefaultNameClaimType, SecondValue),
+            new Claim(ClaimTypes.NameIdentifier, FirstValue),
+            new Claim(ClaimTypes.NameIdentifier, SecondValue),
         };
         var identity = new ClaimsIdentity(claims);
         var principal = new ClaimsPrincipal(identity);
@@ -219,7 +238,7 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
     public async Task GetSessionIsolationKeyAsyncHandlesEmptyClaimValueAsync()
     {
         // Arrange
-        this.SetupHttpContextWithClaim(ClaimsIdentity.DefaultNameClaimType, string.Empty);
+        this.SetupHttpContextWithClaim(ClaimTypes.NameIdentifier, string.Empty);
         var provider = new ClaimsIdentitySessionIsolationKeyProvider(this._httpContextAccessorMock.Object);
 
         // Act
@@ -227,6 +246,42 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
 
         // Assert
         Assert.Equal(string.Empty, result);
+    }
+
+    /// <summary>
+    /// Regression test for the session-isolation collision security report: two distinct authenticated
+    /// principals that share the same display-name claim but have different stable identifiers and tenants
+    /// must produce distinct isolation keys under the default options.
+    /// </summary>
+    [Fact]
+    public async Task GetSessionIsolationKeyAsyncDistinctForPrincipalsSharingNameClaimAsync()
+    {
+        // Arrange - both principals share the same name claim but differ by NameIdentifier and tenant.
+        const string CommonName = "John Doe";
+
+        var principalA = CreatePrincipal(
+            new Claim(ClaimsIdentity.DefaultNameClaimType, CommonName),
+            new Claim(ClaimTypes.NameIdentifier, "oid-user-a"),
+            new Claim("http://schemas.microsoft.com/identity/claims/tenantid", "tenant-a"));
+
+        var principalB = CreatePrincipal(
+            new Claim(ClaimsIdentity.DefaultNameClaimType, CommonName),
+            new Claim(ClaimTypes.NameIdentifier, "oid-user-b"),
+            new Claim("http://schemas.microsoft.com/identity/claims/tenantid", "tenant-b"));
+
+        var provider = new ClaimsIdentitySessionIsolationKeyProvider(this._httpContextAccessorMock.Object);
+
+        // Act
+        this._httpContextAccessorMock.Setup(x => x.HttpContext).Returns(new DefaultHttpContext { User = principalA });
+        string? principalAKey = await provider.GetSessionIsolationKeyAsync();
+
+        this._httpContextAccessorMock.Setup(x => x.HttpContext).Returns(new DefaultHttpContext { User = principalB });
+        string? principalBKey = await provider.GetSessionIsolationKeyAsync();
+
+        // Assert
+        Assert.Equal("oid-user-a", principalAKey);
+        Assert.Equal("oid-user-b", principalBKey);
+        Assert.NotEqual(principalAKey, principalBKey);
     }
 
     #endregion
@@ -246,6 +301,9 @@ public class ClaimsIdentitySessionIsolationKeyProviderTests
 
         this._httpContextAccessorMock.Setup(x => x.HttpContext).Returns(httpContext);
     }
+
+    private static ClaimsPrincipal CreatePrincipal(params Claim[] claims)
+        => new(new ClaimsIdentity(claims));
 
     #endregion
 }

@@ -21,6 +21,14 @@ namespace Microsoft.Agents.AI.Hosting;
 /// from the ambient <see cref="HttpContext"/>.
 /// </para>
 /// <para>
+/// <strong>Security warning:</strong> The configured <see cref="ClaimsIdentitySessionIsolationKeyProviderOptions.ClaimType"/>
+/// must uniquely identify the principal within the served population. Display names, usernames, email
+/// aliases, and other mutable or non-unique claims are <strong>unsafe</strong> isolation keys unless the
+/// host can prove their uniqueness across all callers: two distinct principals that share the same value
+/// would receive the same isolation key and could read or overwrite one another's persisted sessions.
+/// The default claim type is <see cref="ClaimTypes.NameIdentifier"/>, a stable unique subject identifier.
+/// </para>
+/// <para>
 /// If the <see cref="HttpContext"/> is unavailable, the user is not authenticated, or the specified claim
 /// is missing, the provider returns <see langword="null"/>. The consuming <see cref="IsolationKeyScopedAgentSessionStore"/>
 /// will then enforce strict or pass-through behavior based on its configuration.

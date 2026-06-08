@@ -199,10 +199,13 @@ async Task ApprovalLoopAsync()
 
 // Streams a loop run to the console, printing updates live and marking each new inner run (detected
 // via a change in ResponseId) with an "--- run N ---" header so you can see when the LoopAgent
-// re-invokes the inner agent. Returns the aggregated final response.
+// re-invokes the inner agent. Each message is prefixed with "User:" or "Agent:" based on its role, so
+// the loop's on-behalf-of feedback (User) is visually distinct from the agent's responses (Agent).
+// Returns the aggregated final response.
 static async Task<AgentResponse> StreamLoopAsync(AIAgent loopAgent, string input, AgentSession? session = null)
 {
     string? currentResponseId = null;
+    ChatRole? currentRole = null;
     var runCount = 0;
     var updates = new List<AgentResponseUpdate>();
 
@@ -212,7 +215,17 @@ static async Task<AgentResponse> StreamLoopAsync(AIAgent loopAgent, string input
         if (update.ResponseId is { } responseId && responseId != currentResponseId)
         {
             currentResponseId = responseId;
+            currentRole = null;
             Console.WriteLine($"\n--- run {++runCount} ---");
+        }
+
+        // Print a role-based prefix whenever the speaker changes — for example the loop's on-behalf-of
+        // user feedback versus the agent's response.
+        if (update.Role is { } role && role != currentRole)
+        {
+            currentRole = role;
+            var prefix = role == ChatRole.User ? "User" : role == ChatRole.Assistant ? "Agent" : role.Value;
+            Console.Write($"\n{prefix}: ");
         }
 
         Console.Write(update.Text);

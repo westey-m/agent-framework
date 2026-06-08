@@ -142,10 +142,11 @@ public class LoopAgentTests
     }
 
     /// <summary>
-    /// Verify that the loop re-invokes while the predicate returns true and returns the final response.
+    /// Verify that the loop re-invokes while the predicate returns true and the aggregated response contains every
+    /// iteration's messages in order.
     /// </summary>
     [Fact]
-    public async Task RunAsync_PredicateLoopsUntilFalse_ReturnsFinalResponseAsync()
+    public async Task RunAsync_PredicateLoopsUntilFalse_AggregatesAllIterationsAsync()
     {
         // Arrange
         var capture = new InnerAgentCapture(call =>
@@ -159,8 +160,31 @@ public class LoopAgentTests
         var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
 
         // Assert
-        Assert.Equal("iteration 3", response.Text);
         Assert.Equal(3, capture.CallCount);
+        Assert.Equal(["iteration 1", "iteration 2", "iteration 3"], response.Messages.Select(static m => m.Text));
+    }
+
+    /// <summary>
+    /// Verify that <see cref="LoopAgentOptions.NonStreamingReturnsLastResponseOnly"/> returns only the final
+    /// iteration's response instead of the aggregated transcript.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_LastResponseOnly_ReturnsFinalResponseAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(call =>
+            new AgentResponse([new ChatMessage(ChatRole.Assistant, $"iteration {call}")]));
+        var evaluator = While(ctx => ctx.LastResponse.Text != "iteration 3");
+        var options = new LoopAgentOptions { NonStreamingReturnsLastResponseOnly = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Equal("iteration 3", response.Text);
+        Assert.Single(response.Messages);
     }
 
     /// <summary>
@@ -255,8 +279,8 @@ public class LoopAgentTests
         var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
 
         // Assert
-        Assert.Equal("working", response.Text);
         Assert.Equal(3, capture.CallCount);
+        Assert.Equal(["working", "working", "working"], response.Messages.Select(static m => m.Text));
     }
 
     /// <summary>
@@ -644,6 +668,121 @@ public class LoopAgentTests
 
     #endregion
 
+    #region RunAsync - response shaping
+
+    /// <summary>
+    /// Verify that a non-streaming run aggregates each iteration's on-behalf-of feedback message and response messages
+    /// in order, stamping the configured author name on the synthesized feedback while never echoing caller input.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Aggregates_OnBehalfOfFeedbackAndResponsesAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { OnBehalfOfAuthorName = "loop" };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(["ack", "fix it", "ack"], response.Messages.Select(static m => m.Text));
+        ChatMessage feedbackMessage = response.Messages[1];
+        Assert.Equal(ChatRole.User, feedbackMessage.Role);
+        Assert.Equal("loop", feedbackMessage.AuthorName);
+
+        // The on-behalf-of author name is also stamped on the message actually sent to the wrapped agent.
+        Assert.Equal("loop", capture.MessagesPerCall[1].Single().AuthorName);
+    }
+
+    /// <summary>
+    /// Verify that evaluator-supplied messages are surfaced verbatim and their author name is not overwritten by the
+    /// loop's on-behalf-of author name.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ContinueWithMessages_AreSurfacedWithoutAuthorNameOverrideAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2
+                    ? LoopEvaluation.ContinueWithMessages([new ChatMessage(ChatRole.User, "explicit") { AuthorName = "evaluator" }])
+                    : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { OnBehalfOfAuthorName = "loop" };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(["ack", "explicit", "ack"], response.Messages.Select(static m => m.Text));
+        Assert.Equal("evaluator", response.Messages[1].AuthorName);
+    }
+
+    /// <summary>
+    /// Verify that in fresh-context mode only the synthesized aggregated feedback message is surfaced; the replayed
+    /// caller input messages are not echoed.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_FreshContext_SurfacesOnlyAggregatedFeedbackAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { FreshContextPerIteration = true, OnBehalfOfAuthorName = "loop" };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act (no caller session so the loop owns and recreates the session each iteration).
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "original")]);
+
+        // Assert
+        Assert.Equal(3, response.Messages.Count);
+        ChatMessage surfacedFeedback = response.Messages[1];
+        Assert.Equal("loop", surfacedFeedback.AuthorName);
+        Assert.Contains("fix it", surfacedFeedback.Text);
+
+        // The replayed caller input ("original") is sent to the agent but is not surfaced in the response.
+        Assert.DoesNotContain(response.Messages, static m => m.Text == "original");
+        Assert.Equal(["original", surfacedFeedback.Text], capture.MessagesPerCall[1].Select(static m => m.Text));
+    }
+
+    /// <summary>
+    /// Verify that <see cref="LoopAgentOptions.ExcludeOnBehalfOfMessages"/> omits the injected on-behalf-of messages
+    /// from the aggregated non-streaming response while still sending them to the wrapped agent.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ExcludeOnBehalfOfMessages_OmitsThemFromResponseAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { ExcludeOnBehalfOfMessages = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(["ack", "ack"], response.Messages.Select(static m => m.Text));
+
+        // The feedback is still sent to the wrapped agent even though it is not surfaced.
+        Assert.Equal("fix it", capture.MessagesPerCall[1].Single().Text);
+    }
+
+    #endregion
+
     #region RunStreamingAsync
 
     /// <summary>
@@ -734,6 +873,62 @@ public class LoopAgentTests
 
         // Assert
         Assert.Equal(1, capture.CallCount);
+    }
+
+    /// <summary>
+    /// Verify that the streaming path emits the loop's on-behalf-of feedback as an update (with the configured author
+    /// name) before streaming the re-invocation it drives.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_SurfacesOnBehalfOfFeedbackBeforeReinvocationAsync()
+    {
+        // Arrange
+        var capture = new InnerStreamingCapture(_ => [new AgentResponseUpdate(ChatRole.Assistant, "ack")]);
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { OnBehalfOfAuthorName = "loop" };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var updates = new List<AgentResponseUpdate>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession()))
+        {
+            updates.Add(update);
+        }
+
+        // Assert
+        Assert.Equal(["ack", "fix it", "ack"], updates.Select(static u => u.Text));
+        AgentResponseUpdate feedbackUpdate = updates[1];
+        Assert.Equal(ChatRole.User, feedbackUpdate.Role);
+        Assert.Equal("loop", feedbackUpdate.AuthorName);
+    }
+
+    /// <summary>
+    /// Verify that <see cref="LoopAgentOptions.ExcludeOnBehalfOfMessages"/> omits the injected on-behalf-of updates
+    /// from the streamed output while still sending the feedback to the wrapped agent.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_ExcludeOnBehalfOfMessages_OmitsThemFromUpdatesAsync()
+    {
+        // Arrange
+        var capture = new InnerStreamingCapture(_ => [new AgentResponseUpdate(ChatRole.Assistant, "ack")]);
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { ExcludeOnBehalfOfMessages = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var texts = new List<string>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession()))
+        {
+            texts.Add(update.Text);
+        }
+
+        // Assert
+        Assert.Equal(["ack", "ack"], texts);
+        Assert.Equal("fix it", capture.MessagesPerCall[1].Single().Text);
     }
 
     #endregion

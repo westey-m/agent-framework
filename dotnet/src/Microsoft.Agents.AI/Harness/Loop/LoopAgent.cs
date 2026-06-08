@@ -48,6 +48,16 @@ namespace Microsoft.Agents.AI;
 /// evaluators. If an iteration produces a pending tool-approval request, the loop stops and returns that response to
 /// the caller rather than attempting to resolve the approval automatically.
 /// </para>
+/// <para>
+/// A non-streaming run returns, by default, a single <see cref="AgentResponse"/> that aggregates the full transcript
+/// in order: the on-behalf-of messages the loop injected for each re-invocation followed by that iteration's response
+/// messages. The caller's original input messages are not echoed. Set
+/// <see cref="LoopAgentOptions.NonStreamingReturnsLastResponseOnly"/> to instead return only the final iteration's
+/// response. A streaming run always yields every iteration's updates, emitting the injected on-behalf-of messages as
+/// updates before each re-invocation. The injected messages can be attributed with
+/// <see cref="LoopAgentOptions.OnBehalfOfAuthorName"/>, or omitted from the surfaced output entirely with
+/// <see cref="LoopAgentOptions.ExcludeOnBehalfOfMessages"/>.
+/// </para>
 /// </remarks>
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class LoopAgent : DelegatingAIAgent
@@ -58,6 +68,9 @@ public sealed class LoopAgent : DelegatingAIAgent
     private readonly IReadOnlyList<LoopEvaluator> _evaluators;
     private readonly int _maxIterations;
     private readonly bool _freshContextPerIteration;
+    private readonly string? _onBehalfOfAuthorName;
+    private readonly bool _excludeOnBehalfOfMessages;
+    private readonly bool _nonStreamingReturnsLastResponseOnly;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -106,6 +119,9 @@ public sealed class LoopAgent : DelegatingAIAgent
 
         this._maxIterations = Throw.IfLessThan(options?.MaxIterations ?? DefaultMaxIterations, 1);
         this._freshContextPerIteration = options?.FreshContextPerIteration ?? false;
+        this._onBehalfOfAuthorName = options?.OnBehalfOfAuthorName;
+        this._excludeOnBehalfOfMessages = options?.ExcludeOnBehalfOfMessages ?? false;
+        this._nonStreamingReturnsLastResponseOnly = options?.NonStreamingReturnsLastResponseOnly ?? false;
         this._logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<LoopAgent>();
     }
 
@@ -129,6 +145,13 @@ public sealed class LoopAgent : DelegatingAIAgent
         IEnumerable<ChatMessage> currentMessages = initialMessages;
         int iteration = 0;
 
+        // Aggregates the full transcript across iterations: each iteration's surfaced on-behalf-of input messages
+        // followed by that iteration's response messages. Unused when only the final response is returned.
+        List<ChatMessage> transcript = [];
+
+        // The loop-synthesized on-behalf-of messages that drive the current iteration (none for the first iteration).
+        IReadOnlyList<ChatMessage> currentSurfaced = [];
+
         while (true)
         {
             // Run the wrapped agent using the context's session once it exists (it may have been replaced for a fresh
@@ -136,6 +159,10 @@ public sealed class LoopAgent : DelegatingAIAgent
             AgentSession activeSession = context?.Session ?? session;
             AgentResponse response = await this.InnerAgent.RunAsync(currentMessages, activeSession, options, cancellationToken).ConfigureAwait(false);
             iteration++;
+
+            // Record this iteration's on-behalf-of input (before the response it elicited) and the response itself.
+            transcript.AddRange(currentSurfaced);
+            transcript.AddRange(response.Messages);
 
             // Create the context after the first run (so LastResponse is never null) and reuse it thereafter.
             // Expose the feedback log as a read-only wrapper so evaluators cannot downcast and mutate it; the
@@ -148,24 +175,25 @@ public sealed class LoopAgent : DelegatingAIAgent
             // Stop and surface the response when the agent is waiting for a tool approval.
             if (HasPendingApprovalRequests(response))
             {
-                return response;
+                return this.BuildResult(response, transcript);
             }
 
             // Enforce the global safety cap regardless of what the evaluators want.
             if (iteration >= this._maxIterations)
             {
                 this.LogMaxIterationsReached(iteration);
-                return response;
+                return this.BuildResult(response, transcript);
             }
 
             // Ask the evaluators whether to continue; stop when none of them request a re-invocation.
             LoopNextStep step = await this.EvaluateAndBuildNextAsync(context, feedbackLog, sessionProvidedByCaller, cancellationToken).ConfigureAwait(false);
             if (!step.ShouldContinue)
             {
-                return response;
+                return this.BuildResult(response, transcript);
             }
 
             currentMessages = step.Messages;
+            currentSurfaced = step.SurfacedMessages;
         }
     }
 
@@ -189,8 +217,22 @@ public sealed class LoopAgent : DelegatingAIAgent
         IEnumerable<ChatMessage> currentMessages = initialMessages;
         int iteration = 0;
 
+        // The loop-synthesized on-behalf-of messages that drive the current iteration (none for the first iteration).
+        IReadOnlyList<ChatMessage> currentSurfaced = [];
+
         while (true)
         {
+            // Surface the on-behalf-of messages that drive this iteration before streaming the response they elicit,
+            // so callers can see the loop acting autonomously on the user's behalf (none for the first iteration).
+            foreach (ChatMessage surfaced in currentSurfaced)
+            {
+                yield return new AgentResponseUpdate(surfaced.Role, surfaced.Contents)
+                {
+                    AuthorName = surfaced.AuthorName,
+                    MessageId = surfaced.MessageId,
+                };
+            }
+
             // Stream this iteration's updates to the caller while collecting them so the iteration's full
             // response can be aggregated for evaluation (true per-iteration streaming). Uses the context's
             // session once it exists (it may have been replaced for a fresh context), otherwise the resolved session.
@@ -235,6 +277,7 @@ public sealed class LoopAgent : DelegatingAIAgent
             }
 
             currentMessages = step.Messages;
+            currentSurfaced = step.SurfacedMessages;
         }
     }
 
@@ -262,10 +305,11 @@ public sealed class LoopAgent : DelegatingAIAgent
             return LoopNextStep.Stop();
         }
 
-        // An evaluator supplied explicit messages: send them verbatim, bypassing feedback/fresh construction.
+        // An evaluator supplied explicit messages: send them verbatim, bypassing feedback/fresh construction. These
+        // are surfaced to the caller as-is (the evaluator owns them, including any author name).
         if (winner.Messages is not null)
         {
-            return LoopNextStep.Continue(winner.Messages);
+            return LoopNextStep.Continue(winner.Messages, this.Surfaced(winner.Messages));
         }
 
         // Record one feedback entry for this re-invoked iteration (null when none) so the last element always
@@ -279,22 +323,37 @@ public sealed class LoopAgent : DelegatingAIAgent
             context.Session = await context.Agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        return LoopNextStep.Continue(this.BuildNextMessages(context, feedbackLog));
+        (List<ChatMessage> messages, List<ChatMessage> surfaced) = this.BuildNextMessages(context, feedbackLog);
+        return LoopNextStep.Continue(messages, this.Surfaced(surfaced));
     }
 
-    private List<ChatMessage> BuildNextMessages(LoopContext context, List<string?> feedback)
+    /// <summary>
+    /// Returns the messages to surface to the caller, honoring <see cref="LoopAgentOptions.ExcludeOnBehalfOfMessages"/>.
+    /// </summary>
+    private IReadOnlyList<ChatMessage> Surfaced(IReadOnlyList<ChatMessage> surfaced)
+        => this._excludeOnBehalfOfMessages ? [] : surfaced;
+
+    /// <summary>
+    /// Builds the messages sent to the wrapped agent for the next iteration along with the subset that should be
+    /// surfaced to the caller (the loop-synthesized on-behalf-of feedback). Replayed caller input is excluded from the
+    /// surfaced subset.
+    /// </summary>
+    private (List<ChatMessage> Messages, List<ChatMessage> Surfaced) BuildNextMessages(LoopContext context, List<string?> feedback)
     {
         var messages = new List<ChatMessage>();
+        var surfaced = new List<ChatMessage>();
 
         if (this._freshContextPerIteration)
         {
-            // Fresh context: re-send the original task plus an aggregated log of all feedback recorded so far.
+            // Fresh context: re-send the original task plus an aggregated log of all feedback recorded so far. Only the
+            // synthesized feedback message is surfaced; the replayed caller input messages are not.
             messages.AddRange(context.InitialMessages);
 
-            ChatMessage? feedbackMessage = BuildAggregatedFeedbackMessage(feedback);
+            ChatMessage? feedbackMessage = this.BuildAggregatedFeedbackMessage(feedback);
             if (feedbackMessage is not null)
             {
                 messages.Add(feedbackMessage);
+                surfaced.Add(feedbackMessage);
             }
         }
         else
@@ -304,14 +363,16 @@ public sealed class LoopAgent : DelegatingAIAgent
             string? latest = feedback.Count > 0 ? feedback[feedback.Count - 1] : null;
             if (!string.IsNullOrWhiteSpace(latest))
             {
-                messages.Add(new ChatMessage(ChatRole.User, latest));
+                var feedbackMessage = new ChatMessage(ChatRole.User, latest) { AuthorName = this._onBehalfOfAuthorName };
+                messages.Add(feedbackMessage);
+                surfaced.Add(feedbackMessage);
             }
         }
 
-        return messages;
+        return (messages, surfaced);
     }
 
-    private static ChatMessage? BuildAggregatedFeedbackMessage(IReadOnlyList<string?> feedback)
+    private ChatMessage? BuildAggregatedFeedbackMessage(IReadOnlyList<string?> feedback)
     {
         var body = new StringBuilder("## Feedback\n");
         bool any = false;
@@ -324,7 +385,30 @@ public sealed class LoopAgent : DelegatingAIAgent
             }
         }
 
-        return any ? new ChatMessage(ChatRole.User, body.ToString()) : null;
+        return any ? new ChatMessage(ChatRole.User, body.ToString()) { AuthorName = this._onBehalfOfAuthorName } : null;
+    }
+
+    /// <summary>
+    /// Produces the non-streaming run result: either the final iteration's response (when configured) or an
+    /// aggregated response carrying the full transcript with the final response's metadata.
+    /// </summary>
+    private AgentResponse BuildResult(AgentResponse lastResponse, List<ChatMessage> transcript)
+    {
+        if (this._nonStreamingReturnsLastResponseOnly)
+        {
+            return lastResponse;
+        }
+
+        return new AgentResponse(transcript)
+        {
+            AgentId = lastResponse.AgentId,
+            ResponseId = lastResponse.ResponseId,
+            CreatedAt = lastResponse.CreatedAt,
+            FinishReason = lastResponse.FinishReason,
+            Usage = lastResponse.Usage,
+            AdditionalProperties = lastResponse.AdditionalProperties,
+            ContinuationToken = lastResponse.ContinuationToken,
+        };
     }
 
     private static bool HasPendingApprovalRequests(AgentResponse response)
@@ -369,18 +453,27 @@ public sealed class LoopAgent : DelegatingAIAgent
     /// <summary>Represents the loop's decision for the next iteration: stop, or continue with a set of messages.</summary>
     private readonly struct LoopNextStep
     {
-        private LoopNextStep(bool shouldContinue, IReadOnlyList<ChatMessage> messages)
+        private LoopNextStep(bool shouldContinue, IReadOnlyList<ChatMessage> messages, IReadOnlyList<ChatMessage> surfacedMessages)
         {
             this.ShouldContinue = shouldContinue;
             this.Messages = messages;
+            this.SurfacedMessages = surfacedMessages;
         }
 
         public bool ShouldContinue { get; }
 
+        /// <summary>Gets the full set of messages sent to the wrapped agent for the next iteration.</summary>
         public IReadOnlyList<ChatMessage> Messages { get; }
 
-        public static LoopNextStep Stop() => new(shouldContinue: false, []);
+        /// <summary>
+        /// Gets the subset of <see cref="Messages"/> the loop synthesized on the caller's behalf (feedback or
+        /// evaluator-supplied messages) that should be surfaced to the caller. Replayed caller input is excluded.
+        /// </summary>
+        public IReadOnlyList<ChatMessage> SurfacedMessages { get; }
 
-        public static LoopNextStep Continue(IReadOnlyList<ChatMessage> messages) => new(shouldContinue: true, messages);
+        public static LoopNextStep Stop() => new(shouldContinue: false, [], []);
+
+        public static LoopNextStep Continue(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ChatMessage> surfacedMessages)
+            => new(shouldContinue: true, messages, surfacedMessages);
     }
 }

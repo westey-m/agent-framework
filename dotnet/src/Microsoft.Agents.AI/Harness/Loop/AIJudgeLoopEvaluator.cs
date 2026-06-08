@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -82,16 +81,24 @@ public sealed class AIJudgeLoopEvaluator : LoopEvaluator
     {
         _ = Throw.IfNull(context);
 
-        string requestText = string.Join(
-            "\n",
-            context.InitialMessages.Select(static m => m.Text).Where(static t => !string.IsNullOrWhiteSpace(t)));
+        // Build the judge's user message from AIContent so non-text request content (images, data, etc.) is
+        // preserved rather than flattened to text. The original request's contents are framed between header
+        // text segments, followed by the agent's latest response text.
+        var userContents = new List<AIContent>
+        {
+            new TextContent("# Has the original request been fully addressed?\n\n## Original request:\n"),
+        };
+        foreach (ChatMessage message in context.InitialMessages)
+        {
+            userContents.AddRange(message.Contents);
+        }
+
+        userContents.Add(new TextContent($"\n\n## Agent's latest response:\n{context.LastResponse.Text}"));
 
         List<ChatMessage> judgeMessages =
         [
             new ChatMessage(ChatRole.System, this._instructions),
-            new ChatMessage(
-                ChatRole.User,
-                $"# Has the original request been fully addressed?\n\n## Original request:\n{requestText}\n\n## Agent's latest response:\n{context.LastResponse.Text}"),
+            new ChatMessage(ChatRole.User, userContents),
         ];
 
         bool answered;

@@ -138,7 +138,9 @@ public sealed class LoopAgent : DelegatingAIAgent
             iteration++;
 
             // Create the context after the first run (so LastResponse is never null) and reuse it thereafter.
-            context ??= new LoopContext(this.InnerAgent, session, initialMessages, response, options) { Feedback = feedbackLog };
+            // Expose the feedback log as a read-only wrapper so evaluators cannot downcast and mutate it; the
+            // wrapper still reflects entries appended by the loop.
+            context ??= new LoopContext(this.InnerAgent, session, initialMessages, response, options) { Feedback = feedbackLog.AsReadOnly() };
 
             context.Iteration = iteration;
             context.LastResponse = response;
@@ -205,7 +207,9 @@ public sealed class LoopAgent : DelegatingAIAgent
             AgentResponse response = updates.ToAgentResponse();
 
             // Create the context after the first run (so LastResponse is never null) and reuse it thereafter.
-            context ??= new LoopContext(this.InnerAgent, session, initialMessages, response, options) { Feedback = feedbackLog };
+            // Expose the feedback log as a read-only wrapper so evaluators cannot downcast and mutate it; the
+            // wrapper still reflects entries appended by the loop.
+            context ??= new LoopContext(this.InnerAgent, session, initialMessages, response, options) { Feedback = feedbackLog.AsReadOnly() };
 
             context.Iteration = iteration;
             context.LastResponse = response;
@@ -265,8 +269,8 @@ public sealed class LoopAgent : DelegatingAIAgent
         }
 
         // Record one feedback entry for this re-invoked iteration (null when none) so the last element always
-        // corresponds to the latest re-invoked iteration.
-        feedbackLog.Add(string.IsNullOrWhiteSpace(winner.Feedback) ? null : winner.Feedback);
+        // corresponds to the latest re-invoked iteration. Continue() already normalizes whitespace to null.
+        feedbackLog.Add(winner.Feedback);
 
         // Start the next iteration from a brand-new session when a fresh context is requested and the loop owns the
         // session, so no prior conversation history leaks across iterations.

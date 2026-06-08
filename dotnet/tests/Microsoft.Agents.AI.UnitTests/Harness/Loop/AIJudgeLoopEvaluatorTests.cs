@@ -139,6 +139,39 @@ public class AIJudgeLoopEvaluatorTests
     }
 
     /// <summary>
+    /// Verify that non-text content in the original request (for example an image) is forwarded to the judge
+    /// rather than being silently dropped when flattening the request to text.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_NonTextRequestContent_IsForwardedToJudgeAsync()
+    {
+        // Arrange
+        List<ChatMessage>? judgeMessages = null;
+        var judgeMock = new Mock<IChatClient>();
+        judgeMock.Setup(c => c.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions?, CancellationToken>((msgs, _, _) => judgeMessages = msgs.ToList())
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"answered\":true}")));
+        var evaluator = new AIJudgeLoopEvaluator(judgeMock.Object);
+        var imageContent = new DataContent(new byte[] { 1, 2, 3, 4 }, "image/png");
+        var context = new LoopContext(
+            new Mock<AIAgent>().Object,
+            new ChatClientAgentSession(),
+            [new ChatMessage(ChatRole.User, [imageContent])],
+            new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial answer")]));
+
+        // Act
+        await evaluator.EvaluateAsync(context);
+
+        // Assert
+        Assert.NotNull(judgeMessages);
+        ChatMessage userMessage = Assert.Single(judgeMessages!, m => m.Role == ChatRole.User);
+        Assert.Contains(userMessage.Contents.OfType<DataContent>(), c => c.MediaType == "image/png");
+    }
+
+    /// <summary>
     /// Verify that the constructor throws when the judge client is null.
     /// </summary>
     [Fact]

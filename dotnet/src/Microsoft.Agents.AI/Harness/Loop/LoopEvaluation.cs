@@ -15,7 +15,7 @@ namespace Microsoft.Agents.AI;
 /// should inform the next iteration.
 /// </summary>
 /// <remarks>
-/// An evaluator is concerned only with the judgement (continue or stop) and what to carry forward. In the common case
+/// An evaluator is concerned only with the judgment (continue or stop) and what to carry forward. In the common case
 /// it returns a feedback string and lets the <see cref="LoopAgent"/> decide how that feedback is turned into the next
 /// input (and whether the session is reset). For full control, <see cref="ContinueWithMessages"/> supplies the exact
 /// messages to send next, bypassing the loop's feedback and fresh-context message construction.
@@ -63,7 +63,7 @@ public sealed class LoopEvaluation
     /// feedback.
     /// </param>
     /// <returns>An evaluation with <see cref="ShouldReinvoke"/> set to <see langword="true"/>.</returns>
-    public static LoopEvaluation Continue(string? feedback = null) => new(shouldReinvoke: true, feedback, messages: null);
+    public static LoopEvaluation Continue(string? feedback = null) => new(shouldReinvoke: true, string.IsNullOrWhiteSpace(feedback) ? null : feedback, messages: null);
 
     /// <summary>
     /// Creates an evaluation that re-invokes the wrapped agent with the specified messages, bypassing the loop's

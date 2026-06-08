@@ -13,7 +13,7 @@ namespace Microsoft.Agents.AI;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A <see cref="LoopEvaluator"/> is pure judgement: it inspects the <see cref="LoopContext"/> and returns a
+/// A <see cref="LoopEvaluator"/> is pure judgment: it inspects the <see cref="LoopContext"/> and returns a
 /// <see cref="LoopEvaluation"/> describing whether to continue and any feedback for the next iteration. It does not
 /// manage the session or construct the next input messages — that is the responsibility of the
 /// <see cref="LoopAgent"/> that consumes it.

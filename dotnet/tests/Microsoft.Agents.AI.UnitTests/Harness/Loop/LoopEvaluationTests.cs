@@ -36,16 +36,20 @@ public class LoopEvaluationTests
     }
 
     /// <summary>
-    /// Verify that Continue with feedback re-invokes and carries the supplied feedback.
+    /// Verify that Continue with whitespace-only feedback normalizes the feedback to null, matching the documented
+    /// "null, empty, or whitespace is treated as no feedback" semantics.
     /// </summary>
-    [Fact]
-    public void Continue_WithFeedback_ReinvokesWithFeedback()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n")]
+    public void Continue_WhitespaceFeedback_NormalizesToNull(string feedback)
     {
         // Act
-        var evaluation = LoopEvaluation.Continue("do more work");
+        var evaluation = LoopEvaluation.Continue(feedback);
 
         // Assert
         Assert.True(evaluation.ShouldReinvoke);
-        Assert.Equal("do more work", evaluation.Feedback);
+        Assert.Null(evaluation.Feedback);
     }
 }

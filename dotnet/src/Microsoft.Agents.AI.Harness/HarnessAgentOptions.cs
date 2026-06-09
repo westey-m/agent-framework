@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Agents.AI.Compaction;
 #if NET
 using Microsoft.Agents.AI.Tools.Shell;
 #endif
@@ -36,13 +37,13 @@ public sealed class HarnessAgentOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// When both <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/> are provided,
-    /// in-loop compaction is enabled using a <see cref="Compaction.ContextWindowCompactionStrategy"/>
-    /// to prevent function-invocation loops from overflowing the context window, and the default
-    /// <see cref="InMemoryChatHistoryProvider"/> applies a matching chat reducer.
+    /// When both <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/> are provided (and no
+    /// custom <see cref="CompactionStrategy"/> is set), a default <see cref="ContextWindowCompactionStrategy"/>
+    /// is constructed from these values to prevent function-invocation loops from overflowing the context window.
     /// </para>
     /// <para>
-    /// When either value is <see langword="null"/>, compaction is disabled.
+    /// Ignored when <see cref="CompactionStrategy"/> is provided or when <see cref="DisableCompaction"/> is
+    /// <see langword="true"/>.
     /// </para>
     /// </remarks>
     public int? MaxContextWindowTokens { get; set; }
@@ -52,16 +53,46 @@ public sealed class HarnessAgentOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// When both <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/> are provided,
-    /// in-loop compaction is enabled and this value is also used as the default for
-    /// <see cref="ChatOptions"/>.<see cref="ChatOptions.MaxOutputTokens"/> when not explicitly set.
+    /// When set, this value is used as the default for <see cref="ChatOptions"/>.<see cref="ChatOptions.MaxOutputTokens"/>
+    /// when not explicitly configured.
     /// </para>
     /// <para>
-    /// When either value is <see langword="null"/>, compaction is disabled and
-    /// <see cref="ChatOptions"/>.<see cref="ChatOptions.MaxOutputTokens"/> is left unchanged.
+    /// For compaction purposes, this value is used together with <see cref="MaxContextWindowTokens"/> to construct a
+    /// default <see cref="ContextWindowCompactionStrategy"/> — but only when no custom <see cref="CompactionStrategy"/>
+    /// is provided and <see cref="DisableCompaction"/> is <see langword="false"/>.
     /// </para>
     /// </remarks>
     public int? MaxOutputTokens { get; set; }
+
+    /// <summary>
+    /// Gets or sets a custom <see cref="Compaction.CompactionStrategy"/> to use for in-loop context-window compaction.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When provided, this strategy is used directly and <see cref="MaxContextWindowTokens"/> and
+    /// <see cref="MaxOutputTokens"/> are ignored for compaction purposes (<see cref="MaxOutputTokens"/> is still
+    /// used as the default for <see cref="ChatOptions"/>.<see cref="ChatOptions.MaxOutputTokens"/> if set).
+    /// </para>
+    /// <para>
+    /// When <see langword="null"/> and both <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/>
+    /// are provided, a default <see cref="ContextWindowCompactionStrategy"/> is constructed from those values.
+    /// </para>
+    /// <para>
+    /// This property is ignored when <see cref="DisableCompaction"/> is <see langword="true"/>.
+    /// </para>
+    /// </remarks>
+    public CompactionStrategy? CompactionStrategy { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether in-loop compaction is disabled.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="true"/>, compaction is disabled regardless of <see cref="CompactionStrategy"/>,
+    /// <see cref="MaxContextWindowTokens"/>, or <see cref="MaxOutputTokens"/> settings. No
+    /// <see cref="CompactionProvider"/> is added to the chat client pipeline, and the default
+    /// <see cref="InMemoryChatHistoryProvider"/> is configured without a chat reducer.
+    /// </remarks>
+    public bool DisableCompaction { get; set; }
 
     /// <summary>
     /// Gets or sets additional chat options such as tools for the agent to use.

@@ -157,15 +157,25 @@ public sealed class HarnessAgent : DelegatingAIAgent
 
     private static ChatClientAgent BuildInnerAgent(IChatClient chatClient, HarnessAgentOptions? options, ILoggerFactory? loggerFactory, IServiceProvider? services)
     {
-        int? maxContextWindowTokens = options?.MaxContextWindowTokens;
-        int? maxOutputTokens = options?.MaxOutputTokens;
-        bool compactionEnabled = maxContextWindowTokens.HasValue && maxOutputTokens.HasValue;
-
-        ContextWindowCompactionStrategy? compactionStrategy = compactionEnabled
-            ? new ContextWindowCompactionStrategy(
-                maxContextWindowTokens: maxContextWindowTokens!.Value,
-                maxOutputTokens: maxOutputTokens!.Value)
-            : null;
+        // Determine compaction strategy:
+        // 1. DisableCompaction = true → no compaction
+        // 2. Custom CompactionStrategy provided → use it (ignore token params)
+        // 3. Both token params provided → build default ContextWindowCompactionStrategy
+        // 4. Otherwise → no compaction
+        CompactionStrategy? compactionStrategy = null;
+        if (options?.DisableCompaction is not true)
+        {
+            if (options?.CompactionStrategy is CompactionStrategy customStrategy)
+            {
+                compactionStrategy = customStrategy;
+            }
+            else if (options?.MaxContextWindowTokens is int maxCtx && options?.MaxOutputTokens is int maxOut)
+            {
+                compactionStrategy = new ContextWindowCompactionStrategy(
+                    maxContextWindowTokens: maxCtx,
+                    maxOutputTokens: maxOut);
+            }
+        }
 
         ChatHistoryProvider chatHistoryProvider = options?.ChatHistoryProvider
             ?? (compactionStrategy is not null
@@ -186,7 +196,7 @@ public sealed class HarnessAgent : DelegatingAIAgent
             (false, false) => $"{harnessInstructions}\n\n{agentInstructions}",
         };
 
-        ChatOptions chatOptions = BuildChatOptions(options, instructions, maxOutputTokens);
+        ChatOptions chatOptions = BuildChatOptions(options, instructions, options?.MaxOutputTokens);
 
         CompactionProvider? compactionProvider = compactionStrategy is not null
             ? new CompactionProvider(compactionStrategy, loggerFactory: loggerFactory)

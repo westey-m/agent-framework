@@ -32,6 +32,38 @@ public sealed class HarnessAgentOptions
     public string? Description { get; set; }
 
     /// <summary>
+    /// Gets or sets the maximum number of tokens the model's context window supports (e.g., 1,050,000 for gpt-5.4).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When both <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/> are provided,
+    /// in-loop compaction is enabled using a <see cref="Compaction.ContextWindowCompactionStrategy"/>
+    /// to prevent function-invocation loops from overflowing the context window, and the default
+    /// <see cref="InMemoryChatHistoryProvider"/> applies a matching chat reducer.
+    /// </para>
+    /// <para>
+    /// When either value is <see langword="null"/>, compaction is disabled.
+    /// </para>
+    /// </remarks>
+    public int? MaxContextWindowTokens { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of output tokens the model can generate per response (e.g., 128,000 for gpt-5.4).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When both <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/> are provided,
+    /// in-loop compaction is enabled and this value is also used as the default for
+    /// <see cref="ChatOptions"/>.<see cref="ChatOptions.MaxOutputTokens"/> when not explicitly set.
+    /// </para>
+    /// <para>
+    /// When either value is <see langword="null"/>, compaction is disabled and
+    /// <see cref="ChatOptions"/>.<see cref="ChatOptions.MaxOutputTokens"/> is left unchanged.
+    /// </para>
+    /// </remarks>
+    public int? MaxOutputTokens { get; set; }
+
+    /// <summary>
     /// Gets or sets additional chat options such as tools for the agent to use.
     /// </summary>
     /// <remarks>
@@ -68,9 +100,9 @@ public sealed class HarnessAgentOptions
     /// Gets or sets the <see cref="ChatHistoryProvider"/> to use for storing chat history.
     /// </summary>
     /// <remarks>
-    /// When <see langword="null"/>, the agent defaults to an <see cref="InMemoryChatHistoryProvider"/>
-    /// configured with a compaction-based chat reducer derived from the <c>maxContextWindowTokens</c>
-    /// and <c>maxOutputTokens</c> constructor parameters of <see cref="HarnessAgent"/>.
+    /// When <see langword="null"/>, the agent defaults to an <see cref="InMemoryChatHistoryProvider"/>.
+    /// If <see cref="MaxContextWindowTokens"/> and <see cref="MaxOutputTokens"/> are both provided,
+    /// the default provider is configured with a compaction-based chat reducer; otherwise, no reducer is applied.
     /// </remarks>
     public ChatHistoryProvider? ChatHistoryProvider { get; set; }
 

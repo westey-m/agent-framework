@@ -18,7 +18,7 @@ namespace Microsoft.Agents.AI;
 
 /// <summary>
 /// A pre-configured <see cref="DelegatingAIAgent"/> that wraps a <see cref="ChatClientAgent"/> with
-/// function invocation, per-service-call chat history persistence, in-loop compaction, and a rich set
+/// function invocation, per-service-call chat history persistence, optional in-loop compaction, and a rich set
 /// of default context providers and agent decorators.
 /// </summary>
 /// <remarks>
@@ -28,7 +28,7 @@ namespace Microsoft.Agents.AI;
 /// <item><description><see cref="FunctionInvokingChatClient"/> — automatic function/tool invocation.</description></item>
 /// <item><description><see cref="MessageInjectingChatClient"/> — allows external code to inject messages into the conversation mid-stream.</description></item>
 /// <item><description><see cref="PerServiceCallChatHistoryPersistingChatClient"/> — persists chat history after every individual service call within a function-invocation loop.</description></item>
-/// <item><description><see cref="AIContextProviderChatClient"/> with a <see cref="CompactionProvider"/> — applies context-window compaction before each call so long function-invocation loops do not overflow the context window.</description></item>
+/// <item><description><see cref="AIContextProviderChatClient"/> with a <see cref="CompactionProvider"/> — applies context-window compaction before each call so long function-invocation loops do not overflow the context window (only when <see cref="HarnessAgentOptions.MaxContextWindowTokens"/> and <see cref="HarnessAgentOptions.MaxOutputTokens"/> are provided).</description></item>
 /// </list>
 /// </para>
 /// <para>
@@ -59,9 +59,10 @@ namespace Microsoft.Agents.AI;
 /// to match the manually-assembled pipeline.
 /// </para>
 /// <para>
-/// When no <see cref="HarnessAgentOptions.ChatHistoryProvider"/> is supplied, the agent defaults to an
-/// <see cref="InMemoryChatHistoryProvider"/> whose chat reducer applies the same compaction strategy,
-/// keeping in-memory history from growing unboundedly across sessions.
+/// When no <see cref="HarnessAgentOptions.ChatHistoryProvider"/> is supplied and compaction is enabled, the agent
+/// defaults to an <see cref="InMemoryChatHistoryProvider"/> whose chat reducer applies the same compaction strategy,
+/// keeping in-memory history from growing unboundedly across sessions. When compaction is disabled, the default
+/// <see cref="InMemoryChatHistoryProvider"/> is used without a chat reducer.
 /// </para>
 /// </remarks>
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
@@ -93,18 +94,10 @@ public sealed class HarnessAgent : DelegatingAIAgent
     /// The agent wraps this client in a function-invocation, per-service-call persistence,
     /// and compaction pipeline automatically.
     /// </param>
-    /// <param name="maxContextWindowTokens">
-    /// The maximum number of tokens the model's context window supports (e.g., 1,050,000 for gpt-5.4).
-    /// Used to configure the compaction strategy.
-    /// </param>
-    /// <param name="maxOutputTokens">
-    /// The maximum number of output tokens the model can generate per response (e.g., 128,000 for gpt-5.4).
-    /// Used to configure the compaction strategy and to limit the model's output.
-    /// </param>
     /// <param name="options">
     /// Optional configuration options for the agent, including instructions override, tools,
-    /// additional context providers, and chat history provider.
-    /// When <see langword="null"/>, the agent uses built-in default settings.
+    /// additional context providers, chat history provider, and compaction settings.
+    /// When <see langword="null"/>, the agent uses built-in default settings with compaction disabled.
     /// </param>
     /// <param name="loggerFactory">
     /// Optional logger factory for creating loggers used by the agent and its components.
@@ -116,23 +109,22 @@ public sealed class HarnessAgent : DelegatingAIAgent
     /// <paramref name="chatClient"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="maxContextWindowTokens"/> is not positive, or
-    /// <paramref name="maxOutputTokens"/> is negative or greater than or equal to <paramref name="maxContextWindowTokens"/>.
+    /// <see cref="HarnessAgentOptions.MaxContextWindowTokens"/> is not positive, or
+    /// <see cref="HarnessAgentOptions.MaxOutputTokens"/> is negative or greater than or equal to
+    /// <see cref="HarnessAgentOptions.MaxContextWindowTokens"/> (when both are provided).
     /// </exception>
-    public HarnessAgent(IChatClient chatClient, int maxContextWindowTokens, int maxOutputTokens, HarnessAgentOptions? options = null, ILoggerFactory? loggerFactory = null, IServiceProvider? services = null)
+    public HarnessAgent(IChatClient chatClient, HarnessAgentOptions? options = null, ILoggerFactory? loggerFactory = null, IServiceProvider? services = null)
         : base(BuildAgent(
             Throw.IfNull(chatClient),
-            maxContextWindowTokens,
-            maxOutputTokens,
             options,
             loggerFactory,
             services))
     {
     }
 
-    private static AIAgent BuildAgent(IChatClient chatClient, int maxContextWindowTokens, int maxOutputTokens, HarnessAgentOptions? options, ILoggerFactory? loggerFactory, IServiceProvider? services)
+    private static AIAgent BuildAgent(IChatClient chatClient, HarnessAgentOptions? options, ILoggerFactory? loggerFactory, IServiceProvider? services)
     {
-        ChatClientAgent innerAgent = BuildInnerAgent(chatClient, maxContextWindowTokens, maxOutputTokens, options, loggerFactory, services);
+        ChatClientAgent innerAgent = BuildInnerAgent(chatClient, options, loggerFactory, services);
 
         AIAgentBuilder builder = innerAgent.AsBuilder();
 
@@ -149,17 +141,25 @@ public sealed class HarnessAgent : DelegatingAIAgent
         return builder.Build(services);
     }
 
-    private static ChatClientAgent BuildInnerAgent(IChatClient chatClient, int maxContextWindowTokens, int maxOutputTokens, HarnessAgentOptions? options, ILoggerFactory? loggerFactory, IServiceProvider? services)
+    private static ChatClientAgent BuildInnerAgent(IChatClient chatClient, HarnessAgentOptions? options, ILoggerFactory? loggerFactory, IServiceProvider? services)
     {
-        var compactionStrategy = new ContextWindowCompactionStrategy(
-            maxContextWindowTokens: maxContextWindowTokens,
-            maxOutputTokens: maxOutputTokens);
+        int? maxContextWindowTokens = options?.MaxContextWindowTokens;
+        int? maxOutputTokens = options?.MaxOutputTokens;
+        bool compactionEnabled = maxContextWindowTokens.HasValue && maxOutputTokens.HasValue;
+
+        ContextWindowCompactionStrategy? compactionStrategy = compactionEnabled
+            ? new ContextWindowCompactionStrategy(
+                maxContextWindowTokens: maxContextWindowTokens!.Value,
+                maxOutputTokens: maxOutputTokens!.Value)
+            : null;
 
         ChatHistoryProvider chatHistoryProvider = options?.ChatHistoryProvider
-            ?? new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
-            {
-                ChatReducer = compactionStrategy.AsChatReducer(),
-            });
+            ?? (compactionStrategy is not null
+                ? new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+                {
+                    ChatReducer = compactionStrategy.AsChatReducer(),
+                })
+                : new InMemoryChatHistoryProvider());
 
         string harnessInstructions = options?.HarnessInstructions ?? DefaultInstructions;
         string? agentInstructions = options?.ChatOptions?.Instructions;
@@ -174,7 +174,9 @@ public sealed class HarnessAgent : DelegatingAIAgent
 
         ChatOptions chatOptions = BuildChatOptions(options, instructions, maxOutputTokens);
 
-        var compactionProvider = new CompactionProvider(compactionStrategy, loggerFactory: loggerFactory);
+        CompactionProvider? compactionProvider = compactionStrategy is not null
+            ? new CompactionProvider(compactionStrategy, loggerFactory: loggerFactory)
+            : null;
 
         IEnumerable<AIContextProvider> contextProviders = BuildContextProviders(options, loggerFactory);
 
@@ -185,13 +187,19 @@ public sealed class HarnessAgent : DelegatingAIAgent
             chatClientBuilder.UseNonApprovalRequiredFunctionBypassing();
         }
 
-        return chatClientBuilder
+        ChatClientBuilder pipeline = chatClientBuilder
             .UseFunctionInvocation(loggerFactory, configure: options?.MaximumIterationsPerRequest is int maxIterations
                 ? ficc => ficc.MaximumIterationsPerRequest = maxIterations
                 : null)
             .UseMessageInjection()
-            .UsePerServiceCallChatHistoryPersistence()
-            .UseAIContextProviders(compactionProvider)
+            .UsePerServiceCallChatHistoryPersistence();
+
+        if (compactionProvider is not null)
+        {
+            pipeline.UseAIContextProviders(compactionProvider);
+        }
+
+        return pipeline
             .BuildAIAgent(new ChatClientAgentOptions
             {
                 Id = options?.Id,
@@ -209,11 +217,15 @@ public sealed class HarnessAgent : DelegatingAIAgent
             services);
     }
 
-    private static ChatOptions BuildChatOptions(HarnessAgentOptions? options, string instructions, int maxOutputTokens)
+    private static ChatOptions BuildChatOptions(HarnessAgentOptions? options, string instructions, int? maxOutputTokens)
     {
         ChatOptions result = options?.ChatOptions?.Clone() ?? new ChatOptions();
         result.Instructions = instructions;
-        result.MaxOutputTokens ??= maxOutputTokens;
+
+        if (maxOutputTokens.HasValue)
+        {
+            result.MaxOutputTokens ??= maxOutputTokens.Value;
+        }
 
         if (options?.DisableWebSearch is not true)
         {

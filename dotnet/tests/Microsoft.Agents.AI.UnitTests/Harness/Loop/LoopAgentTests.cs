@@ -622,8 +622,133 @@ public class LoopAgentTests
     }
 
     /// <summary>
-    /// Verify that the first evaluator that asks to re-invoke wins and the remaining evaluators are not evaluated.
+    /// Verify that the configured <see cref="LoopAgentOptions.SessionCreatedCallback"/> is invoked with the loop-owned
+    /// session the loop creates when the caller does not supply one, even without fresh context.
     /// </summary>
+    [Fact]
+    public async Task RunAsync_SessionCreatedCallback_NotifiesLoopOwnedSessionAsync()
+    {
+        // Arrange
+        var created = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AgentSession>(created));
+        var observed = new List<AgentSession>();
+        var options = new LoopAgentOptions
+        {
+            SessionCreatedCallback = (s, _) => { observed.Add(s); return default; },
+        };
+        var agent = new LoopAgent(capture.Agent, While(static _ => false), options);
+
+        // Act (no session supplied by caller)
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
+
+        // Assert
+        Assert.Equal(1, capture.CallCount);
+        Assert.Same(created, Assert.Single(observed));
+        Assert.Same(created, capture.SessionsPerCall[0]);
+    }
+
+    /// <summary>
+    /// Verify that the <see cref="LoopAgentOptions.SessionCreatedCallback"/> is not invoked when the caller supplies a
+    /// session and no fresh context is requested (no new session is created).
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_SessionCreatedCallback_NotInvokedForCallerSessionAsync()
+    {
+        // Arrange
+        var callerSession = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        var observed = new List<AgentSession>();
+        var options = new LoopAgentOptions
+        {
+            MaxIterations = 3,
+            SessionCreatedCallback = (s, _) => { observed.Add(s); return default; },
+        };
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Empty(observed);
+    }
+
+    /// <summary>
+    /// Verify that with fresh context and a loop-owned session, the <see cref="LoopAgentOptions.SessionCreatedCallback"/>
+    /// is invoked for the initial session and for each session created for a re-invocation, in order.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_SessionCreatedCallback_NotifiesEachCreatedSessionAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var observed = new List<AgentSession>();
+        var options = new LoopAgentOptions
+        {
+            MaxIterations = 3,
+            FreshContextPerIteration = true,
+            SessionCreatedCallback = (s, _) => { observed.Add(s); return default; },
+        };
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act (no session supplied by caller)
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
+
+        // Assert: one notification for the initial session plus one per re-invocation (iterations 2 and 3).
+        Assert.Equal(3, capture.CallCount);
+        Assert.Equal(3, observed.Count);
+        Assert.Equal<AgentSession?>(capture.SessionsPerCall, observed);
+    }
+
+    /// <summary>
+    /// Verify that with fresh context and a caller-supplied session, the
+    /// <see cref="LoopAgentOptions.SessionCreatedCallback"/> is invoked only for the cloned sessions created for
+    /// re-invocations, not for the caller's own session.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_WithCallerSession_SessionCreatedCallback_NotifiesClonesOnlyAsync()
+    {
+        // Arrange
+        var callerSession = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        using var snapshotDoc = JsonDocument.Parse("{}");
+        JsonElement snapshot = snapshotDoc.RootElement;
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<JsonElement>>("SerializeSessionCoreAsync", ItExpr.IsAny<AgentSession>(), ItExpr.IsAny<JsonSerializerOptions?>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<JsonElement>(snapshot));
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("DeserializeSessionCoreAsync", ItExpr.IsAny<JsonElement>(), ItExpr.IsAny<JsonSerializerOptions?>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        var observed = new List<AgentSession>();
+        var options = new LoopAgentOptions
+        {
+            MaxIterations = 3,
+            FreshContextPerIteration = true,
+            SessionCreatedCallback = (s, _) => { observed.Add(s); return default; },
+        };
+        var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
+
+        // Assert: the caller session is never reported; only the two clones used for re-invocations are.
+        Assert.Equal(3, capture.CallCount);
+        Assert.DoesNotContain(callerSession, observed);
+        Assert.Equal([capture.SessionsPerCall[1]!, capture.SessionsPerCall[2]!], observed);
+    }
     [Fact]
     public async Task RunAsync_MultipleEvaluators_FirstReinvokeWinsAndShortCircuitsAsync()
     {

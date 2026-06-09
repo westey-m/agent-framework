@@ -1,6 +1,9 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Shared.DiagnosticIds;
 
 namespace Microsoft.Agents.AI;
@@ -97,4 +100,18 @@ public sealed class LoopAgentOptions
     /// only; streaming runs always yield every iteration's updates.
     /// </remarks>
     public bool NonStreamingReturnsLastResponseOnly { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional callback invoked whenever <see cref="LoopAgent"/> creates a new session, so the caller
+    /// can capture the latest session (for example to continue the conversation after the loop completes). Defaults to
+    /// <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// The callback is invoked with each session the loop itself creates: the initial loop-owned session (when the
+    /// caller does not supply one) and, when <see cref="FreshContextPerIteration"/> is enabled, every session created
+    /// for a re-invocation — whether a brand-new loop-owned session or a fresh clone deserialized from the caller's
+    /// original session. It is not invoked for a caller-supplied session, since the caller already holds that one. When
+    /// it fires multiple times, the most recent invocation carries the session the loop is currently using.
+    /// </remarks>
+    public Func<AgentSession, CancellationToken, ValueTask>? SessionCreatedCallback { get; set; }
 }

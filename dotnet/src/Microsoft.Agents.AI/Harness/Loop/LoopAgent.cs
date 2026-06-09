@@ -73,6 +73,7 @@ public sealed class LoopAgent : DelegatingAIAgent
     private readonly string? _onBehalfOfAuthorName;
     private readonly bool _excludeOnBehalfOfMessages;
     private readonly bool _nonStreamingReturnsLastResponseOnly;
+    private readonly System.Func<AgentSession, CancellationToken, ValueTask>? _sessionCreatedCallback;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -124,6 +125,7 @@ public sealed class LoopAgent : DelegatingAIAgent
         this._onBehalfOfAuthorName = options?.OnBehalfOfAuthorName;
         this._excludeOnBehalfOfMessages = options?.ExcludeOnBehalfOfMessages ?? false;
         this._nonStreamingReturnsLastResponseOnly = options?.NonStreamingReturnsLastResponseOnly ?? false;
+        this._sessionCreatedCallback = options?.SessionCreatedCallback;
         this._logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<LoopAgent>();
     }
 
@@ -139,7 +141,11 @@ public sealed class LoopAgent : DelegatingAIAgent
         // Capture the caller's initial messages (sent once) and ensure the loop always runs against a session.
         IReadOnlyList<ChatMessage> initialMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
         bool sessionProvidedByCaller = session is not null;
-        session ??= await this.InnerAgent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            session = await this.InnerAgent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+            await this.NotifyNewSessionAsync(session, cancellationToken).ConfigureAwait(false);
+        }
 
         // When a fresh context is requested over a caller-supplied session, snapshot the pristine session up front so
         // each re-invocation can restart from a fresh clone (see CreateFreshIterationSessionAsync). Taken before the
@@ -217,7 +223,11 @@ public sealed class LoopAgent : DelegatingAIAgent
         // Capture the caller's initial messages (sent once) and ensure the loop always runs against a session.
         IReadOnlyList<ChatMessage> initialMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
         bool sessionProvidedByCaller = session is not null;
-        session ??= await this.InnerAgent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            session = await this.InnerAgent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+            await this.NotifyNewSessionAsync(session, cancellationToken).ConfigureAwait(false);
+        }
 
         // When a fresh context is requested over a caller-supplied session, snapshot the pristine session up front so
         // each re-invocation can restart from a fresh clone (see CreateFreshIterationSessionAsync). Taken before the
@@ -455,12 +465,29 @@ public sealed class LoopAgent : DelegatingAIAgent
     /// <summary>
     /// Creates the session used for the next iteration when a fresh context is requested. A caller-supplied session is
     /// restored from the pristine start-of-run snapshot by deserializing a fresh clone; a loop-owned session (no
-    /// snapshot) is created anew.
+    /// snapshot) is created anew. The configured session-created callback is notified of the new session.
     /// </summary>
     private async ValueTask<AgentSession> CreateFreshIterationSessionAsync(LoopContext context, JsonElement? initialSessionSnapshot, CancellationToken cancellationToken)
-        => initialSessionSnapshot is { } snapshot
+    {
+        AgentSession session = initialSessionSnapshot is { } snapshot
             ? await this.InnerAgent.DeserializeSessionAsync(snapshot, cancellationToken: cancellationToken).ConfigureAwait(false)
             : await context.Agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
+
+        await this.NotifyNewSessionAsync(session, cancellationToken).ConfigureAwait(false);
+        return session;
+    }
+
+    /// <summary>
+    /// Invokes the configured <see cref="LoopAgentOptions.SessionCreatedCallback"/> (if any) with a session the loop
+    /// has just created, so the caller can observe the latest session.
+    /// </summary>
+    private async ValueTask NotifyNewSessionAsync(AgentSession session, CancellationToken cancellationToken)
+    {
+        if (this._sessionCreatedCallback is not null)
+        {
+            await this._sessionCreatedCallback(session, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     /// <summary>Represents the loop's decision for the next iteration: stop, or continue with a set of messages.</summary>
     private readonly struct LoopNextStep

@@ -65,18 +65,14 @@ def _assemble_instructions(
 
 def _assemble_compaction_provider(
     *,
-    disable_compaction: bool,
     max_context_window_tokens: int,
     max_output_tokens: int,
     history_source_id: str,
     before_compaction_strategy: CompactionStrategy | None,
     after_compaction_strategy: CompactionStrategy | None,
     tokenizer: TokenizerProtocol | None,
-) -> CompactionProvider | None:
+) -> CompactionProvider:
     """Build the compaction provider from parameters or defaults."""
-    if disable_compaction:
-        return None
-
     before_strategy = before_compaction_strategy or ContextWindowCompactionStrategy(
         max_context_window_tokens=max_context_window_tokens,
         max_output_tokens=max_output_tokens,
@@ -157,8 +153,8 @@ def create_harness_agent(
     harness_instructions: str | None = None,
     agent_instructions: str | None = None,
     tools: ToolTypes | Callable[..., Any] | Sequence[ToolTypes | Callable[..., Any]] | None = None,
-    max_context_window_tokens: int,
-    max_output_tokens: int,
+    max_context_window_tokens: int | None = None,
+    max_output_tokens: int | None = None,
     history_provider: HistoryProvider | None = None,
     disable_compaction: bool = False,
     before_compaction_strategy: CompactionStrategy | None = None,
@@ -206,8 +202,6 @@ def create_harness_agent(
 
             agent = create_harness_agent(
                 OpenAIChatClient(model="gpt-4o"),
-                max_context_window_tokens=128_000,
-                max_output_tokens=16_384,
             )
             session = agent.create_session()
             response = await agent.run("Plan a weekend trip to Seattle", session=session)
@@ -243,7 +237,10 @@ def create_harness_agent(
             (e.g., "You are a research assistant focused on academic sources.").
         tools: Additional tools to include in the agent's toolset.
         max_context_window_tokens: Maximum tokens the model's context window supports.
+            When None (default), compaction is automatically disabled.
         max_output_tokens: Maximum output tokens per response.
+            When None (default), compaction is automatically disabled and no
+            default max_tokens option is set.
         history_provider: Custom history provider. When None, an InMemoryHistoryProvider is used.
         disable_compaction: When True, skip compaction provider setup.
         before_compaction_strategy: Custom before-run compaction strategy.
@@ -283,29 +280,35 @@ def create_harness_agent(
         A fully configured :class:`~agent_framework.Agent` instance.
 
     Raises:
-        ValueError: If max_context_window_tokens <= 0 or max_output_tokens < 0
-            or max_output_tokens >= max_context_window_tokens.
+        ValueError: If max_context_window_tokens is provided and <= 0, or
+            max_output_tokens is provided and < 0, or max_output_tokens >=
+            max_context_window_tokens when both are provided.
     """
-    if max_context_window_tokens <= 0:
+    if max_context_window_tokens is not None and max_context_window_tokens <= 0:
         raise ValueError("max_context_window_tokens must be positive.")
-    if max_output_tokens < 0:
+    if max_output_tokens is not None and max_output_tokens < 0:
         raise ValueError("max_output_tokens must be non-negative.")
-    if max_output_tokens >= max_context_window_tokens:
+    if (
+        max_context_window_tokens is not None
+        and max_output_tokens is not None
+        and max_output_tokens >= max_context_window_tokens
+    ):
         raise ValueError("max_output_tokens must be less than max_context_window_tokens.")
 
     # Build history provider.
     resolved_history = history_provider or InMemoryHistoryProvider()
 
-    # Build compaction provider.
-    compaction_provider = _assemble_compaction_provider(
-        disable_compaction=disable_compaction,
-        max_context_window_tokens=max_context_window_tokens,
-        max_output_tokens=max_output_tokens,
-        history_source_id=resolved_history.source_id,
-        before_compaction_strategy=before_compaction_strategy,
-        after_compaction_strategy=after_compaction_strategy,
-        tokenizer=tokenizer,
-    )
+    # Build compaction provider (disabled when token params are not provided).
+    compaction_provider: CompactionProvider | None = None
+    if not disable_compaction and max_context_window_tokens is not None and max_output_tokens is not None:
+        compaction_provider = _assemble_compaction_provider(
+            max_context_window_tokens=max_context_window_tokens,
+            max_output_tokens=max_output_tokens,
+            history_source_id=resolved_history.source_id,
+            before_compaction_strategy=before_compaction_strategy,
+            after_compaction_strategy=after_compaction_strategy,
+            tokenizer=tokenizer,
+        )
 
     # Build context providers.
     assembled_providers = _assemble_context_providers(
@@ -347,7 +350,8 @@ def create_harness_agent(
 
     # Build default options dict.
     default_opts: dict[str, Any] = dict(default_options) if default_options else {}
-    default_opts.setdefault("max_tokens", max_output_tokens)
+    if max_output_tokens is not None:
+        default_opts.setdefault("max_tokens", max_output_tokens)
 
     agent = Agent(
         client,

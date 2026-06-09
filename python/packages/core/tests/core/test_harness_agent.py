@@ -194,6 +194,23 @@ def test_create_harness_agent_returns_full_agent() -> None:
     assert isinstance(agent, FullAgent)
 
 
+def test_create_harness_agent_no_token_params_disables_compaction() -> None:
+    """When token params are omitted, compaction is automatically disabled."""
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+    )
+    provider_types = [type(p) for p in agent.context_providers]
+    assert CompactionProvider not in provider_types
+
+
+def test_create_harness_agent_no_token_params_skips_max_tokens_option() -> None:
+    """When max_output_tokens is omitted, max_tokens should not be set in default options."""
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+    )
+    assert agent.default_options.get("max_tokens") is None
+
+
 # --- Validation Tests ---
 
 

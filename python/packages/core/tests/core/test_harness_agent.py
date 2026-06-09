@@ -236,6 +236,21 @@ def test_create_harness_agent_disable_compaction_overrides_custom_before_strateg
     assert CompactionProvider not in provider_types
 
 
+def test_create_harness_agent_custom_after_strategy_enables_compaction_without_tokens() -> None:
+    """A custom after_compaction_strategy enables compaction even when token params are omitted."""
+    from agent_framework import ToolResultCompactionStrategy
+
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        after_compaction_strategy=ToolResultCompactionStrategy(),
+    )
+    compaction_providers = [p for p in agent.context_providers if isinstance(p, CompactionProvider)]
+    assert len(compaction_providers) == 1
+    # Before phase is skipped (no token budget, no custom before strategy), after phase is set.
+    assert compaction_providers[0].before_strategy is None
+    assert compaction_providers[0].after_strategy is not None
+
+
 # --- Validation Tests ---
 
 

@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
 
@@ -490,58 +490,64 @@ public class LoopAgentTests
     }
 
     /// <summary>
-    /// Verify that with fresh context but a caller-supplied session, the caller's session is reused and a warning is logged.
+    /// Verify that with fresh context and a caller-supplied session, the caller's session is used for the first
+    /// iteration, then each re-invocation runs against a fresh clone restored from a snapshot taken at the start of
+    /// the run. The session is serialized once and deserialized once per re-invocation.
     /// </summary>
     [Fact]
-    public async Task RunAsync_Fresh_WithCallerSession_WarnsAndDoesNotRecreateAsync()
+    public async Task RunAsync_Fresh_WithCallerSession_ClonesFromSerializedSnapshotAsync()
     {
         // Arrange
         var callerSession = new ChatClientAgentSession();
         var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
-        var loggerFactory = new CapturingLoggerFactory();
+        using var snapshotDoc = JsonDocument.Parse("{}");
+        JsonElement snapshot = snapshotDoc.RootElement;
+
+        int serializeCount = 0;
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<JsonElement>>("SerializeSessionCoreAsync", ItExpr.IsAny<AgentSession>(), ItExpr.IsAny<JsonSerializerOptions?>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => { serializeCount++; return new ValueTask<JsonElement>(snapshot); });
+
+        int deserializeCount = 0;
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("DeserializeSessionCoreAsync", ItExpr.IsAny<JsonElement>(), ItExpr.IsAny<JsonSerializerOptions?>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => { deserializeCount++; return new ValueTask<AgentSession>(new ChatClientAgentSession()); });
+
         var evaluator = new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("more")));
         var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
-        var agent = new LoopAgent(capture.Agent, evaluator, options, loggerFactory);
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
 
         // Act
         await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
 
         // Assert
         Assert.Equal(3, capture.CallCount);
+
+        // The pristine session is snapshotted exactly once, before the first iteration mutates it.
+        Assert.Equal(1, serializeCount);
+
+        // Re-invocations (iterations 2 and 3) each restore a fresh clone from the snapshot.
+        Assert.Equal(2, deserializeCount);
+
+        // The first iteration runs against the caller's supplied session; later iterations use distinct clones.
         Assert.Same(callerSession, capture.SessionsPerCall[0]);
-        Assert.Same(callerSession, capture.SessionsPerCall[2]);
+        Assert.NotSame(callerSession, capture.SessionsPerCall[1]);
+        Assert.NotSame(callerSession, capture.SessionsPerCall[2]);
+        Assert.NotSame(capture.SessionsPerCall[1], capture.SessionsPerCall[2]);
+
+        // The loop never creates a new session for a caller-supplied one; it clones instead.
         capture.Mock.Protected().Verify("CreateSessionCoreAsync", Times.Never(), ItExpr.IsAny<CancellationToken>());
-        Assert.Contains(loggerFactory.Entries, static e => e.Level == LogLevel.Warning && e.Message.Contains("FreshContextPerIteration"));
     }
 
     /// <summary>
-    /// Verify that the fresh-context caller-session warning is logged at the start of the run, even when the loop
-    /// stops after the first iteration and never re-invokes.
+    /// Verify that with fresh context and a loop-owned session, the session is reset for each iteration even when the
+    /// evaluator drives re-invocation via <see cref="LoopEvaluation.ContinueWithMessages"/>: the explicit messages are
+    /// still sent verbatim, but each iteration runs against a new session.
     /// </summary>
     [Fact]
-    public async Task RunAsync_Fresh_WithCallerSession_WarnsEvenWhenStoppingImmediatelyAsync()
-    {
-        // Arrange
-        var callerSession = new ChatClientAgentSession();
-        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
-        var loggerFactory = new CapturingLoggerFactory();
-        var evaluator = While(static _ => false);
-        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
-        var agent = new LoopAgent(capture.Agent, evaluator, options, loggerFactory);
-
-        // Act
-        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
-
-        // Assert
-        Assert.Equal(1, capture.CallCount);
-        Assert.Contains(loggerFactory.Entries, static e => e.Level == LogLevel.Warning && e.Message.Contains("FreshContextPerIteration"));
-    }
-
-    /// <summary>
-    /// Verify that no fresh-context warning is logged when the loop owns the session (fresh context is fully honored).
-    /// </summary>
-    [Fact]
-    public async Task RunAsync_Fresh_WithLoopOwnedSession_DoesNotWarnAsync()
+    public async Task RunAsync_Fresh_WithContinueWithMessages_RecreatesSessionAsync()
     {
         // Arrange
         var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
@@ -549,16 +555,70 @@ public class LoopAgentTests
             .Protected()
             .Setup<ValueTask<AgentSession>>("CreateSessionCoreAsync", ItExpr.IsAny<CancellationToken>())
             .Returns(() => new ValueTask<AgentSession>(new ChatClientAgentSession()));
-        var loggerFactory = new CapturingLoggerFactory();
-        var evaluator = While(static _ => false);
+        var evaluator = new DelegateLoopEvaluator((_, _) =>
+            new ValueTask<LoopEvaluation>(LoopEvaluation.ContinueWithMessages([new ChatMessage(ChatRole.User, "explicit")])));
         var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
-        var agent = new LoopAgent(capture.Agent, evaluator, options, loggerFactory);
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
 
         // Act (no session supplied by caller)
         await agent.RunAsync([new ChatMessage(ChatRole.User, "go")]);
 
         // Assert
-        Assert.DoesNotContain(loggerFactory.Entries, static e => e.Level == LogLevel.Warning && e.Message.Contains("FreshContextPerIteration"));
+        Assert.Equal(3, capture.CallCount);
+
+        // The explicit messages are sent verbatim on each re-invocation.
+        Assert.Equal(["explicit"], capture.MessagesPerCall[1].Select(static m => m.Text));
+        Assert.Equal(["explicit"], capture.MessagesPerCall[2].Select(static m => m.Text));
+
+        // The session is still reset for each iteration despite using ContinueWithMessages.
+        Assert.NotSame(capture.SessionsPerCall[0], capture.SessionsPerCall[1]);
+        Assert.NotSame(capture.SessionsPerCall[1], capture.SessionsPerCall[2]);
+    }
+
+    /// <summary>
+    /// Verify that with fresh context and a caller-supplied session, the session is cloned from the start-of-run
+    /// snapshot for each re-invocation even when the evaluator drives re-invocation via
+    /// <see cref="LoopEvaluation.ContinueWithMessages"/>.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_Fresh_WithCallerSession_AndContinueWithMessages_ClonesFromSnapshotAsync()
+    {
+        // Arrange
+        var callerSession = new ChatClientAgentSession();
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "x")]));
+        using var snapshotDoc = JsonDocument.Parse("{}");
+        JsonElement snapshot = snapshotDoc.RootElement;
+
+        int serializeCount = 0;
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<JsonElement>>("SerializeSessionCoreAsync", ItExpr.IsAny<AgentSession>(), ItExpr.IsAny<JsonSerializerOptions?>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => { serializeCount++; return new ValueTask<JsonElement>(snapshot); });
+
+        int deserializeCount = 0;
+        capture.Mock
+            .Protected()
+            .Setup<ValueTask<AgentSession>>("DeserializeSessionCoreAsync", ItExpr.IsAny<JsonElement>(), ItExpr.IsAny<JsonSerializerOptions?>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(() => { deserializeCount++; return new ValueTask<AgentSession>(new ChatClientAgentSession()); });
+
+        var evaluator = new DelegateLoopEvaluator((_, _) =>
+            new ValueTask<LoopEvaluation>(LoopEvaluation.ContinueWithMessages([new ChatMessage(ChatRole.User, "explicit")])));
+        var options = new LoopAgentOptions { MaxIterations = 3, FreshContextPerIteration = true };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], callerSession);
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        Assert.Equal(1, serializeCount);
+        Assert.Equal(2, deserializeCount);
+
+        // First iteration uses the caller session; later iterations use distinct clones from the snapshot.
+        Assert.Same(callerSession, capture.SessionsPerCall[0]);
+        Assert.NotSame(callerSession, capture.SessionsPerCall[1]);
+        Assert.NotSame(capture.SessionsPerCall[1], capture.SessionsPerCall[2]);
+        capture.Mock.Protected().Verify("CreateSessionCoreAsync", Times.Never(), ItExpr.IsAny<CancellationToken>());
     }
 
     /// <summary>

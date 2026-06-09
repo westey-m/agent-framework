@@ -18,7 +18,7 @@ namespace Microsoft.Agents.AI;
 /// An evaluator is concerned only with the judgment (continue or stop) and what to carry forward. In the common case
 /// it returns a feedback string and lets the <see cref="LoopAgent"/> decide how that feedback is turned into the next
 /// input (and whether the session is reset). For full control, <see cref="ContinueWithMessages"/> supplies the exact
-/// messages to send next, bypassing the loop's feedback and fresh-context message construction.
+/// messages to send next, bypassing the loop's feedback and message construction.
 /// </remarks>
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class LoopEvaluation
@@ -48,8 +48,9 @@ public sealed class LoopEvaluation
     /// </summary>
     /// <remarks>
     /// When non-<see langword="null"/>, the <see cref="LoopAgent"/> sends these messages verbatim and does not apply
-    /// its feedback or fresh-context message construction. Only meaningful when <see cref="ShouldReinvoke"/> is
-    /// <see langword="true"/>.
+    /// its feedback or message construction. The session is still reset when
+    /// <see cref="LoopAgentOptions.FreshContextPerIteration"/> is enabled. Only meaningful when
+    /// <see cref="ShouldReinvoke"/> is <see langword="true"/>.
     /// </remarks>
     internal IReadOnlyList<ChatMessage>? Messages { get; }
 
@@ -67,7 +68,7 @@ public sealed class LoopEvaluation
 
     /// <summary>
     /// Creates an evaluation that re-invokes the wrapped agent with the specified messages, bypassing the loop's
-    /// feedback and fresh-context message construction.
+    /// feedback and message construction.
     /// </summary>
     /// <param name="messages">The messages to send to the wrapped agent on the next iteration.</param>
     /// <returns>An evaluation with <see cref="ShouldReinvoke"/> set to <see langword="true"/>.</returns>

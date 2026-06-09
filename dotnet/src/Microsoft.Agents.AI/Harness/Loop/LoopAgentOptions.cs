@@ -28,11 +28,32 @@ public sealed class LoopAgentOptions
     /// Defaults to <see langword="false"/>.
     /// </summary>
     /// <remarks>
-    /// This rebuilds the input <em>messages</em> each iteration. <see cref="LoopAgent"/> additionally creates a new
-    /// session per iteration only when the loop owns the session; when the caller supplies a session it is reused (and
-    /// a warning is logged), so the agent or its providers may still retain conversation history. For a truly fresh
-    /// context per iteration, run the loop without supplying a session. This setting has no effect on iterations where
-    /// an evaluator returns explicit messages via <see cref="LoopEvaluation.ContinueWithMessages"/>.
+    /// <para>
+    /// This rebuilds the input <em>messages</em> each iteration and resets the session before each re-invocation so no
+    /// prior conversation history leaks across iterations. When the loop owns the session it creates a new one each
+    /// iteration. When the caller supplies a session, <see cref="LoopAgent"/> serializes it once at the start of the run
+    /// and restores a fresh clone (by deserializing that snapshot) before each re-invocation; this requires the wrapped
+    /// agent to support session serialization. The first iteration still runs against the caller's supplied session.
+    /// </para>
+    /// <para>
+    /// Note that cloning will only result in a fresh context, if the chat history storage mechanism supports cloning.
+    /// For example the default in-memory storage supports cloning, since the messages are serialized as part of the snapshot.
+    /// </para>
+    /// <para>
+    /// However, if the Conversations service is used, which stores messages in a single threaded list of messages,
+    /// then the cloned session will still contain the full message history, since the snapshot only captures an id reference
+    /// to the conversation and not the individual messages.
+    /// </para>
+    /// <para>
+    /// On the other hand, if responses are used with response ids, cloning will work well, since response ids are
+    /// forkable. Each new response has its own id, and is based on the id of the previous response.
+    /// </para>
+    /// <para>
+    /// On iterations where an evaluator returns explicit messages via
+    /// <see cref="LoopEvaluation.ContinueWithMessages"/>, the session is still reset (a fresh or cloned session is
+    /// used); only the rebuild of the input messages from the feedback log is skipped, because the evaluator's explicit
+    /// messages are sent verbatim.
+    /// </para>
     /// </remarks>
     public bool FreshContextPerIteration { get; set; }
 

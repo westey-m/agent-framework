@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
 
@@ -117,36 +116,4 @@ internal sealed class InnerStreamingCapture
     public int CallCount { get; private set; }
 
     public List<List<ChatMessage>> MessagesPerCall { get; } = [];
-}
-
-internal sealed record LogEntry(LogLevel Level, string Message);
-
-internal sealed class CapturingLoggerFactory : ILoggerFactory
-{
-    public List<LogEntry> Entries { get; } = [];
-
-    public ILogger CreateLogger(string categoryName) => new CapturingLogger(this.Entries);
-
-    public void AddProvider(ILoggerProvider provider)
-    {
-    }
-
-    public void Dispose()
-    {
-    }
-
-    private sealed class CapturingLogger(List<LogEntry> entries) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-            => entries.Add(new LogEntry(logLevel, formatter(state, exception)));
-    }
 }

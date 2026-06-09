@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -39,9 +40,10 @@ namespace Microsoft.Agents.AI;
 /// <see cref="LoopAgentOptions.FreshContextPerIteration"/> is <see langword="false"/>) the loop reuses a single session
 /// and sends only the winning evaluator's feedback as the next input, letting the agent continue from session history.
 /// When <see cref="LoopAgentOptions.FreshContextPerIteration"/> is <see langword="true"/>, each re-invocation restarts
-/// from the original input messages plus an aggregated feedback log, and a loop-owned session is recreated each
-/// iteration. An evaluator may instead supply the exact next messages via
-/// <see cref="LoopEvaluation.ContinueWithMessages"/>, bypassing this construction.
+/// from the original input messages plus an aggregated feedback log, and the session is reset for each iteration: a
+/// loop-owned session is created anew, while a caller-supplied session is restored from a snapshot taken at the start
+/// of the run (so the wrapped agent must support session serialization). An evaluator may instead supply the exact next
+/// messages via <see cref="LoopEvaluation.ContinueWithMessages"/>, bypassing this construction.
 /// </para>
 /// <para>
 /// The loop is bounded by a global safety cap (<see cref="LoopAgentOptions.MaxIterations"/>) regardless of the
@@ -138,7 +140,13 @@ public sealed class LoopAgent : DelegatingAIAgent
         IReadOnlyList<ChatMessage> initialMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
         bool sessionProvidedByCaller = session is not null;
         session ??= await this.InnerAgent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
-        this.WarnIfFreshContextWithCallerSession(sessionProvidedByCaller);
+
+        // When a fresh context is requested over a caller-supplied session, snapshot the pristine session up front so
+        // each re-invocation can restart from a fresh clone (see CreateFreshIterationSessionAsync). Taken before the
+        // first iteration mutates the session.
+        JsonElement? initialSessionSnapshot = this._freshContextPerIteration && sessionProvidedByCaller
+            ? await this.InnerAgent.SerializeSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false)
+            : null;
 
         LoopContext? context = null;
         List<string?> feedbackLog = [];
@@ -186,7 +194,7 @@ public sealed class LoopAgent : DelegatingAIAgent
             }
 
             // Ask the evaluators whether to continue; stop when none of them request a re-invocation.
-            LoopNextStep step = await this.EvaluateAndBuildNextAsync(context, feedbackLog, sessionProvidedByCaller, cancellationToken).ConfigureAwait(false);
+            LoopNextStep step = await this.EvaluateAndBuildNextAsync(context, feedbackLog, initialSessionSnapshot, cancellationToken).ConfigureAwait(false);
             if (!step.ShouldContinue)
             {
                 return this.BuildResult(response, transcript);
@@ -210,7 +218,13 @@ public sealed class LoopAgent : DelegatingAIAgent
         IReadOnlyList<ChatMessage> initialMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
         bool sessionProvidedByCaller = session is not null;
         session ??= await this.InnerAgent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
-        this.WarnIfFreshContextWithCallerSession(sessionProvidedByCaller);
+
+        // When a fresh context is requested over a caller-supplied session, snapshot the pristine session up front so
+        // each re-invocation can restart from a fresh clone (see CreateFreshIterationSessionAsync). Taken before the
+        // first iteration mutates the session.
+        JsonElement? initialSessionSnapshot = this._freshContextPerIteration && sessionProvidedByCaller
+            ? await this.InnerAgent.SerializeSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false)
+            : null;
 
         LoopContext? context = null;
         List<string?> feedbackLog = [];
@@ -270,7 +284,7 @@ public sealed class LoopAgent : DelegatingAIAgent
             }
 
             // Ask the evaluators whether to continue; stop when none of them request a re-invocation.
-            LoopNextStep step = await this.EvaluateAndBuildNextAsync(context, feedbackLog, sessionProvidedByCaller, cancellationToken).ConfigureAwait(false);
+            LoopNextStep step = await this.EvaluateAndBuildNextAsync(context, feedbackLog, initialSessionSnapshot, cancellationToken).ConfigureAwait(false);
             if (!step.ShouldContinue)
             {
                 yield break;
@@ -285,7 +299,7 @@ public sealed class LoopAgent : DelegatingAIAgent
     /// Evaluates the evaluators in order and, for the first one that requests a re-invocation, builds the next input
     /// according to the loop's feedback and fresh-context policy.
     /// </summary>
-    private async ValueTask<LoopNextStep> EvaluateAndBuildNextAsync(LoopContext context, List<string?> feedbackLog, bool sessionProvidedByCaller, CancellationToken cancellationToken)
+    private async ValueTask<LoopNextStep> EvaluateAndBuildNextAsync(LoopContext context, List<string?> feedbackLog, JsonElement? initialSessionSnapshot, CancellationToken cancellationToken)
     {
         // Evaluate in order; the first evaluator that requests a re-invocation wins.
         LoopEvaluation? winner = null;
@@ -305,8 +319,18 @@ public sealed class LoopAgent : DelegatingAIAgent
             return LoopNextStep.Stop();
         }
 
-        // An evaluator supplied explicit messages: send them verbatim, bypassing feedback/fresh construction. These
-        // are surfaced to the caller as-is (the evaluator owns them, including any author name).
+        // Start the next iteration from a fresh session when a fresh context is requested, so no prior conversation
+        // history leaks across iterations. This applies regardless of how the next input is built (feedback or explicit
+        // ContinueWithMessages): a caller-supplied session is cloned from the pristine start-of-run snapshot; a
+        // loop-owned session is created anew.
+        if (this._freshContextPerIteration)
+        {
+            context.Session = await this.CreateFreshIterationSessionAsync(context, initialSessionSnapshot, cancellationToken).ConfigureAwait(false);
+        }
+
+        // An evaluator supplied explicit messages: send them verbatim, bypassing feedback/message construction (the
+        // session is still reset above when a fresh context is requested). These are surfaced to the caller as-is (the
+        // evaluator owns them, including any author name).
         if (winner.Messages is not null)
         {
             return LoopNextStep.Continue(winner.Messages, this.Surfaced(winner.Messages));
@@ -315,13 +339,6 @@ public sealed class LoopAgent : DelegatingAIAgent
         // Record one feedback entry for this re-invoked iteration (null when none) so the last element always
         // corresponds to the latest re-invoked iteration. Continue() already normalizes whitespace to null.
         feedbackLog.Add(winner.Feedback);
-
-        // Start the next iteration from a brand-new session when a fresh context is requested and the loop owns the
-        // session, so no prior conversation history leaks across iterations.
-        if (this._freshContextPerIteration && !sessionProvidedByCaller)
-        {
-            context.Session = await context.Agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
-        }
 
         (List<ChatMessage> messages, List<ChatMessage> surfaced) = this.BuildNextMessages(context, feedbackLog);
         return LoopNextStep.Continue(messages, this.Surfaced(surfaced));
@@ -436,19 +453,14 @@ public sealed class LoopAgent : DelegatingAIAgent
     }
 
     /// <summary>
-    /// Warns when a fresh context is requested but the caller owns the session: the message input is replayed fresh
-    /// each iteration, but the session (and its history) is not replaced.
+    /// Creates the session used for the next iteration when a fresh context is requested. A caller-supplied session is
+    /// restored from the pristine start-of-run snapshot by deserializing a fresh clone; a loop-owned session (no
+    /// snapshot) is created anew.
     /// </summary>
-    private void WarnIfFreshContextWithCallerSession(bool sessionProvidedByCaller)
-    {
-        if (this._freshContextPerIteration && sessionProvidedByCaller && this._logger.IsEnabled(LogLevel.Warning))
-        {
-            this._logger.LogWarning(
-                "LoopAgent.FreshContextPerIteration rebuilds the input messages each iteration but does not replace a " +
-                "caller-supplied session, so the session may still retain conversation history across iterations. For a " +
-                "truly fresh context per iteration, run the loop without supplying a session.");
-        }
-    }
+    private async ValueTask<AgentSession> CreateFreshIterationSessionAsync(LoopContext context, JsonElement? initialSessionSnapshot, CancellationToken cancellationToken)
+        => initialSessionSnapshot is { } snapshot
+            ? await this.InnerAgent.DeserializeSessionAsync(snapshot, cancellationToken: cancellationToken).ConfigureAwait(false)
+            : await context.Agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
     /// <summary>Represents the loop's decision for the next iteration: stop, or continue with a set of messages.</summary>
     private readonly struct LoopNextStep

@@ -55,8 +55,9 @@ public sealed class LoopContext
     /// <remarks>
     /// When the caller does not provide a session, <see cref="LoopAgent"/> creates one up front. By default the same
     /// session is reused across every iteration so that conversation continuity is preserved and the original request
-    /// is not replayed. When <see cref="LoopAgentOptions.FreshContextPerIteration"/> is enabled and the loop owns the
-    /// session, <see cref="LoopAgent"/> replaces it with a new session before each re-invocation.
+    /// is not replayed. When <see cref="LoopAgentOptions.FreshContextPerIteration"/> is enabled, <see cref="LoopAgent"/>
+    /// resets the session before each re-invocation: a loop-owned session is created anew, while a caller-supplied
+    /// session is restored from a snapshot taken at the start of the run by deserializing a fresh clone.
     /// </remarks>
     public AgentSession Session { get; internal set; }
 

@@ -312,13 +312,13 @@ def create_harness_agent(
 
     Raises:
         ValueError: If max_context_window_tokens is provided and <= 0, or
-            max_output_tokens is provided and < 0, or max_output_tokens >=
+            max_output_tokens is provided and <= 0, or max_output_tokens >=
             max_context_window_tokens when both are provided.
     """
     if max_context_window_tokens is not None and max_context_window_tokens <= 0:
         raise ValueError("max_context_window_tokens must be positive.")
-    if max_output_tokens is not None and max_output_tokens < 0:
-        raise ValueError("max_output_tokens must be non-negative.")
+    if max_output_tokens is not None and max_output_tokens <= 0:
+        raise ValueError("max_output_tokens must be positive.")
     if (
         max_context_window_tokens is not None
         and max_output_tokens is not None

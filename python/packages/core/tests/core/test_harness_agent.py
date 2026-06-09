@@ -264,14 +264,15 @@ def test_create_harness_agent_rejects_invalid_context_tokens() -> None:
         )
 
 
-def test_create_harness_agent_rejects_negative_output_tokens() -> None:
-    """max_output_tokens must be non-negative."""
-    with pytest.raises(ValueError, match="max_output_tokens must be non-negative"):
-        create_harness_agent(
-            client=_FakeChatClient(),  # type: ignore[arg-type]
-            max_context_window_tokens=1000,
-            max_output_tokens=-1,
-        )
+def test_create_harness_agent_rejects_non_positive_output_tokens() -> None:
+    """max_output_tokens must be positive when provided."""
+    for invalid_value in (0, -1):
+        with pytest.raises(ValueError, match="max_output_tokens must be positive"):
+            create_harness_agent(
+                client=_FakeChatClient(),  # type: ignore[arg-type]
+                max_context_window_tokens=1000,
+                max_output_tokens=invalid_value,
+            )
 
 
 def test_create_harness_agent_rejects_output_gte_context() -> None:

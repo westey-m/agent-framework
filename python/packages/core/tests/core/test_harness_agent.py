@@ -211,6 +211,31 @@ def test_create_harness_agent_no_token_params_skips_max_tokens_option() -> None:
     assert agent.default_options.get("max_tokens") is None
 
 
+def test_create_harness_agent_custom_before_strategy_enables_compaction_without_tokens() -> None:
+    """A custom before_compaction_strategy enables compaction even when token params are omitted."""
+    from agent_framework import ToolResultCompactionStrategy
+
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        before_compaction_strategy=ToolResultCompactionStrategy(),
+    )
+    provider_types = [type(p) for p in agent.context_providers]
+    assert CompactionProvider in provider_types
+
+
+def test_create_harness_agent_disable_compaction_overrides_custom_before_strategy() -> None:
+    """disable_compaction=True wins even when a custom before strategy is provided."""
+    from agent_framework import ToolResultCompactionStrategy
+
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        before_compaction_strategy=ToolResultCompactionStrategy(),
+        disable_compaction=True,
+    )
+    provider_types = [type(p) for p in agent.context_providers]
+    assert CompactionProvider not in provider_types
+
+
 # --- Validation Tests ---
 
 

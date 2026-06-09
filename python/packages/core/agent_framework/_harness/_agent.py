@@ -65,19 +65,35 @@ def _assemble_instructions(
 
 def _assemble_compaction_provider(
     *,
-    max_context_window_tokens: int,
-    max_output_tokens: int,
+    disable_compaction: bool,
+    max_context_window_tokens: int | None,
+    max_output_tokens: int | None,
     history_source_id: str,
     before_compaction_strategy: CompactionStrategy | None,
     after_compaction_strategy: CompactionStrategy | None,
     tokenizer: TokenizerProtocol | None,
-) -> CompactionProvider:
-    """Build the compaction provider from parameters or defaults."""
-    before_strategy = before_compaction_strategy or ContextWindowCompactionStrategy(
-        max_context_window_tokens=max_context_window_tokens,
-        max_output_tokens=max_output_tokens,
-        tokenizer=tokenizer,
-    )
+) -> CompactionProvider | None:
+    """Build the compaction provider from parameters or defaults.
+
+    Returns None when compaction is explicitly disabled, or when no before-strategy can be
+    resolved (no custom ``before_compaction_strategy`` and no token budget to build the default).
+    """
+    if disable_compaction:
+        return None
+
+    # A user-supplied strategy is used as-is; otherwise fall back to the token-budget-aware
+    # default, which requires the token params.
+    before_strategy = before_compaction_strategy
+    if before_strategy is None and max_context_window_tokens is not None and max_output_tokens is not None:
+        before_strategy = ContextWindowCompactionStrategy(
+            max_context_window_tokens=max_context_window_tokens,
+            max_output_tokens=max_output_tokens,
+            tokenizer=tokenizer,
+        )
+
+    if before_strategy is None:
+        return None
+
     after_strategy = after_compaction_strategy or ToolResultCompactionStrategy(keep_last_tool_call_groups=2)
 
     return CompactionProvider(
@@ -237,14 +253,18 @@ def create_harness_agent(
             (e.g., "You are a research assistant focused on academic sources.").
         tools: Additional tools to include in the agent's toolset.
         max_context_window_tokens: Maximum tokens the model's context window supports.
-            When None (default), compaction is automatically disabled.
+            Used to construct the default token-budget-aware compaction strategy. When None
+            (default) and no ``before_compaction_strategy`` is provided, compaction is
+            automatically disabled.
         max_output_tokens: Maximum output tokens per response.
-            When None (default), compaction is automatically disabled and no
-            default max_tokens option is set.
+            Used to construct the default compaction strategy and sets a default max_tokens
+            chat option. When None (default), no default max_tokens option is set, and if no
+            ``before_compaction_strategy`` is provided, compaction is automatically disabled.
         history_provider: Custom history provider. When None, an InMemoryHistoryProvider is used.
         disable_compaction: When True, skip compaction provider setup.
-        before_compaction_strategy: Custom before-run compaction strategy.
-            Defaults to ContextWindowCompactionStrategy (token-budget aware).
+        before_compaction_strategy: Custom before-run compaction strategy. When provided,
+            compaction runs even if token params are omitted. Defaults to
+            ContextWindowCompactionStrategy (token-budget aware), which requires the token params.
         after_compaction_strategy: Custom after-run compaction strategy.
             Defaults to ToolResultCompactionStrategy.
         tokenizer: Custom tokenizer for compaction strategies.
@@ -298,17 +318,16 @@ def create_harness_agent(
     # Build history provider.
     resolved_history = history_provider or InMemoryHistoryProvider()
 
-    # Build compaction provider (disabled when token params are not provided).
-    compaction_provider: CompactionProvider | None = None
-    if not disable_compaction and max_context_window_tokens is not None and max_output_tokens is not None:
-        compaction_provider = _assemble_compaction_provider(
-            max_context_window_tokens=max_context_window_tokens,
-            max_output_tokens=max_output_tokens,
-            history_source_id=resolved_history.source_id,
-            before_compaction_strategy=before_compaction_strategy,
-            after_compaction_strategy=after_compaction_strategy,
-            tokenizer=tokenizer,
-        )
+    # Build compaction provider.
+    compaction_provider = _assemble_compaction_provider(
+        disable_compaction=disable_compaction,
+        max_context_window_tokens=max_context_window_tokens,
+        max_output_tokens=max_output_tokens,
+        history_source_id=resolved_history.source_id,
+        before_compaction_strategy=before_compaction_strategy,
+        after_compaction_strategy=after_compaction_strategy,
+        tokenizer=tokenizer,
+    )
 
     # Build context providers.
     assembled_providers = _assemble_context_providers(

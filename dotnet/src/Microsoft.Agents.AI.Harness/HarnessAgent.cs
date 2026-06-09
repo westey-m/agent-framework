@@ -105,8 +105,8 @@ public sealed class HarnessAgent : DelegatingAIAgent
     /// </summary>
     /// <param name="chatClient">
     /// The <see cref="IChatClient"/> that provides access to the underlying AI model.
-    /// The agent wraps this client in a function-invocation, per-service-call persistence,
-    /// and compaction pipeline automatically.
+    /// The agent wraps this client in a function-invocation and per-service-call persistence pipeline.
+    /// When compaction is enabled via <paramref name="options"/>, a compaction decorator is also added.
     /// </param>
     /// <param name="options">
     /// Optional configuration options for the agent, including instructions override, tools,

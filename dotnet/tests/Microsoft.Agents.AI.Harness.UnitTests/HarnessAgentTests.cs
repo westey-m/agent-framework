@@ -1759,8 +1759,12 @@ public class HarnessAgentTests
         // Act
         var agent = new HarnessAgent(chatClient, options);
 
-        // Assert
-        Assert.NotNull(agent);
+        // Assert — compaction should be disabled (no chat reducer)
+        var innerAgent = agent.GetService<ChatClientAgent>();
+        Assert.NotNull(innerAgent);
+        var historyProvider = innerAgent!.ChatHistoryProvider as InMemoryChatHistoryProvider;
+        Assert.NotNull(historyProvider);
+        Assert.Null(historyProvider!.ChatReducer);
     }
 
     /// <summary>
@@ -1787,8 +1791,12 @@ public class HarnessAgentTests
         // Act
         var agent = new HarnessAgent(chatClient, options);
 
-        // Assert
-        Assert.NotNull(agent);
+        // Assert — compaction should be disabled (only one token value provided)
+        var innerAgent = agent.GetService<ChatClientAgent>();
+        Assert.NotNull(innerAgent);
+        var historyProvider = innerAgent!.ChatHistoryProvider as InMemoryChatHistoryProvider;
+        Assert.NotNull(historyProvider);
+        Assert.Null(historyProvider!.ChatReducer);
     }
 
     /// <summary>
@@ -1803,8 +1811,12 @@ public class HarnessAgentTests
         // Act
         var agent = new HarnessAgent(chatClient, CreateAllDisabledOptions());
 
-        // Assert
-        Assert.NotNull(agent);
+        // Assert — compaction should be enabled (chat reducer configured)
+        var innerAgent = agent.GetService<ChatClientAgent>();
+        Assert.NotNull(innerAgent);
+        var historyProvider = innerAgent!.ChatHistoryProvider as InMemoryChatHistoryProvider;
+        Assert.NotNull(historyProvider);
+        Assert.NotNull(historyProvider!.ChatReducer);
     }
 
     #endregion

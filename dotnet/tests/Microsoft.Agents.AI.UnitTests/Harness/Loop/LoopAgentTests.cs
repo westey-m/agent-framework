@@ -1068,7 +1068,8 @@ public class LoopAgentTests
     public async Task RunStreamingAsync_SurfacesOnBehalfOfFeedbackBeforeReinvocationAsync()
     {
         // Arrange
-        var capture = new InnerStreamingCapture(_ => [new AgentResponseUpdate(ChatRole.Assistant, "ack")]);
+        var capture = new InnerStreamingCapture(i =>
+            [new AgentResponseUpdate(ChatRole.Assistant, "ack") { ResponseId = $"resp-{i}", AgentId = $"agent-{i}" }]);
         var evaluator = new DelegateLoopEvaluator((ctx, _) =>
             new ValueTask<LoopEvaluation>(
                 ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
@@ -1087,6 +1088,12 @@ public class LoopAgentTests
         AgentResponseUpdate feedbackUpdate = updates[1];
         Assert.Equal(ChatRole.User, feedbackUpdate.Role);
         Assert.Equal("loop", feedbackUpdate.AuthorName);
+        // The surfaced on-behalf-of update inherits the re-invocation iteration's ResponseId so downstream mergers
+        // group it with the run it drives, and carries its own unique non-null MessageId. AgentId is left unset
+        // because the message is synthesized by the loop, not produced by the wrapped agent.
+        Assert.Equal("resp-2", feedbackUpdate.ResponseId);
+        Assert.True(string.IsNullOrEmpty(feedbackUpdate.AgentId));
+        Assert.False(string.IsNullOrEmpty(feedbackUpdate.MessageId));
     }
 
     /// <summary>
@@ -1114,6 +1121,72 @@ public class LoopAgentTests
         // Assert
         Assert.Equal(["ack", "ack"], texts);
         Assert.Equal("fix it", capture.MessagesPerCall[1].Single().Text);
+    }
+
+    /// <summary>
+    /// Verify that a surfaced on-behalf-of streaming update is assigned a generated, unique <see cref="AgentResponseUpdate.MessageId"/>
+    /// when the underlying evaluator-supplied message has none, inherits the driven iteration's ResponseId, and leaves AgentId unset.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_ContinueWithMessages_GetsGeneratedMessageIdAndInheritsIdsAsync()
+    {
+        // Arrange
+        var capture = new InnerStreamingCapture(i =>
+            [new AgentResponseUpdate(ChatRole.Assistant, "ack") { ResponseId = $"resp-{i}", AgentId = $"agent-{i}" }]);
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2
+                    ? LoopEvaluation.ContinueWithMessages([new ChatMessage(ChatRole.User, "explicit") { AuthorName = "evaluator" }])
+                    : LoopEvaluation.Stop()));
+        var agent = new LoopAgent(capture.Agent, evaluator);
+
+        // Act
+        var updates = new List<AgentResponseUpdate>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession()))
+        {
+            updates.Add(update);
+        }
+
+        // Assert
+        Assert.Equal(["ack", "explicit", "ack"], updates.Select(static u => u.Text));
+        AgentResponseUpdate surfaced = updates[1];
+        Assert.Equal("evaluator", surfaced.AuthorName);
+        Assert.False(string.IsNullOrEmpty(surfaced.MessageId));
+        Assert.Equal("resp-2", surfaced.ResponseId);
+        Assert.True(string.IsNullOrEmpty(surfaced.AgentId));
+    }
+
+    /// <summary>
+    /// Verify that when the wrapped agent produces no updates for an iteration, the surfaced on-behalf-of update is
+    /// still assigned a generated (non-null) ResponseId so it can be grouped downstream.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_NoInnerUpdates_GeneratesResponseIdForOnBehalfOfAsync()
+    {
+        // Arrange (the re-invocation iteration produces no updates, so its surfaced feedback has no inner ResponseId
+        // to inherit and must fall back to a generated one).
+        var capture = new InnerStreamingCapture(i =>
+            i < 2 ? [new AgentResponseUpdate(ChatRole.Assistant, "ack")] : []);
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+            new ValueTask<LoopEvaluation>(
+                ctx.Iteration < 2 ? LoopEvaluation.Continue("fix it") : LoopEvaluation.Stop()));
+        var options = new LoopAgentOptions { OnBehalfOfAuthorName = "loop" };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var updates = new List<AgentResponseUpdate>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "original")], new ChatClientAgentSession()))
+        {
+            updates.Add(update);
+        }
+
+        // Assert (the first iteration's "ack" and then the surfaced feedback whose iteration produced no updates).
+        Assert.Equal(["ack", "fix it"], updates.Select(static u => u.Text));
+        AgentResponseUpdate feedbackUpdate = updates[1];
+        Assert.Equal("loop", feedbackUpdate.AuthorName);
+        Assert.False(string.IsNullOrEmpty(feedbackUpdate.ResponseId));
+        Assert.True(string.IsNullOrEmpty(feedbackUpdate.AgentId));
+        Assert.False(string.IsNullOrEmpty(feedbackUpdate.MessageId));
     }
 
     #endregion

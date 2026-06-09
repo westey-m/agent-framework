@@ -244,9 +244,11 @@ AIAgent CreateLeanHarnessAgent(
     bool disableTodoProvider = true,
     IList<AITool>? tools = null,
     ToolApprovalAgentOptions? toolApprovalAgentOptions = null) =>
-    CreateChatClient().AsHarnessAgent(MaxContextWindowTokens, MaxOutputTokens, new HarnessAgentOptions
+    CreateChatClient().AsHarnessAgent(new HarnessAgentOptions
     {
         Name = name,
+        MaxContextWindowTokens = MaxContextWindowTokens,
+        MaxOutputTokens = MaxOutputTokens,
         DisableAgentModeProvider = true,
         DisableTodoProvider = disableTodoProvider,
         DisableFileMemory = true,

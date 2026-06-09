@@ -246,26 +246,41 @@ public sealed class LoopAgent : DelegatingAIAgent
 
         while (true)
         {
-            // Surface the on-behalf-of messages that drive this iteration before streaming the response they elicit,
-            // so callers can see the loop acting autonomously on the user's behalf (none for the first iteration).
-            foreach (ChatMessage surfaced in currentSurfaced)
-            {
-                yield return new AgentResponseUpdate(surfaced.Role, surfaced.Contents)
-                {
-                    AuthorName = surfaced.AuthorName,
-                    MessageId = surfaced.MessageId,
-                };
-            }
-
             // Stream this iteration's updates to the caller while collecting them so the iteration's full
             // response can be aggregated for evaluation (true per-iteration streaming). Uses the context's
             // session once it exists (it may have been replaced for a fresh context), otherwise the resolved session.
             AgentSession activeSession = context?.Session ?? session;
             List<AgentResponseUpdate> updates = [];
+
+            // The on-behalf-of messages that drive this iteration are surfaced before the response they elicit (none
+            // for the first iteration). They are flushed lazily on the first inner update so they can be stamped with
+            // that update's ResponseId/AgentId, keeping them grouped with the iteration for downstream mergers.
+            bool surfacedPending = currentSurfaced.Count > 0;
             await foreach (var update in this.InnerAgent.RunStreamingAsync(currentMessages, activeSession, options, cancellationToken).ConfigureAwait(false))
             {
+                if (surfacedPending)
+                {
+                    foreach (ChatMessage surfaced in currentSurfaced)
+                    {
+                        yield return CreateOnBehalfOfUpdate(surfaced, update.ResponseId);
+                    }
+
+                    surfacedPending = false;
+                }
+
                 updates.Add(update);
                 yield return update;
+            }
+
+            // The inner agent produced no updates this iteration; surface the on-behalf-of messages anyway. Since there
+            // is no iteration response to inherit from, generate a ResponseId so they still group together downstream.
+            if (surfacedPending)
+            {
+                string fallbackResponseId = System.Guid.NewGuid().ToString("N");
+                foreach (ChatMessage surfaced in currentSurfaced)
+                {
+                    yield return CreateOnBehalfOfUpdate(surfaced, fallbackResponseId);
+                }
             }
 
             // Aggregate this iteration's updates and record the result on the context.
@@ -361,6 +376,20 @@ public sealed class LoopAgent : DelegatingAIAgent
         => this._excludeOnBehalfOfMessages ? [] : surfaced;
 
     /// <summary>
+    /// Creates a streaming update for a surfaced on-behalf-of message, inheriting the driven iteration's
+    /// <paramref name="responseId"/> so downstream mergers group it with that iteration, and ensuring a unique
+    /// non-null <see cref="AgentResponseUpdate.MessageId"/>. The <see cref="AgentResponseUpdate.AgentId"/> is left
+    /// unset because the message is synthesized by the loop, not produced by the wrapped agent.
+    /// </summary>
+    private static AgentResponseUpdate CreateOnBehalfOfUpdate(ChatMessage message, string? responseId)
+        => new(message.Role, message.Contents)
+        {
+            AuthorName = message.AuthorName,
+            MessageId = message.MessageId is { Length: > 0 } messageId ? messageId : System.Guid.NewGuid().ToString("N"),
+            ResponseId = responseId,
+        };
+
+    /// <summary>
     /// Builds the messages sent to the wrapped agent for the next iteration along with the subset that should be
     /// surfaced to the caller (the loop-synthesized on-behalf-of feedback). Replayed caller input is excluded from the
     /// surfaced subset.
@@ -390,7 +419,7 @@ public sealed class LoopAgent : DelegatingAIAgent
             string? latest = feedback.Count > 0 ? feedback[feedback.Count - 1] : null;
             if (!string.IsNullOrWhiteSpace(latest))
             {
-                var feedbackMessage = new ChatMessage(ChatRole.User, latest) { AuthorName = this._onBehalfOfAuthorName };
+                var feedbackMessage = new ChatMessage(ChatRole.User, latest) { AuthorName = this._onBehalfOfAuthorName, MessageId = System.Guid.NewGuid().ToString("N") };
                 messages.Add(feedbackMessage);
                 surfaced.Add(feedbackMessage);
             }
@@ -412,7 +441,7 @@ public sealed class LoopAgent : DelegatingAIAgent
             }
         }
 
-        return any ? new ChatMessage(ChatRole.User, body.ToString()) { AuthorName = this._onBehalfOfAuthorName } : null;
+        return any ? new ChatMessage(ChatRole.User, body.ToString()) { AuthorName = this._onBehalfOfAuthorName, MessageId = System.Guid.NewGuid().ToString("N") } : null;
     }
 
     /// <summary>

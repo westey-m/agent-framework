@@ -23,46 +23,60 @@ namespace Microsoft.Agents.AI;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="HarnessAgent"/> assembles the following pipeline from a caller-supplied <see cref="IChatClient"/>:
+/// <see cref="HarnessAgent"/> provides an opinionated, batteries-included agent suitable for
+/// interactive agentic scenarios such as research, coding, data analysis, and general task automation.
+/// It assembles a full pipeline from a caller-supplied <see cref="IChatClient"/> so that callers
+/// only need to configure the parts they want to customize.
+/// </para>
+/// <para>
+/// <strong>Chat client pipeline (inner to outer):</strong>
 /// <list type="number">
-/// <item><description><see cref="FunctionInvokingChatClient"/> — automatic function/tool invocation.</description></item>
-/// <item><description><see cref="MessageInjectingChatClient"/> — allows external code to inject messages into the conversation mid-stream.</description></item>
-/// <item><description><see cref="PerServiceCallChatHistoryPersistingChatClient"/> — persists chat history after every individual service call within a function-invocation loop.</description></item>
-/// <item><description><see cref="AIContextProviderChatClient"/> with a <see cref="CompactionProvider"/> — applies context-window compaction before each call so long function-invocation loops do not overflow the context window (only when <see cref="HarnessAgentOptions.MaxContextWindowTokens"/> and <see cref="HarnessAgentOptions.MaxOutputTokens"/> are provided).</description></item>
+/// <item><description><see cref="FunctionInvokingChatClient"/> — automatic function/tool invocation with configurable iteration limits.</description></item>
+/// <item><description><see cref="MessageInjectingChatClient"/> — allows external code to inject messages into the conversation mid-stream (e.g., for user interrupts).</description></item>
+/// <item><description><see cref="PerServiceCallChatHistoryPersistingChatClient"/> — persists chat history after every individual service call within a function-invocation loop, enabling crash recovery and history inspection.</description></item>
+/// <item><description><see cref="AIContextProviderChatClient"/> with a <see cref="CompactionProvider"/> — applies context-window compaction before each call so long function-invocation loops do not overflow the context window. Only included when <see cref="HarnessAgentOptions.MaxContextWindowTokens"/> and <see cref="HarnessAgentOptions.MaxOutputTokens"/> are both provided.</description></item>
 /// </list>
 /// </para>
 /// <para>
-/// By default, the following context providers are included (each can be disabled via <see cref="HarnessAgentOptions"/>):
+/// <strong>Context providers (each enabled by default, individually disableable via <see cref="HarnessAgentOptions"/>):</strong>
 /// <list type="bullet">
-/// <item><description><see cref="TodoProvider"/> — todo list management.</description></item>
-/// <item><description><see cref="AgentModeProvider"/> — agent mode tracking (plan/execute).</description></item>
-/// <item><description><see cref="FileMemoryProvider"/> — file-based session memory.</description></item>
-/// <item><description><see cref="FileAccessProvider"/> — shared file access.</description></item>
-/// <item><description><see cref="AgentSkillsProvider"/> — skill discovery and loading.</description></item>
+/// <item><description><see cref="TodoProvider"/> — persistent todo list that the agent uses to track multi-step plans. Disable with <see cref="HarnessAgentOptions.DisableTodoProvider"/>.</description></item>
+/// <item><description><see cref="AgentModeProvider"/> — mode tracking (e.g., "plan" vs "execute") that the agent uses to structure its work. Disable with <see cref="HarnessAgentOptions.DisableAgentModeProvider"/>.</description></item>
+/// <item><description><see cref="FileMemoryProvider"/> — file-based session memory allowing the agent to persist notes and artifacts across turns. Disable with <see cref="HarnessAgentOptions.DisableFileMemory"/>.</description></item>
+/// <item><description><see cref="FileAccessProvider"/> — shared file access providing read/write tools for a working directory. Disable with <see cref="HarnessAgentOptions.DisableFileAccess"/>.</description></item>
+/// <item><description><see cref="AgentSkillsProvider"/> — discovers and loads skill definitions from the file system, enabling dynamic tool sets. Disable with <see cref="HarnessAgentOptions.DisableAgentSkillsProvider"/>.</description></item>
 /// </list>
 /// </para>
 /// <para>
-/// The agent is also wrapped with the following decorators by default (each can be disabled):
+/// <strong>Optional context providers (enabled via <see cref="HarnessAgentOptions"/>):</strong>
 /// <list type="bullet">
-/// <item><description><see cref="ToolApprovalAgent"/> — "don't ask again" tool approval rules.</description></item>
-/// <item><description><see cref="OpenTelemetryAgent"/> — OpenTelemetry instrumentation.</description></item>
+/// <item><description><see cref="BackgroundAgentsProvider"/> — enables delegation to background agents for parallel work. Enable by setting <see cref="HarnessAgentOptions.BackgroundAgents"/>.</description></item>
+/// <item><description><c>ShellEnvironmentProvider</c> — injects OS/shell/CWD information and a shell execution tool. Enable by setting <c>HarnessAgentOptions.ShellExecutor</c> (.NET only).</description></item>
 /// </list>
 /// </para>
 /// <para>
-/// A <see cref="HostedWebSearchTool"/> is added to the chat options by default (can be disabled via
-/// <see cref="HarnessAgentOptions.DisableWebSearch"/>).
+/// <strong>Agent decorators (each enabled by default, individually disableable):</strong>
+/// <list type="bullet">
+/// <item><description><see cref="ToolApprovalAgent"/> — "don't ask again" tool approval rules enabling safe unattended execution. Disable with <see cref="HarnessAgentOptions.DisableToolApproval"/>.</description></item>
+/// <item><description><see cref="OpenTelemetryAgent"/> — OpenTelemetry instrumentation following semantic conventions for generative AI. Disable with <see cref="HarnessAgentOptions.DisableOpenTelemetry"/>.</description></item>
+/// </list>
 /// </para>
 /// <para>
-/// The underlying <see cref="ChatClientAgent"/> is configured with
-/// <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> and
-/// <see cref="ChatClientAgentOptions.RequirePerServiceCallChatHistoryPersistence"/> set to <see langword="true"/>
-/// to match the manually-assembled pipeline.
+/// <strong>Default tools:</strong>
+/// <list type="bullet">
+/// <item><description><see cref="HostedWebSearchTool"/> — a hosted web search tool added to chat options by default. Disable with <see cref="HarnessAgentOptions.DisableWebSearch"/>.</description></item>
+/// </list>
 /// </para>
 /// <para>
-/// When no <see cref="HarnessAgentOptions.ChatHistoryProvider"/> is supplied and compaction is enabled, the agent
-/// defaults to an <see cref="InMemoryChatHistoryProvider"/> whose chat reducer applies the same compaction strategy,
-/// keeping in-memory history from growing unboundedly across sessions. When compaction is disabled, the default
-/// <see cref="InMemoryChatHistoryProvider"/> is used without a chat reducer.
+/// <strong>Chat history:</strong> When no <see cref="HarnessAgentOptions.ChatHistoryProvider"/> is supplied,
+/// the agent defaults to an <see cref="InMemoryChatHistoryProvider"/>. If compaction is enabled, the provider
+/// is configured with a compaction-based chat reducer to keep in-memory history bounded. Otherwise, no reducer
+/// is applied.
+/// </para>
+/// <para>
+/// <strong>Default instructions:</strong> The agent includes built-in system instructions (<see cref="DefaultInstructions"/>)
+/// that guide general tool usage and reasoning patterns. These can be overridden via <see cref="HarnessAgentOptions.HarnessInstructions"/>
+/// and combined with agent-specific instructions via <see cref="ChatOptions.Instructions"/>.
 /// </para>
 /// </remarks>
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
@@ -196,7 +210,7 @@ public sealed class HarnessAgent : DelegatingAIAgent
 
         if (compactionProvider is not null)
         {
-            pipeline.UseAIContextProviders(compactionProvider);
+            pipeline = pipeline.UseAIContextProviders(compactionProvider);
         }
 
         return pipeline

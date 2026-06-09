@@ -16,7 +16,8 @@ public static class ChatClientHarnessExtensions
 {
     /// <summary>
     /// Creates a new <see cref="HarnessAgent"/> that wraps this <see cref="IChatClient"/> with a pre-configured
-    /// pipeline including function invocation, per-service-call chat history persistence, and optional in-loop compaction.
+    /// pipeline including function invocation, per-service-call chat history persistence, optional in-loop compaction, and a rich set
+    /// of default context providers and agent decorators.
     /// </summary>
     /// <param name="chatClient">
     /// The <see cref="IChatClient"/> that provides access to the underlying AI model.

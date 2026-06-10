@@ -577,6 +577,9 @@ class MCPTool:
                 case _:
                     result.append(Content.from_text(str(item)))
 
+        if mcp_type.structuredContent is not None:
+            result.append(Content.from_text(json.dumps(mcp_type.structuredContent, default=str)))
+
         if not result:
             result.append(Content.from_text("null"))
         return result

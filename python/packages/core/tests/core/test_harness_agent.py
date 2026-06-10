@@ -577,3 +577,35 @@ def test_create_harness_agent_no_shell_by_default() -> None:
     )
     providers = agent.context_providers or []
     assert not any(isinstance(p, ShellEnvironmentProvider) for p in providers)
+
+
+def test_create_harness_agent_shell_executor_without_as_function_raises() -> None:
+    """A shell_executor lacking a callable as_function() should raise a clear TypeError."""
+
+    class _BadExecutor:
+        pass
+
+    with pytest.raises(TypeError, match="as_function"):
+        create_harness_agent(
+            client=_FakeShellClient(),  # type: ignore[arg-type]
+            max_context_window_tokens=128_000,
+            max_output_tokens=16_384,
+            disable_web_search=True,
+            shell_executor=_BadExecutor(),
+        )
+
+
+def test_create_harness_agent_shell_executor_validated_before_client_check() -> None:
+    """The as_function() contract is validated upfront, even when the client lacks shell support."""
+
+    class _BadExecutor:
+        pass
+
+    with pytest.raises(TypeError, match="as_function"):
+        create_harness_agent(
+            client=_FakeChatClient(),  # type: ignore[arg-type]
+            max_context_window_tokens=128_000,
+            max_output_tokens=16_384,
+            disable_web_search=True,
+            shell_executor=_BadExecutor(),
+        )

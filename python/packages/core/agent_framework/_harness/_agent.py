@@ -159,9 +159,19 @@ def _assemble_shell(
     Returns a ``(tool, provider)`` tuple. Both are ``None`` when no shell executor is
     provided, or when the client does not support shell tools (a warning is logged in the
     latter case, since the environment provider is not useful without an execution path).
+
+    Raises:
+        TypeError: If ``shell_executor`` does not expose a callable ``as_function()`` method.
     """
     if shell_executor is None:
         return None, None
+
+    if not callable(getattr(shell_executor, "as_function", None)):
+        raise TypeError(
+            f"shell_executor must expose a callable 'as_function()' method "
+            f"(e.g. a LocalShellTool or DockerShellTool from agent-framework-tools), "
+            f"but got {type(shell_executor).__name__}."
+        )
 
     if not isinstance(client, SupportsShellTool):
         logger.warning(

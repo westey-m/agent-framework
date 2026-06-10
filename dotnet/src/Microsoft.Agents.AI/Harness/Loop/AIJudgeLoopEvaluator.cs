@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -29,6 +30,11 @@ namespace Microsoft.Agents.AI;
 /// reset) is decided by the <see cref="LoopAgent"/> that consumes this evaluator.
 /// </para>
 /// <para>
+/// The judge instructions act as a template: any occurrence of <see cref="CriteriaPlaceholder"/> is replaced with the
+/// rendered <see cref="AIJudgeLoopEvaluatorOptions.Criteria"/> (or removed when no criteria are supplied), letting
+/// callers add bespoke standards the response must satisfy.
+/// </para>
+/// <para>
 /// LLM-judged loops are costly and probabilistic, so consider setting a stricter
 /// <see cref="LoopAgentOptions.MaxIterations"/> on the owning <see cref="LoopAgent"/>.
 /// </para>
@@ -37,12 +43,24 @@ namespace Microsoft.Agents.AI;
 public sealed class AIJudgeLoopEvaluator : LoopEvaluator
 {
     /// <summary>The default system instructions used to prompt the judge.</summary>
+    /// <remarks>
+    /// Acts as a template: the trailing <see cref="CriteriaPlaceholder"/> is replaced with the rendered
+    /// <see cref="AIJudgeLoopEvaluatorOptions.Criteria"/> (or removed when none are supplied).
+    /// </remarks>
     public const string DefaultInstructions =
         "You are an evaluator. You are given a user's original request and an agent's latest response. " +
         "Decide whether the agent has fully addressed the original request. " +
         "Set 'answered' to true if the request has been fully addressed, or false if more work is still required. " +
         "When 'answered' is false, use 'gapAnalysis' to explain what is still missing or what work remains. " +
-        "If you cannot return structured output, reply with the single token ANSWERED or NOT_ANSWERED.";
+        "If you cannot return structured output, reply with the single token ANSWERED or NOT_ANSWERED." +
+        CriteriaPlaceholder;
+
+    /// <summary>
+    /// The placeholder token within <see cref="DefaultInstructions"/> (or a custom
+    /// <see cref="AIJudgeLoopEvaluatorOptions.Instructions"/>) that is replaced with the rendered
+    /// <see cref="AIJudgeLoopEvaluatorOptions.Criteria"/>. When no criteria are supplied, the placeholder is removed.
+    /// </summary>
+    public const string CriteriaPlaceholder = "{criteria}";
 
     /// <summary>
     /// The placeholder token within <see cref="DefaultFeedbackMessageTemplate"/> (or a custom
@@ -72,7 +90,8 @@ public sealed class AIJudgeLoopEvaluator : LoopEvaluator
     public AIJudgeLoopEvaluator(IChatClient judgeClient, AIJudgeLoopEvaluatorOptions? options = null)
     {
         this._judgeClient = Throw.IfNull(judgeClient);
-        this._instructions = options?.Instructions ?? DefaultInstructions;
+        this._instructions = (options?.Instructions ?? DefaultInstructions)
+            .Replace(CriteriaPlaceholder, RenderCriteria(options?.Criteria));
         this._feedbackMessageTemplate = options?.FeedbackMessageTemplate ?? DefaultFeedbackMessageTemplate;
     }
 
@@ -131,5 +150,30 @@ public sealed class AIJudgeLoopEvaluator : LoopEvaluator
         // Not yet answered: continue, providing feedback describing what is still missing.
         string feedback = this._feedbackMessageTemplate.Replace(GapAnalysisPlaceholder, gapAnalysis);
         return LoopEvaluation.Continue(feedback);
+    }
+
+    /// <summary>
+    /// Renders the supplied <paramref name="criteria"/> into a bullet block appended at <see cref="CriteriaPlaceholder"/>,
+    /// or an empty string when no non-blank criteria are supplied.
+    /// </summary>
+    private static string RenderCriteria(IEnumerable<string>? criteria)
+    {
+        if (criteria is null)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        foreach (string criterion in criteria)
+        {
+            if (!string.IsNullOrWhiteSpace(criterion))
+            {
+                builder.Append("\n- ").Append(criterion);
+            }
+        }
+
+        return builder.Length == 0
+            ? string.Empty
+            : "\n\nThe response must satisfy all of the following criteria:" + builder;
     }
 }

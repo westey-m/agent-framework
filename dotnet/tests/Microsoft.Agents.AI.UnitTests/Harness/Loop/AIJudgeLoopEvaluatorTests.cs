@@ -194,6 +194,96 @@ public class AIJudgeLoopEvaluatorTests
         await Assert.ThrowsAsync<ArgumentNullException>("context", async () => await evaluator.EvaluateAsync(null!));
     }
 
+    /// <summary>
+    /// Verify that supplied criteria are rendered into the default judge instructions as a bullet list and the
+    /// placeholder is consumed.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_Criteria_AreRenderedIntoDefaultInstructionsAsync()
+    {
+        // Arrange
+        var judgeClient = CreateCapturingJudgeClient("{\"answered\":true}", out List<ChatMessage> judgeMessages);
+        var options = new AIJudgeLoopEvaluatorOptions { Criteria = ["Must cite sources", "Must be under 200 words"] };
+        var evaluator = new AIJudgeLoopEvaluator(judgeClient, options);
+        LoopContext context = CreateContext();
+
+        // Act
+        await evaluator.EvaluateAsync(context);
+
+        // Assert
+        string system = judgeMessages.Single(static m => m.Role == ChatRole.System).Text;
+        Assert.Contains("The response must satisfy all of the following criteria:", system);
+        Assert.Contains("- Must cite sources", system);
+        Assert.Contains("- Must be under 200 words", system);
+        Assert.DoesNotContain(AIJudgeLoopEvaluator.CriteriaPlaceholder, system);
+    }
+
+    /// <summary>
+    /// Verify that when no criteria are supplied the placeholder is removed and no criteria block is added to the
+    /// default instructions.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_NoCriteria_LeavesDefaultInstructionsWithoutCriteriaBlockAsync()
+    {
+        // Arrange
+        var judgeClient = CreateCapturingJudgeClient("{\"answered\":true}", out List<ChatMessage> judgeMessages);
+        var evaluator = new AIJudgeLoopEvaluator(judgeClient);
+        LoopContext context = CreateContext();
+
+        // Act
+        await evaluator.EvaluateAsync(context);
+
+        // Assert
+        string system = judgeMessages.Single(static m => m.Role == ChatRole.System).Text;
+        Assert.DoesNotContain(AIJudgeLoopEvaluator.CriteriaPlaceholder, system);
+        Assert.DoesNotContain("The response must satisfy all of the following criteria:", system);
+    }
+
+    /// <summary>
+    /// Verify that criteria are injected at the placeholder location in custom instructions.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_CustomInstructionsWithPlaceholder_InjectsCriteriaAsync()
+    {
+        // Arrange
+        var judgeClient = CreateCapturingJudgeClient("{\"answered\":true}", out List<ChatMessage> judgeMessages);
+        const string Instructions = "Judge the answer." + AIJudgeLoopEvaluator.CriteriaPlaceholder + " Be strict.";
+        var options = new AIJudgeLoopEvaluatorOptions { Instructions = Instructions, Criteria = ["Must include code"] };
+        var evaluator = new AIJudgeLoopEvaluator(judgeClient, options);
+        LoopContext context = CreateContext();
+
+        // Act
+        await evaluator.EvaluateAsync(context);
+
+        // Assert
+        string system = judgeMessages.Single(static m => m.Role == ChatRole.System).Text;
+        Assert.StartsWith("Judge the answer.", system);
+        Assert.EndsWith("Be strict.", system);
+        Assert.Contains("- Must include code", system);
+        Assert.DoesNotContain(AIJudgeLoopEvaluator.CriteriaPlaceholder, system);
+    }
+
+    /// <summary>
+    /// Verify that custom instructions without the placeholder do not receive the criteria.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_CustomInstructionsWithoutPlaceholder_OmitsCriteriaAsync()
+    {
+        // Arrange
+        var judgeClient = CreateCapturingJudgeClient("{\"answered\":true}", out List<ChatMessage> judgeMessages);
+        const string Instructions = "Judge the answer and be strict.";
+        var options = new AIJudgeLoopEvaluatorOptions { Instructions = Instructions, Criteria = ["Must include code"] };
+        var evaluator = new AIJudgeLoopEvaluator(judgeClient, options);
+        LoopContext context = CreateContext();
+
+        // Act
+        await evaluator.EvaluateAsync(context);
+
+        // Assert
+        string system = judgeMessages.Single(static m => m.Role == ChatRole.System).Text;
+        Assert.Equal(Instructions, system);
+    }
+
     private static LoopContext CreateContext() => new(
         new Mock<AIAgent>().Object,
         new ChatClientAgentSession(),

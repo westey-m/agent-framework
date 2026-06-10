@@ -40,6 +40,28 @@ internal static class LoopTestHelpers
         return mock.Object;
     }
 
+    /// <summary>
+    /// Creates a mocked judge <see cref="IChatClient"/> that always returns the supplied response text and captures the
+    /// messages it was invoked with via <paramref name="capturedMessages"/>.
+    /// </summary>
+    public static IChatClient CreateCapturingJudgeClient(string responseText, out List<ChatMessage> capturedMessages)
+    {
+        var captured = new List<ChatMessage>();
+        capturedMessages = captured;
+        var mock = new Mock<IChatClient>();
+        mock.Setup(c => c.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions?, CancellationToken>((messages, _, _) =>
+            {
+                captured.Clear();
+                captured.AddRange(messages);
+            })
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText)));
+        return mock.Object;
+    }
+
     public static async IAsyncEnumerable<T> ToAsyncEnumerableAsync<T>(
         IEnumerable<T> items,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)

@@ -1101,7 +1101,13 @@ class FileAccessProvider(ContextProvider):
 
         @tool(name="file_access_list_subdirectories", approval_mode="never_require")
         async def file_access_list_subdirectories(directory: str | None = None) -> list[str] | str:
-            """List the direct child subdirectory names of a directory. Omit ``directory`` (or pass an empty string) to list the root. To enumerate subdirectories of a subdirectory, pass its relative path, for example ``"reports"`` or ``"reports/2024"``. Use this together with file_access_list_files to explore the directory tree level by level."""  # noqa: E501
+            """List the direct child subdirectory names of a directory.
+
+            Omit ``directory`` (or pass an empty string) to list the root.
+            To enumerate subdirectories of a subdirectory, pass its relative path, for example
+            ``"reports"`` or ``"reports/2024"``.
+            Use this together with file_access_list_files to explore the directory tree level by level.
+            """
             target = directory if directory and directory.strip() else ""
             try:
                 return await self.store.list_directories(target)
@@ -1115,7 +1121,20 @@ class FileAccessProvider(ContextProvider):
             regex_pattern: str,
             file_pattern: str | None = None,
         ) -> list[dict[str, Any]] | str:
-            """Search the contents of all files in the store (recursively, across all subdirectories) using a regular expression pattern (case-insensitive). Optionally filter which files to search using a glob pattern matched against each file's path relative to the store root. The glob uses fnmatch semantics where ``*`` matches any characters including ``/``: use ``"*.md"`` to match markdown files at any depth, or ``"reports/*"`` to restrict the search to the ``reports`` subtree. Leave empty or omit to search all files. Returns matching results whose file_name values are paths relative to the store root (usable with file_access_read_file), along with snippets and matching lines with line numbers. The regex_pattern must be 256 characters or fewer."""  # noqa: E501
+            """Search the contents of all files in the store using a case-insensitive regular expression.
+
+            The search runs recursively across all subdirectories.
+            Optionally filter which files to search using a glob pattern matched against each file's
+            path relative to the store root.
+            The glob uses fnmatch semantics where ``*`` matches any characters including ``/``: use
+            ``"*.md"`` to match markdown files at any depth,
+            or ``"reports/*"`` to restrict the search to the ``reports`` subtree.
+            Leave empty or omit to search all files.
+            Returns matching results whose file_name values are paths relative to the store root
+            (usable with file_access_read_file),
+            along with snippets and matching lines with line numbers. The regex_pattern must be
+            256 characters or fewer.
+            """
             pattern = file_pattern if file_pattern and file_pattern.strip() else None
             try:
                 results = await self.store.search_files("", regex_pattern, pattern, recursive=True)

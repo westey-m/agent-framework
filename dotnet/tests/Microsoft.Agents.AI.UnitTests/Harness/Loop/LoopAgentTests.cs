@@ -232,10 +232,10 @@ public class LoopAgentTests
 
     /// <summary>
     /// Verify that an evaluator using <see cref="LoopEvaluation.ContinueWithMessages"/> sends the messages verbatim and
-    /// records no feedback entry.
+    /// records an aligned <see langword="null"/> feedback entry (it carries no feedback string).
     /// </summary>
     [Fact]
-    public async Task RunAsync_ContinueWithMessages_SendsMessagesVerbatimAndRecordsNoFeedbackAsync()
+    public async Task RunAsync_ContinueWithMessages_SendsMessagesVerbatimAndRecordsNullFeedbackAsync()
     {
         // Arrange
         var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "ack")]));
@@ -260,7 +260,8 @@ public class LoopAgentTests
         Assert.Equal(2, capture.CallCount);
         Assert.Equal(["sys", "explicit"], capture.MessagesPerCall[1].Select(static m => m.Text));
         Assert.NotNull(feedbackSnapshot);
-        Assert.Empty(feedbackSnapshot!);
+        // One aligned entry for the single re-invoked iteration; null because ContinueWithMessages carries no feedback string.
+        Assert.Equal([null], feedbackSnapshot!);
     }
 
     /// <summary>
@@ -402,6 +403,43 @@ public class LoopAgentTests
         Assert.Equal(3, capture.CallCount);
         // On the third iteration the producer stops, the observer runs and sees two recorded feedback entries.
         Assert.Equal([2], observed);
+    }
+
+    /// <summary>
+    /// Verify that iterations driven by <see cref="LoopEvaluation.ContinueWithMessages"/> still record an (aligned)
+    /// entry in the feedback log, so the log stays one-entry-per-re-invoked-iteration. The explicit-messages iteration
+    /// contributes a <see langword="null"/> entry since it carries no feedback string.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ContinueWithMessages_RecordsNullFeedbackEntryAsync()
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(_ => new AgentResponse([new ChatMessage(ChatRole.Assistant, "partial")]));
+        List<string?>? finalLog = null;
+        var evaluator = new DelegateLoopEvaluator((ctx, _) =>
+        {
+            // Capture the log on the final evaluation, after both re-invocations have been recorded.
+            if (ctx.Iteration >= 3)
+            {
+                finalLog = ctx.Feedback.ToList();
+                return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
+            }
+
+            // Iteration 1 drives a feedback-string re-invocation; iteration 2 drives an explicit-messages one.
+            return new ValueTask<LoopEvaluation>(ctx.Iteration == 1
+                ? LoopEvaluation.Continue("needs work")
+                : LoopEvaluation.ContinueWithMessages([new ChatMessage(ChatRole.User, "explicit")]));
+        });
+        var options = new LoopAgentOptions { MaxIterations = 5 };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.NotNull(finalLog);
+        // One entry per re-invoked iteration: the feedback string, then null for the ContinueWithMessages iteration.
+        Assert.Equal(["needs work", null], finalLog!);
     }
 
     #endregion

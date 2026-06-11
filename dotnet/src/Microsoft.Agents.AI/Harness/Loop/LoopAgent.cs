@@ -353,6 +353,11 @@ public sealed class LoopAgent : DelegatingAIAgent
             context.Session = await this.CreateFreshIterationSessionAsync(context, initialSessionSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
+        // Record one feedback entry for this re-invoked iteration (null when none, including ContinueWithMessages
+        // iterations which carry no feedback string) so the log stays aligned: one entry per re-invoked iteration, with
+        // the last element always corresponding to the latest re-invoked iteration. Continue() normalizes whitespace to null.
+        feedbackLog.Add(winner.Feedback);
+
         // An evaluator supplied explicit messages: send them verbatim, bypassing feedback/message construction (the
         // session is still reset above when a fresh context is requested). These are surfaced to the caller as-is (the
         // evaluator owns them, including any author name).
@@ -360,10 +365,6 @@ public sealed class LoopAgent : DelegatingAIAgent
         {
             return LoopNextStep.Continue(winner.Messages, this.Surfaced(winner.Messages));
         }
-
-        // Record one feedback entry for this re-invoked iteration (null when none) so the last element always
-        // corresponds to the latest re-invoked iteration. Continue() already normalizes whitespace to null.
-        feedbackLog.Add(winner.Feedback);
 
         (List<ChatMessage> messages, List<ChatMessage> surfaced) = this.BuildNextMessages(context, feedbackLog);
         return LoopNextStep.Continue(messages, this.Surfaced(surfaced));

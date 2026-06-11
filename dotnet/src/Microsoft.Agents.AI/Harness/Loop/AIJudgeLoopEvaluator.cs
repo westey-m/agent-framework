@@ -20,8 +20,9 @@ namespace Microsoft.Agents.AI;
 /// <para>
 /// After each iteration the judge is queried directly (without any agent tools, session, or middleware) with the
 /// original request and the agent's latest response, and asked for a structured <see cref="JudgeVerdict"/>. If the
-/// judge client does not honor structured output, the verdict falls back to parsing the raw text for an
-/// <c>ANSWERED</c> / <c>NOT_ANSWERED</c> token.
+/// judge client does not honor structured output, the verdict falls back to parsing the raw text for the
+/// non-overlapping <see cref="DoneVerdictMarker"/> / <see cref="MoreVerdictMarker"/> markers (with
+/// <see cref="MoreVerdictMarker"/> winning, so the loop keeps running, when the verdict is ambiguous or absent).
 /// </para>
 /// <para>
 /// When the request is not yet answered, the evaluator returns feedback built from
@@ -52,8 +53,27 @@ public sealed class AIJudgeLoopEvaluator : LoopEvaluator
         "Decide whether the agent has fully addressed the original request. " +
         "Set 'answered' to true if the request has been fully addressed, or false if more work is still required. " +
         "When 'answered' is false, use 'gapAnalysis' to explain what is still missing or what work remains. " +
-        "If you cannot return structured output, reply with the single token ANSWERED or NOT_ANSWERED." +
+        "If you cannot return structured output, reply with " + DoneVerdictMarker + " when the request has been fully " +
+        "addressed, or " + MoreVerdictMarker + " when more work is still required." +
         CriteriaPlaceholder;
+
+    /// <summary>
+    /// The verdict marker the judge is asked to emit (for clients that do not honor structured output) when the
+    /// original request has been fully addressed.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DoneVerdictMarker"/> and <see cref="MoreVerdictMarker"/> are deliberately non-overlapping (neither is
+    /// a substring of the other), so the text fallback cannot misclassify one verdict as the other. When the marker is
+    /// ambiguous or absent, <see cref="MoreVerdictMarker"/> wins so the loop keeps running rather than stopping on an
+    /// incomplete answer.
+    /// </remarks>
+    public const string DoneVerdictMarker = "VERDICT: DONE";
+
+    /// <summary>
+    /// The verdict marker the judge is asked to emit (for clients that do not honor structured output) when more work
+    /// is still required. Takes precedence over <see cref="DoneVerdictMarker"/> when both (or neither) are present.
+    /// </summary>
+    public const string MoreVerdictMarker = "VERDICT: MORE";
 
     /// <summary>
     /// The placeholder token within <see cref="DefaultInstructions"/> (or a custom
@@ -136,9 +156,11 @@ public sealed class AIJudgeLoopEvaluator : LoopEvaluator
         }
         else
         {
-            // Fallback for clients that do not honor structured output: parse the raw text.
+            // Fallback for clients that do not honor structured output: look for the explicit, non-overlapping verdict
+            // markers. MoreVerdictMarker wins so an ambiguous or marker-less reply keeps looping rather than stopping
+            // on an incomplete answer.
             string text = response.Text.ToUpperInvariant();
-            answered = !text.Contains("NOT_ANSWERED") && text.Contains("ANSWERED");
+            answered = !text.Contains(MoreVerdictMarker) && text.Contains(DoneVerdictMarker);
         }
 
         // The request is answered: stop looping.

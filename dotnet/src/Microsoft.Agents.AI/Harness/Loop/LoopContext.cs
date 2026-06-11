@@ -78,9 +78,11 @@ public sealed class LoopContext
     /// </summary>
     /// <remarks>
     /// Each entry is the feedback supplied by the evaluator that requested the corresponding re-invocation, or
-    /// <see langword="null"/> when that iteration produced no feedback (so the last entry always corresponds to the
-    /// most recent re-invoked iteration). This log is owned and populated by <see cref="LoopAgent"/>; evaluators may
-    /// read it to reason over prior feedback.
+    /// <see langword="null"/> when that iteration produced no feedback string (for example a plain
+    /// <see cref="LoopEvaluation.Continue(string)"/> with no text, or a <see cref="LoopEvaluation.ContinueWithMessages"/>
+    /// that supplied explicit messages instead). The log records one entry per re-invoked iteration regardless of mode,
+    /// so the last entry always corresponds to the most recent re-invoked iteration. This log is owned and populated by
+    /// <see cref="LoopAgent"/>; evaluators may read it to reason over prior feedback.
     /// </remarks>
     public IReadOnlyList<string?> Feedback { get; internal set; } = [];
 

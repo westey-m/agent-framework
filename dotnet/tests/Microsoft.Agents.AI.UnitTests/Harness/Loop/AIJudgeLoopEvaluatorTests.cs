@@ -57,13 +57,13 @@ public class AIJudgeLoopEvaluatorTests
     }
 
     /// <summary>
-    /// Verify that the evaluator falls back to text parsing and stops when an ANSWERED token is present.
+    /// Verify that the evaluator falls back to text parsing and stops when the DONE verdict marker is present.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_TextFallback_StopsWhenAnsweredAsync()
     {
         // Arrange
-        var judgeClient = CreateJudgeClient("ANSWERED");
+        var judgeClient = CreateJudgeClient(AIJudgeLoopEvaluator.DoneVerdictMarker);
         var evaluator = new AIJudgeLoopEvaluator(judgeClient);
         LoopContext context = CreateContext();
 
@@ -81,7 +81,7 @@ public class AIJudgeLoopEvaluatorTests
     public async Task EvaluateAsync_NotAnswered_TextFallback_InjectsUnknownGapAnalysisAsync()
     {
         // Arrange
-        var judgeClient = CreateJudgeClient("NOT_ANSWERED");
+        var judgeClient = CreateJudgeClient(AIJudgeLoopEvaluator.MoreVerdictMarker);
         var evaluator = new AIJudgeLoopEvaluator(judgeClient);
         LoopContext context = CreateContext();
 
@@ -91,6 +91,28 @@ public class AIJudgeLoopEvaluatorTests
         // Assert
         Assert.True(evaluation.ShouldReinvoke);
         Assert.Contains("<unknown>", evaluation.Feedback!);
+    }
+
+    /// <summary>
+    /// Verify that the text fallback keeps looping for replies that merely contain the substring "ANSWERED" (for
+    /// example "UNANSWERED" or "NOT ANSWERED") rather than the explicit DONE verdict marker.
+    /// </summary>
+    [Theory]
+    [InlineData("UNANSWERED")]
+    [InlineData("NOT ANSWERED")]
+    [InlineData("The request is not yet answered.")]
+    public async Task EvaluateAsync_TextFallback_AmbiguousReply_ContinuesAsync(string reply)
+    {
+        // Arrange
+        var judgeClient = CreateJudgeClient(reply);
+        var evaluator = new AIJudgeLoopEvaluator(judgeClient);
+        LoopContext context = CreateContext();
+
+        // Act
+        LoopEvaluation evaluation = await evaluator.EvaluateAsync(context);
+
+        // Assert
+        Assert.True(evaluation.ShouldReinvoke);
     }
 
     /// <summary>

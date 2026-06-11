@@ -28,6 +28,8 @@ from ._todo import TodoProvider
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from agent_framework_tools.shell import ShellEnvironmentProviderOptions, ShellExecutor
+
     from .._clients import SupportsChatGetResponse
     from .._compaction import CompactionStrategy, TokenizerProtocol
     from .._middleware import MiddlewareTypes
@@ -151,8 +153,8 @@ def _assemble_context_providers(
 
 def _assemble_shell(
     client: SupportsChatGetResponse[Any],
-    shell_executor: Any,
-    shell_environment_provider_options: Any,
+    shell_executor: ShellExecutor | None,
+    shell_environment_provider_options: ShellEnvironmentProviderOptions | None,
 ) -> tuple[ToolTypes | None, ContextProvider | None]:
     """Build the shell tool and environment provider when a shell executor is supplied.
 
@@ -166,7 +168,10 @@ def _assemble_shell(
     if shell_executor is None:
         return None, None
 
-    if not callable(getattr(shell_executor, "as_function", None)):
+    # ShellExecutor is a protocol without ``as_function()``, so the
+    # contract is validated at runtime: a shell tool such as LocalShellTool/DockerShellTool exposes it.
+    as_function = getattr(shell_executor, "as_function", None)
+    if not callable(as_function):
         raise TypeError(
             f"shell_executor must expose a callable 'as_function()' method "
             f"(e.g. a LocalShellTool or DockerShellTool from agent-framework-tools), "
@@ -185,7 +190,7 @@ def _assemble_shell(
     # which depends on core, so core cannot import them at module load time.
     from agent_framework_tools.shell import ShellEnvironmentProvider
 
-    shell_tool = client.get_shell_tool(func=shell_executor.as_function())
+    shell_tool = client.get_shell_tool(func=as_function())
     shell_provider = ShellEnvironmentProvider(shell_executor, shell_environment_provider_options)
     return shell_tool, shell_provider
 
@@ -220,8 +225,8 @@ def create_harness_agent(
     skills_paths: Sequence[str] | None = None,
     background_agents: Sequence[SupportsAgentRun] | None = None,
     background_agents_instructions: str | None = None,
-    shell_executor: Any = None,
-    shell_environment_provider_options: Any = None,
+    shell_executor: ShellExecutor | None = None,
+    shell_environment_provider_options: ShellEnvironmentProviderOptions | None = None,
     disable_web_search: bool = False,
     otel_provider_name: str | None = None,
     context_providers: Sequence[ContextProvider] | None = None,

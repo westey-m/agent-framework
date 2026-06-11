@@ -246,7 +246,7 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
     /// </summary>
     private static IEnumerable<string> EnumerateFiles(string directory, bool recursive)
     {
-        foreach (string filePath in Directory.GetFiles(directory))
+        foreach (string filePath in Directory.EnumerateFiles(directory))
         {
             // Skip files that are symlinks/reparse points.
             if ((File.GetAttributes(filePath) & FileAttributes.ReparsePoint) != 0)
@@ -262,7 +262,7 @@ public sealed class FileSystemAgentFileStore : AgentFileStore
             yield break;
         }
 
-        foreach (string subDir in Directory.GetDirectories(directory))
+        foreach (string subDir in Directory.EnumerateDirectories(directory))
         {
             // Skip symlinked/reparse-point directories so recursion cannot escape the root.
             if ((File.GetAttributes(subDir) & FileAttributes.ReparsePoint) != 0)

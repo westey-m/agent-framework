@@ -523,6 +523,16 @@ public class InMemoryAgentFileStoreTests
     }
 
     [Fact]
+    public async Task ListDirectories_PathTraversal_ThrowsAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => store.ListDirectoriesAsync("../other"));
+    }
+
+    [Fact]
     public async Task SearchFiles_Recursive_FindsDescendantsAsync()
     {
         // Arrange

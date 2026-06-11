@@ -428,6 +428,13 @@ public sealed class FileSystemAgentFileStoreTests : IDisposable
         Assert.Empty(directories);
     }
 
+    [Fact]
+    public async Task ListDirectoriesAsync_DotDotSegment_ThrowsAsync()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => this._store.ListDirectoriesAsync("../other"));
+    }
+
     #endregion
 
     #region Symlink Escape Rejection

@@ -51,6 +51,7 @@ public sealed class PlanningOutputObserver : ConsoleObserver
     /// <inheritdoc/>
     public override async Task OnResponseUpdateAsync(IUXStateDriver ux, AgentResponseUpdate update, AIAgent agent, AgentSession session)
     {
+        // We aren't in planning mode, so we can just stream the output directly.
         if (!this.IsPlanningMode(ux.CurrentMode))
         {
             if (!string.IsNullOrWhiteSpace(update.Text))
@@ -61,14 +62,15 @@ public sealed class PlanningOutputObserver : ConsoleObserver
             return;
         }
 
-        if (this.IsPlanningMode(ux.CurrentMode) && this._lastResponseId == update.ResponseId && this._lastMessageId == update.MessageId)
+        // We are still accumulating the same response/message.
+        if (this._lastResponseId == update.ResponseId && this._lastMessageId == update.MessageId)
         {
             this._textCollector.Append(update.Text);
             return;
         }
 
-        // New response/message, clear the text collector for the next JSON response/message
-        // and write the previous response/message.
+        // New response/message, write the previous response/message and
+        // clear the text collector for the next JSON response/message.
         string collectedText = this._textCollector.ToString();
         if (!string.IsNullOrWhiteSpace(collectedText))
         {

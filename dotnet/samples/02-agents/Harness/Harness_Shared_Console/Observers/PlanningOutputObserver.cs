@@ -53,7 +53,11 @@ public sealed class PlanningOutputObserver : ConsoleObserver
     {
         if (!this.IsPlanningMode(ux.CurrentMode))
         {
-            await ux.WriteTextAsync(update.Text).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(update.Text))
+            {
+                await ux.WriteTextAsync(update.Text).ConfigureAwait(false);
+            }
+
             return;
         }
 

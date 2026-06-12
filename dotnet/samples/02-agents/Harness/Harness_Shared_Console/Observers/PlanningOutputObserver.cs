@@ -72,6 +72,7 @@ public sealed class PlanningOutputObserver : ConsoleObserver
         }
 
         this._textCollector.Clear();
+        this._textCollector.Append(update.Text);
         this._lastResponseId = update.ResponseId;
         this._lastMessageId = update.MessageId;
     }

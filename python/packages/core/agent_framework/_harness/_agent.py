@@ -373,7 +373,8 @@ def create_harness_agent(
         disable_tool_approval: When True, do not wire the tool approval middleware.
             When False (default), a :class:`~agent_framework.ToolApprovalMiddleware` is added
             (outermost) to coordinate "don't ask again" standing approval rules and queued
-            approval prompts.
+            approval prompts; callers must pass an :class:`~agent_framework.AgentSession` to
+            :meth:`~agent_framework.Agent.run` when enabled.
         auto_approval_rules: Optional heuristic callbacks that can auto-approve a function call
             that would otherwise require approval. Each callback receives the ``function_call``
             content and returns ``True`` to approve it. Rules are evaluated after standing rules

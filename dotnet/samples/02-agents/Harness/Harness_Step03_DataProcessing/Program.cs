@@ -81,10 +81,9 @@ AIAgent agent =
         FileAccessStore = new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "working")),
         ToolApprovalAgentOptions = new ToolApprovalAgentOptions()
         {
-            // The FileAccessProvider on the HarnessAgent requires approval for all file access operations.
-            // We can however add some auto approval rules, like here we auto approve read-only file access tools.
-            // You can also supply your own function, to craft your own auto approval rules.
-            AutoApprovalRules = [FileAccessProvider.ReadOnlyToolsAutoApprovalRule]
+            // The HarnessAgent's FileAccessProvider requires approval for all file access operations.
+            // Add an auto-approval rule to skip prompts for specific operations (e.g., read-only access).
+            // You can also supply your own rule to implement custom approval logic.
         },
         DisableTodoProvider = true,
         DisableAgentModeProvider = true,

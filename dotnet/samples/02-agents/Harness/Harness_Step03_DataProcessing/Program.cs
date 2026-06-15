@@ -79,6 +79,13 @@ AIAgent agent =
         Description = "A data analyst assistant that reads, analyzes, and processes data files.",
         OpenTelemetrySourceName = TracingSourceName,
         FileAccessStore = new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "working")),
+        ToolApprovalAgentOptions = new ToolApprovalAgentOptions()
+        {
+            // The FileAccessProvider on the HarnessAgent requires approval for all file access operations.
+            // We can however add some auto approval rules, like here we auto approve read-only file access tools.
+            // You can also supply your own function, to craft your own auto approval rules.
+            AutoApprovalRules = [FileAccessProvider.ReadOnlyToolsAutoApprovalRule]
+        },
         DisableTodoProvider = true,
         DisableAgentModeProvider = true,
         DisableFileMemory = true,   // If enabled, this would allow the agent to store memories as files in a directory associated with the current session

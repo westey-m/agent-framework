@@ -66,9 +66,14 @@ class ToolCallDisplayObserver(ConsoleObserver):
         if content.type != "function_call":
             return
 
-        # Group streamed fragments by call_id. Some providers may omit a call_id;
-        # fall back to a name-derived key so distinct unnamed calls don't merge.
-        call_id = content.call_id or f"__noid_{content.name or 'unknown'}"
+        # Streamed fragments are coalesced by call_id. If a provider omits the
+        # call_id, fragments cannot be reliably grouped, so fall back to the
+        # original behavior — display the item as-is — rather than risk merging
+        # (and then dropping) distinct calls under a shared synthetic key.
+        call_id = content.call_id
+        if not call_id:
+            self._display(ux, content)
+            return
 
         if call_id in self._displayed:
             return
@@ -120,10 +125,17 @@ class ToolCallDisplayObserver(ConsoleObserver):
         parses immediately).
         """
         if isinstance(arguments, str):
-            if not arguments:
+            stripped = arguments.strip()
+            if not stripped:
+                return False
+            # Cheap structural gate: a complete JSON object/array opens and
+            # closes with matching brackets. This rejects growing partial
+            # fragments in O(1) so json.loads only runs on a plausibly-complete
+            # payload, avoiding O(n^2) re-parsing across many streamed deltas.
+            if not ((stripped[0] == "{" and stripped[-1] == "}") or (stripped[0] == "[" and stripped[-1] == "]")):
                 return False
             try:
-                json.loads(arguments)
+                json.loads(stripped)
             except (json.JSONDecodeError, TypeError):
                 return False
             return True
@@ -139,10 +151,20 @@ class ToolCallDisplayObserver(ConsoleObserver):
 
         from agent_framework import Content
 
+        # Preserve an empty mapping ("{}") as-is; only treat an empty *string*
+        # (no arguments were ever streamed) as "no arguments".
+        arguments = entry["arguments"]
+        if arguments == "":
+            arguments = None
+
         call = Content.from_function_call(
             call_id=call_id,
             name=entry["name"] or "Unknown",
-            arguments=entry["arguments"] or None,
+            arguments=arguments,
         )
+        self._display(ux, call)
+
+    def _display(self, ux: IUXStateDriver, call: Content) -> None:
+        """Format and write a single tool-call line."""
         formatted = format_tool_call(self._formatters, call)
         ux.append_info_line(f"🔧 {formatted}", "yellow")

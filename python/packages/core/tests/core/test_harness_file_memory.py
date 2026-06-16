@@ -1,0 +1,284 @@
+# Copyright (c) Microsoft. All rights reserved.
+
+from __future__ import annotations
+
+import json
+
+from agent_framework import (
+    AgentSession,
+    FileMemoryProvider,
+    InMemoryAgentFileStore,
+)
+from agent_framework._harness._file_memory import (
+    _MEMORY_INDEX_FILE_NAME,
+    DEFAULT_FILE_MEMORY_INSTRUCTIONS,
+    DEFAULT_FILE_MEMORY_SOURCE_ID,
+    _combine_paths,
+    _description_file_name,
+    _is_internal_file,
+)
+from agent_framework._sessions import SessionContext
+
+
+def _tool_by_name(tools: list[object], name: str) -> object:
+    """Return the tool with the requested name from a prepared tool list."""
+    for tool in tools:
+        if getattr(tool, "name", None) == name:
+            return tool
+    raise AssertionError(f"Tool {name!r} was not found.")
+
+
+async def _prepare(
+    provider: FileMemoryProvider, *, session_id: str = "session-1"
+) -> tuple[SessionContext, dict[str, object]]:
+    """Run ``before_run`` against a fresh session context and return tools by name."""
+    session = AgentSession(session_id=session_id)
+    context = SessionContext(session_id=session_id, input_messages=[])
+    await provider.before_run(agent=None, session=session, context=context, state={})
+    tools = {getattr(t, "name", None): t for t in context.tools}
+    return context, tools
+
+
+def test_description_file_name_replaces_extension() -> None:
+    """The description sidecar replaces a known extension and appends otherwise."""
+    assert _description_file_name("notes.md") == "notes_description.md"
+    assert _description_file_name("data.json") == "data_description.md"
+    assert _description_file_name("noext") == "noext_description.md"
+    # Leading-dot files have no stem, so the suffix is appended.
+    assert _description_file_name(".hidden") == ".hidden_description.md"
+
+
+def test_is_internal_file_detects_sidecars_and_index() -> None:
+    """Internal files are description sidecars and the memory index, case-insensitively."""
+    assert _is_internal_file("notes_description.md")
+    assert _is_internal_file("NOTES_DESCRIPTION.MD")
+    assert _is_internal_file(_MEMORY_INDEX_FILE_NAME)
+    assert _is_internal_file("Memories.md")
+    assert not _is_internal_file("notes.md")
+    assert not _is_internal_file("description.md")
+
+
+def test_combine_paths_joins_with_forward_slash() -> None:
+    """Working-folder paths join with a single forward slash and tolerate empties."""
+    assert _combine_paths("session-1", "notes.md") == "session-1/notes.md"
+    assert _combine_paths("session-1/", "/notes.md") == "session-1/notes.md"
+    assert _combine_paths("", "notes.md") == "notes.md"
+    assert _combine_paths("session-1", "") == "session-1"
+
+
+async def test_provider_registers_tools_and_instructions() -> None:
+    """``before_run`` should register the five tools and the default instructions."""
+    provider = FileMemoryProvider(store=InMemoryAgentFileStore())
+    context, tools = await _prepare(provider)
+
+    expected = {
+        "file_memory_save_file",
+        "file_memory_read_file",
+        "file_memory_delete_file",
+        "file_memory_list_files",
+        "file_memory_search_files",
+    }
+    assert set(tools) >= expected
+    assert all(t.approval_mode == "never_require" for t in context.tools)  # type: ignore[attr-defined]
+    assert any(DEFAULT_FILE_MEMORY_INSTRUCTIONS in chunk for chunk in context.instructions)
+
+
+async def test_provider_uses_default_source_id() -> None:
+    """The default source id should match the public constant."""
+    provider = FileMemoryProvider(store=InMemoryAgentFileStore())
+    assert provider.source_id == DEFAULT_FILE_MEMORY_SOURCE_ID
+
+
+async def test_save_read_delete_round_trip() -> None:
+    """The tools should drive a save/read/list/delete flow with index maintenance."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store)
+    _, tools = await _prepare(provider)
+
+    save = tools["file_memory_save_file"]
+    read = tools["file_memory_read_file"]
+    delete = tools["file_memory_delete_file"]
+    list_files = tools["file_memory_list_files"]
+
+    saved = await save.invoke(arguments={"file_name": "plan.md", "content": "step 1"})
+    assert "plan.md" in saved[0].text and "saved" in saved[0].text
+
+    read_back = await read.invoke(arguments={"file_name": "plan.md"})
+    assert read_back[0].text == "step 1"
+
+    # Overwrite is allowed (no overwrite flag needed).
+    await save.invoke(arguments={"file_name": "plan.md", "content": "step 2"})
+    assert (await read.invoke(arguments={"file_name": "plan.md"}))[0].text == "step 2"
+
+    listed = json.loads((await list_files.invoke())[0].text)
+    assert listed == [{"file_name": "plan.md", "description": None}]
+
+    deleted = await delete.invoke(arguments={"file_name": "plan.md"})
+    assert "deleted" in deleted[0].text
+    missing = await read.invoke(arguments={"file_name": "plan.md"})
+    assert "not found" in missing[0].text
+    missing_delete = await delete.invoke(arguments={"file_name": "plan.md"})
+    assert "not found" in missing_delete[0].text
+
+
+async def test_description_sidecar_is_written_and_listed() -> None:
+    """Saving with a description writes a sidecar and surfaces it in listings."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store, scope="user-1")
+    _, tools = await _prepare(provider)
+    save = tools["file_memory_save_file"]
+    list_files = tools["file_memory_list_files"]
+
+    result = await save.invoke(
+        arguments={"file_name": "arch.md", "content": "big content", "description": "system architecture"}
+    )
+    assert "with description" in result[0].text
+
+    sidecar = await store.read_file(_combine_paths("user-1", "arch_description.md"))
+    assert sidecar == "system architecture"
+
+    listed = json.loads((await list_files.invoke())[0].text)
+    assert listed == [{"file_name": "arch.md", "description": "system architecture"}]
+
+    # Re-saving without a description removes the sidecar.
+    await save.invoke(arguments={"file_name": "arch.md", "content": "big content"})
+    assert await store.read_file(_combine_paths("user-1", "arch_description.md")) is None
+    listed_again = json.loads((await list_files.invoke())[0].text)
+    assert listed_again == [{"file_name": "arch.md", "description": None}]
+
+
+async def test_delete_removes_sidecar() -> None:
+    """Deleting a file also removes its companion description sidecar."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store, scope="user-1")
+    _, tools = await _prepare(provider)
+
+    await tools["file_memory_save_file"].invoke(
+        arguments={"file_name": "arch.md", "content": "x", "description": "desc"}
+    )
+    assert await store.read_file(_combine_paths("user-1", "arch_description.md")) == "desc"
+
+    await tools["file_memory_delete_file"].invoke(arguments={"file_name": "arch.md"})
+    assert await store.read_file(_combine_paths("user-1", "arch_description.md")) is None
+
+
+async def test_index_is_rebuilt_and_injected_on_next_run() -> None:
+    """Saved memories should be summarized in the index and injected as a context message."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store, scope="user-1")
+    _, tools = await _prepare(provider)
+
+    await tools["file_memory_save_file"].invoke(
+        arguments={"file_name": "arch.md", "content": "x", "description": "architecture"}
+    )
+    await tools["file_memory_save_file"].invoke(arguments={"file_name": "todo.md", "content": "y"})
+
+    index = await store.read_file(_combine_paths("user-1", _MEMORY_INDEX_FILE_NAME))
+    assert index is not None
+    assert "# Memory Index" in index
+    assert "- **arch.md**: architecture" in index
+    assert "- **todo.md**" in index
+
+    # A subsequent run injects the index as a user context message.
+    session = AgentSession(session_id="ignored")
+    context = SessionContext(session_id="ignored", input_messages=[])
+    await provider.before_run(agent=None, session=session, context=context, state={})
+    injected = context.context_messages.get(DEFAULT_FILE_MEMORY_SOURCE_ID, [])
+    assert len(injected) == 1
+    assert injected[0].role == "user"
+    assert "arch.md" in injected[0].text
+
+
+async def test_list_and_search_hide_internal_files() -> None:
+    """Listing and search must hide description sidecars and the memory index."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store, scope="user-1")
+    _, tools = await _prepare(provider)
+
+    await tools["file_memory_save_file"].invoke(
+        arguments={"file_name": "arch.md", "content": "architecture text", "description": "architecture"}
+    )
+
+    listed = json.loads((await tools["file_memory_list_files"].invoke())[0].text)
+    assert [e["file_name"] for e in listed] == ["arch.md"]
+
+    # The description text lives in an internal sidecar, so a regex matching it
+    # must not return the sidecar (only the memory file itself).
+    found = json.loads(
+        (await tools["file_memory_search_files"].invoke(arguments={"regex_pattern": "architecture"}))[0].text
+    )
+    names = [e["file_name"] for e in found]
+    assert "arch.md" in names
+    assert all(not _is_internal_file(name) for name in names)
+
+
+async def test_scope_isolates_memories_across_sessions() -> None:
+    """Two sessions sharing a store should not see each other's memories by default."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store)
+
+    _, tools_a = await _prepare(provider, session_id="session-a")
+    await tools_a["file_memory_save_file"].invoke(arguments={"file_name": "a.md", "content": "from a"})
+
+    _, tools_b = await _prepare(provider, session_id="session-b")
+    listed_b = json.loads((await tools_b["file_memory_list_files"].invoke())[0].text)
+    assert listed_b == []
+
+    # The original session still sees its own memory.
+    _, tools_a2 = await _prepare(provider, session_id="session-a")
+    listed_a = json.loads((await tools_a2["file_memory_list_files"].invoke())[0].text)
+    assert [e["file_name"] for e in listed_a] == ["a.md"]
+
+
+async def test_explicit_scope_shares_memories_across_sessions() -> None:
+    """An explicit scope groups memories regardless of session id."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store, scope="shared")
+
+    _, tools_a = await _prepare(provider, session_id="session-a")
+    await tools_a["file_memory_save_file"].invoke(arguments={"file_name": "shared.md", "content": "v"})
+
+    _, tools_b = await _prepare(provider, session_id="session-b")
+    listed_b = json.loads((await tools_b["file_memory_list_files"].invoke())[0].text)
+    assert [e["file_name"] for e in listed_b] == ["shared.md"]
+
+
+async def test_save_rejects_reserved_internal_names() -> None:
+    """Saving a file whose name collides with an internal file must be rejected."""
+    provider = FileMemoryProvider(store=InMemoryAgentFileStore())
+    _, tools = await _prepare(provider)
+    save = tools["file_memory_save_file"]
+
+    reserved = await save.invoke(arguments={"file_name": _MEMORY_INDEX_FILE_NAME, "content": "x"})
+    assert "reserved" in reserved[0].text
+
+    sidecar = await save.invoke(arguments={"file_name": "notes_description.md", "content": "x"})
+    assert "reserved" in sidecar[0].text
+
+
+async def test_tools_surface_path_validation_errors() -> None:
+    """Path traversal and rooted paths should be reported as tool messages, not raised."""
+    provider = FileMemoryProvider(store=InMemoryAgentFileStore())
+    _, tools = await _prepare(provider)
+
+    bad_save = await tools["file_memory_save_file"].invoke(arguments={"file_name": "../escape.md", "content": "x"})
+    assert "Could not save" in bad_save[0].text
+
+    bad_read = await tools["file_memory_read_file"].invoke(arguments={"file_name": "/rooted.md"})
+    assert "Could not read" in bad_read[0].text
+
+    bad_delete = await tools["file_memory_delete_file"].invoke(arguments={"file_name": "../escape.md"})
+    assert "Could not delete" in bad_delete[0].text
+
+
+async def test_provider_accepts_custom_instructions() -> None:
+    """Custom instructions override the default banner."""
+    provider = FileMemoryProvider(store=InMemoryAgentFileStore(), instructions="custom memory banner")
+    context, _ = await _prepare(provider)
+    assert "custom memory banner" in context.instructions
+    assert all(DEFAULT_FILE_MEMORY_INSTRUCTIONS not in chunk for chunk in context.instructions)
+
+
+def test_file_memory_provider_is_experimental() -> None:
+    """The provider should be marked experimental under the harness feature."""
+    assert getattr(FileMemoryProvider, "__feature_stage__", None) == "experimental"

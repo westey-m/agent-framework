@@ -82,15 +82,18 @@ def _compile_search_regex(pattern: str) -> re.Pattern[str]:
     """Compile a case-insensitive search regex, enforcing the length cap.
 
     Raises:
-        ValueError: When ``pattern`` exceeds ``_MAX_SEARCH_PATTERN_LENGTH`` characters.
-        re.error: When ``pattern`` is not a valid regular expression.
+        ValueError: When ``pattern`` exceeds ``_MAX_SEARCH_PATTERN_LENGTH``
+            characters, or when ``pattern`` is not a valid regular expression.
     """
     if len(pattern) > _MAX_SEARCH_PATTERN_LENGTH:
         raise ValueError(
             f"Regex pattern is too long ({len(pattern)} characters). "
             f"Maximum supported length is {_MAX_SEARCH_PATTERN_LENGTH} characters."
         )
-    return re.compile(pattern, flags=re.IGNORECASE)
+    try:
+        return re.compile(pattern, flags=re.IGNORECASE)
+    except re.error as exc:
+        raise ValueError(f"Invalid regular expression: {exc}") from exc
 
 
 async def _run_search_with_timeout(

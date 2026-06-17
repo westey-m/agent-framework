@@ -115,29 +115,31 @@ def test_create_harness_agent_disable_mode() -> None:
 
 
 def test_create_harness_agent_disable_file_memory() -> None:
-    """disable_file_memory=True should exclude the FileMemoryProvider."""
+    """disable_file_memory=True should exclude only the FileMemoryProvider."""
     agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_file_memory=True,
-        disable_file_access=True,
     )
     provider_types = [type(p) for p in agent.context_providers]
     assert FileMemoryProvider not in provider_types
+    # The file access provider should remain active.
+    assert FileAccessProvider in provider_types
 
 
 def test_create_harness_agent_disable_file_access() -> None:
-    """disable_file_access=True should exclude the FileAccessProvider."""
+    """disable_file_access=True should exclude only the FileAccessProvider."""
     agent = create_harness_agent(
         client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        disable_file_memory=True,
         disable_file_access=True,
     )
     provider_types = [type(p) for p in agent.context_providers]
     assert FileAccessProvider not in provider_types
+    # The file memory provider should remain active.
+    assert FileMemoryProvider in provider_types
 
 
 def test_create_harness_agent_uses_custom_file_stores() -> None:

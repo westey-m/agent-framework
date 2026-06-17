@@ -33,6 +33,7 @@ per-invocation :class:`~agent_framework.SessionContext` in
 from __future__ import annotations
 
 import asyncio
+import logging
 import weakref
 from typing import Any, ClassVar
 
@@ -41,6 +42,8 @@ from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._tools import tool
 from .._types import Message
 from ._file_access import AgentFileStore, _normalize_relative_path  # pyright: ignore[reportPrivateUsage]
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_FILE_MEMORY_SOURCE_ID = "file_memory"
 
@@ -93,6 +96,20 @@ def _combine_paths(base_path: str, relative_path: str) -> str:
     if not relative_path:
         return base_path
     return f"{base_path.rstrip('/')}/{relative_path.lstrip('/')}"
+
+
+def _is_nested_path(normalized_file_name: str) -> bool:
+    """Return whether a normalized file name points into a subdirectory.
+
+    File memory is a flat, session-scoped space: every discovery surface
+    (the ``memories.md`` index, ``file_memory_list_files``, and non-recursive
+    ``file_memory_search_files``) only enumerates direct children of the
+    working folder. A nested name such as ``"notes/plan.md"`` would therefore
+    be saved but never surface again, so such names are rejected up front.
+    ``_normalize_relative_path`` already converts backslashes to forward
+    slashes, so checking for ``/`` covers both separators.
+    """
+    return "/" in normalized_file_name
 
 
 @experimental(feature_id=ExperimentalFeature.HARNESS)
@@ -216,6 +233,11 @@ class FileMemoryProvider(ContextProvider):
                 normalized = _normalize_relative_path(file_name)
             except ValueError as exc:
                 return f"Could not save file '{file_name}': {exc}"
+            if _is_nested_path(normalized):
+                return (
+                    f"Could not save file '{file_name}': memory files must not be saved into a "
+                    "subdirectory. Please choose a flat file name without path separators."
+                )
             if _is_internal_file(normalized):
                 return (
                     f"Could not save file '{file_name}': the file name is reserved for internal use. "
@@ -232,6 +254,8 @@ class FileMemoryProvider(ContextProvider):
                     else:
                         await self.store.delete_file(desc_path)
                     await self._rebuild_index(working_folder)
+                except ValueError as exc:
+                    return f"Could not save file '{file_name}': {exc}"
                 except OSError as exc:
                     return f"Could not save file '{file_name}': {exc.strerror or exc}"
             if description and description.strip():
@@ -245,8 +269,12 @@ class FileMemoryProvider(ContextProvider):
                 normalized = _normalize_relative_path(file_name)
             except ValueError as exc:
                 return f"Could not read file '{file_name}': {exc}"
+            if _is_nested_path(normalized):
+                return f"File '{file_name}' not found."
             try:
                 content = await self.store.read_file(_combine_paths(working_folder, normalized))
+            except ValueError as exc:
+                return f"Could not read file '{file_name}': {exc}"
             except OSError as exc:
                 return f"Could not read file '{file_name}': {exc.strerror or exc}"
             return content if content is not None else f"File '{file_name}' not found."
@@ -258,6 +286,8 @@ class FileMemoryProvider(ContextProvider):
                 normalized = _normalize_relative_path(file_name)
             except ValueError as exc:
                 return f"Could not delete file '{file_name}': {exc}"
+            if _is_nested_path(normalized):
+                return f"File '{file_name}' not found."
 
             path = _combine_paths(working_folder, normalized)
             desc_path = _combine_paths(working_folder, _description_file_name(normalized))
@@ -266,6 +296,8 @@ class FileMemoryProvider(ContextProvider):
                     deleted = await self.store.delete_file(path)
                     await self.store.delete_file(desc_path)
                     await self._rebuild_index(working_folder)
+                except ValueError as exc:
+                    return f"Could not delete file '{file_name}': {exc}"
                 except OSError as exc:
                     return f"Could not delete file '{file_name}': {exc.strerror or exc}"
             return f"File '{file_name}' deleted." if deleted else f"File '{file_name}' not found."
@@ -317,7 +349,14 @@ class FileMemoryProvider(ContextProvider):
             ],
         )
 
-        index_content = await self.store.read_file(_combine_paths(working_folder, _MEMORY_INDEX_FILE_NAME))
+        try:
+            index_content = await self.store.read_file(_combine_paths(working_folder, _MEMORY_INDEX_FILE_NAME))
+        except (OSError, ValueError) as exc:
+            # A corrupt/unavailable index (e.g. non-UTF8 bytes on disk or a store
+            # error) must not block the run. Skip index injection for this run; it
+            # self-heals on the next successful save/delete that rebuilds the index.
+            logger.warning("Could not read memory index; skipping index injection: %s", exc)
+            index_content = None
         if index_content and index_content.strip():
             context.extend_messages(
                 self.source_id,

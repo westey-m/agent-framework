@@ -10,6 +10,7 @@ from agent_framework import (
     InMemoryAgentFileStore,
 )
 from agent_framework._harness._file_memory import (
+    _MAX_INDEX_ENTRIES,
     _MEMORY_INDEX_FILE_NAME,
     DEFAULT_FILE_MEMORY_INSTRUCTIONS,
     DEFAULT_FILE_MEMORY_SOURCE_ID,
@@ -282,3 +283,100 @@ async def test_provider_accepts_custom_instructions() -> None:
 def test_file_memory_provider_is_experimental() -> None:
     """The provider should be marked experimental under the harness feature."""
     assert getattr(FileMemoryProvider, "__feature_stage__", None) == "experimental"
+
+
+async def test_tools_reject_nested_paths() -> None:
+    """Memory files must stay flat; nested names are rejected/undiscoverable."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store)
+    _, tools = await _prepare(provider)
+
+    saved = await tools["file_memory_save_file"].invoke(arguments={"file_name": "notes/plan.md", "content": "x"})
+    assert "subdirectory" in saved[0].text
+    # Nothing should have been written for the nested name.
+    assert await store.list_files("") == []
+
+    # Backslash separators are normalized to "/" and rejected the same way.
+    saved_backslash = await tools["file_memory_save_file"].invoke(
+        arguments={"file_name": "notes\\plan.md", "content": "x"}
+    )
+    assert "subdirectory" in saved_backslash[0].text
+
+    # Reading/deleting a nested name reports a clean "not found" message.
+    read_back = await tools["file_memory_read_file"].invoke(arguments={"file_name": "notes/plan.md"})
+    assert "not found" in read_back[0].text
+    deleted = await tools["file_memory_delete_file"].invoke(arguments={"file_name": "notes/plan.md"})
+    assert "not found" in deleted[0].text
+
+
+async def test_index_caps_entries_at_max() -> None:
+    """The rebuilt ``memories.md`` index lists at most ``_MAX_INDEX_ENTRIES`` files."""
+    store = InMemoryAgentFileStore()
+    provider = FileMemoryProvider(store=store, scope="user-1")
+    _, tools = await _prepare(provider)
+    save = tools["file_memory_save_file"]
+
+    total = _MAX_INDEX_ENTRIES + 5
+    for i in range(total):
+        await save.invoke(arguments={"file_name": f"memory-{i:03d}.md", "content": "x"})
+
+    index = await store.read_file(_combine_paths("user-1", _MEMORY_INDEX_FILE_NAME))
+    assert index is not None
+    entry_lines = [line for line in index.splitlines() if line.startswith("- ")]
+    assert len(entry_lines) == _MAX_INDEX_ENTRIES
+
+
+async def test_tools_surface_store_value_errors() -> None:
+    """``ValueError`` raised by the store is returned as a tool message, not raised."""
+
+    class _ValueErrorStore(InMemoryAgentFileStore):
+        async def write_file(self, path: str, content: str, *, overwrite: bool = True) -> None:
+            raise ValueError("boom-write")
+
+        async def read_file(self, path: str) -> str | None:
+            raise ValueError("boom-read")
+
+        async def delete_file(self, path: str) -> bool:
+            raise ValueError("boom-delete")
+
+    provider = FileMemoryProvider(store=_ValueErrorStore())
+    _, tools = await _prepare(provider)
+
+    saved = await tools["file_memory_save_file"].invoke(arguments={"file_name": "plan.md", "content": "x"})
+    assert "Could not save" in saved[0].text and "boom-write" in saved[0].text
+
+    read_back = await tools["file_memory_read_file"].invoke(arguments={"file_name": "plan.md"})
+    assert "Could not read" in read_back[0].text and "boom-read" in read_back[0].text
+
+    deleted = await tools["file_memory_delete_file"].invoke(arguments={"file_name": "plan.md"})
+    assert "Could not delete" in deleted[0].text and "boom-delete" in deleted[0].text
+
+
+async def test_before_run_skips_injection_when_index_unreadable() -> None:
+    """A failing index read must not crash the run; injection is simply skipped."""
+
+    class _UnreadableIndexStore(InMemoryAgentFileStore):
+        async def read_file(self, path: str) -> str | None:
+            if path.endswith(_MEMORY_INDEX_FILE_NAME):
+                raise ValueError("corrupt index")
+            return await super().read_file(path)
+
+    store = _UnreadableIndexStore()
+    # Seed an index so before_run attempts to read it.
+    await store.write_file(_combine_paths("user-1", _MEMORY_INDEX_FILE_NAME), "# Memory Index\n")
+    provider = FileMemoryProvider(store=store, scope="user-1")
+
+    session = AgentSession(session_id="s-1")
+    context = SessionContext(session_id="s-1", input_messages=[])
+    # Should not raise despite the unreadable index.
+    await provider.before_run(agent=None, session=session, context=context, state={})
+    assert context.context_messages.get(DEFAULT_FILE_MEMORY_SOURCE_ID, []) == []
+
+
+async def test_search_reports_invalid_regex() -> None:
+    """An invalid regex from the model is surfaced as a clean tool message."""
+    provider = FileMemoryProvider(store=InMemoryAgentFileStore())
+    _, tools = await _prepare(provider)
+
+    result = await tools["file_memory_search_files"].invoke(arguments={"regex_pattern": "[unclosed"})
+    assert "Could not search memory files" in result[0].text

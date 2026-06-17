@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
+
+import pytest
 
 from agent_framework import (
     AgentSession,
@@ -373,10 +376,10 @@ async def test_before_run_skips_injection_when_index_unreadable() -> None:
     assert context.context_messages.get(DEFAULT_FILE_MEMORY_SOURCE_ID, []) == []
 
 
-async def test_search_reports_invalid_regex() -> None:
-    """An invalid regex from the model is surfaced as a clean tool message."""
+async def test_search_propagates_invalid_regex() -> None:
+    """An invalid regex from the model is surfaced as a raised error so it can retry."""
     provider = FileMemoryProvider(store=InMemoryAgentFileStore())
     _, tools = await _prepare(provider)
 
-    result = await tools["file_memory_search_files"].invoke(arguments={"regex_pattern": "[unclosed"})
-    assert "Could not search memory files" in result[0].text
+    with pytest.raises(re.error):
+        await tools["file_memory_search_files"].invoke(arguments={"regex_pattern": "[unclosed"})

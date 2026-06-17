@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -225,7 +226,7 @@ async def test_in_memory_store_search_rejects_invalid_and_oversize_regex() -> No
     store = InMemoryAgentFileStore()
     await store.write_file("a.md", "hello")
 
-    with pytest.raises(ValueError, match="Invalid regular expression"):
+    with pytest.raises(re.error):
         await store.search_files("", "[unclosed")
 
     with pytest.raises(ValueError, match="too long"):
@@ -768,9 +769,10 @@ async def test_file_access_tool_wrappers_surface_value_error_as_message(
     searched = await search_files.invoke(arguments={"regex_pattern": too_long})
     assert "Could not search files" in searched[0].text
 
-    # An invalid regex should also be surfaced as text rather than raised.
-    invalid = await search_files.invoke(arguments={"regex_pattern": "[unclosed"})
-    assert "Could not search files" in invalid[0].text
+    # An invalid regex is surfaced to the caller (the model) as a raised error
+    # so it can correct the pattern and retry.
+    with pytest.raises(re.error):
+        await search_files.invoke(arguments={"regex_pattern": "[unclosed"})
 
 
 async def test_file_access_tool_read_file_wrapper_surfaces_non_utf8(

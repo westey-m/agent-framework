@@ -34,8 +34,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import weakref
-from typing import Any, ClassVar
+from typing import Annotated, Any
+
+from pydantic import BaseModel, Field
 
 from .._feature_stage import ExperimentalFeature, experimental
 from .._sessions import AgentSession, ContextProvider, SessionContext
@@ -112,6 +113,48 @@ def _is_nested_path(normalized_file_name: str) -> bool:
     return "/" in normalized_file_name
 
 
+class _SaveFileInput(BaseModel):
+    """Input schema for ``file_memory_save_file``."""
+
+    file_name: Annotated[str, Field(description="Flat file name to save under; must not contain path separators.")]
+    content: Annotated[str, Field(description="Full text content to write to the file.")]
+    description: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Optional summary used to aid future discovery; recommended for large files.",
+        ),
+    ] = None
+
+
+class _ReadFileInput(BaseModel):
+    """Input schema for ``file_memory_read_file``."""
+
+    file_name: Annotated[str, Field(description="Name of the memory file to read.")]
+
+
+class _DeleteFileInput(BaseModel):
+    """Input schema for ``file_memory_delete_file``."""
+
+    file_name: Annotated[str, Field(description="Name of the memory file to delete.")]
+
+
+class _SearchFilesInput(BaseModel):
+    """Input schema for ``file_memory_search_files``."""
+
+    regex_pattern: Annotated[
+        str,
+        Field(description="Case-insensitive regex matched against file contents; 256 characters or fewer."),
+    ]
+    file_pattern: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description='Optional glob to filter which files are searched (e.g. "*.md", "research*").',
+        ),
+    ] = None
+
+
 @experimental(feature_id=ExperimentalFeature.HARNESS)
 class FileMemoryProvider(ContextProvider):
     """Context provider that gives an agent session-scoped, file-based memory.
@@ -129,10 +172,6 @@ class FileMemoryProvider(ContextProvider):
     working folder derived from its session id. Pass an explicit ``scope`` to
     group memories differently (for example, per user id) across sessions.
     """
-
-    _WRITE_LOCKS_BY_LOOP: ClassVar[weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, asyncio.Lock]]] = (
-        weakref.WeakKeyDictionary()
-    )
 
     def __init__(
         self,
@@ -160,6 +199,10 @@ class FileMemoryProvider(ContextProvider):
         self.store = store
         self.scope = scope
         self.instructions = instructions or DEFAULT_FILE_MEMORY_INSTRUCTIONS
+        # Serializes save/delete operations (and their index rebuilds) so the
+        # ``memories.md`` index stays consistent. A single per-instance lock is
+        # sufficient for v1; concurrent writes across scopes are rare in practice.
+        self._write_lock = asyncio.Lock()
 
     def _resolve_working_folder(self, context: SessionContext) -> str:
         """Resolve the working folder for the current invocation.
@@ -170,25 +213,6 @@ class FileMemoryProvider(ContextProvider):
         """
         raw_scope = self.scope or context.session_id or ""
         return _normalize_relative_path(raw_scope, is_directory=True)
-
-    def _write_lock(self, working_folder: str) -> asyncio.Lock:
-        """Return a per-event-loop, per-working-folder write lock.
-
-        Serializes save/delete operations (and their index rebuilds) so the
-        ``memories.md`` index stays consistent. Locks are keyed by the running
-        loop so the provider can be shared across loops.
-        """
-        loop = asyncio.get_running_loop()
-        lock_key = f"{self.source_id}:{working_folder}"
-        locks_for_loop = self._WRITE_LOCKS_BY_LOOP.get(loop)
-        if locks_for_loop is None:
-            locks_for_loop = {}
-            self._WRITE_LOCKS_BY_LOOP[loop] = locks_for_loop
-        lock = locks_for_loop.get(lock_key)
-        if lock is None:
-            lock = asyncio.Lock()
-            locks_for_loop[lock_key] = lock
-        return lock
 
     async def _rebuild_index(self, working_folder: str) -> None:
         """Rebuild the ``memories.md`` index for ``working_folder``.
@@ -219,14 +243,12 @@ class FileMemoryProvider(ContextProvider):
         state: dict[str, Any],
     ) -> None:
         """Inject file-memory tools, instructions, and the memory index."""
-        del agent, session, state
-
         working_folder = self._resolve_working_folder(context)
 
         if working_folder:
             await self.store.create_directory(working_folder)
 
-        @tool(name="file_memory_save_file", approval_mode="never_require")
+        @tool(name="file_memory_save_file", schema=_SaveFileInput, approval_mode="never_require")
         async def file_memory_save_file(file_name: str, content: str, description: str | None = None) -> str:
             """Save a memory file with the given name and content. Overwrites the file if it already exists. Include a description for large files to provide a summary that helps with future discovery."""  # noqa: E501
             try:
@@ -246,7 +268,7 @@ class FileMemoryProvider(ContextProvider):
 
             path = _combine_paths(working_folder, normalized)
             desc_path = _combine_paths(working_folder, _description_file_name(normalized))
-            async with self._write_lock(working_folder):
+            async with self._write_lock:
                 try:
                     await self.store.write_file(path, content)
                     if description and description.strip():
@@ -262,7 +284,7 @@ class FileMemoryProvider(ContextProvider):
                 return f"File '{file_name}' saved with description."
             return f"File '{file_name}' saved."
 
-        @tool(name="file_memory_read_file", approval_mode="never_require")
+        @tool(name="file_memory_read_file", schema=_ReadFileInput, approval_mode="never_require")
         async def file_memory_read_file(file_name: str) -> str:
             """Read the content of a memory file by name. Returns the file content or a message indicating the file was not found."""  # noqa: E501
             try:
@@ -279,7 +301,7 @@ class FileMemoryProvider(ContextProvider):
                 return f"Could not read file '{file_name}': {exc.strerror or exc}"
             return content if content is not None else f"File '{file_name}' not found."
 
-        @tool(name="file_memory_delete_file", approval_mode="never_require")
+        @tool(name="file_memory_delete_file", schema=_DeleteFileInput, approval_mode="never_require")
         async def file_memory_delete_file(file_name: str) -> str:
             """Delete a memory file by name. Also removes its companion description file if one exists."""
             try:
@@ -291,7 +313,7 @@ class FileMemoryProvider(ContextProvider):
 
             path = _combine_paths(working_folder, normalized)
             desc_path = _combine_paths(working_folder, _description_file_name(normalized))
-            async with self._write_lock(working_folder):
+            async with self._write_lock:
                 try:
                     deleted = await self.store.delete_file(path)
                     await self.store.delete_file(desc_path)
@@ -322,7 +344,7 @@ class FileMemoryProvider(ContextProvider):
                 entries.append({"file_name": file_name, "description": description})
             return entries
 
-        @tool(name="file_memory_search_files", approval_mode="never_require")
+        @tool(name="file_memory_search_files", schema=_SearchFilesInput, approval_mode="never_require")
         async def file_memory_search_files(
             regex_pattern: str,
             file_pattern: str | None = None,

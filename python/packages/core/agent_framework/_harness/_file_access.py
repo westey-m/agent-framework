@@ -30,7 +30,9 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
+
+from pydantic import BaseModel, Field
 
 from .._feature_stage import ExperimentalFeature, experimental
 from .._serialization import SerializationMixin
@@ -81,19 +83,21 @@ _ELOOP = errno.ELOOP
 def _compile_search_regex(pattern: str) -> re.Pattern[str]:
     """Compile a case-insensitive search regex, enforcing the length cap.
 
+    An invalid ``pattern`` raises :class:`re.error` unchanged so the search
+    tools surface it to the calling model, which can correct the pattern and
+    retry.
+
     Raises:
         ValueError: When ``pattern`` exceeds ``_MAX_SEARCH_PATTERN_LENGTH``
-            characters, or when ``pattern`` is not a valid regular expression.
+            characters.
+        re.error: When ``pattern`` is not a valid regular expression.
     """
     if len(pattern) > _MAX_SEARCH_PATTERN_LENGTH:
         raise ValueError(
             f"Regex pattern is too long ({len(pattern)} characters). "
             f"Maximum supported length is {_MAX_SEARCH_PATTERN_LENGTH} characters."
         )
-    try:
-        return re.compile(pattern, flags=re.IGNORECASE)
-    except re.error as exc:
-        raise ValueError(f"Invalid regular expression: {exc}") from exc
+    return re.compile(pattern, flags=re.IGNORECASE)
 
 
 async def _run_search_with_timeout(
@@ -984,6 +988,63 @@ class FileSystemAgentFileStore(AgentFileStore):
         await asyncio.to_thread(lambda: full_path.mkdir(parents=True, exist_ok=True))
 
 
+class _SaveFileInput(BaseModel):
+    """Input schema for ``file_access_save_file``."""
+
+    file_name: Annotated[str, Field(description="Name (relative path) of the file to save.")]
+    content: Annotated[str, Field(description="Full text content to write to the file.")]
+    overwrite: Annotated[
+        bool,
+        Field(default=False, description="When true, replace an existing file; otherwise saving fails if it exists."),
+    ] = False
+
+
+class _ReadFileInput(BaseModel):
+    """Input schema for ``file_access_read_file``."""
+
+    file_name: Annotated[str, Field(description="Name (relative path) of the file to read.")]
+
+
+class _DeleteFileInput(BaseModel):
+    """Input schema for ``file_access_delete_file``."""
+
+    file_name: Annotated[str, Field(description="Name (relative path) of the file to delete.")]
+
+
+class _ListFilesInput(BaseModel):
+    """Input schema for ``file_access_list_files``."""
+
+    directory: Annotated[
+        str | None,
+        Field(default=None, description="Relative directory to list; omit or pass empty to list the root."),
+    ] = None
+
+
+class _ListSubdirectoriesInput(BaseModel):
+    """Input schema for ``file_access_list_subdirectories``."""
+
+    directory: Annotated[
+        str | None,
+        Field(default=None, description="Relative directory to list; omit or pass empty to list the root."),
+    ] = None
+
+
+class _SearchFilesInput(BaseModel):
+    """Input schema for ``file_access_search_files``."""
+
+    regex_pattern: Annotated[
+        str,
+        Field(description="Case-insensitive regex matched against file contents; 256 characters or fewer."),
+    ]
+    file_pattern: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description='Optional glob to filter which files are searched (e.g. "*.md", "reports/*").',
+        ),
+    ] = None
+
+
 @experimental(feature_id=ExperimentalFeature.HARNESS)
 class FileAccessProvider(ContextProvider):
     """Context provider that gives an agent CRUD/search access to a shared file store.
@@ -1049,9 +1110,8 @@ class FileAccessProvider(ContextProvider):
         state: dict[str, Any],
     ) -> None:
         """Inject file-access tools and instructions before the model runs."""
-        del agent, session, state
 
-        @tool(name="file_access_save_file", approval_mode="never_require")
+        @tool(name="file_access_save_file", schema=_SaveFileInput, approval_mode="never_require")
         async def file_access_save_file(file_name: str, content: str, overwrite: bool = False) -> str:
             """Save a file with the given name and content. By default, does not overwrite an existing file unless overwrite is set to true."""  # noqa: E501
             try:
@@ -1065,7 +1125,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not save file '{file_name}': {exc.strerror or exc}"
             return f"File '{file_name}' saved."
 
-        @tool(name="file_access_read_file", approval_mode="never_require")
+        @tool(name="file_access_read_file", schema=_ReadFileInput, approval_mode="never_require")
         async def file_access_read_file(file_name: str) -> str:
             """Read the content of a file by name. Returns the file content or a message indicating the file could not be read."""  # noqa: E501
             try:
@@ -1079,7 +1139,7 @@ class FileAccessProvider(ContextProvider):
 
         delete_approval_mode: ApprovalMode = "always_require" if self.require_delete_approval else "never_require"
 
-        @tool(name="file_access_delete_file", approval_mode=delete_approval_mode)
+        @tool(name="file_access_delete_file", schema=_DeleteFileInput, approval_mode=delete_approval_mode)
         async def file_access_delete_file(file_name: str) -> str:
             """Delete a file by name."""
             try:
@@ -1091,7 +1151,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not delete file '{file_name}': {exc.strerror or exc}"
             return f"File '{file_name}' deleted." if deleted else f"File '{file_name}' not found."
 
-        @tool(name="file_access_list_files", approval_mode="never_require")
+        @tool(name="file_access_list_files", schema=_ListFilesInput, approval_mode="never_require")
         async def file_access_list_files(directory: str | None = None) -> list[str] | str:
             """List the direct child file names of a directory. Omit ``directory`` (or pass an empty string) to list the root. To enumerate files in a subdirectory, pass its relative path, for example ``"reports"`` or ``"reports/2024"``."""  # noqa: E501
             target = directory if directory and directory.strip() else ""
@@ -1102,7 +1162,7 @@ class FileAccessProvider(ContextProvider):
             except OSError as exc:
                 return f"Could not list directory '{directory or ''}': {exc.strerror or exc}"
 
-        @tool(name="file_access_list_subdirectories", approval_mode="never_require")
+        @tool(name="file_access_list_subdirectories", schema=_ListSubdirectoriesInput, approval_mode="never_require")
         async def file_access_list_subdirectories(directory: str | None = None) -> list[str] | str:
             """List the direct child subdirectory names of a directory.
 
@@ -1119,7 +1179,7 @@ class FileAccessProvider(ContextProvider):
             except OSError as exc:
                 return f"Could not list directory '{directory or ''}': {exc.strerror or exc}"
 
-        @tool(name="file_access_search_files", approval_mode="never_require")
+        @tool(name="file_access_search_files", schema=_SearchFilesInput, approval_mode="never_require")
         async def file_access_search_files(
             regex_pattern: str,
             file_pattern: str | None = None,

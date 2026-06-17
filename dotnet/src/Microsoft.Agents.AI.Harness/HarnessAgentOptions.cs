@@ -147,7 +147,7 @@ public sealed class HarnessAgentOptions
     public IEnumerable<AIContextProvider>? AIContextProviders { get; set; }
 
     /// <summary>
-    /// Gets or sets the ordered set of <see cref="LoopEvaluator"/> instances that, when supplied, cause the
+    /// Gets or sets the ordered collection of <see cref="LoopEvaluator"/> instances that, when supplied, cause the
     /// <see cref="HarnessAgent"/> to be wrapped in a <see cref="LoopAgent"/> decorator.
     /// </summary>
     /// <remarks>

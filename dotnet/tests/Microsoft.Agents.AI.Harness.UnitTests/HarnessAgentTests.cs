@@ -1893,9 +1893,12 @@ public class HarnessAgentTests
         // Act
         var agent = new HarnessAgent(chatClient, options);
 
-        // Assert — the loop is present and the tool approval agent it wraps is still resolvable underneath it.
+        // Assert — the loop is the outermost decorator: it is resolvable, it wraps the tool approval agent, and
+        // looking *down* from the tool approval agent does not surface the loop (proving the loop sits above it).
         Assert.NotNull(agent.GetService<LoopAgent>());
-        Assert.NotNull(agent.GetService<ToolApprovalAgent>());
+        var toolApproval = agent.GetService<ToolApprovalAgent>();
+        Assert.NotNull(toolApproval);
+        Assert.Null(toolApproval.GetService<LoopAgent>());
     }
 
     /// <summary>

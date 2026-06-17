@@ -116,7 +116,7 @@ public sealed class TodoCompletionLoopEvaluator : LoopEvaluator
             }
         }
 
-        List<TodoItem> remaining = await todoProvider.GetRemainingTodosAsync(context.Session).ConfigureAwait(false);
+        List<TodoItem> remaining = await todoProvider.GetRemainingTodosAsync(context.Session, cancellationToken).ConfigureAwait(false);
         if (remaining.Count == 0)
         {
             return LoopEvaluation.Stop();

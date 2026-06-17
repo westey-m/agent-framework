@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from rich.markup import escape
+
 from .base import ConsoleObserver
 
 if TYPE_CHECKING:
@@ -97,7 +99,7 @@ class WebSearchDisplayObserver(ConsoleObserver):
         lines = ["🌐 Web Search: search"]
         for i, query in enumerate(queries):
             connector = "├─" if (i < len(queries) - 1 or has_sources) else "└─"
-            query_text = _truncate(str(query), _MAX_QUERY_DISPLAY_LENGTH)
+            query_text = escape(_truncate(str(query), _MAX_QUERY_DISPLAY_LENGTH))
             lines.append(f'\n   {connector} "{query_text}"')
 
         if has_sources:
@@ -111,7 +113,7 @@ class WebSearchDisplayObserver(ConsoleObserver):
 
     def _display_open_page_action(self, ux: IUXStateDriver, action: dict) -> None:
         """Display an open page action."""
-        url = action.get("url") or "(unknown)"
+        url = escape(str(action.get("url") or "(unknown)"))
         ux.append_info_line(
             f"🌐 Web Search: open page\n   └─ {url}",
             "cyan",
@@ -119,10 +121,10 @@ class WebSearchDisplayObserver(ConsoleObserver):
 
     def _display_find_in_page_action(self, ux: IUXStateDriver, action: dict) -> None:
         """Display a find-in-page action."""
-        url = action.get("url") or "(unknown)"
-        pattern = action.get("pattern") or "(unknown)"
+        url = escape(str(action.get("url") or "(unknown)"))
+        pattern = escape(_truncate(str(action.get("pattern") or "(unknown)"), _MAX_QUERY_DISPLAY_LENGTH))
         ux.append_info_line(
-            f'🌐 Web Search: find in page\n   ├─ "{_truncate(pattern, _MAX_QUERY_DISPLAY_LENGTH)}"\n   └─ {url}',
+            f'🌐 Web Search: find in page\n   ├─ "{pattern}"\n   └─ {url}',
             "cyan",
         )
 
@@ -135,9 +137,9 @@ def _truncate(text: str, max_length: int) -> str:
 def _format_source(source: Any) -> str:
     """Format a source entry for display."""
     if isinstance(source, dict):
-        url = source.get("url") or source.get("uri") or "(unknown)"
+        url = escape(str(source.get("url") or source.get("uri") or "(unknown)"))
         title = source.get("title")
         if title:
-            return f"{_truncate(title, _MAX_QUERY_DISPLAY_LENGTH)} — {url}"
-        return str(url)
-    return str(source)
+            return f"{escape(_truncate(str(title), _MAX_QUERY_DISPLAY_LENGTH))} — {url}"
+        return url
+    return escape(str(source))

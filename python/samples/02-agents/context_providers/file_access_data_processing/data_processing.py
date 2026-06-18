@@ -99,11 +99,11 @@ async def main() -> None:
     file_access = FileAccessProvider(store=FileSystemAgentFileStore(working_dir))
 
     # 4. Create the agent and attach the provider. The file-access tools all
-    #    require approval (approval_mode="always_require"), so a base Agent must
-    #    install ToolApprovalMiddleware for them to run at all. This sample is
-    #    non-interactive, so it auto-approves every file-access tool via
-    #    FileAccessProvider.all_tools_auto_approval_rule. (create_harness_agent
-    #    wires ToolApprovalMiddleware automatically; a base Agent does not.)
+    #    require approval (approval_mode="always_require"). Developers can
+    #    present these to the user for approval, or like in this case, auto-approve
+    #    them via FileAccessProvider.all_tools_auto_approval_rule. Note that
+    #    to use tool approval rules, the agent must have ToolApprovalMiddleware
+    #    in its middleware stack.
     async with Agent(
         client=client,
         name="DataAnalyst",

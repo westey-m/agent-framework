@@ -19,15 +19,6 @@ that exercises every tool the provider exposes:
 After the run, the sample prints the final contents of `working/` so the
 written file is easy to spot.
 
-## Tool approval
-
-The `file_access_*` tools all require approval (`approval_mode="always_require"`),
-so a base `Agent` installs `ToolApprovalMiddleware` to drive the approval
-handshake — without it the file tools would never execute. Because this sample
-runs a non-interactive scripted conversation, it auto-approves every file-access
-tool via `FileAccessProvider.all_tools_auto_approval_rule`. (`create_harness_agent`
-wires `ToolApprovalMiddleware` automatically; a base `Agent` does not.)
-
 ## Prerequisites
 
 | Variable | Description |

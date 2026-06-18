@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import importlib.util
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterable, Awaitable, Mapping, Sequence
 from typing import Any
 
 import pytest
+from agent_framework_tools.shell import ShellResult
 
 from agent_framework import (
     AgentSession,
+    BaseChatClient,
+    ChatOptions,
     ChatResponse,
+    ChatResponseUpdate,
     CompactionProvider,
+    Content,
     InMemoryHistoryProvider,
     Message,
+    ResponseStream,
     SkillsProvider,
     TodoProvider,
     create_harness_agent,
@@ -23,28 +29,32 @@ from agent_framework._harness._mode import AgentModeProvider
 from agent_framework._sessions import ContextProvider
 
 
-class _FakeChatClient:
+class _FakeChatClient(BaseChatClient[ChatOptions[Any]]):
     """Minimal chat client stub for testing assembly."""
 
     model = "test-model"
 
-    async def get_response(
+    def _inner_get_response(
         self,
         *,
-        messages: list[Message],
-        options: Mapping[str, Any] | None = None,
+        messages: Sequence[Message],
+        stream: bool,
+        options: Mapping[str, Any],
         **kwargs: Any,
-    ) -> ChatResponse:
-        return ChatResponse(messages=[Message(role="assistant", contents=["Hello"])])
+    ) -> Awaitable[ChatResponse] | ResponseStream[ChatResponseUpdate, ChatResponse]:
+        if stream:
+            return self._get_streaming_response()
 
-    async def get_streaming_response(
-        self,
-        *,
-        messages: list[Message],
-        options: Mapping[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> AsyncIterator[Any]:
-        yield Message(role="assistant", contents=["Hello"])  # pragma: no cover
+        async def _get() -> ChatResponse:
+            return ChatResponse(messages=[Message(role="assistant", contents=["Hello"])])
+
+        return _get()
+
+    def _get_streaming_response(self) -> ResponseStream[ChatResponseUpdate, ChatResponse]:
+        async def _stream() -> AsyncIterable[ChatResponseUpdate]:
+            yield ChatResponseUpdate(contents=[Content.from_text("Hello")], role="assistant")  # pragma: no cover
+
+        return ResponseStream(_stream(), finalizer=ChatResponse.from_updates)
 
 
 # --- Assembly Tests ---
@@ -53,7 +63,7 @@ class _FakeChatClient:
 def test_create_harness_agent_with_defaults() -> None:
     """create_harness_agent should assemble successfully with default options."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -63,7 +73,7 @@ def test_create_harness_agent_with_defaults() -> None:
 def test_create_harness_agent_includes_all_default_providers() -> None:
     """Default assembly should include history, compaction, todo, mode (no skills by default)."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -80,7 +90,7 @@ def test_create_harness_agent_includes_all_default_providers() -> None:
 def test_create_harness_agent_disable_todo() -> None:
     """disable_todo=True should exclude TodoProvider."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_todo=True,
@@ -92,7 +102,7 @@ def test_create_harness_agent_disable_todo() -> None:
 def test_create_harness_agent_disable_mode() -> None:
     """disable_mode=True should exclude AgentModeProvider."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_mode=True,
@@ -119,19 +129,19 @@ def test_create_harness_agent_disable_memory() -> None:
         def delete_topic(self, session, *, source_id, topic):
             pass
 
-        def get_index_text(self, session, *, source_id):
+        def get_index_text(self, session, *, source_id):  # type: ignore[override]  # pyrefly: ignore[bad-override]  # ty: ignore[invalid-method-override]
             return ""
 
-        def get_transcripts_directory(self, session, *, source_id):
+        def get_transcripts_directory(self, session, *, source_id):  # pyrefly: ignore[bad-override]
             return ""
 
         def read_state(self, session, *, source_id):
             return {}
 
-        def rebuild_index(self, session, *, source_id):
+        def rebuild_index(self, session, *, source_id):  # type: ignore[override]  # pyrefly: ignore[bad-override]  # ty: ignore[invalid-method-override]
             pass
 
-        def search_transcripts(self, session, *, source_id, query):
+        def search_transcripts(self, session, *, source_id, query):  # type: ignore[override]  # pyrefly: ignore[bad-override]  # ty: ignore[invalid-method-override]
             return []
 
         def write_state(self, session, state, *, source_id):
@@ -139,7 +149,7 @@ def test_create_harness_agent_disable_memory() -> None:
 
     # With memory_store provided and disable_memory=False, MemoryContextProvider should be present.
     agent_with_memory = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         memory_store=_FakeMemoryStore(),
@@ -149,7 +159,7 @@ def test_create_harness_agent_disable_memory() -> None:
 
     # With memory_store provided and disable_memory=True, MemoryContextProvider should be absent.
     agent_disabled = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         memory_store=_FakeMemoryStore(),
@@ -162,7 +172,7 @@ def test_create_harness_agent_disable_memory() -> None:
 def test_create_harness_agent_skills_paths_adds_provider() -> None:
     """skills_paths should add a SkillsProvider."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         skills_paths=["./test-skills"],
@@ -174,7 +184,7 @@ def test_create_harness_agent_skills_paths_adds_provider() -> None:
 def test_create_harness_agent_disable_compaction() -> None:
     """disable_compaction=True should exclude CompactionProvider."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_compaction=True,
@@ -188,7 +198,7 @@ def test_create_harness_agent_returns_full_agent() -> None:
     from agent_framework._agents import Agent as FullAgent
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -198,7 +208,7 @@ def test_create_harness_agent_returns_full_agent() -> None:
 def test_create_harness_agent_no_token_params_disables_compaction() -> None:
     """When token params are omitted, compaction is automatically disabled."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
     )
     provider_types = [type(p) for p in agent.context_providers]
     assert CompactionProvider not in provider_types
@@ -207,7 +217,7 @@ def test_create_harness_agent_no_token_params_disables_compaction() -> None:
 def test_create_harness_agent_no_token_params_skips_max_tokens_option() -> None:
     """When max_output_tokens is omitted, max_tokens should not be set in default options."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
     )
     assert agent.default_options.get("max_tokens") is None
 
@@ -217,7 +227,7 @@ def test_create_harness_agent_custom_before_strategy_enables_compaction_without_
     from agent_framework import ToolResultCompactionStrategy
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         before_compaction_strategy=ToolResultCompactionStrategy(),
     )
     provider_types = [type(p) for p in agent.context_providers]
@@ -229,7 +239,7 @@ def test_create_harness_agent_disable_compaction_overrides_custom_before_strateg
     from agent_framework import ToolResultCompactionStrategy
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         before_compaction_strategy=ToolResultCompactionStrategy(),
         disable_compaction=True,
     )
@@ -242,7 +252,7 @@ def test_create_harness_agent_custom_after_strategy_enables_compaction_without_t
     from agent_framework import ToolResultCompactionStrategy
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         after_compaction_strategy=ToolResultCompactionStrategy(),
     )
     compaction_providers = [p for p in agent.context_providers if isinstance(p, CompactionProvider)]
@@ -259,28 +269,37 @@ def test_create_harness_agent_rejects_invalid_context_tokens() -> None:
     """max_context_window_tokens must be positive."""
     with pytest.raises(ValueError, match="max_context_window_tokens must be positive"):
         create_harness_agent(
-            client=_FakeChatClient(),  # type: ignore[arg-type]
+            client=_FakeChatClient(),
             max_context_window_tokens=0,
             max_output_tokens=100,
         )
 
 
 def test_create_harness_agent_rejects_non_positive_output_tokens() -> None:
-    """max_output_tokens must be positive when provided."""
-    for invalid_value in (0, -1):
-        with pytest.raises(ValueError, match="max_output_tokens must be positive"):
-            create_harness_agent(
-                client=_FakeChatClient(),  # type: ignore[arg-type]
-                max_context_window_tokens=1000,
-                max_output_tokens=invalid_value,
-            )
+    """max_output_tokens must be positive."""
+    with pytest.raises(ValueError, match="max_output_tokens must be positive"):
+        create_harness_agent(
+            client=_FakeChatClient(),
+            max_context_window_tokens=1000,
+            max_output_tokens=0,
+        )
+
+
+def test_create_harness_agent_rejects_negative_output_tokens() -> None:
+    """max_output_tokens must be positive."""
+    with pytest.raises(ValueError, match="max_output_tokens must be positive"):
+        create_harness_agent(
+            client=_FakeChatClient(),
+            max_context_window_tokens=1000,
+            max_output_tokens=-1,
+        )
 
 
 def test_create_harness_agent_rejects_output_gte_context() -> None:
     """max_output_tokens must be less than max_context_window_tokens."""
     with pytest.raises(ValueError, match="max_output_tokens must be less than"):
         create_harness_agent(
-            client=_FakeChatClient(),  # type: ignore[arg-type]
+            client=_FakeChatClient(),
             max_context_window_tokens=1000,
             max_output_tokens=1000,
         )
@@ -298,8 +317,8 @@ def test_default_instructions() -> None:
 def test_custom_agent_instructions_appended() -> None:
     """Agent instructions should be appended after harness instructions."""
     result = _assemble_instructions(None, "Focus on code review.")
-    assert DEFAULT_HARNESS_INSTRUCTIONS in result  # type: ignore[operator]
-    assert "Focus on code review." in result  # type: ignore[operator]
+    assert DEFAULT_HARNESS_INSTRUCTIONS in result  # type: ignore[operator]  # ty: ignore[unsupported-operator]
+    assert "Focus on code review." in result  # type: ignore[operator]  # ty: ignore[unsupported-operator]
 
 
 def test_empty_harness_instructions_uses_agent_only() -> None:
@@ -314,7 +333,7 @@ def test_empty_harness_instructions_uses_agent_only() -> None:
 def test_create_harness_agent_custom_identity() -> None:
     """Custom id, name, description should propagate."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         id="my-agent-id",
@@ -332,7 +351,7 @@ def test_create_harness_agent_custom_identity() -> None:
 def test_create_harness_agent_create_session() -> None:
     """create_session should return an AgentSession."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -343,7 +362,7 @@ def test_create_harness_agent_create_session() -> None:
 def test_create_harness_agent_create_session_with_id() -> None:
     """create_session should accept a custom session_id."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -354,7 +373,7 @@ def test_create_harness_agent_create_session_with_id() -> None:
 async def test_create_harness_agent_run_returns_response() -> None:
     """agent.run() should return a response."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -372,7 +391,7 @@ def test_create_harness_agent_satisfies_protocol() -> None:
     from agent_framework import SupportsAgentRun
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -390,7 +409,7 @@ def test_create_harness_agent_extra_context_providers() -> None:
 
     custom = _CustomProvider("custom")
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         context_providers=[custom],
@@ -411,7 +430,7 @@ class _FakeWebSearchClient(_FakeChatClient):
 def test_create_harness_agent_auto_adds_web_search_tool() -> None:
     """Web search tool should be auto-added when client supports it."""
     agent = create_harness_agent(
-        client=_FakeWebSearchClient(),  # type: ignore[arg-type]
+        client=_FakeWebSearchClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -422,7 +441,7 @@ def test_create_harness_agent_auto_adds_web_search_tool() -> None:
 def test_create_harness_agent_disable_web_search() -> None:
     """disable_web_search=True should skip auto-adding the web search tool."""
     agent = create_harness_agent(
-        client=_FakeWebSearchClient(),  # type: ignore[arg-type]
+        client=_FakeWebSearchClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
@@ -434,7 +453,7 @@ def test_create_harness_agent_disable_web_search() -> None:
 def test_create_harness_agent_no_web_search_when_unsupported() -> None:
     """Web search tool should NOT be added when client does not support it."""
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
     )
@@ -448,7 +467,7 @@ def test_create_harness_agent_logs_warning_when_no_web_search(caplog: pytest.Log
 
     with caplog.at_level(logging.WARNING, logger="agent_framework._harness._agent"):
         create_harness_agent(
-            client=_FakeChatClient(),  # type: ignore[arg-type]
+            client=_FakeChatClient(),
             max_context_window_tokens=128_000,
             max_output_tokens=16_384,
         )
@@ -483,7 +502,7 @@ def test_create_harness_agent_no_background_agents_by_default() -> None:
     from agent_framework._harness._background_agents import BackgroundAgentsProvider
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
@@ -498,11 +517,11 @@ def test_create_harness_agent_adds_background_agents_provider() -> None:
 
     bg_agent = _FakeBackgroundAgent("WebSearcher", "Searches the web")
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
-        background_agents=[bg_agent],
+        background_agents=[bg_agent],  # type: ignore[list-item]  # pyrefly: ignore[bad-argument-type]  # ty: ignore[invalid-argument-type]
     )
     providers = agent.context_providers or []
     bg_providers = [p for p in providers if isinstance(p, BackgroundAgentsProvider)]
@@ -516,11 +535,11 @@ def test_create_harness_agent_background_agents_custom_instructions() -> None:
     custom_instructions = "## Custom\n\nUse agents wisely.\n\n{background_agents}"
     bg_agent = _FakeBackgroundAgent("Helper", "A helper agent")
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
-        background_agents=[bg_agent],
+        background_agents=[bg_agent],  # type: ignore[list-item]  # pyrefly: ignore[bad-argument-type]  # ty: ignore[invalid-argument-type]
         background_agents_instructions=custom_instructions,
     )
     providers = agent.context_providers or []
@@ -536,7 +555,7 @@ def test_create_harness_agent_empty_background_agents_list() -> None:
     from agent_framework._harness._background_agents import BackgroundAgentsProvider
 
     agent = create_harness_agent(
-        client=_FakeChatClient(),  # type: ignore[arg-type]
+        client=_FakeChatClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
@@ -552,6 +571,21 @@ def test_create_harness_agent_empty_background_agents_list() -> None:
 class _FakeShellTool:
     """Fake shell executor/tool exposing as_function()."""
 
+    async def start(self) -> None:
+        pass
+
+    async def close(self) -> None:
+        pass
+
+    async def run(self, command: str, *, timeout: float | None = None) -> ShellResult:
+        return ShellResult(stdout="", stderr="", exit_code=0, duration_ms=0)
+
+    async def __aenter__(self) -> _FakeShellTool:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        pass
+
     def as_function(self) -> str:
         return "shell_fn"
 
@@ -560,6 +594,7 @@ class _FakeShellClient(_FakeChatClient):
     """Fake client that supports the shell tool."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.shell_func: Any = None
 
     def get_shell_tool(self, *, func: Any = None, **kwargs: Any) -> str:
@@ -580,7 +615,7 @@ def test_create_harness_agent_adds_shell_tool_and_provider() -> None:
 
     client = _FakeShellClient()
     agent = create_harness_agent(
-        client=client,  # type: ignore[arg-type]
+        client=client,
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
@@ -600,7 +635,7 @@ def test_create_harness_agent_shell_passes_custom_options() -> None:
 
     options = ShellEnvironmentProviderOptions(probe_tools=("git",))
     agent = create_harness_agent(
-        client=_FakeShellClient(),  # type: ignore[arg-type]
+        client=_FakeShellClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
@@ -621,7 +656,7 @@ def test_create_harness_agent_shell_skipped_when_unsupported(caplog: pytest.LogC
 
     with caplog.at_level(logging.WARNING, logger="agent_framework._harness._agent"):
         agent = create_harness_agent(
-            client=_FakeChatClient(),  # type: ignore[arg-type]
+            client=_FakeChatClient(),
             max_context_window_tokens=128_000,
             max_output_tokens=16_384,
             disable_web_search=True,
@@ -639,7 +674,7 @@ def test_create_harness_agent_no_shell_by_default() -> None:
     from agent_framework_tools.shell import ShellEnvironmentProvider
 
     agent = create_harness_agent(
-        client=_FakeShellClient(),  # type: ignore[arg-type]
+        client=_FakeShellClient(),
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
         disable_web_search=True,
@@ -656,11 +691,11 @@ def test_create_harness_agent_shell_executor_without_as_function_raises() -> Non
 
     with pytest.raises(TypeError, match="as_function"):
         create_harness_agent(
-            client=_FakeShellClient(),  # type: ignore[arg-type]
+            client=_FakeShellClient(),
             max_context_window_tokens=128_000,
             max_output_tokens=16_384,
             disable_web_search=True,
-            shell_executor=_BadExecutor(),
+            shell_executor=_BadExecutor(),  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         )
 
 
@@ -672,11 +707,11 @@ def test_create_harness_agent_shell_executor_validated_before_client_check() -> 
 
     with pytest.raises(TypeError, match="as_function"):
         create_harness_agent(
-            client=_FakeChatClient(),  # type: ignore[arg-type]
+            client=_FakeChatClient(),
             max_context_window_tokens=128_000,
             max_output_tokens=16_384,
             disable_web_search=True,
-            shell_executor=_BadExecutor(),
+            shell_executor=_BadExecutor(),  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         )
 
 

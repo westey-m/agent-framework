@@ -887,8 +887,12 @@ async def todos_remaining_message(*, session: Any = None, agent: Any = None, **k
     :class:`~agent_framework.TodoProvider` from the agent, lists the still-open todo items, and
     instructs the agent to complete them all before finishing.
 
-    Returns ``None`` when the session/agent/provider is unavailable or no todos are open, so the loop
-    falls back to its default "continue" nudge.
+    Returns ``None`` when the session/agent/provider is unavailable or no todos are open. In that
+    case the loop's default ``next_message`` handling applies: with ``fresh_context=False`` (the
+    default, used by ``create_harness_agent``) it reuses the previous iteration's messages verbatim
+    (skipping progress injection); only with ``fresh_context=True`` does it fall back to
+    ``DEFAULT_NEXT_MESSAGE``. In normal looping a ``None`` here is rare, since "no open todos" also
+    makes :func:`todos_remaining` stop the loop before the next message is consulted.
     """
     from ._todo import TodoProvider
 

@@ -1008,9 +1008,17 @@ class FileAccessProvider(ContextProvider):
 
     All six tools always require approval: each is registered with
     ``approval_mode="always_require"`` so the host must approve every file
-    operation the model proposes. To run unattended, supply one of the static
-    auto-approval rules to :class:`~agent_framework.ToolApprovalMiddleware` via
-    its ``auto_approval_rules``:
+    operation the model proposes. In the auto-invocation flow this means the
+    model's calls to these tools are converted into
+    ``function_approval_request`` items and the tool does **not** execute until
+    the host supplies a matching ``function_approval_response``. Consumers that
+    use the base agent directly must install
+    :class:`~agent_framework.ToolApprovalMiddleware` (or use
+    :func:`~agent_framework.create_harness_agent`, which wires it in by default)
+    to drive that handshake; otherwise these tools never run. To run unattended,
+    supply one of the static auto-approval rules to
+    :class:`~agent_framework.ToolApprovalMiddleware` via its
+    ``auto_approval_rules``:
 
     - :meth:`read_only_tools_auto_approval_rule` — auto-approves only the
       read-only tools (read, list files, list subdirectories, search), while
@@ -1081,6 +1089,20 @@ class FileAccessProvider(ContextProvider):
         self.instructions = instructions or DEFAULT_FILE_ACCESS_INSTRUCTIONS
 
     @staticmethod
+    def _is_local_tool_call(function_call: Content) -> bool:
+        """Return whether a function call targets this provider's local tools.
+
+        Hosted-tool calls carry a ``server_label`` in their
+        ``additional_properties`` and are a separate server-scoped approval
+        boundary that must be passed through untouched (see
+        :func:`agent_framework._tools._is_hosted_tool_approval`). These rules
+        only ever auto-approve the provider's own local tools, so any call that
+        carries a ``server_label`` is rejected even if its name collides with a
+        file-access tool name.
+        """
+        return not function_call.additional_properties.get("server_label")
+
+    @staticmethod
     def read_only_tools_auto_approval_rule(function_call: Content) -> bool:
         """Auto-approval rule that approves only the read-only file-access tools.
 
@@ -1092,6 +1114,10 @@ class FileAccessProvider(ContextProvider):
         while still prompting for the tools that modify it
         (``file_access_save_file`` and ``file_access_delete_file``).
 
+        Hosted-tool calls (those carrying a ``server_label``) are never
+        auto-approved, even when their name matches a file-access tool, so the
+        rule stays scoped to this provider's local tools.
+
         Args:
             function_call: The pending ``function_call`` content.
 
@@ -1099,7 +1125,10 @@ class FileAccessProvider(ContextProvider):
             ``True`` for read-only file-access tools, ``False`` otherwise so that
             subsequent rules continue to be evaluated.
         """
-        return function_call.name in FileAccessProvider._READ_ONLY_TOOL_NAMES
+        return (
+            FileAccessProvider._is_local_tool_call(function_call)
+            and function_call.name in FileAccessProvider._READ_ONLY_TOOL_NAMES
+        )
 
     @staticmethod
     def all_tools_auto_approval_rule(function_call: Content) -> bool:
@@ -1111,6 +1140,10 @@ class FileAccessProvider(ContextProvider):
         including the tools that modify the store (``file_access_save_file`` and
         ``file_access_delete_file``).
 
+        Hosted-tool calls (those carrying a ``server_label``) are never
+        auto-approved, even when their name matches a file-access tool, so the
+        rule stays scoped to this provider's local tools.
+
         Args:
             function_call: The pending ``function_call`` content.
 
@@ -1118,7 +1151,10 @@ class FileAccessProvider(ContextProvider):
             ``True`` for any file-access tool, ``False`` otherwise so that
             subsequent rules continue to be evaluated.
         """
-        return function_call.name in FileAccessProvider._ALL_TOOL_NAMES
+        return (
+            FileAccessProvider._is_local_tool_call(function_call)
+            and function_call.name in FileAccessProvider._ALL_TOOL_NAMES
+        )
 
     async def before_run(
         self,

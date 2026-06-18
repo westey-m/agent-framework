@@ -514,6 +514,16 @@ def test_read_only_tools_auto_approval_rule() -> None:
     for name in rejected:
         call = Content("function_call", call_id="c1", name=name, arguments="{}")
         assert FileAccessProvider.read_only_tools_auto_approval_rule(call) is False
+    # A hosted tool with the same name (carrying a server_label) is NOT auto-approved.
+    for name in approved:
+        hosted = Content(
+            "function_call",
+            call_id="c1",
+            name=name,
+            arguments="{}",
+            additional_properties={"server_label": "remote"},
+        )
+        assert FileAccessProvider.read_only_tools_auto_approval_rule(hosted) is False
 
 
 def test_all_tools_auto_approval_rule() -> None:
@@ -528,6 +538,15 @@ def test_all_tools_auto_approval_rule() -> None:
     ):
         call = Content("function_call", call_id="c1", name=name, arguments="{}")
         assert FileAccessProvider.all_tools_auto_approval_rule(call) is True
+        # A hosted tool with the same name (carrying a server_label) is NOT auto-approved.
+        hosted = Content(
+            "function_call",
+            call_id="c1",
+            name=name,
+            arguments="{}",
+            additional_properties={"server_label": "remote"},
+        )
+        assert FileAccessProvider.all_tools_auto_approval_rule(hosted) is False
 
     unrelated = Content("function_call", call_id="c1", name="some_other_tool", arguments="{}")
     assert FileAccessProvider.all_tools_auto_approval_rule(unrelated) is False

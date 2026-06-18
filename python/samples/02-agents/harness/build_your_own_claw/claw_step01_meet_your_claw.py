@@ -9,7 +9,7 @@
 # ]
 # ///
 # Run with any PEP 723 compatible runner, e.g.:
-#   uv run samples/02-agents/harness/build_your_own_claw/claw_step01_meet_your_claw.py
+#   uv run python/samples/02-agents/harness/build_your_own_claw/claw_step01_meet_your_claw.py
 
 # Copyright (c) Microsoft. All rights reserved.
 
@@ -91,7 +91,12 @@ def get_stock_price(
     price = _PRICE_BOOK.get(ticker)
     if price is None:
         # Deterministic pseudo-price for unknown symbols so the sample stays self-contained.
-        price = 50.0 + (abs(hash(ticker)) % 45000) / 100.0
+        # Derive a stable seed from the characters — the built-in hash() is randomized per
+        # process (PYTHONHASHSEED), so it would give different prices on every run.
+        seed = 0
+        for ch in ticker:
+            seed = (seed * 31 + ord(ch)) % 1_000_000
+        price = 50.0 + (seed % 45000) / 100.0
 
     return {
         "symbol": ticker,

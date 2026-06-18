@@ -664,7 +664,9 @@ class FileSystemAgentFileStore(AgentFileStore):
     All paths are resolved relative to the root directory provided at
     construction time. Lexical path traversal attempts (for example, via ``..``
     segments or absolute paths) are rejected with :class:`ValueError`. The root
-    directory is created automatically if it does not already exist.
+    directory is created lazily on the first write (or ``create_directory``)
+    rather than at construction, so constructing a store never touches the
+    filesystem and is safe in read-only working directories.
 
     Symbolic links and reparse points anywhere along the resolved path are
     rejected on read, write, delete, list, and existence checks. The check is
@@ -681,15 +683,20 @@ class FileSystemAgentFileStore(AgentFileStore):
     def __init__(self, root_directory: str | os.PathLike[str]) -> None:
         """Initialize the file-system store.
 
+        The root directory is **not** created here; construction performs no
+        filesystem writes. The directory is created lazily on the first
+        ``write_file`` (or ``create_directory``) call, so a store can be
+        constructed in a read-only working directory and only fails if a write
+        is actually attempted.
+
         Args:
             root_directory: The directory under which all files are stored.
-                Created if it does not exist.
+                Created lazily on first write if it does not exist.
         """
         raw_root = os.fspath(root_directory)
         if not raw_root or not raw_root.strip():
             raise ValueError("root_directory must not be empty or whitespace-only.")
         root_path = Path(raw_root).resolve()
-        root_path.mkdir(parents=True, exist_ok=True)
         self._root_path = root_path
 
     @property

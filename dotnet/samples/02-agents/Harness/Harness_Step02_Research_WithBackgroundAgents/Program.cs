@@ -58,7 +58,7 @@ AIAgent webSearchAgent =
         DisableAgentModeProvider = true,
         DisableFileMemory = true,       // If enabled, this would allow the agent to store memories as files in a directory associated with the current session
         DisableFileAccess = true,       // If enabled, this would allow the agent to read/write files in a working directory
-        DisableToolAutoApproval = true, // If enabled, this allows don't-ask-again approval functionality.
+        DisableToolAutoApproval = true, // If true, this disables the don't-ask-again approval functionality.
         ChatOptions = new ChatOptions
         {
             Instructions = "You are a web search assistant. When asked to find information, use the web search tool to look it up and return a concise, factual answer.",
@@ -108,7 +108,7 @@ AIAgent parentAgent =
         DisableAgentModeProvider = true,
         DisableFileMemory = true,       // If enabled, this would allow the agent to store memories as files in a directory associated with the current session
         DisableFileAccess = true,       // If enabled, this would allow the agent to read/write files in a working directory
-        DisableToolAutoApproval = true, // If enabled, this allows don't-ask-again approval functionality.
+        DisableToolAutoApproval = true, // If true, this disables the don't-ask-again approval functionality.
         DisableWebSearch = true,
         BackgroundAgents = [webSearchAgent],
         ChatOptions = new ChatOptions

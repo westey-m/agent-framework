@@ -1887,7 +1887,7 @@ public class HarnessAgentTests
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;
         var options = CreateAllDisabledOptions();
-        options.DisableToolApproval = false;
+        options.DisableToolAutoApproval = false;
         options.LoopEvaluators = [new DelegateLoopEvaluator((_, _) => new ValueTask<LoopEvaluation>(LoopEvaluation.Stop()))];
 
         // Act

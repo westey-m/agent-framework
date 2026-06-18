@@ -10,6 +10,7 @@ import pytest
 from agent_framework import (
     AgentSession,
     FileMemoryProvider,
+    FunctionTool,
     InMemoryAgentFileStore,
 )
 from agent_framework._harness._file_memory import (
@@ -34,12 +35,12 @@ def _tool_by_name(tools: list[object], name: str) -> object:
 
 async def _prepare(
     provider: FileMemoryProvider, *, session_id: str = "session-1"
-) -> tuple[SessionContext, dict[str, object]]:
+) -> tuple[SessionContext, dict[str, FunctionTool]]:
     """Run ``before_run`` against a fresh session context and return tools by name."""
     session = AgentSession(session_id=session_id)
     context = SessionContext(session_id=session_id, input_messages=[])
     await provider.before_run(agent=None, session=session, context=context, state={})
-    tools = {getattr(t, "name", None): t for t in context.tools}
+    tools: dict[str, FunctionTool] = {tool.name: tool for tool in context.tools}
     return context, tools
 
 

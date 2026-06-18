@@ -186,8 +186,8 @@ public sealed class HarnessAgentOptions
     /// Gets or sets a value indicating whether the <see cref="ToolApprovalAgent"/> auto-approval middleware is disabled.
     /// </summary>
     /// <remarks>
-    /// This does not disable tool approval itself; tools may still require approval (for example,
-    /// <see cref="ApprovalRequiredAIFunction"/> tools). It only controls whether the agent is wrapped with the
+    /// This disables the tool auto-approval functionality only, keeping the tool approval flow requiring approval (for example,
+    /// <see cref="ApprovalRequiredAIFunction"/> tools). This setting controls whether the agent is wrapped with the
     /// <see cref="ToolApprovalAgent"/> middleware that supports "don't ask again" and auto-approval rules.
     /// When <see langword="false"/> (the default), the middleware is added.
     /// </remarks>

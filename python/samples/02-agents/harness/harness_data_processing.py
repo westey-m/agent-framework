@@ -106,12 +106,6 @@ async def main() -> None:
     # with your preferred authentication option.
     client = FoundryChatClient(credential=AzureCliCredential())
 
-    # Wire a FileAccessProvider pointed at the sample's working/ folder so it
-    # works regardless of the current working directory. All of its tools
-    # require approval; the read-only auto-approval rule below lets read/list/
-    # search run automatically while save/delete still prompt for approval.
-    file_access_provider = FileAccessProvider(FileSystemAgentFileStore(working_dir))
-
     # Create a harness agent with data-analyst instructions. Unused features are
     # disabled. The read_only_tools_auto_approval_rule auto-approves the
     # FileAccessProvider's read-only tools, so only write operations prompt.
@@ -122,7 +116,7 @@ async def main() -> None:
         name="DataAnalyst",
         description="A data analyst assistant that reads, analyzes, and processes data files.",
         agent_instructions=DATA_ANALYST_INSTRUCTIONS,
-        context_providers=[file_access_provider],
+        file_access_store=FileSystemAgentFileStore(working_dir),
         auto_approval_rules=[FileAccessProvider.read_only_tools_auto_approval_rule],
         disable_todo=True,
         disable_mode=True,

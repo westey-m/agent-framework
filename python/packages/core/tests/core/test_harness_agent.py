@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 from collections.abc import AsyncIterable, Awaitable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,6 +18,10 @@ from agent_framework import (
     ChatResponseUpdate,
     CompactionProvider,
     Content,
+    FileAccessProvider,
+    FileMemoryProvider,
+    FileSystemAgentFileStore,
+    InMemoryAgentFileStore,
     InMemoryHistoryProvider,
     Message,
     ResponseStream,
@@ -60,6 +65,12 @@ class _FakeChatClient(BaseChatClient[ChatOptions[Any]]):
 # --- Assembly Tests ---
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every test in a temp directory so default file stores don't write into the repo."""
+    monkeypatch.chdir(tmp_path)
+
+
 def test_create_harness_agent_with_defaults() -> None:
     """create_harness_agent should assemble successfully with default options."""
     agent = create_harness_agent(
@@ -70,8 +81,9 @@ def test_create_harness_agent_with_defaults() -> None:
     assert agent.id is not None
 
 
-def test_create_harness_agent_includes_all_default_providers() -> None:
-    """Default assembly should include history, compaction, todo, mode (no skills by default)."""
+def test_create_harness_agent_includes_all_default_providers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default assembly should include history, compaction, todo, mode, file memory, and file access."""
+    monkeypatch.chdir(tmp_path)
     agent = create_harness_agent(
         client=_FakeChatClient(),
         max_context_window_tokens=128_000,
@@ -84,6 +96,8 @@ def test_create_harness_agent_includes_all_default_providers() -> None:
     assert CompactionProvider in provider_types
     assert TodoProvider in provider_types
     assert AgentModeProvider in provider_types
+    assert FileMemoryProvider in provider_types
+    assert FileAccessProvider in provider_types
     assert SkillsProvider not in provider_types
 
 
@@ -111,62 +125,69 @@ def test_create_harness_agent_disable_mode() -> None:
     assert AgentModeProvider not in provider_types
 
 
-def test_create_harness_agent_disable_memory() -> None:
-    """disable_memory=True should exclude MemoryContextProvider even when memory_store is provided."""
-    from agent_framework import MemoryContextProvider
-    from agent_framework._harness._memory import MemoryStore
-
-    class _FakeMemoryStore(MemoryStore):
-        def list_topics(self, session, *, source_id):
-            return []
-
-        def get_topic(self, session, *, source_id, topic):
-            raise NotImplementedError
-
-        def write_topic(self, session, record, *, source_id):
-            pass
-
-        def delete_topic(self, session, *, source_id, topic):
-            pass
-
-        def get_index_text(self, session, *, source_id):  # type: ignore[override]  # pyrefly: ignore[bad-override]  # ty: ignore[invalid-method-override]
-            return ""
-
-        def get_transcripts_directory(self, session, *, source_id):  # pyrefly: ignore[bad-override]
-            return ""
-
-        def read_state(self, session, *, source_id):
-            return {}
-
-        def rebuild_index(self, session, *, source_id):  # type: ignore[override]  # pyrefly: ignore[bad-override]  # ty: ignore[invalid-method-override]
-            pass
-
-        def search_transcripts(self, session, *, source_id, query):  # type: ignore[override]  # pyrefly: ignore[bad-override]  # ty: ignore[invalid-method-override]
-            return []
-
-        def write_state(self, session, state, *, source_id):
-            pass
-
-    # With memory_store provided and disable_memory=False, MemoryContextProvider should be present.
-    agent_with_memory = create_harness_agent(
-        client=_FakeChatClient(),
+def test_create_harness_agent_disable_file_memory() -> None:
+    """disable_file_memory=True should exclude only the FileMemoryProvider."""
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        memory_store=_FakeMemoryStore(),
+        disable_file_memory=True,
     )
-    provider_types = [type(p) for p in agent_with_memory.context_providers]
-    assert MemoryContextProvider in provider_types
+    provider_types = [type(p) for p in agent.context_providers]
+    assert FileMemoryProvider not in provider_types
+    # The file access provider should remain active.
+    assert FileAccessProvider in provider_types
 
-    # With memory_store provided and disable_memory=True, MemoryContextProvider should be absent.
-    agent_disabled = create_harness_agent(
-        client=_FakeChatClient(),
+
+def test_create_harness_agent_disable_file_access() -> None:
+    """disable_file_access=True should exclude only the FileAccessProvider."""
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
         max_context_window_tokens=128_000,
         max_output_tokens=16_384,
-        memory_store=_FakeMemoryStore(),
-        disable_memory=True,
+        disable_file_access=True,
     )
-    provider_types = [type(p) for p in agent_disabled.context_providers]
-    assert MemoryContextProvider not in provider_types
+    provider_types = [type(p) for p in agent.context_providers]
+    assert FileAccessProvider not in provider_types
+    # The file memory provider should remain active.
+    assert FileMemoryProvider in provider_types
+
+
+def test_create_harness_agent_uses_custom_file_stores() -> None:
+    """Custom file stores should be used by the file memory and file access providers."""
+    memory_store = InMemoryAgentFileStore()
+    access_store = InMemoryAgentFileStore()
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+        file_memory_store=memory_store,
+        file_access_store=access_store,
+    )
+
+    memory_provider = next(p for p in agent.context_providers if isinstance(p, FileMemoryProvider))
+    access_provider = next(p for p in agent.context_providers if isinstance(p, FileAccessProvider))
+    assert memory_provider.store is memory_store
+    assert access_provider.store is access_store
+
+
+def test_create_harness_agent_default_file_stores_are_filesystem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without custom stores, the providers default to FileSystemAgentFileStore rooted in cwd."""
+    monkeypatch.chdir(tmp_path)
+    agent = create_harness_agent(
+        client=_FakeChatClient(),  # type: ignore[arg-type]
+        max_context_window_tokens=128_000,
+        max_output_tokens=16_384,
+    )
+
+    memory_provider = next(p for p in agent.context_providers if isinstance(p, FileMemoryProvider))
+    access_provider = next(p for p in agent.context_providers if isinstance(p, FileAccessProvider))
+    assert isinstance(memory_provider.store, FileSystemAgentFileStore)
+    assert isinstance(access_provider.store, FileSystemAgentFileStore)
+    assert memory_provider.store.root_path == (tmp_path / "agent-file-memory").resolve()
+    assert access_provider.store.root_path == (tmp_path / "working").resolve()
 
 
 def test_create_harness_agent_skills_paths_adds_provider() -> None:

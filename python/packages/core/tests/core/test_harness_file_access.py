@@ -442,6 +442,28 @@ def test_filesystem_store_requires_non_empty_root() -> None:
         FileSystemAgentFileStore("   ")
 
 
+async def test_filesystem_store_does_not_create_root_until_write(tmp_path: Path) -> None:
+    """Constructing a store must not touch the filesystem; the root is created lazily on first write."""
+    root = tmp_path / "does-not-exist-yet"
+
+    # Construction performs no filesystem writes (safe in read-only CWDs).
+    store = FileSystemAgentFileStore(root)
+    assert not root.exists()
+
+    # Read-only operations tolerate the missing root without creating it.
+    assert await store.read_file("a.txt") is None
+    assert await store.file_exists("a.txt") is False
+    assert await store.list_files() == []
+    assert await store.list_directories() == []
+    assert await store.search_files("", ".") == []
+    assert not root.exists()
+
+    # The first write creates the root directory lazily.
+    await store.write_file("a.txt", "alpha")
+    assert root.is_dir()
+    assert await store.read_file("a.txt") == "alpha"
+
+
 async def test_file_access_provider_registers_tools_and_instructions(
     chat_client_base: SupportsChatGetResponse,
 ) -> None:
@@ -777,6 +799,11 @@ async def test_file_access_tool_wrappers_surface_value_error_as_message(
     too_long = "a" * 1024
     searched = await search_files.invoke(arguments={"regex_pattern": too_long})
     assert "Could not search files" in _text(searched[0])
+
+    # An invalid regex is surfaced to the caller (the model) as a raised error
+    # so it can correct the pattern and retry.
+    with pytest.raises(re.error):
+        await search_files.invoke(arguments={"regex_pattern": "[unclosed"})
 
 
 async def test_file_access_tool_read_file_wrapper_surfaces_non_utf8(

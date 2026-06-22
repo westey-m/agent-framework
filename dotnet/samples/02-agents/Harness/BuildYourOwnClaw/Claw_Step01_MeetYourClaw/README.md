@@ -1,6 +1,6 @@
 # Meet your claw (Post 1) — .NET
 
-The first runnable sample from the **"Build your own claw with Microsoft Agent Framework"** blog
+The first runnable sample from the [**"Build your own agent harness and claw with Microsoft Agent Framework"** blog](https://devblogs.microsoft.com/agent-framework/build-your-own-claw-and-agent-harness-with-microsoft-agent-framework)
 series. It builds the foundation of a personal finance / investing assistant on top of a
 `HarnessAgent`.
 

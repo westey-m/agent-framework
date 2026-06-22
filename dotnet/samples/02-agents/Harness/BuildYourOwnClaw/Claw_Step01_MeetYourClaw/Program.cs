@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 // "Meet your agent harness and claw" — Post 1 of the "Build your own claw with Microsoft Agent Framework" series.
+// See: https://devblogs.microsoft.com/agent-framework/meet-your-agent-harness-and-claw.
 //
 // This sample builds the foundation of a personal finance / investing assistant on top of a
 // HarnessAgent. The harness comes pre-configured with function invocation, per-service-call

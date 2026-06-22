@@ -30,7 +30,9 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
+
+from pydantic import BaseModel, Field
 
 from .._feature_stage import ExperimentalFeature, experimental
 from .._serialization import SerializationMixin
@@ -82,8 +84,13 @@ _ELOOP = errno.ELOOP
 def _compile_search_regex(pattern: str) -> re.Pattern[str]:
     """Compile a case-insensitive search regex, enforcing the length cap.
 
+    An invalid ``pattern`` raises :class:`re.error` unchanged so the search
+    tools surface it to the calling model, which can correct the pattern and
+    retry.
+
     Raises:
-        ValueError: When ``pattern`` exceeds ``_MAX_SEARCH_PATTERN_LENGTH`` characters.
+        ValueError: When ``pattern`` exceeds ``_MAX_SEARCH_PATTERN_LENGTH``
+            characters.
         re.error: When ``pattern`` is not a valid regular expression.
     """
     if len(pattern) > _MAX_SEARCH_PATTERN_LENGTH:
@@ -658,7 +665,9 @@ class FileSystemAgentFileStore(AgentFileStore):
     All paths are resolved relative to the root directory provided at
     construction time. Lexical path traversal attempts (for example, via ``..``
     segments or absolute paths) are rejected with :class:`ValueError`. The root
-    directory is created automatically if it does not already exist.
+    directory is created lazily on the first write (or ``create_directory``)
+    rather than at construction, so constructing a store never touches the
+    filesystem and is safe in read-only working directories.
 
     Symbolic links and reparse points anywhere along the resolved path are
     rejected on read, write, delete, list, and existence checks. The check is
@@ -675,15 +684,20 @@ class FileSystemAgentFileStore(AgentFileStore):
     def __init__(self, root_directory: str | os.PathLike[str]) -> None:
         """Initialize the file-system store.
 
+        The root directory is **not** created here; construction performs no
+        filesystem writes. The directory is created lazily on the first
+        ``write_file`` (or ``create_directory``) call, so a store can be
+        constructed in a read-only working directory and only fails if a write
+        is actually attempted.
+
         Args:
             root_directory: The directory under which all files are stored.
-                Created if it does not exist.
+                Created lazily on first write if it does not exist.
         """
         raw_root = os.fspath(root_directory)
         if not raw_root or not raw_root.strip():
             raise ValueError("root_directory must not be empty or whitespace-only.")
         root_path = Path(raw_root).resolve()
-        root_path.mkdir(parents=True, exist_ok=True)
         self._root_path = root_path
 
     @property
@@ -982,6 +996,63 @@ class FileSystemAgentFileStore(AgentFileStore):
         await asyncio.to_thread(lambda: full_path.mkdir(parents=True, exist_ok=True))
 
 
+class _SaveFileInput(BaseModel):
+    """Input schema for ``file_access_save_file``."""
+
+    file_name: Annotated[str, Field(description="Name (relative path) of the file to save.")]
+    content: Annotated[str, Field(description="Full text content to write to the file.")]
+    overwrite: Annotated[
+        bool,
+        Field(default=False, description="When true, replace an existing file; otherwise saving fails if it exists."),
+    ] = False
+
+
+class _ReadFileInput(BaseModel):
+    """Input schema for ``file_access_read_file``."""
+
+    file_name: Annotated[str, Field(description="Name (relative path) of the file to read.")]
+
+
+class _DeleteFileInput(BaseModel):
+    """Input schema for ``file_access_delete_file``."""
+
+    file_name: Annotated[str, Field(description="Name (relative path) of the file to delete.")]
+
+
+class _ListFilesInput(BaseModel):
+    """Input schema for ``file_access_list_files``."""
+
+    directory: Annotated[
+        str | None,
+        Field(default=None, description="Relative directory to list; omit or pass empty to list the root."),
+    ] = None
+
+
+class _ListSubdirectoriesInput(BaseModel):
+    """Input schema for ``file_access_list_subdirectories``."""
+
+    directory: Annotated[
+        str | None,
+        Field(default=None, description="Relative directory to list; omit or pass empty to list the root."),
+    ] = None
+
+
+class _SearchFilesInput(BaseModel):
+    """Input schema for ``file_access_search_files``."""
+
+    regex_pattern: Annotated[
+        str,
+        Field(description="Case-insensitive regex matched against file contents; 256 characters or fewer."),
+    ]
+    file_pattern: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description='Optional glob to filter which files are searched (e.g. "*.md", "reports/*").',
+        ),
+    ] = None
+
+
 @experimental(feature_id=ExperimentalFeature.HARNESS)
 class FileAccessProvider(ContextProvider):
     """Context provider that gives an agent CRUD/search access to a shared file store.
@@ -1165,9 +1236,8 @@ class FileAccessProvider(ContextProvider):
         state: dict[str, Any],
     ) -> None:
         """Inject file-access tools and instructions before the model runs."""
-        del agent, session, state
 
-        @tool(name=FileAccessProvider.SAVE_FILE_TOOL_NAME, approval_mode="always_require")
+        @tool(name=FileAccessProvider.SAVE_FILE_TOOL_NAME, schema=_SaveFileInput, approval_mode="always_require")
         async def file_access_save_file(file_name: str, content: str, overwrite: bool = False) -> str:
             """Save a file with the given name and content. By default, does not overwrite an existing file unless overwrite is set to true."""  # noqa: E501
             try:
@@ -1181,7 +1251,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not save file '{file_name}': {exc.strerror or exc}"
             return f"File '{file_name}' saved."
 
-        @tool(name=FileAccessProvider.READ_FILE_TOOL_NAME, approval_mode="always_require")
+        @tool(name=FileAccessProvider.READ_FILE_TOOL_NAME, schema=_ReadFileInput, approval_mode="always_require")
         async def file_access_read_file(file_name: str) -> str:
             """Read the content of a file by name. Returns the file content or a message indicating the file could not be read."""  # noqa: E501
             try:
@@ -1193,7 +1263,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not read file '{file_name}': {exc.strerror or exc}"
             return content if content is not None else f"File '{file_name}' not found."
 
-        @tool(name=FileAccessProvider.DELETE_FILE_TOOL_NAME, approval_mode="always_require")
+        @tool(name=FileAccessProvider.DELETE_FILE_TOOL_NAME, schema=_DeleteFileInput, approval_mode="always_require")
         async def file_access_delete_file(file_name: str) -> str:
             """Delete a file by name."""
             try:
@@ -1205,7 +1275,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not delete file '{file_name}': {exc.strerror or exc}"
             return f"File '{file_name}' deleted." if deleted else f"File '{file_name}' not found."
 
-        @tool(name=FileAccessProvider.LIST_FILES_TOOL_NAME, approval_mode="always_require")
+        @tool(name=FileAccessProvider.LIST_FILES_TOOL_NAME, schema=_ListFilesInput, approval_mode="always_require")
         async def file_access_list_files(directory: str | None = None) -> list[str] | str:
             """List the direct child file names of a directory. Omit ``directory`` (or pass an empty string) to list the root. To enumerate files in a subdirectory, pass its relative path, for example ``"reports"`` or ``"reports/2024"``."""  # noqa: E501
             target = directory if directory and directory.strip() else ""
@@ -1216,7 +1286,11 @@ class FileAccessProvider(ContextProvider):
             except OSError as exc:
                 return f"Could not list directory '{directory or ''}': {exc.strerror or exc}"
 
-        @tool(name=FileAccessProvider.LIST_SUBDIRECTORIES_TOOL_NAME, approval_mode="always_require")
+        @tool(
+            name=FileAccessProvider.LIST_SUBDIRECTORIES_TOOL_NAME,
+            schema=_ListSubdirectoriesInput,
+            approval_mode="always_require",
+        )
         async def file_access_list_subdirectories(directory: str | None = None) -> list[str] | str:
             """List the direct child subdirectory names of a directory.
 
@@ -1233,7 +1307,7 @@ class FileAccessProvider(ContextProvider):
             except OSError as exc:
                 return f"Could not list directory '{directory or ''}': {exc.strerror or exc}"
 
-        @tool(name=FileAccessProvider.SEARCH_FILES_TOOL_NAME, approval_mode="always_require")
+        @tool(name=FileAccessProvider.SEARCH_FILES_TOOL_NAME, schema=_SearchFilesInput, approval_mode="always_require")
         async def file_access_search_files(
             regex_pattern: str,
             file_pattern: str | None = None,

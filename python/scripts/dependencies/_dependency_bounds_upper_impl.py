@@ -37,6 +37,8 @@ from scripts.task_runner import discover_projects, extract_poe_tasks, project_fi
 logger = logging.getLogger(__name__)
 
 CHECK_TASK_PRIORITY = ("check", "typing", "pyright", "mypy", "lint")
+AZURE_MONITOR_OPENTELEMETRY = "azure-monitor-opentelemetry"
+OPENTELEMETRY_SDK = "opentelemetry-sdk"
 REQ_PATTERN = r"^\s*([A-Za-z0-9_.-]+(?:\[[^\]]+\])?)\s*(.*?)\s*$"
 SECTION_HEADER_PATTERN = re.compile(r"^\s*\[([^\]]+)\]\s*$")
 INLINE_ARRAY_ASSIGNMENT_PATTERN = re.compile(
@@ -238,6 +240,18 @@ def _select_latest_dev_version(versions: list[Version]) -> Version | None:
     return versions[-1]
 
 
+def _exact_pin_version(requirement: Requirement) -> Version | None:
+    """Return the exact pinned version from a requirement, if it has one."""
+    for specifier in requirement.specifier:
+        if specifier.operator not in {"==", "==="} or "*" in specifier.version:
+            continue
+        try:
+            return Version(specifier.version)
+        except InvalidVersion:
+            return None
+    return None
+
+
 @lru_cache(maxsize=8)
 def _load_workspace_package_versions(workspace_root: str) -> dict[str, Version]:
     workspace_path = Path(workspace_root)
@@ -283,6 +297,13 @@ def _collect_dev_pin_replacements(
         requirement for requirement in (dependency_groups.get("dev", []) or []) if isinstance(requirement, str)
     )
     logger.debug(f"Found {len(dev_requirements)} dev requirements in {pyproject_file}")
+    parsed_dev_requirements: dict[str, Requirement] = {}
+    for requirement in dev_requirements:
+        try:
+            parsed_requirement = Requirement(requirement)
+        except InvalidRequirement:
+            continue
+        parsed_dev_requirements[parsed_requirement.name.lower()] = parsed_requirement
 
     seen_requirements: set[str] = set()
     replacements: dict[str, str] = {}
@@ -308,6 +329,33 @@ def _collect_dev_pin_replacements(
             # back to lock data when PyPI cannot be reached or --version-source=lock is used.
             latest_version = _select_latest_dev_version(catalog.get(dependency_name))
         if latest_version is None:
+            continue
+        current_exact_version = _exact_pin_version(parsed_requirement)
+        if current_exact_version is None and not dependency_name.startswith("agent-framework"):
+            locked_version = _select_latest_dev_version(catalog.get_lock(dependency_name))
+            if locked_version is not None:
+                latest_version = locked_version
+        if current_exact_version is not None and latest_version < current_exact_version:
+            logger.info(
+                "Skipping %s in %s because selected version %s is older than current pin %s.",
+                dependency_name,
+                pyproject_file,
+                latest_version,
+                current_exact_version,
+            )
+            continue
+        if (
+            dependency_name == OPENTELEMETRY_SDK
+            and AZURE_MONITOR_OPENTELEMETRY in parsed_dev_requirements
+            and current_exact_version is not None
+            and latest_version != current_exact_version
+        ):
+            logger.info(
+                "Skipping %s in %s because %s currently pins the SDK version.",
+                dependency_name,
+                pyproject_file,
+                AZURE_MONITOR_OPENTELEMETRY,
+            )
             continue
 
         extras = f"[{','.join(sorted(parsed_requirement.extras))}]" if parsed_requirement.extras else ""
@@ -426,10 +474,16 @@ def _load_lock_versions(workspace_root: Path) -> dict[str, list[Version]]:
 class VersionCatalog:
     """Cache and fetch available dependency versions."""
 
-    def __init__(self, lock_versions: dict[str, list[Version]], source: str) -> None:
+    def __init__(
+        self,
+        lock_versions: dict[str, list[Version]],
+        source: str,
+        exclude_newer: datetime | None = None,
+    ) -> None:
         """Initialize the catalog with lock-based fallback and fetch source."""
         self._lock_versions = lock_versions
         self._source = source
+        self._exclude_newer = exclude_newer if exclude_newer is not None else _load_exclude_newer_from_env()
         self._cache: dict[str, list[Version]] = {}
         self._lock = threading.Lock()
 
@@ -463,7 +517,11 @@ class VersionCatalog:
         for raw_version, files in payload.get("releases", {}).items():
             if not files:
                 continue
-            non_yanked = any(not bool(file_info.get("yanked", False)) for file_info in files)
+            non_yanked = any(
+                not bool(file_info.get("yanked", False))
+                and _upload_is_not_newer(file_info, exclude_newer=self._exclude_newer)
+                for file_info in files
+            )
             if not non_yanked:
                 continue
             try:
@@ -473,6 +531,35 @@ class VersionCatalog:
         if versions:
             return sorted(versions)
         return self._lock_versions.get(package_name, [])
+
+
+def _load_exclude_newer_from_env() -> datetime | None:
+    raw_value = os.environ.get("DEPENDENCY_RELEASE_CUTOFF") or os.environ.get("UV_EXCLUDE_NEWER")
+    if not raw_value:
+        return None
+    normalized = raw_value.removesuffix("Z")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _upload_is_not_newer(file_info: dict[str, object], *, exclude_newer: datetime | None) -> bool:
+    if exclude_newer is None:
+        return True
+    upload_time = file_info.get("upload_time_iso_8601") or file_info.get("upload_time")
+    if not isinstance(upload_time, str) or not upload_time:
+        return False
+    normalized = upload_time.removesuffix("Z")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    parsed = parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+    return parsed <= exclude_newer
 
 
 def _load_package_name(pyproject_file: Path) -> str:

@@ -113,7 +113,7 @@ async def main() -> None:
         # keep re-invoking it automatically so it works through the whole plan without manual
         # prompting. loop_next_message reminds the agent which todos are still open each pass, and
         # loop_max_iterations caps the autonomous passes per turn as a safety net.
-        loop_should_continue=todos_remaining(modes=["execute"]),
+        loop_should_continue=todos_remaining(looping_modes=["execute"]),
         loop_next_message=todos_remaining_message,
         loop_max_iterations=10,
     )

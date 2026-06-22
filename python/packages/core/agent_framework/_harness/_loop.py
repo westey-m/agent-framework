@@ -819,8 +819,8 @@ def _resolve_context_provider(agent: Any, provider_type: type) -> Any:
     )
 
 
-def todos_remaining(*, modes: Sequence[str] | None = None) -> ShouldContinueCallable:
-    """Build a ``should_continue`` predicate that loops while the harness ``TodoProvider`` has open items.
+def todos_remaining(*, looping_modes: Sequence[str] | None = None) -> ShouldContinueCallable:
+    """Build a ``should_continue`` predicate that loops while the Agent's ``TodoProvider`` has open items.
 
     This resolves the :class:`~agent_framework.TodoProvider` from the running agent
     (``agent.context_providers``) rather than taking it as an argument, so it can be used directly
@@ -829,23 +829,27 @@ def todos_remaining(*, modes: Sequence[str] | None = None) -> ShouldContinueCall
     counterpart of the .NET ``TodoCompletionLoopEvaluator``.
 
     Args:
-        modes: When provided, the loop only continues while the agent's current operating mode (read
-            from its :class:`~agent_framework.AgentModeProvider`) is one of these modes; in any other
-            mode the predicate returns ``False`` so the agent stays interactive. Mode matching is
-            case-insensitive. When ``None`` (default), the loop applies in every mode. An empty
-            sequence is rejected (there would be no mode in which the loop could ever run).
+        looping_modes: When provided, the loop only continues while the agent's current operating
+            mode (read from its :class:`~agent_framework.AgentModeProvider`) is one of these modes;
+            in any other mode the predicate returns ``False`` so the agent stays interactive. Mode
+            matching is case-insensitive. When ``None`` (default), the loop applies in every mode. An
+            empty sequence is rejected (there would be no mode in which the loop could ever run).
+            Restricting looping to certain modes is useful when, for example, the agent has a planning
+            and execution mode, and you only want to loop on the execution mode until all todos are
+            complete.  Looping until completion in planning is usually undesirable since the agent is
+            still building the list of todos to complete.
 
     Returns:
         A predicate suitable for :class:`AgentLoopMiddleware`'s ``should_continue`` argument (and for
         ``create_harness_agent``'s ``loop_should_continue``).
 
     Raises:
-        ValueError: ``modes`` is an empty sequence.
+        ValueError: ``looping_modes`` is an empty sequence.
     """
-    if modes is not None:
-        allowed_modes: set[str] | None = {mode.strip().lower() for mode in modes}
+    if looping_modes is not None:
+        allowed_modes: set[str] | None = {mode.strip().lower() for mode in looping_modes}
         if not allowed_modes:
-            raise ValueError("modes must be None or a non-empty sequence of mode names.")
+            raise ValueError("looping_modes must be None or a non-empty sequence of mode names.")
     else:
         allowed_modes = None
 

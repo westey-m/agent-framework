@@ -1067,7 +1067,7 @@ async def test_todos_remaining_mode_gating() -> None:
     agent = _FakeHarnessAgent(provider, mode_provider)
     await _save_todos(provider, session, [TodoItem(id=1, title="open", is_complete=False)])
 
-    predicate = todos_remaining(modes=["execute"])
+    predicate = todos_remaining(looping_modes=["execute"])
 
     # Default mode is "plan" -> not in allowed modes -> False even with open todos.
     assert await _resolve_should_continue_result(predicate(session=session, agent=agent)) is False
@@ -1076,7 +1076,7 @@ async def test_todos_remaining_mode_gating() -> None:
     assert await _resolve_should_continue_result(predicate(session=session, agent=agent)) is True
 
     # Case-insensitive matching.
-    predicate_upper = todos_remaining(modes=["EXECUTE"])
+    predicate_upper = todos_remaining(looping_modes=["EXECUTE"])
     assert await _resolve_should_continue_result(predicate_upper(session=session, agent=agent)) is True
 
 
@@ -1087,14 +1087,14 @@ async def test_todos_remaining_modes_none_ignores_mode() -> None:
     agent = _FakeHarnessAgent(provider, mode_provider)
     await _save_todos(provider, session, [TodoItem(id=1, title="open", is_complete=False)])
 
-    predicate = todos_remaining(modes=None)
+    predicate = todos_remaining(looping_modes=None)
     # "plan" mode still loops because no mode gating is applied.
     assert await _resolve_should_continue_result(predicate(session=session, agent=agent)) is True
 
 
 def test_todos_remaining_rejects_empty_modes() -> None:
     with pytest.raises(ValueError):
-        todos_remaining(modes=[])
+        todos_remaining(looping_modes=[])
 
 
 async def test_todos_remaining_message_lists_open_items() -> None:

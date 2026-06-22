@@ -25,7 +25,6 @@ from ._background_agents import BackgroundAgentsProvider
 from ._file_access import AgentFileStore, FileAccessProvider, FileSystemAgentFileStore
 from ._file_memory import FileMemoryProvider
 from ._loop import DEFAULT_MAX_ITERATIONS, AgentLoopMiddleware
-from ._memory import MemoryContextProvider, MemoryStore
 from ._mode import AgentModeProvider
 from ._todo import TodoProvider
 from ._tool_approval import ToolApprovalMiddleware

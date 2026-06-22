@@ -1,6 +1,6 @@
 # Build your own agent harness and claw — Python samples
 
-Runnable Python samples for the **"Build your own agent harness and claw with Microsoft Agent Framework"** blog
+Runnable Python samples for the [**"Build your own agent harness and claw with Microsoft Agent Framework"** blog](https://devblogs.microsoft.com/agent-framework/build-your-own-claw-and-agent-harness-with-microsoft-agent-framework)
 series. Each step builds a personal finance / investing assistant on top of
 `create_harness_agent`, reusing the shared harness `console` package in the parent `harness/`
 directory.

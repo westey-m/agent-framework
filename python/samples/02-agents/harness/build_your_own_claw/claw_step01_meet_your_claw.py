@@ -16,7 +16,8 @@
 """Meet your agent harness and claw (Post 1) — Python.
 
 The first runnable sample from the "Build your own claw with Microsoft Agent Framework" blog
-series. It builds the foundation of a personal finance / investing assistant on top of
+series. See: https://devblogs.microsoft.com/agent-framework/01-meet-your-claw.html.
+It builds the foundation of a personal finance / investing assistant on top of
 ``create_harness_agent``.
 
 ``create_harness_agent`` is a factory that wires up a batteries-included agent: function

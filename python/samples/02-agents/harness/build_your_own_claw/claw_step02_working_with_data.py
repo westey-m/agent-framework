@@ -17,7 +17,7 @@
 """Working with your data, safely (Post 2) — Python.
 
 The second runnable sample from the "Build your own claw and agent harness with Microsoft Agent
-Framework" blog series. See: https://devblogs.microsoft.com/agent-framework/working-with-your-data-safely.
+Framework" blog series. See: https://devblogs.microsoft.com/agent-framework/agent-harness-working-with-your-data-safely.
 It builds on Post 1's personal finance assistant and adds three abilities:
 
 1. File access  — read the user's ``portfolio.csv`` and write report files (file_access_* tools),

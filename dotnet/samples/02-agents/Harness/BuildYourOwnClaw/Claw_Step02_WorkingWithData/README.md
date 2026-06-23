@@ -1,7 +1,7 @@
 # Working with your data, safely (Post 2) — .NET
 
 The second runnable sample from the [**"Build your own claw and agent harness with Microsoft Agent Framework"** blog](https://devblogs.microsoft.com/agent-framework/build-your-own-claw-and-agent-harness-with-microsoft-agent-framework)
-series ([Part 2 — Working with your data, safely](https://devblogs.microsoft.com/agent-framework/working-with-your-data-safely)).
+series ([Part 2 — Working with your data, safely](https://devblogs.microsoft.com/agent-framework/agent-harness-working-with-your-data-safely)).
 It builds on Post 1's personal finance assistant and teaches it to work with *your* data safely.
 
 ## What this sample demonstrates

@@ -39,7 +39,14 @@ internal static class StockTools
         if (!s_priceBook.TryGetValue(symbol, out var price))
         {
             // Deterministic pseudo-price for unknown symbols so the sample stays self-contained.
-            var seed = Math.Abs(symbol.ToUpperInvariant().GetHashCode());
+            // Derive a stable seed from the characters — string.GetHashCode() is randomized per
+            // process and Math.Abs(int.MinValue) throws, so neither is safe for repeatable output.
+            var seed = 0;
+            foreach (var ch in symbol.ToUpperInvariant())
+            {
+                seed = (seed * 31 + ch) % 1_000_000;
+            }
+
             price = 50m + seed % 45000 / 100m;
         }
 

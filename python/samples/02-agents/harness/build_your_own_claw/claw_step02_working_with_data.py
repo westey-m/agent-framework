@@ -48,6 +48,7 @@ Authentication:
 import asyncio
 import os
 import sys
+import uuid
 from contextlib import AsyncExitStack
 from datetime import datetime, timezone
 from pathlib import Path
@@ -151,8 +152,14 @@ def place_trade(
 ) -> str:
     """Place a (simulated) buy or sell order. Marked approval-required, so the harness asks the
     user to approve before this ever runs. No real order is placed."""
-    verb = "Sold" if action.lower() == "sell" else "Bought"
-    confirmation = f"TRADE-{abs(hash((symbol, action, quantity))) % 100000000:08d}"
+    normalized_action = action.lower()
+    if normalized_action not in ("buy", "sell"):
+        return f"Invalid action '{action}'. Use 'buy' or 'sell'."
+    if quantity <= 0:
+        return f"Invalid quantity '{quantity}'. Quantity must be a positive whole number of shares."
+
+    verb = "Sold" if normalized_action == "sell" else "Bought"
+    confirmation = f"TRADE-{uuid.uuid4().hex[:8].upper()}"
     return f"{verb} {quantity} share(s) of {symbol.upper()}. Confirmation: {confirmation}."
 # </place_trade>
 
@@ -177,13 +184,17 @@ async def _maybe_enable_foundry_memory(stack: AsyncExitStack) -> FoundryMemoryPr
     # Imported lazily so the common (file-memory-only) path has no async-project dependency.
     from azure.ai.projects.aio import AIProjectClient
     from azure.ai.projects.models import MemoryStoreDefaultDefinition, MemoryStoreDefaultOptions
+    from azure.core.exceptions import ResourceNotFoundError
     from azure.identity.aio import AzureCliCredential as AsyncAzureCliCredential
 
     credential = await stack.enter_async_context(AsyncAzureCliCredential())
     project_client = await stack.enter_async_context(AIProjectClient(endpoint=endpoint, credential=credential))
 
-    # Create the memory store if it does not already exist (no-op on conflict).
+    # Create the memory store only if it does not already exist.
     try:
+        await project_client.beta.memory_stores.get(name=store_name)
+        print(f"Using existing memory store '{store_name}'.")
+    except ResourceNotFoundError:
         definition = MemoryStoreDefaultDefinition(
             chat_model=chat_model,
             embedding_model=embedding_model,
@@ -194,8 +205,7 @@ async def _maybe_enable_foundry_memory(stack: AsyncExitStack) -> FoundryMemoryPr
             description="Durable memory for the Build-your-own-claw finance assistant.",
             definition=definition,
         )
-    except Exception as exc:  # noqa: BLE001 - store may already exist; that is fine.
-        print(f"(Using existing memory store '{store_name}': {exc})")
+        print(f"Created memory store '{store_name}'.")
 
     provider = FoundryMemoryProvider(
         project_client=project_client,

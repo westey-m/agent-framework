@@ -21,13 +21,25 @@ internal static class TradingTools
     /// <param name="symbol">The stock ticker symbol to trade, e.g. <c>MSFT</c>.</param>
     /// <param name="action">Either <c>buy</c> or <c>sell</c>.</param>
     /// <param name="quantity">The number of shares to trade.</param>
-    [Description("Places a buy or sell order for a given symbol and quantity. This executes a real trade.")]
+    [Description("Places a buy or sell order for a given symbol and quantity.")]
     public static string PlaceTrade(
         [Description("The stock ticker symbol to trade, e.g. MSFT.")] string symbol,
         [Description("Either 'buy' or 'sell'.")] string action,
         [Description("The number of shares to trade.")] int quantity)
     {
-        var verb = action.Equals("sell", StringComparison.OrdinalIgnoreCase) ? "Sold" : "Bought";
+        var isBuy = action.Equals("buy", StringComparison.OrdinalIgnoreCase);
+        var isSell = action.Equals("sell", StringComparison.OrdinalIgnoreCase);
+        if (!isBuy && !isSell)
+        {
+            return $"Invalid action '{action}'. Use 'buy' or 'sell'.";
+        }
+
+        if (quantity <= 0)
+        {
+            return $"Invalid quantity '{quantity}'. Quantity must be a positive whole number of shares.";
+        }
+
+        var verb = isSell ? "Sold" : "Bought";
         var confirmation = $"TRADE-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
         return $"{verb} {quantity} share(s) of {symbol.ToUpperInvariant()}. Confirmation: {confirmation}.";
     }

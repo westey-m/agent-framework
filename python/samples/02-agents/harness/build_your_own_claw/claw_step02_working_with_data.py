@@ -27,8 +27,10 @@ It builds on Post 1's personal finance assistant and adds three abilities:
                   harness asks for human approval before it runs.
 3. Durable memory, two complementary kinds:
      * File memory   (coarse-grained, explicit) — the agent reads/writes files like
-                     ``watchlist.md``. On by default and session-scoped, so it survives across runs
-                     when you reuse the session (``/session-export`` and ``/session-import``).
+                     ``watchlist.md``. On by default. Its files live on disk under
+                     ``{cwd}/agent-file-memory/<session-id>/``, so they persist across runs on this
+                     machine. A new session starts empty; ``/session-export`` + ``/session-import``
+                     preserve the session id so a relaunched session re-links to its memory files.
      * Foundry memory (fine-grained, automatic) — Microsoft Foundry extracts durable facts (e.g.
                      the user's risk tolerance) from the conversation. Opt-in: enabled only when
                      FOUNDRY_MEMORY_STORE and FOUNDRY_EMBEDDING_MODEL are set.
@@ -52,9 +54,10 @@ import uuid
 from contextlib import AsyncExitStack
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from agent_framework import (
+    AgentModeProvider,
     FileAccessProvider,
     FileSystemAgentFileStore,
     create_harness_agent,
@@ -63,14 +66,15 @@ from agent_framework import (
 from agent_framework.foundry import FoundryChatClient, FoundryMemoryProvider
 from azure.identity import AzureCliCredential
 from dotenv import load_dotenv
+from pydantic import Field
 
 # Reuse the shared harness console that lives in the parent ``harness/`` directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from console import build_observers_with_planning, run_agent_async  # noqa: E402
 
-# Fixed folder so file access (portfolio.csv, reports) lives next to this script. File memory stays
-# on its session-scoped default (no fixed folder); it persists across runs when you reuse the
-# session (via the console's /session-export and /session-import commands).
+# Fixed folder so file access (portfolio.csv, reports) lives next to this script. File memory uses its
+# on-disk default ({cwd}/agent-file-memory/<session-id>/), so memory files persist across runs on this
+# machine; /session-export + /session-import preserve the session id so a relaunch re-links to them.
 _SAMPLE_DIR = Path(__file__).resolve().parent
 _WORKING_DIR = _SAMPLE_DIR / "working"
 # Foundry memory is scoped to a single logical user here, so its facts are recalled across sessions.
@@ -147,18 +151,16 @@ def get_stock_price(
 @tool(approval_mode="always_require")
 def place_trade(
     symbol: Annotated[str, "The stock ticker symbol to trade, e.g. MSFT."],
-    action: Annotated[str, "Either 'buy' or 'sell'."],
-    quantity: Annotated[int, "The number of shares to trade."],
+    action: Annotated[Literal["buy", "sell"], "Either 'buy' or 'sell'."],
+    quantity: Annotated[int, Field(gt=0, description="The number of shares to trade.")],
 ) -> str:
     """Place a (simulated) buy or sell order. Marked approval-required, so the harness asks the
-    user to approve before this ever runs. No real order is placed."""
-    normalized_action = action.lower()
-    if normalized_action not in ("buy", "sell"):
-        return f"Invalid action '{action}'. Use 'buy' or 'sell'."
-    if quantity <= 0:
-        return f"Invalid quantity '{quantity}'. Quantity must be a positive whole number of shares."
+    user to approve before this ever runs. No real order is placed.
 
-    verb = "Sold" if normalized_action == "sell" else "Bought"
+    ``action`` and ``quantity`` are validated by the framework (pydantic) from their type hints:
+    the model can only pass 'buy'/'sell' and a quantity greater than zero.
+    """
+    verb = "Sold" if action == "sell" else "Bought"
     confirmation = f"TRADE-{uuid.uuid4().hex[:8].upper()}"
     return f"{verb} {quantity} share(s) of {symbol.upper()}. Confirmation: {confirmation}."
 # </place_trade>
@@ -241,8 +243,9 @@ async def main() -> None:
         # Turn the chat client into a harness agent. On top of Post 1's defaults we point file
         # access at a folder next to this script, add our approval-gated place_trade tool,
         # auto-approve the read-only file tools (so reading is frictionless while writes and
-        # trades still prompt), and optionally add the Foundry memory provider. File memory stays
-        # on its session-scoped default folder, and we don't point it at a custom folder here.
+        # trades still prompt), and optionally add the Foundry memory provider. File memory keeps its
+        # on-disk default store, and we don't point it at a custom folder here. We default the agent to
+        # execute mode (autonomous); the user can still switch to plan with the `mode_set` tool.
         agent = create_harness_agent(
             client=client,
             agent_instructions=FINANCE_INSTRUCTIONS,
@@ -250,6 +253,7 @@ async def main() -> None:
             file_access_store=FileSystemAgentFileStore(str(_WORKING_DIR)),
             auto_approval_rules=[FileAccessProvider.read_only_tools_auto_approval_rule],
             context_providers=context_providers or None,
+            mode_provider=AgentModeProvider(default_mode="execute"),
         )
         # </create_agent>
 
@@ -262,7 +266,7 @@ async def main() -> None:
             agent,
             session=session,
             observers=build_observers_with_planning(agent),
-            initial_mode="plan",
+            initial_mode="execute",
             title="💹 Finance Assistant",
             placeholder="Review your portfolio, draft a report, update your watchlist, or place a trade...",
         )

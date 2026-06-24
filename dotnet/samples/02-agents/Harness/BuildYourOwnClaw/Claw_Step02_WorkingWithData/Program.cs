@@ -8,8 +8,9 @@
 //   2. Approvals    — the place_trade tool is wrapped so it requires human approval before running.
 //   3. Durable memory — two complementary kinds:
 //        * File memory   (coarse-grained, explicit) — the agent reads/writes files like
-//                         watchlist.md. It travels with the session, so it survives as long as you
-//                         reuse the session (use /session-export and /session-import across runs).
+//                         watchlist.md. Its files live on disk under {cwd}/agent-file-memory/<session-id>/,
+//                         so they persist across runs on this machine; /session-export and /session-import
+//                         preserve the session id so a relaunched session re-links to its memory files.
 //        * Foundry memory (fine-grained, automatic) — Microsoft Foundry extracts durable facts
 //                         (e.g. the user's risk tolerance) from the conversation. Opt-in: enabled
 //                         only when FOUNDRY_MEMORY_STORE and FOUNDRY_EMBEDDING_MODEL are set.
@@ -123,8 +124,8 @@ else
 // <create_agent>
 // Turn the chat client into a HarnessAgent. On top of Post 1's defaults we point file access at a
 // fixed folder, add our approval-gated place_trade tool, and (optionally) wire in the Foundry
-// memory provider for automatic, fine-grained fact extraction. File memory stays on its
-// session-scoped default folder (see below), and we don't point it at a custom folder.
+// memory provider for automatic, fine-grained fact extraction. File memory keeps its on-disk default
+// store (see below), and we don't point it at a custom folder.
 AIAgent agent = chatClient.AsHarnessAgent(new HarnessAgentOptions
 {
     // File access: read portfolio.csv and write reports under the sample's working/ folder.
@@ -135,10 +136,14 @@ AIAgent agent = chatClient.AsHarnessAgent(new HarnessAgentOptions
     {
         AutoApprovalRules = [FileAccessProvider.ReadOnlyToolsAutoApprovalRule],
     },
-    // File memory is on by default and travels with the session: the agent records which memory
-    // folder it is using in the session state. It persists for as long as you reuse the same
-    // session, so use /session-export and /session-import to carry it across a restart. No fixed
-    // folder is required.
+    // Start in "execute" mode: this assistant is mostly quick lookups and single actions, so a plan
+    // would be overkill. (Planning is still available — switch any time with /mode plan.)
+    AgentModeProviderOptions = new AgentModeProviderOptions { DefaultMode = "execute" },
+    // File memory is on by default. Its files live on disk under {cwd}/agent-file-memory/<session-id>/,
+    // so they persist across runs on this machine. A brand-new session gets a new id (and so an empty
+    // memory); /session-export and /session-import preserve the session's identity so a relaunched
+    // session re-links to its existing on-disk memory files. The export file holds session state, not
+    // the memory files themselves.
     // Fine-grained, automatic memory (when configured).
     AIContextProviders = foundryMemory is null ? null : [foundryMemory],
     ChatOptions = new ChatOptions

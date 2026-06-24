@@ -76,9 +76,10 @@ Teaches the assistant to work with *your* data safely.
   runs. The trade is simulated.
 - **Durable memory, two ways:**
   - **File memory** (coarse-grained, explicit) — the agent reads/writes files such as
-    `watchlist.md`. File memory is on by default and is session-scoped: it travels with the
-    session, so use `/session-export` and `/session-import` to carry it across runs (no fixed
-    folder or owner id required).
+    `watchlist.md`. File memory is on by default; its files live on disk under
+    `{cwd}/agent-file-memory/<session-id>/`, so they persist across runs on this machine. A new
+    session starts empty; use `/session-export` and `/session-import` to preserve the session id so a
+    relaunch re-links to its memory files (no fixed folder or owner id required).
   - **Foundry memory** (fine-grained, automatic) — Microsoft Foundry extracts durable facts from
     the conversation. Opt-in; see below.
 
@@ -99,20 +100,19 @@ uv run python/samples/02-agents/harness/build_your_own_claw/claw_step02_working_
 
 ### What to expect
 
-Try these in order:
+Try these in order (the sample starts in **execute** mode — quick lookups don't need a plan):
 
-1. `/mode execute` — quick lookups don't need a plan.
-2. `What's in my portfolio?` — the agent reads `portfolio.csv` with the file_access tools.
-3. `Write me a short report on my portfolio and save it.` — the agent writes a Markdown file under
+1. `What's in my portfolio?` — the agent reads `portfolio.csv` with the file_access tools.
+2. `Write me a short report on my portfolio and save it.` — the agent writes a Markdown file under
    `working/`; saving is a write, so **you are prompted to approve** before the file is created.
-4. `I'm a conservative investor saving for a house in two years.` — a durable fact (recalled later
+3. `I'm a conservative investor saving for a house in two years.` — a durable fact (recalled later
    by Foundry memory when enabled).
-5. `Buy 10 shares of MSFT.` — the agent calls `place_trade`; **you are prompted to approve or
+4. `Buy 10 shares of MSFT.` — the agent calls `place_trade`; **you are prompted to approve or
    deny** before it runs.
-6. `Add SPY to my watchlist.` — saved to `watchlist.md` in file memory.
+5. `Add SPY to my watchlist.` — saved to `watchlist.md` in file memory.
 
 Foundry memory (when enabled) recalls facts about you in any new session. File memory (the
-watchlist) is session-scoped, so `/session-export` before you quit and `/session-import` after
-relaunching to bring it back, then ask *"What's on my watchlist?"* or *"What do you know about
-me?"*.
+watchlist) lives on disk keyed by session id, so `/session-export` before you quit and
+`/session-import` after relaunching to re-link the relaunched session to its files, then ask
+*"What's on my watchlist?"* or *"What do you know about me?"*.
 

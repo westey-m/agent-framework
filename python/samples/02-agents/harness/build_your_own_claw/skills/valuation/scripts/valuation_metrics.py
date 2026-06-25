@@ -23,6 +23,14 @@ def main() -> None:
         print(json.dumps({"error": "EPS must be positive to compute a P/E ratio."}))
         return
 
+    if args.price <= 0:
+        print(json.dumps({"error": "Price must be positive to compute valuation metrics."}))
+        return
+
+    if args.target_pe <= 0:
+        print(json.dumps({"error": "Target P/E must be positive."}))
+        return
+
     pe = args.price / args.eps
     fair_value = args.eps * args.target_pe
     upside = (fair_value - args.price) / args.price

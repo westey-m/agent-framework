@@ -219,6 +219,10 @@ try
 finally
 {
     codeAct?.Dispose();
-    toolboxMcpClient?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    if (toolboxMcpClient is not null)
+    {
+        await toolboxMcpClient.DisposeAsync().ConfigureAwait(false);
+    }
+
     toolboxHttpClient?.Dispose();
 }

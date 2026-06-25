@@ -29,21 +29,30 @@ internal static class FoundrySkills
             InnerHandler = new HttpClientHandler(),
         });
 
-        McpClient mcpClient = await McpClient.CreateAsync(
-            new HttpClientTransport(
-                new HttpClientTransportOptions
-                {
-                    Endpoint = new Uri(toolboxMcpServerUrl),
-                    Name = "foundry_toolbox",
-                    TransportMode = HttpTransportMode.StreamableHttp,
-                    AdditionalHeaders = new Dictionary<string, string>
+        try
+        {
+            McpClient mcpClient = await McpClient.CreateAsync(
+                new HttpClientTransport(
+                    new HttpClientTransportOptions
                     {
-                        ["Foundry-Features"] = "Toolboxes=V1Preview",
+                        Endpoint = new Uri(toolboxMcpServerUrl),
+                        Name = "foundry_toolbox",
+                        TransportMode = HttpTransportMode.StreamableHttp,
+                        AdditionalHeaders = new Dictionary<string, string>
+                        {
+                            ["Foundry-Features"] = "Toolboxes=V1Preview",
+                        },
                     },
-                },
-                httpClient));
+                    httpClient));
 
-        return (mcpClient, httpClient);
+            return (mcpClient, httpClient);
+        }
+        catch
+        {
+            // The MCP client never took ownership of the HTTP client, so dispose it here.
+            httpClient.Dispose();
+            throw;
+        }
     }
 
     private sealed class BearerTokenHandler(TokenCredential credential, string scope) : DelegatingHandler

@@ -20,6 +20,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 /// </remarks>
 internal sealed class SubprocessScriptRunner
 {
+    /// <summary>Maximum time a skill script is allowed to run before it is terminated.</summary>
+    private static readonly TimeSpan s_scriptTimeout = TimeSpan.FromSeconds(30);
+
     private readonly ILogger _logger;
 
     /// <summary>
@@ -55,7 +58,8 @@ internal sealed class SubprocessScriptRunner
         string extension = Path.GetExtension(script.FullPath);
         string? interpreter = extension switch
         {
-            ".py" => "python3",
+            // Windows Python installs commonly expose "python" rather than "python3".
+            ".py" => OperatingSystem.IsWindows() ? "python" : "python3",
             ".js" => "node",
             ".sh" => "bash",
             ".ps1" => "pwsh",
@@ -103,6 +107,11 @@ internal sealed class SubprocessScriptRunner
                 "File-based skill scripts expect positional arguments as a JSON array of strings.");
         }
 
+        // Bound the script's lifetime: cancel after a timeout, or when the caller cancels.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(s_scriptTimeout);
+        CancellationToken runToken = timeoutCts.Token;
+
         Process? process = null;
         try
         {
@@ -113,10 +122,10 @@ internal sealed class SubprocessScriptRunner
                 return $"Error: Failed to start process for script '{script.Name}'.";
             }
 
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(runToken);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(runToken);
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            await process.WaitForExitAsync(runToken).ConfigureAwait(false);
 
             string output = await outputTask.ConfigureAwait(false);
             string error = await errorTask.ConfigureAwait(false);
@@ -154,14 +163,19 @@ internal sealed class SubprocessScriptRunner
 
             return result;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Kill the process on cancellation to avoid leaving orphaned subprocesses.
+            // The timeout fired (the caller did not cancel). Kill the process and report a timeout.
             process?.Kill(entireProcessTree: true);
-            throw;
+            this._logger.LogError(
+                "Script '{ScriptName}' from skill '{SkillName}' timed out after {Timeout} seconds.",
+                script.Name, skill.Frontmatter.Name, s_scriptTimeout.TotalSeconds);
+            return $"Error: Script '{script.Name}' timed out after {s_scriptTimeout.TotalSeconds:0} seconds.";
         }
         catch (OperationCanceledException)
         {
+            // The caller cancelled: kill the process to avoid leaving orphaned subprocesses, then rethrow.
+            process?.Kill(entireProcessTree: true);
             throw;
         }
         catch (Exception ex)

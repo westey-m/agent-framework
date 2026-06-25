@@ -18,3 +18,4 @@ Samples accompanying the [*Build your own agent harness or claw with Microsoft A
 | Sample | Description |
 | --- | --- |
 | [Claw_Step01_MeetYourClaw](./BuildYourOwnClaw/Claw_Step01_MeetYourClaw/README.md) | Post 1 — a minimal HarnessAgent with a custom `get_stock_price` tool, web search, and planning |
+| [Claw_Step03_ScalingCapabilities](./BuildYourOwnClaw/Claw_Step03_ScalingCapabilities/README.md) | Post 3 — scaling the claw with skills (plus optional Foundry skills), a confined shell, CodeAct, and background agents |

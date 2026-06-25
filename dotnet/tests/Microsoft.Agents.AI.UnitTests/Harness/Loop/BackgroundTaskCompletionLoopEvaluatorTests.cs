@@ -199,6 +199,33 @@ public class BackgroundTaskCompletionLoopEvaluatorTests
         tcs2.SetResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "done")));
     }
 
+    /// <summary>
+    /// Verify that a task persisted as <see cref="BackgroundTaskStatus.Running"/> but with no corresponding in-flight
+    /// runtime reference (as happens after a session is serialized and restored) is treated as
+    /// <see cref="BackgroundTaskStatus.Lost"/> and excluded from the incomplete set, so the loop does not spin forever.
+    /// </summary>
+    [Fact]
+    public async Task GetIncompleteTasks_TaskWithNoInFlightReference_IsTreatedAsLostAndExcludedAsync()
+    {
+        // Arrange — seed a Running task into session state without any runtime in-flight reference, simulating a restore.
+        var backgroundAgent = CreateMockAgent("Research", "Research agent");
+        var provider = new BackgroundAgentsProvider(new[] { backgroundAgent });
+        var session = new ChatClientAgentSession();
+        SeedRunningTaskWithoutInFlight(session, 1, "Research", "First task");
+
+        // Act — querying refreshes task state, which finalizes the orphaned task to Lost.
+        IReadOnlyList<BackgroundTaskInfo> incomplete = provider.GetIncompleteTasks(session);
+
+        // Assert — the lost task is not returned, and the evaluator stops rather than looping forever.
+        Assert.Empty(incomplete);
+
+        AIAgent agent = CreateAgent(provider);
+        var evaluator = new BackgroundTaskCompletionLoopEvaluator();
+        LoopEvaluation evaluation = await evaluator.EvaluateAsync(CreateContext(agent, session));
+        Assert.False(evaluation.ShouldReinvoke);
+        Assert.Null(evaluation.Feedback);
+    }
+
     private static ChatClientAgent CreateAgent(params AIContextProvider[] providers)
     {
         var chatClient = new Mock<IChatClient>().Object;
@@ -239,6 +266,22 @@ public class BackgroundTaskCompletionLoopEvaluatorTests
         {
             ["taskIds"] = new List<int> { taskId },
         });
+    }
+
+    private static void SeedRunningTaskWithoutInFlight(AgentSession session, int id, string agentName, string description)
+    {
+        var state = new BackgroundAgentState { NextTaskId = id + 1 };
+        state.Tasks.Add(new BackgroundTaskInfo
+        {
+            Id = id,
+            AgentName = agentName,
+            Description = description,
+            Status = BackgroundTaskStatus.Running,
+        });
+
+        // Persist under the BackgroundAgentsProvider's state key with no runtime in-flight entry, mirroring a restored
+        // session whose in-flight task references have been lost.
+        session.StateBag.SetValue(nameof(BackgroundAgentsProvider), state, AgentJsonUtilities.DefaultOptions);
     }
 
     private static AIAgent CreateMockAgent(string? name, string? description)

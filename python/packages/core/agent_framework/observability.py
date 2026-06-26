@@ -1779,15 +1779,16 @@ class AgentTelemetryLayer:
         )
 
         if stream:
-            # Set the inner-telemetry context vars eagerly here: the streaming branch returns a
-            # ResponseStream synchronously and is consumed in this same task/context, so the
-            # cleanup-hook resets (in _finalize_stream / the exception handler) run in the context
-            # that created the tokens.
+            # Do NOT set the inner-telemetry context vars here: this synchronous run() body executes
+            # in the CALLER's context, but the ResponseStream may be consumed in a different context
+            # (e.g. ``stream = agent.run(stream=True)`` then ``await asyncio.create_task(consume(stream))``).
+            # The cleanup-hook reset (in _finalize_stream) runs in the consuming context, so a token
+            # created here would raise ``ValueError: <Token ...> was created in a different Context``.
+            # Instead the tokens are set lazily on the first pull (see _inner_telemetry_pull_context
+            # below), so set and reset both happen in the consumer's context.
             inner_response_telemetry_captured_fields: set[str] = set()
-            inner_response_telemetry_captured_fields_token = INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.set(
-                inner_response_telemetry_captured_fields
-            )
-            inner_accumulated_usage_token = INNER_ACCUMULATED_USAGE.set({})
+            inner_response_telemetry_captured_fields_token: contextvars.Token[set[str] | None] | None = None
+            inner_accumulated_usage_token: contextvars.Token[UsageDetails | None] | None = None
             span = _start_streaming_span(attributes, OtelAttr.AGENT_NAME)
 
             if OBSERVABILITY_SETTINGS.SENSITIVE_DATA_ENABLED and messages and span.is_recording():
@@ -1831,8 +1832,9 @@ class AgentTelemetryLayer:
                     raise RuntimeError("Streaming telemetry requires a ResponseStream result.")
             except Exception as exception:
                 capture_exception(span=span, exception=exception, timestamp=time_ns())
-                INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.reset(inner_response_telemetry_captured_fields_token)
-                INNER_ACCUMULATED_USAGE.reset(inner_accumulated_usage_token)
+                # The contextvars are set lazily on the first pull, which only happens after this
+                # synchronous setup phase returns the stream, so the tokens are still unset here and
+                # there is nothing to reset.
                 _close_span()
                 raise
 
@@ -1872,21 +1874,42 @@ class AgentTelemetryLayer:
                 except Exception as exception:
                     capture_exception(span=span, exception=exception, timestamp=time_ns())
                 finally:
-                    INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.reset(inner_response_telemetry_captured_fields_token)
-                    INNER_ACCUMULATED_USAGE.reset(inner_accumulated_usage_token)
+                    # Reset only if the lazy set actually ran (it may not have if the stream was
+                    # never pulled). These run in the consuming context — the same context the
+                    # pull-context factory below set the tokens in — so the reset is cross-context safe.
+                    if inner_response_telemetry_captured_fields_token is not None:
+                        INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.reset(inner_response_telemetry_captured_fields_token)
+                    if inner_accumulated_usage_token is not None:
+                        INNER_ACCUMULATED_USAGE.reset(inner_accumulated_usage_token)
                     _close_span()
+
+            def _inner_telemetry_pull_context() -> contextlib.AbstractContextManager[Any]:
+                # Invoked at the start of every pull (and during stream resolution), in the
+                # consuming context. On the first pull it sets the inner-telemetry context vars so
+                # that set and the reset in _finalize_stream both run in the consumer's context,
+                # avoiding the cross-context Token reset failure. Setting happens before the
+                # underlying iterator is pulled, so inner chat completion spans created during the
+                # pull can still accumulate usage / mark captured fields.
+                nonlocal inner_response_telemetry_captured_fields_token, inner_accumulated_usage_token
+                if inner_response_telemetry_captured_fields_token is None:
+                    inner_response_telemetry_captured_fields_token = INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.set(
+                        inner_response_telemetry_captured_fields
+                    )
+                    inner_accumulated_usage_token = INNER_ACCUMULATED_USAGE.set({})
+                return _activate_span(span)
 
             # The pull context manager attaches the span around each underlying iterator pull so
             # that child spans created during the pull (e.g. inner chat completion spans from the
             # underlying ChatTelemetryLayer) are parented under this agent invoke span. Attach and
             # detach happen in the same async context as the pull, avoiding cross-context cleanup
-            # issues. The weakref finalizer ensures the span is closed even if the stream is
-            # garbage collected without being consumed.
+            # issues. It also lazily sets the inner-telemetry context vars on the first pull (see
+            # _inner_telemetry_pull_context). The weakref finalizer ensures the span is closed even
+            # if the stream is garbage collected without being consumed.
             wrapped_stream: ResponseStream[AgentResponseUpdate, AgentResponse[Any]] = (
                 result_stream
                 .with_cleanup_hook(_record_duration)
                 .with_cleanup_hook(_finalize_stream)
-                .with_pull_context_manager(lambda: _activate_span(span))
+                .with_pull_context_manager(_inner_telemetry_pull_context)
             )
             weakref.finalize(wrapped_stream, _close_span)
             return wrapped_stream

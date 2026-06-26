@@ -1778,12 +1778,16 @@ class AgentTelemetryLayer:
             **merged_client_kwargs,
         )
 
-        inner_response_telemetry_captured_fields: set[str] = set()
-        inner_response_telemetry_captured_fields_token = INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.set(
-            inner_response_telemetry_captured_fields
-        )
-        inner_accumulated_usage_token = INNER_ACCUMULATED_USAGE.set({})
         if stream:
+            # Set the inner-telemetry context vars eagerly here: the streaming branch returns a
+            # ResponseStream synchronously and is consumed in this same task/context, so the
+            # cleanup-hook resets (in _finalize_stream / the exception handler) run in the context
+            # that created the tokens.
+            inner_response_telemetry_captured_fields: set[str] = set()
+            inner_response_telemetry_captured_fields_token = INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.set(
+                inner_response_telemetry_captured_fields
+            )
+            inner_accumulated_usage_token = INNER_ACCUMULATED_USAGE.set({})
             span = _start_streaming_span(attributes, OtelAttr.AGENT_NAME)
 
             if OBSERVABILITY_SETTINGS.SENSITIVE_DATA_ENABLED and messages and span.is_recording():
@@ -1888,6 +1892,18 @@ class AgentTelemetryLayer:
             return wrapped_stream
 
         async def _run() -> AgentResponse[Any]:
+            # Set the inner-telemetry context vars inside the coroutine so the set and the
+            # reset in `finally` always happen in the same execution context. `run()` is a sync
+            # method that returns this coroutine, which may be awaited in a different context than
+            # the one that called `run()` (e.g. `asyncio.create_task(agent.run(...))`, as used by
+            # BackgroundAgentsProvider). A contextvars.Token can only be reset in the context that
+            # created it, so setting eagerly in `run()`/`_trace_agent_invocation` and resetting
+            # here would raise "Token was created in a different Context".
+            inner_response_telemetry_captured_fields: set[str] = set()
+            inner_response_telemetry_captured_fields_token = INNER_RESPONSE_TELEMETRY_CAPTURED_FIELDS.set(
+                inner_response_telemetry_captured_fields
+            )
+            inner_accumulated_usage_token = INNER_ACCUMULATED_USAGE.set({})
             try:
                 with _get_span(attributes=attributes, span_name_attribute=OtelAttr.AGENT_NAME) as span:
                     try:

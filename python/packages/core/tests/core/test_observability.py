@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+import asyncio
 import logging
 from collections.abc import AsyncIterable, Awaitable, Mapping, Sequence
 from typing import Any, cast
@@ -5247,6 +5248,74 @@ async def test_agent_streaming_execute_failure_closes_span_and_resets_contextvar
     agent_spans = [s for s in spans if s.attributes.get(OtelAttr.OPERATION.value) == OtelAttr.AGENT_INVOKE_OPERATION]  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
     assert len(agent_spans) == 1
     assert agent_spans[0].status.status_code == StatusCode.ERROR
+
+
+@pytest.mark.parametrize("enable_sensitive_data", [True], indirect=True)
+async def test_agent_run_contextvars_safe_when_awaited_in_different_context(
+    span_exporter: InMemorySpanExporter, enable_sensitive_data
+):
+    """``run()`` is a sync method that returns an awaitable; the telemetry contextvar set and reset
+    must happen in the same execution context so the returned coroutine can be awaited in a different
+    context.
+
+    Regression for background agents (``BackgroundAgentsProvider``), which do
+    ``asyncio.create_task(agent.run(...))``: ``run()`` executes synchronously in the parent context
+    while the returned coroutine is awaited in a fresh copied context. If the contextvar token were
+    created eagerly in the parent context but reset inside the coroutine, this raised
+    ``ValueError: <Token ...> was created in a different Context``.
+    """
+
+    class _SimpleAgent:
+        AGENT_PROVIDER_NAME = "test_provider"
+
+        def __init__(self):
+            self._id = "simple"
+            self._name = "Simple"
+            self._description = "Agent that returns a response without raising"
+            self._default_options: dict[str, Any] = {}
+
+        @property
+        def id(self):
+            return self._id
+
+        @property
+        def name(self):
+            return self._name
+
+        @property
+        def description(self):
+            return self._description
+
+        @property
+        def default_options(self):
+            return self._default_options
+
+        def run(self, messages=None, *, stream: bool = False, session=None, **kwargs):
+            async def _inner() -> AgentResponse:
+                return AgentResponse(messages=[Message(role="assistant", contents=["hi"])])
+
+            return _inner()
+
+    class SimpleAgent(AgentTelemetryLayer, _SimpleAgent):  # type: ignore[misc]
+        pass
+
+    agent = SimpleAgent()
+    span_exporter.clear()
+
+    # Mimic BackgroundAgentsProvider: invoke run() synchronously in this context, then await the
+    # returned coroutine inside a separate task (a different/copied context).
+    awaitable = agent.run(messages="Hello", stream=False)
+
+    async def _runner(aw):
+        return await aw
+
+    result = await asyncio.create_task(_runner(awaitable))
+    assert isinstance(result, AgentResponse)
+
+    spans = span_exporter.get_finished_spans()
+    agent_spans = [s for s in spans if s.attributes.get(OtelAttr.OPERATION.value) == OtelAttr.AGENT_INVOKE_OPERATION]  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
+    assert len(agent_spans) == 1
+    assert agent_spans[0].status.status_code != StatusCode.ERROR
 
 
 # region Test heavy operations skipped when span is not recording

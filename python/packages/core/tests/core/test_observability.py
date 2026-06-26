@@ -5318,7 +5318,144 @@ async def test_agent_run_contextvars_safe_when_awaited_in_different_context(
     assert agent_spans[0].status.status_code != StatusCode.ERROR
 
 
-# region Test heavy operations skipped when span is not recording
+@pytest.mark.parametrize("enable_sensitive_data", [True], indirect=True)
+async def test_agent_run_error_path_contextvars_safe_when_awaited_in_different_context(
+    span_exporter: InMemorySpanExporter, enable_sensitive_data
+):
+    """Error-path variant: the coroutine returned by ``run()`` raises, and is awaited in a different
+    context via ``asyncio.create_task``. The telemetry contextvars are set and reset inside the
+    coroutine (its ``finally``), so the reset on the exception path must not raise
+    ``ValueError: <Token ...> was created in a different Context``; the original error must surface.
+    """
+
+    class _FailingRunAgent:
+        AGENT_PROVIDER_NAME = "test_provider"
+
+        def __init__(self):
+            self._id = "failing_run"
+            self._name = "Failing Run"
+            self._description = "Agent whose run coroutine raises"
+            self._default_options: dict[str, Any] = {}
+
+        @property
+        def id(self):
+            return self._id
+
+        @property
+        def name(self):
+            return self._name
+
+        @property
+        def description(self):
+            return self._description
+
+        @property
+        def default_options(self):
+            return self._default_options
+
+        def run(self, messages=None, *, stream: bool = False, session=None, **kwargs):
+            async def _inner() -> AgentResponse:
+                raise RuntimeError("run failed")
+
+            return _inner()
+
+    class FailingRunAgent(AgentTelemetryLayer, _FailingRunAgent):  # type: ignore[misc]
+        pass
+
+    agent = FailingRunAgent()
+    span_exporter.clear()
+
+    awaitable = agent.run(messages="Hello", stream=False)
+
+    async def _runner(aw):
+        return await aw
+
+    # The original RuntimeError must propagate unchanged — not a cross-context ValueError from the
+    # contextvar reset in the coroutine's finally block.
+    with pytest.raises(RuntimeError, match="run failed"):
+        await asyncio.create_task(_runner(awaitable))
+
+    spans = span_exporter.get_finished_spans()
+    agent_spans = [s for s in spans if s.attributes.get(OtelAttr.OPERATION.value) == OtelAttr.AGENT_INVOKE_OPERATION]  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
+    assert len(agent_spans) == 1
+    assert agent_spans[0].status.status_code == StatusCode.ERROR
+
+
+@pytest.mark.parametrize("enable_sensitive_data", [True], indirect=True)
+async def test_agent_streaming_contextvars_safe_when_consumed_in_different_context(
+    span_exporter: InMemorySpanExporter, enable_sensitive_data
+):
+    """``run(stream=True)`` returns a ``ResponseStream`` synchronously, but its cleanup hooks (which
+    reset the telemetry contextvars) run when the stream is *consumed* — possibly in a different
+    context (e.g. ``stream = agent.run(stream=True)`` then ``await asyncio.create_task(consume(stream))``).
+
+    The contextvars are therefore set lazily on the first pull, in the consuming context, so the set
+    and the reset both run there. Otherwise this raised
+    ``ValueError: <Token ...> was created in a different Context``.
+    """
+    from agent_framework import AgentResponseUpdate
+
+    class _StreamingAgent:
+        AGENT_PROVIDER_NAME = "test_provider"
+
+        def __init__(self):
+            self._id = "streaming_xctx"
+            self._name = "Streaming XCtx"
+            self._description = "Streaming agent for cross-context consumption"
+            self._default_options: dict[str, Any] = {}
+
+        @property
+        def id(self):
+            return self._id
+
+        @property
+        def name(self):
+            return self._name
+
+        @property
+        def description(self):
+            return self._description
+
+        @property
+        def default_options(self):
+            return self._default_options
+
+        def run(self, messages=None, *, stream: bool = False, session=None, **kwargs):
+            if stream:
+
+                async def _stream():
+                    yield AgentResponseUpdate(contents=[Content.from_text("Hello ")], role="assistant")
+                    yield AgentResponseUpdate(contents=[Content.from_text("World")], role="assistant")
+
+                return ResponseStream(_stream(), finalizer=AgentResponse.from_updates)
+            raise NotImplementedError
+
+    class StreamingAgent(AgentTelemetryLayer, _StreamingAgent):  # type: ignore[misc]
+        pass
+
+    agent = StreamingAgent()
+    span_exporter.clear()
+
+    # Create the stream synchronously in this context, then consume it inside a separate task (a
+    # different/copied context) — mirroring how a caller might hand the stream off to be drained.
+    stream = agent.run(messages="Hello", stream=True)
+
+    async def _consume(s):
+        collected = []
+        async for update in s:
+            collected.append(update)
+        await s.get_final_response()
+        return collected
+
+    updates = await asyncio.create_task(_consume(stream))
+    assert len(updates) == 2
+
+    spans = span_exporter.get_finished_spans()
+    agent_spans = [s for s in spans if s.attributes.get(OtelAttr.OPERATION.value) == OtelAttr.AGENT_INVOKE_OPERATION]  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
+    assert len(agent_spans) == 1
+    assert agent_spans[0].status.status_code != StatusCode.ERROR
+
+
 #
 # When ``ENABLE_INSTRUMENTATION`` is on (the default) but no OpenTelemetry
 # tracer provider has been configured, the global provider is the

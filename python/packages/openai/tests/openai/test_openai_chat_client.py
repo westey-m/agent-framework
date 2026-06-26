@@ -1248,8 +1248,8 @@ def test_response_content_creation_with_code_interpreter() -> None:
 def test_get_shell_tool_basic() -> None:
     """Test get_shell_tool returns hosted shell config with default auto environment."""
     tool = OpenAIChatClient.get_shell_tool()
-    assert tool.type == "shell"
-    assert tool.environment.type == "container_auto"
+    assert tool["type"] == "shell"
+    assert tool["environment"]["type"] == "container_auto"
 
 
 def test_get_shell_tool_rejects_local_without_func() -> None:
@@ -1286,8 +1286,34 @@ def test_get_shell_tool_local_executor_maps_to_shell_tool() -> None:
     assert isinstance(local_shell_tool, FunctionTool)
     response_tools = client._prepare_tools_for_openai([local_shell_tool])
     assert len(response_tools) == 1
-    assert response_tools[0].type == "shell"
-    assert response_tools[0].environment.type == "local"
+    assert response_tools[0]["type"] == "shell"
+    assert response_tools[0]["environment"]["type"] == "local"
+
+
+def test_prepared_local_shell_tool_survives_make_tools() -> None:
+    """Regression: the prepared shell tool must be a subscriptable dict.
+
+    The OpenAI SDK's ``_make_tools`` helper (used by the structured-output /
+    ``responses.parse``/``responses.stream`` path) indexes each tool with
+    ``tool["type"]``. A pydantic model is not subscriptable and previously
+    raised ``TypeError: 'FunctionShellTool' object is not subscriptable``.
+    """
+    from openai.resources.responses.responses import _make_tools
+
+    client = OpenAIChatClient(model="test-model", api_key="test-key")
+
+    def local_exec(command: str) -> str:
+        return command
+
+    local_shell_tool = OpenAIChatClient.get_shell_tool(
+        func=local_exec,
+        approval_mode="never_require",
+    )
+    response_tools = client._prepare_tools_for_openai([local_shell_tool])
+
+    # Must not raise TypeError (the bug); shell tool flows through unchanged.
+    made = _make_tools(response_tools)  # type: ignore[arg-type]
+    assert {"type": "shell", "environment": {"type": "local"}} in made
 
 
 def test_get_shell_tool_reuses_function_tool_instance() -> None:
@@ -2023,6 +2049,83 @@ def test_parse_chunk_from_openai_with_file_search_call_done() -> None:
     assert content.tool_name == "file_search"
     assert content.status == "completed"
     assert content.result == {"results": [{"file_id": "file_1", "text": "Seattle was cloudy."}]}
+
+
+def test_parse_chunk_from_openai_shell_call_added_defers_command() -> None:
+    """An in-progress shell_call on output_item.added has no command yet, so it must emit nothing.
+
+    The command is only populated on the completed item (output_item.done); there are no
+    shell-specific streaming delta events. Emitting from the .added skeleton would surface an
+    empty command (see issue: run_shell tool call with empty `command` in the streaming console).
+    """
+    client = OpenAIChatClient(model="test-model", api_key="test-key")
+
+    def local_exec(command: str) -> str:
+        return command
+
+    local_shell_tool = OpenAIChatClient.get_shell_tool(func=local_exec, approval_mode="never_require")
+    function_call_ids: dict[int, tuple[str, str]] = {}
+
+    mock_action = MagicMock()
+    mock_action.commands = []  # empty on the in-progress skeleton
+    mock_action.timeout_ms = None
+    mock_action.max_output_length = None
+
+    mock_item = MagicMock()
+    mock_item.type = "shell_call"
+    mock_item.id = "sh_1"
+    mock_item.call_id = "shell-call-1"
+    mock_item.action = mock_action
+    mock_item.status = "in_progress"
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.added"
+    mock_event.output_index = 0
+    mock_event.item = mock_item
+
+    update = client._parse_chunk_from_openai(
+        mock_event, options={"tools": [local_shell_tool]}, function_call_ids=function_call_ids
+    )
+
+    assert update.contents == []
+
+
+def test_parse_chunk_from_openai_shell_call_done_emits_command() -> None:
+    """A completed shell_call on output_item.done must emit a function call with the real command."""
+    client = OpenAIChatClient(model="test-model", api_key="test-key")
+
+    def local_exec(command: str) -> str:
+        return command
+
+    local_shell_tool = OpenAIChatClient.get_shell_tool(func=local_exec, approval_mode="never_require")
+    function_call_ids: dict[int, tuple[str, str]] = {}
+
+    mock_action = MagicMock()
+    mock_action.commands = ["ls -la"]
+    mock_action.timeout_ms = 30000
+    mock_action.max_output_length = 4096
+
+    mock_item = MagicMock()
+    mock_item.type = "shell_call"
+    mock_item.id = "sh_1"
+    mock_item.call_id = "shell-call-1"
+    mock_item.action = mock_action
+    mock_item.status = "completed"
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.done"
+    mock_event.item = mock_item
+
+    update = client._parse_chunk_from_openai(
+        mock_event, options={"tools": [local_shell_tool]}, function_call_ids=function_call_ids
+    )
+
+    assert len(update.contents) == 1
+    call_content = update.contents[0]
+    assert call_content.type == "function_call"
+    assert call_content.call_id == "shell-call-1"
+    assert call_content.name == local_shell_tool.name
+    assert json.loads(call_content.arguments) == {"command": "ls -la"}
 
 
 @pytest.mark.parametrize(

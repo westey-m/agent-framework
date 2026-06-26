@@ -1312,7 +1312,7 @@ def test_prepared_local_shell_tool_survives_make_tools() -> None:
     response_tools = client._prepare_tools_for_openai([local_shell_tool])
 
     # Must not raise TypeError (the bug); shell tool flows through unchanged.
-    made = _make_tools(response_tools)  # type: ignore[arg-type]
+    made = cast("list[dict[str, Any]]", _make_tools(response_tools))  # type: ignore[arg-type]
     assert {"type": "shell", "environment": {"type": "local"}} in made
 
 
@@ -2125,7 +2125,114 @@ def test_parse_chunk_from_openai_shell_call_done_emits_command() -> None:
     assert call_content.type == "function_call"
     assert call_content.call_id == "shell-call-1"
     assert call_content.name == local_shell_tool.name
-    assert json.loads(call_content.arguments) == {"command": "ls -la"}
+    assert call_content.parse_arguments() == {"command": "ls -la"}
+
+
+def test_parse_chunk_from_openai_local_shell_call_done_emits_command() -> None:
+    """A completed local_shell_call on output_item.done emits a function call with the command.
+
+    Mirrors the non-streaming local_shell_call mapping: the joined command and the
+    local-shell metadata (item id) must be present on the completed item.
+    """
+    client = OpenAIChatClient(model="test-model", api_key="test-key")
+
+    def local_exec(command: str) -> str:
+        return command
+
+    local_shell_tool = OpenAIChatClient.get_shell_tool(func=local_exec, approval_mode="never_require")
+    function_call_ids: dict[int, tuple[str, str]] = {}
+
+    mock_action = MagicMock()
+    mock_action.command = ["python", "--version"]
+    mock_action.timeout_ms = 30000
+
+    mock_item = MagicMock()
+    mock_item.type = "local_shell_call"
+    mock_item.id = "local-shell-item-1"
+    mock_item.call_id = "local-shell-call-1"
+    mock_item.action = mock_action
+    mock_item.status = "completed"
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.done"
+    mock_event.item = mock_item
+
+    update = client._parse_chunk_from_openai(
+        mock_event, options={"tools": [local_shell_tool]}, function_call_ids=function_call_ids
+    )
+
+    assert len(update.contents) == 1
+    call_content = update.contents[0]
+    assert call_content.type == "function_call"
+    assert call_content.call_id == "local-shell-call-1"
+    assert call_content.name == local_shell_tool.name
+    assert call_content.parse_arguments() == {"command": "python --version"}
+    assert call_content.additional_properties[OPENAI_LOCAL_SHELL_CALL_ITEM_ID_KEY] == "local-shell-item-1"
+
+
+def test_parse_chunk_from_openai_shell_call_output_added_defers_result() -> None:
+    """An in-progress shell_call_output on output_item.added must emit nothing.
+
+    The hosted ``shell_call_output`` item is incremental (it carries a ``status`` field);
+    its stdout/stderr/outcome are only populated on the completed item. Parsing the
+    ``.added`` skeleton would surface an empty result.
+    """
+    client = OpenAIChatClient(model="test-model", api_key="test-key")
+    function_call_ids: dict[int, tuple[str, str]] = {}
+
+    mock_item = MagicMock()
+    mock_item.type = "shell_call_output"
+    mock_item.call_id = "shell-call-1"
+    mock_item.output = []  # empty on the in-progress skeleton
+    mock_item.max_output_length = None
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.added"
+    mock_event.output_index = 0
+    mock_event.item = mock_item
+
+    update = client._parse_chunk_from_openai(mock_event, options={}, function_call_ids=function_call_ids)
+
+    assert update.contents == []
+
+
+def test_parse_chunk_from_openai_shell_call_output_done_emits_result() -> None:
+    """A completed shell_call_output on output_item.done emits a shell tool result with stdout/exit."""
+    client = OpenAIChatClient(model="test-model", api_key="test-key")
+    function_call_ids: dict[int, tuple[str, str]] = {}
+
+    mock_outcome = MagicMock()
+    mock_outcome.type = "exit"
+    mock_outcome.exit_code = 0
+
+    mock_output_entry = MagicMock()
+    mock_output_entry.stdout = "hello world\n"
+    mock_output_entry.stderr = ""
+    mock_output_entry.outcome = mock_outcome
+
+    mock_item = MagicMock()
+    mock_item.type = "shell_call_output"
+    mock_item.call_id = "shell-call-1"
+    mock_item.output = [mock_output_entry]
+    mock_item.max_output_length = 4096
+
+    mock_event = MagicMock()
+    mock_event.type = "response.output_item.done"
+    mock_event.item = mock_item
+
+    update = client._parse_chunk_from_openai(mock_event, options={}, function_call_ids=function_call_ids)
+
+    assert len(update.contents) == 1
+    result_content = update.contents[0]
+    assert result_content.type == "shell_tool_result"
+    assert result_content.call_id == "shell-call-1"
+    assert result_content.outputs is not None
+    assert len(result_content.outputs) == 1
+    assert result_content.outputs[0].type == "shell_command_output"
+    assert result_content.outputs[0].stdout == "hello world\n"
+    assert result_content.outputs[0].exit_code == 0
+    assert result_content.outputs[0].timed_out is False
+    assert result_content.max_output_length == 4096
 
 
 @pytest.mark.parametrize(

@@ -269,7 +269,6 @@ class FileSearchMatch(SerializationMixin):
 
     line_number: int
     line: str
-    __slots__ = ("line", "line_number")
 
     def __init__(self, line_number: int, line: str) -> None:
         r"""Initialize one search match.
@@ -286,13 +285,12 @@ class FileSearchMatch(SerializationMixin):
     def to_dict(self, *, exclude: set[str] | None = None, exclude_none: bool = True) -> dict[str, Any]:
         """Serialize this match to a JSON-compatible dictionary.
 
-        Overrides :meth:`SerializationMixin.to_dict` because this DTO is
-        declared with ``__slots__``: the base implementation iterates
-        ``self.__dict__`` which is empty for slotted classes and would emit
-        only the auto-injected ``type`` field. The ``exclude`` /
-        ``exclude_none`` arguments are accepted (and discarded) so the
-        signature remains drop-in compatible with the mixin — callers like
-        :meth:`SerializationMixin.to_json` always forward them.
+        Overrides :meth:`SerializationMixin.to_dict` to emit an explicit,
+        stable payload without the auto-injected ``type`` identifier field.
+        The ``exclude`` / ``exclude_none`` arguments are accepted (and
+        discarded) so the signature remains drop-in compatible with the
+        mixin — callers like :meth:`SerializationMixin.to_json` always
+        forward them.
         """
         del exclude, exclude_none
         return {"line_number": self.line_number, "line": self.line}
@@ -327,7 +325,6 @@ class FileSearchResult(SerializationMixin):
     file_name: str
     snippet: str
     matching_lines: list[FileSearchMatch]
-    __slots__ = ("file_name", "matching_lines", "snippet")
 
     def __init__(
         self,
@@ -350,10 +347,10 @@ class FileSearchResult(SerializationMixin):
         """Serialize this result to a JSON-compatible dictionary.
 
         Overrides :meth:`SerializationMixin.to_dict` for the same reason as
-        :meth:`FileSearchMatch.to_dict`: this DTO uses ``__slots__`` so the
-        base implementation cannot introspect the payload. The ``exclude`` /
-        ``exclude_none`` arguments are accepted and ignored to preserve
-        signature compatibility with the mixin.
+        :meth:`FileSearchMatch.to_dict`: to emit an explicit payload without
+        the auto-injected ``type`` field. The ``exclude`` / ``exclude_none``
+        arguments are accepted and ignored to preserve signature
+        compatibility with the mixin.
         """
         del exclude, exclude_none
         return {
@@ -407,7 +404,6 @@ class FileStoreEntry(SerializationMixin):
 
     name: str
     type: str
-    __slots__ = ("name", "type")
 
     def __init__(self, name: str, type: str) -> None:
         """Initialize one directory-listing entry.
@@ -427,10 +423,10 @@ class FileStoreEntry(SerializationMixin):
         """Serialize this entry to a JSON-compatible dictionary.
 
         Overrides :meth:`SerializationMixin.to_dict` for the same reason as
-        :meth:`FileSearchResult.to_dict`: this DTO uses ``__slots__`` so the
-        base implementation cannot introspect the payload. The ``exclude`` /
-        ``exclude_none`` arguments are accepted and ignored to preserve
-        signature compatibility with the mixin.
+        :meth:`FileSearchResult.to_dict`: to emit an explicit payload without
+        the auto-injected ``type`` field. The ``exclude`` / ``exclude_none``
+        arguments are accepted and ignored to preserve signature
+        compatibility with the mixin.
         """
         del exclude, exclude_none
         return {"name": self.name, "type": self.type}

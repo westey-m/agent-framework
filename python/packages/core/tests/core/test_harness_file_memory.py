@@ -405,6 +405,24 @@ async def test_memory_replace() -> None:
     assert "2 occurrence" in _text(done)
     assert _text(await tools["file_memory_read"].invoke(arguments={"file_name": "a.md"})) == "baz bar baz"
 
+    # Unique single occurrence with the default replace_all=False -> replaces exactly one.
+    await tools["file_memory_write"].invoke(arguments={"file_name": "u.md", "content": "alpha beta gamma"})
+    single = await tools["file_memory_replace"].invoke(
+        arguments={"file_name": "u.md", "old_string": "beta", "new_string": "BETA"}
+    )
+    assert "1 occurrence" in _text(single)
+    assert _text(await tools["file_memory_read"].invoke(arguments={"file_name": "u.md"})) == "alpha BETA gamma"
+
+    # Internal files (the memories.md index and *_description.md sidecars) are reserved.
+    reserved = await tools["file_memory_replace"].invoke(
+        arguments={"file_name": "memories.md", "old_string": "x", "new_string": "y"}
+    )
+    assert "reserved for internal use" in _text(reserved)
+    reserved_desc = await tools["file_memory_replace"].invoke(
+        arguments={"file_name": "a_description.md", "old_string": "x", "new_string": "y"}
+    )
+    assert "reserved for internal use" in _text(reserved_desc)
+
 
 async def test_memory_replace_lines() -> None:
     """``file_memory_replace_lines`` replaces whole 1-based lines and rejects bad input."""
@@ -422,3 +440,9 @@ async def test_memory_replace_lines() -> None:
         arguments={"file_name": "a.md", "edits": [{"line_number": 9, "new_line": "x"}]}
     )
     assert "out of range" in _text(oor)
+
+    # Internal files (the memories.md index and *_description.md sidecars) are reserved.
+    reserved = await tools["file_memory_replace_lines"].invoke(
+        arguments={"file_name": "memories.md", "edits": [{"line_number": 1, "new_line": "x"}]}
+    )
+    assert "reserved for internal use" in _text(reserved)

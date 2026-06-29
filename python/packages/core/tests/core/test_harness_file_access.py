@@ -36,12 +36,12 @@ from agent_framework._harness._file_access import (
 
 
 async def _list_files(store: AgentFileStore, directory: str = "") -> list[str]:
-    """Return only the file names from a combined ``store.list`` call."""
+    """Return only the file names from a combined ``store.list_children`` call."""
     return [entry.name for entry in await store.list_children(directory) if entry.type == FileStoreEntry.FILE]
 
 
 async def _list_dirs(store: AgentFileStore, directory: str = "") -> list[str]:
-    """Return only the subdirectory names from a combined ``store.list`` call."""
+    """Return only the subdirectory names from a combined ``store.list_children`` call."""
     return [entry.name for entry in await store.list_children(directory) if entry.type == FileStoreEntry.DIRECTORY]
 
 
@@ -666,10 +666,14 @@ async def test_file_access_provider_tools_round_trip_files(
     scoped = await search.invoke(arguments={"regex_pattern": "error", "glob_pattern": "reports/*"})
     scoped_parsed = json.loads(_text(scoped[0]))
     assert [entry["file_name"] for entry in scoped_parsed] == ["reports/issues.md"]
-    # The directory param restricts the search base; names become relative to it.
+    # The directory param restricts the search base, but returned names stay relative to the
+    # store root so they compose directly with file_access_read/replace/delete.
     scoped_dir = await search.invoke(arguments={"regex_pattern": "error", "directory": "reports"})
     scoped_dir_parsed = json.loads(_text(scoped_dir[0]))
-    assert [entry["file_name"] for entry in scoped_dir_parsed] == ["issues.md"]
+    assert [entry["file_name"] for entry in scoped_dir_parsed] == ["reports/issues.md"]
+    # The grep result name is usable directly with file_access_read.
+    reread = await read.invoke(arguments={"file_name": scoped_dir_parsed[0]["file_name"]})
+    assert "ERROR nested" in _text(reread[0])
 
     deleted = await delete.invoke(arguments={"file_name": "plan.md"})
     assert "deleted" in _text(deleted[0])
@@ -840,8 +844,8 @@ async def test_file_access_tool_wrappers_surface_value_error_as_message(
     # Path-traversal attempts on each tool should return a clean string, not raise.
     saved = await save_file.invoke(arguments={"file_name": "../escape.txt", "content": "x"})
     assert "Could not write" in _text(saved[0]) and "escape" in _text(saved[0]).lower()
-    read = await read.invoke(arguments={"file_name": "../escape.txt"})
-    assert "Could not read" in _text(read[0])
+    read_result = await read.invoke(arguments={"file_name": "../escape.txt"})
+    assert "Could not read" in _text(read_result[0])
     deleted = await delete.invoke(arguments={"file_name": "../escape.txt"})
     assert "Could not delete" in _text(deleted[0])
     listed = await list_files.invoke(arguments={"directory": "../escape"})
@@ -948,10 +952,12 @@ async def test_filesystem_store_rejects_symlinked_intermediate_directory(tmp_pat
                 await store.delete("aliased_dir/secret.txt")
 
 
-async def _prepare_access_tools(chat_client_base: SupportsChatGetResponse, **provider_kwargs: object) -> list[object]:
+async def _prepare_access_tools(
+    chat_client_base: SupportsChatGetResponse, *, disable_write_tools: bool = False
+) -> list[object]:
     """Prepare a FileAccessProvider and return its registered tools."""
     session = AgentSession(session_id="session-1")
-    provider = FileAccessProvider(store=InMemoryAgentFileStore(), **provider_kwargs)  # type: ignore[arg-type]
+    provider = FileAccessProvider(store=InMemoryAgentFileStore(), disable_write_tools=disable_write_tools)
     agent = Agent(client=chat_client_base, context_providers=[provider])
     _, options = await agent._prepare_session_and_messages(  # pyright: ignore[reportPrivateUsage]
         session=session,
@@ -985,6 +991,12 @@ async def test_file_access_replace(chat_client_base: SupportsChatGetResponse) ->
     )
     assert "2 occurrence" in _text(done[0])
     assert _text((await read.invoke(arguments={"file_name": "a.txt"}))[0]) == "baz bar baz"
+
+    # Unique single occurrence with the default replace_all=False -> replaces exactly one.
+    await save.invoke(arguments={"file_name": "u.txt", "content": "alpha beta gamma", "overwrite": True})
+    single = await replace.invoke(arguments={"file_name": "u.txt", "old_string": "beta", "new_string": "BETA"})
+    assert "1 occurrence" in _text(single[0])
+    assert _text((await read.invoke(arguments={"file_name": "u.txt"}))[0]) == "alpha BETA gamma"
 
     # Missing file -> not found.
     none = await replace.invoke(arguments={"file_name": "none.txt", "old_string": "x", "new_string": "y"})

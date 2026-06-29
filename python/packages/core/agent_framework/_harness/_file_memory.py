@@ -415,6 +415,11 @@ class FileMemoryProvider(ContextProvider):
                 return f"Could not replace in file '{file_name}': {exc}"
             if _is_nested_path(normalized):
                 return f"File '{file_name}' not found."
+            if _is_internal_file(normalized):
+                return (
+                    f"Could not replace in file '{file_name}': the file name is reserved for internal use. "
+                    "Please choose a different file name."
+                )
             path = _combine_paths(working_folder, normalized)
             async with self._write_lock:
                 try:
@@ -438,6 +443,11 @@ class FileMemoryProvider(ContextProvider):
                 return f"Could not edit file '{file_name}': {exc}"
             if _is_nested_path(normalized):
                 return f"File '{file_name}' not found."
+            if _is_internal_file(normalized):
+                return (
+                    f"Could not edit file '{file_name}': the file name is reserved for internal use. "
+                    "Please choose a different file name."
+                )
             path = _combine_paths(working_folder, normalized)
             async with self._write_lock:
                 try:

@@ -615,7 +615,7 @@ class InMemoryAgentFileStore(AgentFileStore):
         """Initialize an empty in-memory file store."""
         # Keys are case-insensitive (normalized + lowercased) so the store
         # behaves consistently on case-insensitive deployments. Each entry
-        # also records the *original* normalized path so ``list`` and
+        # also records the *original* normalized path so ``list_children`` and
         # ``search`` return display names that match what the caller
         # wrote, mirroring how :class:`FileSystemAgentFileStore` preserves the
         # on-disk casing.
@@ -658,7 +658,7 @@ class InMemoryAgentFileStore(AgentFileStore):
 
         Subdirectories are returned before files. Entry names preserve the
         *original-case* paths that were written, so a caller that does
-        ``write("Plan.MD", ...)`` then ``list()`` gets back ``"Plan.MD"``
+        ``write("Plan.MD", ...)`` then ``list_children()`` gets back ``"Plan.MD"``
         rather than ``"plan.md"``. This matches the behaviour of
         :class:`FileSystemAgentFileStore` on case-preserving filesystems.
 
@@ -1281,6 +1281,12 @@ class FileAccessProvider(ContextProvider):
         self.store = store
         self.instructions = instructions or DEFAULT_FILE_ACCESS_INSTRUCTIONS
         self.disable_write_tools = disable_write_tools
+        # Serializes mutating tool operations (write/delete/replace/replace_lines).
+        # The provider is shared across sessions/agents, so read-modify-write tools
+        # (replace/replace_lines) could otherwise interleave and lose updates. Note
+        # this only serializes within a single event loop/process, not across
+        # processes sharing a FileSystemAgentFileStore on disk.
+        self._write_lock = asyncio.Lock()
 
     @staticmethod
     def _is_local_tool_call(function_call: Content) -> bool:
@@ -1366,7 +1372,8 @@ class FileAccessProvider(ContextProvider):
             """Write a file with the given name and content. By default, does not overwrite an existing file unless overwrite is set to true."""  # noqa: E501
             try:
                 normalized = _normalize_relative_path(file_name)
-                await self.store.write(normalized, content, overwrite=overwrite)
+                async with self._write_lock:
+                    await self.store.write(normalized, content, overwrite=overwrite)
             except FileExistsError:
                 return f"File '{file_name}' already exists. To replace it, write again with overwrite set to true."
             except ValueError as exc:
@@ -1392,7 +1399,8 @@ class FileAccessProvider(ContextProvider):
             """Delete a file by name."""
             try:
                 normalized = _normalize_relative_path(file_name)
-                deleted = await self.store.delete(normalized)
+                async with self._write_lock:
+                    deleted = await self.store.delete(normalized)
             except ValueError as exc:
                 return f"Could not delete file '{file_name}': {exc}"
             except OSError as exc:
@@ -1426,11 +1434,12 @@ class FileAccessProvider(ContextProvider):
             """Replace occurrences of old_string with new_string in a file. Fails if old_string is not found, or if it occurs more than once and replace_all is false. Returns the number of occurrences replaced."""  # noqa: E501
             try:
                 normalized = _normalize_relative_path(file_name)
-                content = await self.store.read(normalized)
-                if content is None:
-                    return f"File '{file_name}' not found."
-                new_content, count = _apply_replace(content, old_string, new_string, replace_all)
-                await self.store.write(normalized, new_content, overwrite=True)
+                async with self._write_lock:
+                    content = await self.store.read(normalized)
+                    if content is None:
+                        return f"File '{file_name}' not found."
+                    new_content, count = _apply_replace(content, old_string, new_string, replace_all)
+                    await self.store.write(normalized, new_content, overwrite=True)
             except ValueError as exc:
                 return f"Could not replace in file '{file_name}': {exc}"
             except OSError as exc:
@@ -1446,11 +1455,12 @@ class FileAccessProvider(ContextProvider):
             """Replace whole lines in a file. Provide a list of edits, each with a 1-based line_number and the new_line content. Fails on out-of-range or duplicate line numbers."""  # noqa: E501
             try:
                 normalized = _normalize_relative_path(file_name)
-                content = await self.store.read(normalized)
-                if content is None:
-                    return f"File '{file_name}' not found."
-                new_content = _apply_replace_lines(content, _line_edits(edits))
-                await self.store.write(normalized, new_content, overwrite=True)
+                async with self._write_lock:
+                    content = await self.store.read(normalized)
+                    if content is None:
+                        return f"File '{file_name}' not found."
+                    new_content = _apply_replace_lines(content, _line_edits(edits))
+                    await self.store.write(normalized, new_content, overwrite=True)
             except ValueError as exc:
                 return f"Could not edit file '{file_name}': {exc}"
             except OSError as exc:
@@ -1472,8 +1482,8 @@ class FileAccessProvider(ContextProvider):
             ``"*.md"`` to match markdown files at any depth,
             or ``"reports/*"`` to restrict the search to the ``reports`` subtree.
             Leave empty or omit to search all files.
-            Returns matching results whose file_name values are paths relative to ``directory``
-            (usable with file_access_read), along with snippets and matching lines with line numbers.
+            Returns matching results whose file_name values are paths relative to the store root
+            (directly usable with file_access_read), along with snippets and matching lines with line numbers.
             The regex_pattern must be 256 characters or fewer.
             """
             glob_filter = glob_pattern if glob_pattern and glob_pattern.strip() else None
@@ -1484,7 +1494,16 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not search files: {exc}"
             except OSError as exc:
                 return f"Could not search files: {exc.strerror or exc}"
-            return [result.to_dict() for result in results]
+            # ``store.search`` returns ``file_name`` relative to ``target``; re-root it to the store
+            # root so the names compose directly with file_access_read/replace/delete.
+            prefix = target.strip("/")
+            output: list[dict[str, Any]] = []
+            for result in results:
+                entry = result.to_dict()
+                if prefix:
+                    entry["file_name"] = f"{prefix}/{entry['file_name']}"
+                output.append(entry)
+            return output
 
         context.extend_instructions(self.source_id, [self.instructions])
         tools = [file_access_read, file_access_ls, file_access_grep]

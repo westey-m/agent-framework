@@ -377,7 +377,7 @@ def create_harness_agent(
             (and disable_file_access is False), a FileSystemAgentFileStore rooted at
             ``{cwd}/working`` is created. Ignored when disable_file_access is True.
         file_access_disable_write_tools: When True, the FileAccessProvider advertises only its
-            read-only tools (read, ls, grep); the write tools (save, delete, replace,
+            read-only tools (read, ls, grep); the write tools (write, delete, replace,
             replace_lines) are hidden. When False (default), all tools are advertised. Ignored
             when disable_file_access is True.
         skills_provider: Custom SkillsProvider instance for code-defined skills.

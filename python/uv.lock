@@ -211,7 +211,7 @@ dev = [
 requires-dist = [
     { name = "ag-ui-protocol", specifier = ">=0.1.16,<0.2" },
     { name = "agent-framework-core", editable = "packages/core" },
-    { name = "fastapi", specifier = ">=0.115.0,<0.133.1" },
+    { name = "fastapi", specifier = ">=0.115.0,<0.138.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = "==0.28.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0,<1" },
@@ -504,7 +504,7 @@ dev = [
 requires-dist = [
     { name = "agent-framework-core", editable = "packages/core" },
     { name = "agent-framework-orchestrations", marker = "extra == 'dev'", editable = "packages/orchestrations" },
-    { name = "fastapi", specifier = ">=0.115.0,<0.133.1" },
+    { name = "fastapi", specifier = ">=0.115.0,<0.138.1" },
     { name = "openai", specifier = ">=1.99.0,<3" },
     { name = "opentelemetry-sdk", specifier = ">=1.39.0,<2" },
     { name = "pytest", marker = "extra == 'all'", specifier = "==9.1.0" },
@@ -613,7 +613,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agent-framework-core", editable = "packages/core" },
-    { name = "google-genai", specifier = ">=1.65.0,<2.0.0" },
+    { name = "google-genai", specifier = ">=1.65.0,<3.0.0" },
 ]
 
 [[package]]
@@ -715,7 +715,7 @@ requires-dist = [
     { name = "agent-framework-core", editable = "packages/core" },
     { name = "hyperlight-sandbox", specifier = ">=0.4.0,<0.5" },
     { name = "hyperlight-sandbox-backend-wasm", marker = "(python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.14' and platform_machine == 'AMD64' and sys_platform == 'win32')", specifier = ">=0.4.0,<0.5" },
-    { name = "hyperlight-sandbox-python-guest", specifier = ">=0.4.0,<0.5" },
+    { name = "hyperlight-sandbox-python-guest", specifier = ">=0.4.0,<0.6" },
 ]
 
 [[package]]

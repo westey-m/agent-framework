@@ -1222,9 +1222,9 @@ class FileAccessProvider(ContextProvider):
     #: Name of the tool that writes a file.
     WRITE_TOOL_NAME = "file_access_write"
     #: Name of the tool that reads a file.
-    READ_FILE_TOOL_NAME = "file_access_read"
+    READ_TOOL_NAME = "file_access_read"
     #: Name of the tool that deletes a file.
-    DELETE_FILE_TOOL_NAME = "file_access_delete"
+    DELETE_TOOL_NAME = "file_access_delete"
     #: Name of the tool that lists the files and subdirectories of a directory.
     LS_TOOL_NAME = "file_access_ls"
     #: Name of the tool that searches file contents.
@@ -1236,7 +1236,7 @@ class FileAccessProvider(ContextProvider):
 
     #: Names of the tools that only read from (never modify) the file store.
     _READ_ONLY_TOOL_NAMES: frozenset[str] = frozenset({
-        READ_FILE_TOOL_NAME,
+        READ_TOOL_NAME,
         LS_TOOL_NAME,
         GREP_TOOL_NAME,
     })
@@ -1244,7 +1244,7 @@ class FileAccessProvider(ContextProvider):
     #: Names of the tools that modify the file store.
     _WRITE_TOOL_NAMES: frozenset[str] = frozenset({
         WRITE_TOOL_NAME,
-        DELETE_FILE_TOOL_NAME,
+        DELETE_TOOL_NAME,
         REPLACE_TOOL_NAME,
         REPLACE_LINES_TOOL_NAME,
     })
@@ -1382,7 +1382,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not write file '{file_name}': {exc.strerror or exc}"
             return f"File '{file_name}' written."
 
-        @tool(name=FileAccessProvider.READ_FILE_TOOL_NAME, schema=_ReadFileInput, approval_mode="always_require")
+        @tool(name=FileAccessProvider.READ_TOOL_NAME, schema=_ReadFileInput, approval_mode="always_require")
         async def file_access_read(file_name: str) -> str:
             """Read the content of a file by name. Returns the file content or a message indicating the file could not be read."""  # noqa: E501
             try:
@@ -1394,7 +1394,7 @@ class FileAccessProvider(ContextProvider):
                 return f"Could not read file '{file_name}': {exc.strerror or exc}"
             return content if content is not None else f"File '{file_name}' not found."
 
-        @tool(name=FileAccessProvider.DELETE_FILE_TOOL_NAME, schema=_DeleteFileInput, approval_mode="always_require")
+        @tool(name=FileAccessProvider.DELETE_TOOL_NAME, schema=_DeleteFileInput, approval_mode="always_require")
         async def file_access_delete(file_name: str) -> str:
             """Delete a file by name."""
             try:

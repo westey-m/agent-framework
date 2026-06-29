@@ -526,8 +526,8 @@ async def test_file_access_provider_all_tools_require_approval(
     assert isinstance(tools, list)
     for name in (
         FileAccessProvider.WRITE_TOOL_NAME,
-        FileAccessProvider.READ_FILE_TOOL_NAME,
-        FileAccessProvider.DELETE_FILE_TOOL_NAME,
+        FileAccessProvider.READ_TOOL_NAME,
+        FileAccessProvider.DELETE_TOOL_NAME,
         FileAccessProvider.LS_TOOL_NAME,
         FileAccessProvider.GREP_TOOL_NAME,
         FileAccessProvider.REPLACE_TOOL_NAME,
@@ -539,13 +539,13 @@ async def test_file_access_provider_all_tools_require_approval(
 def test_read_only_tools_auto_approval_rule() -> None:
     """The read-only rule approves only the non-mutating tools."""
     approved = {
-        FileAccessProvider.READ_FILE_TOOL_NAME,
+        FileAccessProvider.READ_TOOL_NAME,
         FileAccessProvider.LS_TOOL_NAME,
         FileAccessProvider.GREP_TOOL_NAME,
     }
     rejected = {
         FileAccessProvider.WRITE_TOOL_NAME,
-        FileAccessProvider.DELETE_FILE_TOOL_NAME,
+        FileAccessProvider.DELETE_TOOL_NAME,
         FileAccessProvider.REPLACE_TOOL_NAME,
         FileAccessProvider.REPLACE_LINES_TOOL_NAME,
         "some_other_tool",
@@ -572,8 +572,8 @@ def test_all_tools_auto_approval_rule() -> None:
     """The all-tools rule approves every file-access tool but nothing else."""
     for name in (
         FileAccessProvider.WRITE_TOOL_NAME,
-        FileAccessProvider.READ_FILE_TOOL_NAME,
-        FileAccessProvider.DELETE_FILE_TOOL_NAME,
+        FileAccessProvider.READ_TOOL_NAME,
+        FileAccessProvider.DELETE_TOOL_NAME,
         FileAccessProvider.LS_TOOL_NAME,
         FileAccessProvider.GREP_TOOL_NAME,
         FileAccessProvider.REPLACE_TOOL_NAME,

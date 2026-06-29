@@ -9,7 +9,7 @@ integrations, many of which are lazy-loaded from optional packages.
 """
 
 import importlib.metadata
-from typing import Final
+from typing import TYPE_CHECKING, Any, Final
 
 try:
     _version = importlib.metadata.version(__name__)
@@ -168,6 +168,7 @@ from ._middleware import (
     chat_middleware,
     function_middleware,
 )
+
 from ._sessions import (
     AgentSession,
     ContextProvider,
@@ -265,6 +266,7 @@ from ._workflows._agent_executor import (
 )
 from ._workflows._agent_utils import resolve_agent_id
 from ._workflows._checkpoint import (
+    CheckpointID,
     CheckpointStorage,
     FileCheckpointStorage,
     InMemoryCheckpointStorage,
@@ -308,7 +310,6 @@ from ._workflows._functional import (
     workflow,
 )
 from ._workflows._request_info_mixin import response_handler
-from ._workflows._runner import Runner
 from ._workflows._runner_context import (
     InProcRunnerContext,
     RunnerContext,
@@ -406,6 +407,7 @@ __all__ = [
     "ChatResponse",
     "ChatResponseUpdate",
     "CheckResult",
+    "CheckpointID",
     "CheckpointStorage",
     "ClassSkill",
     "CompactionProvider",
@@ -620,3 +622,20 @@ __all__ = [
     "validate_workflow_graph",
     "workflow",
 ]
+
+if TYPE_CHECKING:
+    from ._workflows._runner import Runner
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve deprecated public names, emitting a ``DeprecationWarning``.
+
+    ``Runner`` remains importable from ``agent_framework`` for backward
+    compatibility but is deprecated and slated for removal from the public API.
+    """
+    if name == "Runner":
+        from ._workflows._runner import Runner, warn_runner_deprecated
+
+        warn_runner_deprecated()
+        return Runner
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

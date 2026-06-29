@@ -167,6 +167,7 @@ from ._middleware import (
     chat_middleware,
     function_middleware,
 )
+
 from ._sessions import (
     AgentSession,
     ContextProvider,

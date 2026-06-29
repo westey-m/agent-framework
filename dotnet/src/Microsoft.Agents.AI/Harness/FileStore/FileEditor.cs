@@ -62,6 +62,7 @@ internal static class FileEditor
         }
 
         bool hadTrailingNewline = content.EndsWith("\n", StringComparison.Ordinal);
+        string newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         List<string> lines = SplitLines(content);
 
         var seen = new HashSet<int>();
@@ -84,8 +85,8 @@ internal static class FileEditor
             lines[edit.LineNumber - 1] = edit.NewLine;
         }
 
-        string result = string.Join("\n", lines);
-        return hadTrailingNewline ? result + "\n" : result;
+        string result = string.Join(newline, lines);
+        return hadTrailingNewline ? result + newline : result;
     }
 
     private static int CountOccurrences(string content, string value)

@@ -217,6 +217,23 @@ public class FileMemoryProviderTests
         Assert.Contains("not found", text);
     }
 
+    [Fact]
+    public async Task ReadFile_InternalFile_ThrowsAsync()
+    {
+        // Arrange — the memory index file name is reserved for internal use.
+        var store = new InMemoryAgentFileStore();
+        await store.WriteAsync("memories.md", "internal");
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var readFile = GetTool(tools, "file_memory_read");
+
+        // Act & Assert — reserved internal files are not reachable through the read tool.
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await InvokeWithRunContextAsync(readFile, new AIFunctionArguments
+            {
+                ["fileName"] = "memories.md",
+            }, session));
+    }
+
     #endregion
 
     #region DeleteFile Tests
@@ -261,6 +278,24 @@ public class FileMemoryProviderTests
         // Assert
         Assert.False(await store.FileExistsAsync("notes.md"));
         Assert.False(await store.FileExistsAsync("notes_description.md"));
+    }
+
+    [Fact]
+    public async Task DeleteFile_InternalFile_ThrowsAsync()
+    {
+        // Arrange — the memory index file name is reserved for internal use.
+        var store = new InMemoryAgentFileStore();
+        await store.WriteAsync("memories.md", "internal");
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var deleteFile = GetTool(tools, "file_memory_delete");
+
+        // Act & Assert — reserved internal files cannot be deleted through the delete tool.
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await InvokeWithRunContextAsync(deleteFile, new AIFunctionArguments
+            {
+                ["fileName"] = "memories.md",
+            }, session));
+        Assert.True(await store.FileExistsAsync("memories.md"));
     }
 
     #endregion
@@ -730,6 +765,80 @@ public class FileMemoryProviderTests
             }, session));
     }
 
+    [Fact]
+    public async Task Replace_ReplaceAll_ReplacesEveryOccurrenceAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var write = GetTool(tools, "file_memory_write");
+        var replace = GetTool(tools, "file_memory_replace");
+        await InvokeWithRunContextAsync(write, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "a a a",
+        }, session);
+
+        // Act
+        var result = await InvokeWithRunContextAsync(replace, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["oldString"] = "a",
+            ["newString"] = "b",
+            ["replaceAll"] = true,
+        }, session);
+
+        // Assert
+        var text = Assert.IsType<JsonElement>(result).GetString();
+        Assert.Contains("Replaced 3 occurrence(s)", text);
+        Assert.Equal("b b b", await store.ReadAsync("notes.md"));
+    }
+
+    [Fact]
+    public async Task Replace_MultipleOccurrences_WithoutReplaceAll_ThrowsAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var write = GetTool(tools, "file_memory_write");
+        var replace = GetTool(tools, "file_memory_replace");
+        await InvokeWithRunContextAsync(write, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "a a a",
+        }, session);
+
+        // Act & Assert — exception bubbles, content unchanged.
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await InvokeWithRunContextAsync(replace, new AIFunctionArguments
+            {
+                ["fileName"] = "notes.md",
+                ["oldString"] = "a",
+                ["newString"] = "b",
+            }, session));
+        Assert.Equal("a a a", await store.ReadAsync("notes.md"));
+    }
+
+    [Fact]
+    public async Task Replace_NonExistentFile_ReturnsNotFoundAsync()
+    {
+        // Arrange
+        var (tools, _, session) = await CreateToolsAsync();
+        var replace = GetTool(tools, "file_memory_replace");
+
+        // Act
+        var result = await InvokeWithRunContextAsync(replace, new AIFunctionArguments
+        {
+            ["fileName"] = "missing.md",
+            ["oldString"] = "x",
+            ["newString"] = "y",
+        }, session);
+
+        // Assert
+        var text = Assert.IsType<JsonElement>(result).GetString();
+        Assert.Contains("not found", text);
+    }
+
     #endregion
 
     #region ReplaceLines Tests
@@ -776,6 +885,30 @@ public class FileMemoryProviderTests
                 ["fileName"] = "memories.md",
                 ["edits"] = new List<FileLineEdit> { new() { LineNumber = 1, NewLine = "X" } },
             }, session));
+    }
+
+    [Fact]
+    public async Task ReplaceLines_OutOfRange_ThrowsAsync()
+    {
+        // Arrange
+        var store = new InMemoryAgentFileStore();
+        var (tools, _, session) = await CreateToolsAsync(store);
+        var write = GetTool(tools, "file_memory_write");
+        var replaceLines = GetTool(tools, "file_memory_replace_lines");
+        await InvokeWithRunContextAsync(write, new AIFunctionArguments
+        {
+            ["fileName"] = "notes.md",
+            ["content"] = "line1\nline2",
+        }, session);
+
+        // Act & Assert — exception bubbles, content unchanged.
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await InvokeWithRunContextAsync(replaceLines, new AIFunctionArguments
+            {
+                ["fileName"] = "notes.md",
+                ["edits"] = new List<FileLineEdit> { new() { LineNumber = 5, NewLine = "X" } },
+            }, session));
+        Assert.Equal("line1\nline2", await store.ReadAsync("notes.md"));
     }
 
     #endregion

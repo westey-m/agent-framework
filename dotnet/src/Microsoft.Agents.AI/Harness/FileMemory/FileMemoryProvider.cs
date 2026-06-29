@@ -222,6 +222,8 @@ public sealed class FileMemoryProvider : AIContextProvider, IDisposable
     {
         string normalized = StorePaths.NormalizeRelativePath(fileName);
 
+        ValidateMemoryFileName(normalized, fileName);
+
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, normalized);
         string? content = await this._fileStore.ReadAsync(path, cancellationToken).ConfigureAwait(false);
@@ -238,6 +240,8 @@ public sealed class FileMemoryProvider : AIContextProvider, IDisposable
     private async Task<string> DeleteAsync(string fileName, CancellationToken cancellationToken = default)
     {
         string normalized = StorePaths.NormalizeRelativePath(fileName);
+
+        ValidateMemoryFileName(normalized, fileName);
 
         FileMemoryState state = this._sessionState.GetOrInitializeState(AIAgent.CurrentRunContext?.Session);
         string path = ResolvePath(state.WorkingFolder, normalized);

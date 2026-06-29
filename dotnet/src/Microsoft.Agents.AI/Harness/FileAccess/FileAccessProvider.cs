@@ -380,12 +380,12 @@ public sealed class FileAccessProvider : AIContextProvider, IDisposable
     private async Task<List<FileSearchResult>> GrepAsync(string regexPattern, string? globPattern = null, string? directory = null, CancellationToken cancellationToken = default)
     {
         string? pattern = string.IsNullOrWhiteSpace(globPattern) ? null : globPattern;
-        string target = string.IsNullOrWhiteSpace(directory) ? string.Empty : directory!;
+        string target = StorePaths.NormalizeRelativePath(directory ?? string.Empty, isDirectory: true);
         IReadOnlyList<FileSearchResult> results = await this._fileStore.SearchAsync(target, regexPattern, pattern, recursive: true, cancellationToken).ConfigureAwait(false);
 
         // store.SearchAsync returns FileName relative to the searched directory; re-root each result to the
         // store root so the names compose directly with file_access_read/replace/delete.
-        string prefix = target.Trim('/');
+        string prefix = target;
         if (prefix.Length == 0)
         {
             return new List<FileSearchResult>(results);

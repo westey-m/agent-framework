@@ -1832,9 +1832,6 @@ class AgentTelemetryLayer:
                     raise RuntimeError("Streaming telemetry requires a ResponseStream result.")
             except Exception as exception:
                 capture_exception(span=span, exception=exception, timestamp=time_ns())
-                # The contextvars are set lazily on the first pull, which only happens after this
-                # synchronous setup phase returns the stream, so the tokens are still unset here and
-                # there is nothing to reset.
                 _close_span()
                 raise
 

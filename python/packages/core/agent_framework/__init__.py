@@ -99,6 +99,7 @@ from ._harness._file_access import (
     FileAccessProvider,
     FileSearchMatch,
     FileSearchResult,
+    FileStoreEntry,
     FileSystemAgentFileStore,
     InMemoryAgentFileStore,
 )
@@ -111,6 +112,7 @@ from ._harness._loop import (
     AgentLoopMiddleware,
     JudgeVerdict,
     background_tasks_running,
+    background_tasks_running_message,
     todos_remaining,
     todos_remaining_message,
 )
@@ -446,6 +448,7 @@ __all__ = [
     "FileSkill",
     "FileSkillScript",
     "FileSkillsSource",
+    "FileStoreEntry",
     "FileSystemAgentFileStore",
     "FilteringSkillsSource",
     "FinalT",
@@ -577,6 +580,7 @@ __all__ = [
     "annotate_message_groups",
     "apply_compaction",
     "background_tasks_running",
+    "background_tasks_running_message",
     "chat_middleware",
     "create_always_approve_tool_response",
     "create_always_approve_tool_with_arguments_response",

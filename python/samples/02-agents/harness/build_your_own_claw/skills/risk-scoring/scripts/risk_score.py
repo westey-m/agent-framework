@@ -23,7 +23,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    positions = [p for p in args.position if p > 0]
+    positions = args.position
+    if any(p <= 0 for p in positions):
+        print(json.dumps({"error": "Each position value must be a positive market value."}))
+        return
+
     total = sum(positions)
     if total <= 0:
         print(json.dumps({"error": "Total portfolio value must be positive."}))

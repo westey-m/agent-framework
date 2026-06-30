@@ -2407,8 +2407,13 @@ class SkillsProvider(ContextProvider):
                 ``agent.run(user_id="123")``).
 
         Returns:
-            The result, or a user-facing error message on
-            failure.
+            The script result. Returns a user-facing error string for
+            validation failures (empty or unknown skill/script name).
+
+        Raises:
+            Exception: Re-raises any exception raised while running the script,
+                delegating error handling to the function-invocation pipeline
+                (which applies its own ``include_detailed_errors`` policy).
         """
         if not skill_name or not skill_name.strip():
             return "Error: Skill name cannot be empty."
@@ -2428,7 +2433,7 @@ class SkillsProvider(ContextProvider):
             return await script.run(skill, args, **kwargs)
         except Exception:
             logger.exception("Error running script '%s' in skill '%s'", script_name, skill_name)
-            return f"Error: Failed to run script '{script_name}' in skill '{skill_name}'."
+            raise
 
     async def _read_skill_resource(
         self, skills: Sequence[Skill], skill_name: str, resource_name: str, **kwargs: Any
@@ -2448,8 +2453,16 @@ class SkillsProvider(ContextProvider):
                 ``agent.run(user_id="123")``).
 
         Returns:
-            The resource content (any type), or a user-facing error message on
-            failure.
+            The resource content (any type). Returns a user-facing error
+            string for validation failures (empty or unknown skill/resource
+            name).
+
+        Raises:
+            Exception: Re-raises any exception raised while reading the
+                resource. Resources take no model-supplied arguments, so a
+                swallowed generic error is not actionable by the model;
+                re-raising lets the function-invocation pipeline decide how to
+                surface it.
         """
         if not skill_name or not skill_name.strip():
             return "Error: Skill name cannot be empty."
@@ -2469,7 +2482,7 @@ class SkillsProvider(ContextProvider):
             return await resource.read(**kwargs)
         except Exception:
             logger.exception("Failed to read resource '%s' from skill '%s'", resource_name, skill_name)
-            return f"Error: Failed to read resource '{resource_name}' from skill '{skill_name}'."
+            raise
 
 
 # endregion

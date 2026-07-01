@@ -1004,23 +1004,66 @@ async def test_file_access_replace(chat_client_base: SupportsChatGetResponse) ->
 
 
 async def test_file_access_replace_lines(chat_client_base: SupportsChatGetResponse) -> None:
-    """``file_access_replace_lines`` should replace whole 1-based lines and reject bad input."""
+    """``file_access_replace_lines`` should apply literal 1-based line edits and reject bad input."""
     tools = await _prepare_access_tools(chat_client_base)
     save = _tool_by_name(tools, "file_access_write")
     read = _tool_by_name(tools, "file_access_read")
     replace_lines = _tool_by_name(tools, "file_access_replace_lines")
 
-    await save.invoke(arguments={"file_name": "a.txt", "content": "one\ntwo\nthree"})
+    async def write(content: str) -> None:
+        await save.invoke(arguments={"file_name": "a.txt", "content": content, "overwrite": True})
 
+    async def current() -> str:
+        return _text((await read.invoke(arguments={"file_name": "a.txt"}))[0])
+
+    # Literal replacement: the caller supplies the trailing newline.
+    await write("one\ntwo\nthree")
     done = await replace_lines.invoke(
-        arguments={"file_name": "a.txt", "edits": [{"line_number": 2, "new_line": "TWO"}]}
+        arguments={"file_name": "a.txt", "edits": [{"line_number": 2, "new_line": "TWO\n"}]}
     )
     assert "1 line" in _text(done[0])
-    assert _text((await read.invoke(arguments={"file_name": "a.txt"}))[0]) == "one\nTWO\nthree"
+    assert await current() == "one\nTWO\nthree"
+
+    # Empty new_line deletes a middle line, including its terminator.
+    await write("line1\nline2\nline3\n")
+    await replace_lines.invoke(arguments={"file_name": "a.txt", "edits": [{"line_number": 2, "new_line": ""}]})
+    assert await current() == "line1\nline3\n"
+
+    # Empty new_line deletes the last line even when it has no terminator.
+    await write("line1\nline2")
+    await replace_lines.invoke(arguments={"file_name": "a.txt", "edits": [{"line_number": 2, "new_line": ""}]})
+    assert await current() == "line1\n"
+
+    # Delete + replace in the same call.
+    await write("a\nb\nc\n")
+    await replace_lines.invoke(
+        arguments={
+            "file_name": "a.txt",
+            "edits": [{"line_number": 1, "new_line": ""}, {"line_number": 3, "new_line": "C\n"}],
+        }
+    )
+    assert await current() == "b\nC\n"
+
+    # Embedded newlines expand one line into several.
+    await write("a\nb\nc\n")
+    await replace_lines.invoke(arguments={"file_name": "a.txt", "edits": [{"line_number": 2, "new_line": "b1\nb2\n"}]})
+    assert await current() == "a\nb1\nb2\nc\n"
+
+    # CRLF terminators are preserved when the caller keeps them.
+    await write("line1\r\nline2\r\nline3")
+    await replace_lines.invoke(
+        arguments={"file_name": "a.txt", "edits": [{"line_number": 2, "new_line": "CHANGED\r\n"}]}
+    )
+    assert await current() == "line1\r\nCHANGED\r\nline3"
 
     # Out-of-range line -> failure.
+    await write("one\ntwo\nthree")
     oor = await replace_lines.invoke(arguments={"file_name": "a.txt", "edits": [{"line_number": 9, "new_line": "x"}]})
     assert "out of range" in _text(oor[0])
+
+    # Empty edits list -> failure.
+    empty = await replace_lines.invoke(arguments={"file_name": "a.txt", "edits": []})
+    assert "At least one line edit" in _text(empty[0])
 
     # Duplicate line numbers -> failure.
     dup = await replace_lines.invoke(

@@ -56,36 +56,36 @@ public sealed class OpenAIResponsesMapOptions
         ArgumentNullException.ThrowIfNull(request);
 
         List<string>? unsupported = null;
-        void Add(string name) => (unsupported ??= []).Add(name);
+        void LocalAdd(string name) => (unsupported ??= []).Add(name);
 
         if (request.Temperature is not null)
         {
-            Add("temperature");
+            LocalAdd("temperature");
         }
 
         if (request.TopP is not null)
         {
-            Add("top_p");
+            LocalAdd("top_p");
         }
 
         if (request.MaxOutputTokens is not null)
         {
-            Add("max_output_tokens");
+            LocalAdd("max_output_tokens");
         }
 
         if (request.Instructions is not null)
         {
-            Add("instructions");
+            LocalAdd("instructions");
         }
 
         if (request.Tools is { Count: > 0 })
         {
-            Add("tools");
+            LocalAdd("tools");
         }
 
         if (request.ToolChoice is not null)
         {
-            Add("tool_choice");
+            LocalAdd("tool_choice");
         }
 
         if (unsupported is not null)

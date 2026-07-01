@@ -57,56 +57,56 @@ public sealed class OpenAIChatCompletionsMapOptions
         Throw.IfNull(request);
 
         List<string>? unsupported = null;
-        void Add(string name) => (unsupported ??= []).Add(name);
+        void LocalAdd(string name) => (unsupported ??= []).Add(name);
 
         if (request.Temperature is not null)
         {
-            Add("temperature");
+            LocalAdd("temperature");
         }
 
         if (request.TopP is not null)
         {
-            Add("top_p");
+            LocalAdd("top_p");
         }
 
         if (request.MaxOutputTokens is not null)
         {
-            Add("max_completion_tokens");
+            LocalAdd("max_completion_tokens");
         }
 
         if (request.FrequencyPenalty is not null)
         {
-            Add("frequency_penalty");
+            LocalAdd("frequency_penalty");
         }
 
         if (request.PresencePenalty is not null)
         {
-            Add("presence_penalty");
+            LocalAdd("presence_penalty");
         }
 
         if (request.Seed is not null)
         {
-            Add("seed");
+            LocalAdd("seed");
         }
 
         if (request.StopSequences is { Count: > 0 })
         {
-            Add("stop");
+            LocalAdd("stop");
         }
 
         if (request.ResponseFormat is not null)
         {
-            Add("response_format");
+            LocalAdd("response_format");
         }
 
         if (request.Tools is { Count: > 0 })
         {
-            Add("tools");
+            LocalAdd("tools");
         }
 
         if (request.ToolChoice is not null)
         {
-            Add("tool_choice");
+            LocalAdd("tool_choice");
         }
 
         if (unsupported is not null)

@@ -463,3 +463,17 @@ async def test_memory_replace_lines() -> None:
         arguments={"file_name": "memories.md", "edits": [{"line_number": 1, "new_line": "x"}]}
     )
     assert "reserved for internal use" in _text(reserved)
+
+    # Empty edits list -> failure surfaced to the caller.
+    await write("one\ntwo")
+    empty = await tools["file_memory_replace_lines"].invoke(arguments={"file_name": "a.md", "edits": []})
+    assert "At least one line edit" in _text(empty)
+
+    # Duplicate line numbers -> failure surfaced to the caller.
+    dup = await tools["file_memory_replace_lines"].invoke(
+        arguments={
+            "file_name": "a.md",
+            "edits": [{"line_number": 1, "new_line": "x"}, {"line_number": 1, "new_line": "y"}],
+        }
+    )
+    assert "Duplicate" in _text(dup)

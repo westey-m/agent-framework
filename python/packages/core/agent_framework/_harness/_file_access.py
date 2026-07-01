@@ -230,17 +230,16 @@ def _apply_replace(content: str, old_string: str, new_string: str, replace_all: 
 def _split_lines_keepends(content: str) -> list[str]:
     r"""Split ``content`` into lines on ``\n`` only, keeping the terminator attached.
 
-    Splits solely on ``\n`` (a trailing ``\r`` stays as line content), mirroring how
-    :func:`_search_file_content` numbers lines, so a ``line_number`` obtained from
-    ``grep`` targets the same line here. A trailing ``\n`` does not produce a final
-    empty element. Returns an empty list for empty content.
+    Splits solely on ``\n`` (a trailing ``\r`` stays as line content), reproducing
+    :func:`_search_file_content`'s ``content.split("\n")`` enumeration exactly, so a
+    ``line_number`` obtained from ``grep`` always targets the same line here and stays
+    in range. This means the result has ``len(content.split("\n"))`` elements: a
+    trailing ``\n`` yields a final empty (editable) line, and empty content yields a
+    single empty line. ``"".join(...)`` reproduces ``content`` verbatim.
     """
-    if not content:
-        return []
     segments = content.split("\n")
     lines = [segment + "\n" for segment in segments[:-1]]
-    if segments[-1]:
-        lines.append(segments[-1])
+    lines.append(segments[-1])
     return lines
 
 

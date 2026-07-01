@@ -861,7 +861,7 @@ public class FileMemoryProviderTests
         var result = await InvokeWithRunContextAsync(replaceLines, new AIFunctionArguments
         {
             ["fileName"] = "notes.md",
-            ["edits"] = new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED" } },
+            ["edits"] = new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED\n" } },
         }, session);
 
         // Assert

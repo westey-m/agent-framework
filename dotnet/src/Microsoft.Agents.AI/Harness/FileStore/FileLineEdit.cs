@@ -22,9 +22,10 @@ public sealed class FileLineEdit
     public int LineNumber { get; set; }
 
     /// <summary>
-    /// Gets or sets the replacement content for the whole line (no trailing newline).
+    /// Gets or sets the literal replacement text for the line, including any trailing newline to keep.
+    /// An empty string deletes the line entirely (its content and its line break).
     /// </summary>
     [JsonPropertyName("new_line")]
-    [Description("Replacement content for the whole line (no trailing newline).")]
+    [Description("Literal replacement text for the line, including any trailing newline you want to keep (the editor does not add one). Set to an empty string to delete the line entirely, including its line break.")]
     public string NewLine { get; set; } = string.Empty;
 }

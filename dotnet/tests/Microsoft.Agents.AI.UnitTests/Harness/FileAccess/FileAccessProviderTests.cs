@@ -936,7 +936,7 @@ public class FileAccessProviderTests
         var result = await InvokeToolAsync(replaceLines, new AIFunctionArguments
         {
             ["fileName"] = "notes.md",
-            ["edits"] = new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED" } },
+            ["edits"] = new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED\n" } },
         });
 
         // Assert

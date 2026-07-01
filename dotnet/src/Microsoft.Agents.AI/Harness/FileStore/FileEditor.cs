@@ -47,9 +47,13 @@ internal static class FileEditor
     }
 
     /// <summary>
-    /// Applies whole-line (1-based) replacements to <paramref name="content"/>, preserving a trailing
-    /// newline if the original had one.
+    /// Applies literal (1-based) line replacements to <paramref name="content"/>.
     /// </summary>
+    /// <remarks>
+    /// Each edit's <see cref="FileLineEdit.NewLine"/> is treated as the literal replacement text for the
+    /// targeted line, including any trailing newline the caller wants to keep — the editor does not add
+    /// one. An empty <see cref="FileLineEdit.NewLine"/> deletes the line entirely, including its line break.
+    /// </remarks>
     /// <exception cref="ArgumentException">
     /// Thrown when <paramref name="edits"/> is empty, any line number is out of range, or a line number
     /// is targeted more than once.
@@ -61,9 +65,7 @@ internal static class FileEditor
             throw new ArgumentException("At least one line edit must be provided.");
         }
 
-        bool hadTrailingNewline = content.EndsWith("\n", StringComparison.Ordinal);
-        string newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        List<string> lines = SplitLines(content);
+        List<string> lines = SplitLinesKeepEnds(content);
 
         var seen = new HashSet<int>();
         foreach (FileLineEdit edit in edits)
@@ -82,11 +84,12 @@ internal static class FileEditor
 
         foreach (FileLineEdit edit in edits)
         {
+            // An empty replacement removes the line (content and its line break); otherwise the
+            // replacement is written verbatim, so the caller controls any trailing newline.
             lines[edit.LineNumber - 1] = edit.NewLine;
         }
 
-        string result = string.Join(newline, lines);
-        return hadTrailingNewline ? result + newline : result;
+        return string.Concat(lines);
     }
 
     private static int CountOccurrences(string content, string value)
@@ -103,33 +106,34 @@ internal static class FileEditor
     }
 
     /// <summary>
-    /// Splits content into lines. A trailing <c>\r</c> is stripped from each line and the empty segment produced by a final newline
-    /// is not treated as a line.
+    /// Splits content into lines, keeping each line's trailing newline (<c>\r\n</c>, <c>\n</c>, or a lone
+    /// <c>\r</c>) attached. The final line has no terminator when the content does not end with a newline.
     /// </summary>
-    private static List<string> SplitLines(string content)
+    private static List<string> SplitLinesKeepEnds(string content)
     {
         var lines = new List<string>();
-        if (content.Length == 0)
+        int start = 0;
+        for (int i = 0; i < content.Length; i++)
         {
-            return lines;
+            char c = content[i];
+            if (c == '\n')
+            {
+                lines.Add(content.Substring(start, i - start + 1));
+                start = i + 1;
+            }
+            else if (c == '\r')
+            {
+                // Treat "\r\n" as a single terminator; a lone "\r" also terminates a line.
+                int end = (i + 1 < content.Length && content[i + 1] == '\n') ? i + 2 : i + 1;
+                lines.Add(content.Substring(start, end - start));
+                i = end - 1;
+                start = end;
+            }
         }
 
-        string[] parts = content.Split('\n');
-        for (int i = 0; i < parts.Length; i++)
+        if (start < content.Length)
         {
-            // The final empty segment after a trailing '\n' is not a line.
-            if (i == parts.Length - 1 && parts[i].Length == 0)
-            {
-                break;
-            }
-
-            string line = parts[i];
-            if (line.EndsWith("\r", StringComparison.Ordinal))
-            {
-                line = line.Substring(0, line.Length - 1);
-            }
-
-            lines.Add(line);
+            lines.Add(content.Substring(start));
         }
 
         return lines;

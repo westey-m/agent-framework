@@ -330,13 +330,14 @@ public sealed class FileAccessProvider : AIContextProvider, IDisposable
     }
 
     /// <summary>
-    /// Replace whole lines in a file. Provide a list of edits, each with a 1-based line number and the new line content.
+    /// Replace lines in a file. Provide a list of edits, each with a 1-based line number and the literal
+    /// replacement text; an empty replacement deletes the line.
     /// </summary>
     /// <param name="fileName">The name of the file to modify.</param>
-    /// <param name="edits">The list of 1-based line numbers and their replacement content.</param>
+    /// <param name="edits">The list of 1-based line numbers and their literal replacement text.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A confirmation message including the number of lines replaced, or a failure message.</returns>
-    [Description("Replace whole lines in a file. Provide a list of edits, each with a 1-based line_number and the new_line content. Fails on out-of-range or duplicate line numbers.")]
+    [Description("Replace lines in a file. Provide a list of edits, each with a 1-based line_number and a literal new_line (include your own trailing newline); an empty new_line deletes the line, including its line break. Fails on out-of-range or duplicate line numbers.")]
     private async Task<string> ReplaceLinesAsync(string fileName, List<FileLineEdit> edits, CancellationToken cancellationToken = default)
     {
         await this._writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);

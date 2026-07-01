@@ -87,9 +87,11 @@ public sealed class InMemoryAgentFileStore : AgentFileStore
         }
 
         // Subdirectories first, then files.
-        var entries = new List<FileStoreEntry>(directories.Count + files.Count);
-        entries.AddRange(directories.Select(d => new FileStoreEntry(d, FileStoreEntry.Directory)));
-        entries.AddRange(files.Select(f => new FileStoreEntry(f, FileStoreEntry.File)));
+        FileStoreEntry[] entries =
+        [
+            .. directories.Select(d => new FileStoreEntry(d, FileStoreEntry.Directory)),
+            .. files.Select(f => new FileStoreEntry(f, FileStoreEntry.File)),
+        ];
 
         return Task.FromResult<IReadOnlyList<FileStoreEntry>>(entries);
     }

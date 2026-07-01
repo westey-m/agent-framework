@@ -63,10 +63,10 @@ public class FileEditorTests
     [Fact]
     public void ApplyReplaceLines_ReplacesSpecifiedLine()
     {
-        // Act
+        // Act — new_line is literal; the caller supplies the trailing newline to keep it.
         string result = FileEditor.ApplyReplaceLines(
             "line1\nline2\nline3",
-            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED" } });
+            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED\n" } });
 
         // Assert
         Assert.Equal("line1\nCHANGED\nline3", result);
@@ -102,39 +102,79 @@ public class FileEditorTests
     }
 
     [Fact]
-    public void ApplyReplaceLines_PreservesTrailingNewline()
+    public void ApplyReplaceLines_LiteralNewLineControlsTrailingNewline()
     {
-        // Act
+        // Act — the literal new_line keeps the trailing newline the caller provides.
         string result = FileEditor.ApplyReplaceLines(
             "line1\nline2\n",
-            new List<FileLineEdit> { new() { LineNumber = 1, NewLine = "CHANGED" } });
+            new List<FileLineEdit> { new() { LineNumber = 1, NewLine = "CHANGED\n" } });
 
         // Assert
         Assert.Equal("CHANGED\nline2\n", result);
     }
 
     [Fact]
-    public void ApplyReplaceLines_PreservesCrlfLineEndings()
+    public void ApplyReplaceLines_PreservesCrlfWhenCallerSuppliesIt()
     {
-        // Act — a CRLF file should retain CRLF endings after a surgical line edit.
+        // Act — a CRLF file keeps CRLF endings when the caller supplies "\r\n".
         string result = FileEditor.ApplyReplaceLines(
             "line1\r\nline2\r\nline3",
-            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED" } });
+            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "CHANGED\r\n" } });
 
         // Assert
         Assert.Equal("line1\r\nCHANGED\r\nline3", result);
     }
 
     [Fact]
-    public void ApplyReplaceLines_PreservesCrlfWithTrailingNewline()
+    public void ApplyReplaceLines_EmptyNewLine_DeletesMiddleLine()
+    {
+        // Act — an empty new_line removes the line, including its line break.
+        string result = FileEditor.ApplyReplaceLines(
+            "line1\nline2\nline3\n",
+            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = string.Empty } });
+
+        // Assert
+        Assert.Equal("line1\nline3\n", result);
+    }
+
+    [Fact]
+    public void ApplyReplaceLines_EmptyNewLine_DeletesLastLineWithoutTerminator()
     {
         // Act
         string result = FileEditor.ApplyReplaceLines(
-            "line1\r\nline2\r\n",
-            new List<FileLineEdit> { new() { LineNumber = 1, NewLine = "CHANGED" } });
+            "line1\nline2",
+            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = string.Empty } });
 
         // Assert
-        Assert.Equal("CHANGED\r\nline2\r\n", result);
+        Assert.Equal("line1\n", result);
+    }
+
+    [Fact]
+    public void ApplyReplaceLines_DeleteAndReplaceInSameCall()
+    {
+        // Act
+        string result = FileEditor.ApplyReplaceLines(
+            "a\nb\nc\n",
+            new List<FileLineEdit>
+            {
+                new() { LineNumber = 1, NewLine = string.Empty },
+                new() { LineNumber = 3, NewLine = "C\n" },
+            });
+
+        // Assert
+        Assert.Equal("b\nC\n", result);
+    }
+
+    [Fact]
+    public void ApplyReplaceLines_EmbeddedNewLine_ExpandsIntoMultipleLines()
+    {
+        // Act — a literal new_line may contain its own newlines to insert extra lines.
+        string result = FileEditor.ApplyReplaceLines(
+            "a\nb\nc\n",
+            new List<FileLineEdit> { new() { LineNumber = 2, NewLine = "b1\nb2\n" } });
+
+        // Assert
+        Assert.Equal("a\nb1\nb2\nc\n", result);
     }
 
     #endregion

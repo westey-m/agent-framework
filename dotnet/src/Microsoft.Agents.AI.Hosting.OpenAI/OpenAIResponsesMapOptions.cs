@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI.Hosting.OpenAI;
 
@@ -29,7 +30,14 @@ public sealed class OpenAIResponsesMapOptions
     /// Returning <see langword="null"/> runs the agent with its own configuration only.
     /// </para>
     /// </remarks>
-    public Func<OpenAIResponseRequestInfo, AgentRunOptions?> RunOptionsFactory { get; set; } = RejectRequestSettings;
+    public Func<OpenAIResponseRequestInfo, AgentRunOptions?> RunOptionsFactory
+    {
+        get;
+        set
+        {
+            field = Throw.IfNull(value);
+        }
+    } = RejectRequestSettings;
 
     /// <summary>
     /// The default <see cref="RunOptionsFactory"/> implementation. Throws a <see cref="NotSupportedException"/>

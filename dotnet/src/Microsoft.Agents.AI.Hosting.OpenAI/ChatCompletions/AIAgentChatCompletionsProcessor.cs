@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Agents.AI.Hosting.OpenAI.ChatCompletions.Converters;
 using Microsoft.Agents.AI.Hosting.OpenAI.ChatCompletions.Models;
+using Microsoft.Agents.AI.Hosting.OpenAI.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.AI;
@@ -33,7 +34,15 @@ internal static class AIAgentChatCompletionsProcessor
         }
         catch (NotSupportedException ex)
         {
-            return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "unsupported_parameter");
+            return Results.BadRequest(new ErrorResponse
+            {
+                Error = new ErrorDetails
+                {
+                    Message = ex.Message,
+                    Type = "invalid_request_error",
+                    Code = "unsupported_parameter"
+                }
+            });
         }
 
         var chatMessages = request.Messages.Select(i => i.ToChatMessage());

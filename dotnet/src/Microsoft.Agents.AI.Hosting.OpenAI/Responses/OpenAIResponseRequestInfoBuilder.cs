@@ -42,7 +42,12 @@ internal static class OpenAIResponseRequestInfoBuilder
                 };
 
             case JsonValueKind.Object:
-                if (toolChoice.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
+                // Only a function tool selection (for example { "type": "function", "name": "..." })
+                // has a ChatToolMode equivalent. Other object shapes (e.g. hosted tool selections) are
+                // not mapped so that they are not mistaken for a specific function.
+                if (toolChoice.TryGetProperty("type", out JsonElement type) && type.ValueKind == JsonValueKind.String &&
+                    type.GetString() == "function" &&
+                    toolChoice.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
                     name.GetString() is { Length: > 0 } functionName)
                 {
                     return ChatToolMode.RequireSpecific(functionName);

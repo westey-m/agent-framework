@@ -27,6 +27,7 @@ internal static class PermissiveMapOptions
                 MaxOutputTokens = request.MaxOutputTokens,
                 Instructions = request.Instructions,
                 ModelId = request.Model,
+                ToolMode = request.ToolChoice,
             };
 
             return new ChatClientAgentRunOptions(chatOptions);

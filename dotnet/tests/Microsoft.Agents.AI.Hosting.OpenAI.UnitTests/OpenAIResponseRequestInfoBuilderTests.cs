@@ -92,9 +92,13 @@ public sealed class OpenAIResponseRequestInfoBuilderTests
         Assert.Null(info.ToolChoice);
     }
 
-    private static CreateResponse CreateRequestWithToolChoice(string toolChoiceJson) => new()
+    private static CreateResponse CreateRequestWithToolChoice(string toolChoiceJson)
     {
-        Input = "hello",
-        ToolChoice = JsonDocument.Parse(toolChoiceJson).RootElement,
-    };
+        using JsonDocument document = JsonDocument.Parse(toolChoiceJson);
+        return new()
+        {
+            Input = "hello",
+            ToolChoice = document.RootElement.Clone(),
+        };
+    }
 }

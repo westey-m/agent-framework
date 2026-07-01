@@ -71,7 +71,7 @@ public sealed class OpenAIMapOptionsTests
             "top_p" => new OpenAIResponseRequestInfo { TopP = 0.5 },
             "max_output_tokens" => new OpenAIResponseRequestInfo { MaxOutputTokens = 100 },
             "instructions" => new OpenAIResponseRequestInfo { Instructions = "be brief" },
-            "tools" => new OpenAIResponseRequestInfo { Tools = [JsonDocument.Parse("{}").RootElement] },
+            "tools" => new OpenAIResponseRequestInfo { Tools = [ParseElement("{}")] },
             "tool_choice" => new OpenAIResponseRequestInfo { ToolChoice = ChatToolMode.None },
             _ => throw new ArgumentOutOfRangeException(nameof(setting))
         };
@@ -162,6 +162,41 @@ public sealed class OpenAIMapOptionsTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ChatCompletions_DefaultEndpoint_RejectsRequestWithSettingsAsync()
+    {
+        // Arrange
+        using var app = await CreateChatCompletionsServerAsync("reject-agent", mapOptions: null);
+        HttpClient client = GetClient(app);
+
+        // Act
+        HttpResponseMessage response = await client.PostAsync(
+            new Uri("/reject-agent/v1/chat/completions", UriKind.Relative),
+            new StringContent("""{"model":"myModel","messages":[{"role":"user","content":"hello"}],"temperature":0.5}""", Encoding.UTF8, "application/json"));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("temperature", body, StringComparison.Ordinal);
+        Assert.Contains("invalid_request_error", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ChatCompletions_ConfiguredEndpoint_HonorsRequestSettingsAsync()
+    {
+        // Arrange
+        using var app = await CreateChatCompletionsServerAsync("map-agent", PermissiveMapOptions.ChatCompletions());
+        HttpClient client = GetClient(app);
+
+        // Act
+        HttpResponseMessage response = await client.PostAsync(
+            new Uri("/map-agent/v1/chat/completions", UriKind.Relative),
+            new StringContent("""{"model":"myModel","messages":[{"role":"user","content":"hello"}],"temperature":0.5}""", Encoding.UTF8, "application/json"));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private static async Task<WebApplication> CreateResponsesServerAsync(string agentName, OpenAIResponsesMapOptions? mapOptions)
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -185,5 +220,29 @@ public sealed class OpenAIMapOptionsTests
         TestServer testServer = app.Services.GetRequiredService<IServer>() as TestServer
             ?? throw new InvalidOperationException("TestServer not found");
         return testServer.CreateClient();
+    }
+
+    private static async Task<WebApplication> CreateChatCompletionsServerAsync(string agentName, OpenAIChatCompletionsMapOptions? mapOptions)
+    {
+        WebApplicationBuilder builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+
+        IChatClient mockChatClient = new TestHelpers.SimpleMockChatClient("Hello there.");
+        builder.Services.AddKeyedSingleton("chat-client", mockChatClient);
+        builder.AddAIAgent(agentName, "You are a helpful assistant.", chatClientServiceKey: "chat-client");
+        builder.AddOpenAIChatCompletions();
+
+        WebApplication app = builder.Build();
+        AIAgent agent = app.Services.GetRequiredKeyedService<AIAgent>(agentName);
+        app.MapOpenAIChatCompletions(agent, path: null, mapOptions);
+
+        await app.StartAsync();
+        return app;
+    }
+
+    private static JsonElement ParseElement(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
     }
 }

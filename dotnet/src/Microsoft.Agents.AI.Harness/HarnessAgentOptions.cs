@@ -372,6 +372,34 @@ public sealed class HarnessAgentOptions
     public ShellExecutor? ShellExecutor { get; set; }
 
     /// <summary>
+    /// Gets or sets the name of the shell execution tool exposed to the model.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="null"/> (the default), the shell executor's default tool name (<c>run_shell</c>) is used.
+    /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
+    /// </remarks>
+    public string? ShellToolName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the description of the shell execution tool shown to the model.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="null"/> (the default), the shell executor's built-in description is used.
+    /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
+    /// </remarks>
+    public string? ShellToolDescription { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the shell execution tool requires approval before each invocation.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="true"/> (the default), the shell tool is wrapped in an <see cref="ApprovalRequiredAIFunction"/>
+    /// so every command requires explicit approval before executing. When <see langword="false"/>, the tool can be invoked
+    /// without approval. This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
+    /// </remarks>
+    public bool ShellToolRequireApproval { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets optional configuration for the <see cref="ShellEnvironmentProvider"/>.
     /// </summary>
     /// <remarks>

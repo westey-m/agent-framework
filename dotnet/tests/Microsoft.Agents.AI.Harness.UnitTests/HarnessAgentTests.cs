@@ -1606,7 +1606,7 @@ public class HarnessAgentTests
         options.ShellExecutor = executorMock.Object;
         options.ShellToolName = "custom_shell";
         options.ShellToolDescription = "Run a custom command.";
-        options.ShellToolRequireApproval = false;
+        options.DisableShellToolApproval = true;
 
         // Act
         var agent = new HarnessAgent(chatClientMock.Object, options);
@@ -1634,9 +1634,14 @@ public class HarnessAgentTests
             .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
 
         bool? capturedRequireApproval = null;
+        string? capturedName = null;
         var executorMock = new Mock<ShellExecutor>();
         executorMock.Setup(e => e.AsAIFunction(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()))
-            .Callback<string, string?, bool>((_, _, requireApproval) => capturedRequireApproval = requireApproval)
+            .Callback<string, string?, bool>((name, _, requireApproval) =>
+            {
+                capturedName = name;
+                capturedRequireApproval = requireApproval;
+            })
             .Returns(AIFunctionFactory.Create(() => "shell output", "run_shell"));
 
         var options = CreateAllDisabledOptions();
@@ -1648,8 +1653,44 @@ public class HarnessAgentTests
         var session = await agent.CreateSessionAsync();
         await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
 
-        // Assert — approval is required by default.
+        // Assert — approval is required by default and the executor's default name is used.
         Assert.True(capturedRequireApproval);
+        Assert.Equal("run_shell", capturedName);
+    }
+
+    /// <summary>
+    /// Verify that disabling shell approval is honored end-to-end when the underlying executor permits unapproved use:
+    /// a real <see cref="LocalShellExecutor"/> constructed with <see cref="LocalShellExecutorOptions.AcknowledgeUnsafe"/>
+    /// set to <see langword="true"/> plus <see cref="HarnessAgentOptions.DisableShellToolApproval"/> set to
+    /// <see langword="true"/> yields a shell tool that is not wrapped in an <see cref="ApprovalRequiredAIFunction"/>.
+    /// </summary>
+    [Fact]
+    public async Task ShellExecutor_ApprovalDisabledWithAcknowledgedExecutorProducesNonApprovalToolAsync()
+    {
+        // Arrange
+        ChatOptions? capturedOptions = null;
+        var chatClientMock = new Mock<IChatClient>();
+        chatClientMock
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions?, CancellationToken>((_, opts, _) => capturedOptions = opts)
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+
+        await using var executor = new LocalShellExecutor(new LocalShellExecutorOptions { AcknowledgeUnsafe = true });
+
+        var options = CreateAllDisabledOptions();
+        options.DisableWebSearch = true;
+        options.ShellExecutor = executor;
+        options.DisableShellToolApproval = true;
+
+        // Act
+        var agent = new HarnessAgent(chatClientMock.Object, options);
+        var session = await agent.CreateSessionAsync();
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert — the shell tool is registered but not gated by approval.
+        Assert.NotNull(capturedOptions?.Tools);
+        var shellTool = Assert.Single(capturedOptions!.Tools!, t => t is AIFunction f && f.Name == "run_shell");
+        Assert.IsNotType<ApprovalRequiredAIFunction>(shellTool);
     }
 
     /// <summary>

@@ -50,6 +50,19 @@ public sealed class LocalShellExecutorTests
     }
 
     [Fact]
+    public void Policy_BroadDenyList_OverridesSpecificAllowList()
+    {
+        // A broad deny pattern wins even when a more specific allow pattern
+        // would otherwise permit the command.
+        var policy = new ShellPolicy(
+            allowList: ["^git push origin main$"],
+            denyList: ["git push"]);
+        var decision = policy.Evaluate(new ShellRequest("git push origin main"));
+        Assert.False(decision.Allowed);
+        Assert.Contains("deny pattern", decision.Reason ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Policy_AllowList_AllowsMatch()
     {
         var policy = new ShellPolicy(allowList: ["^echo "]);

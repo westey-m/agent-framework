@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Microsoft.Agents.AI.Tools.Shell;
@@ -140,8 +141,8 @@ public readonly struct ShellPolicyOutcome : IEquatable<ShellPolicyOutcome>
 /// </remarks>
 public sealed class ShellPolicy
 {
-    private readonly IReadOnlyList<Regex> _denies;
-    private readonly IReadOnlyList<Regex>? _allows;
+    private readonly IReadOnlyList<Regex> _denyList;
+    private readonly IReadOnlyList<Regex>? _allowList;
     private readonly Func<ShellRequest, ShellPolicyOutcome?>? _custom;
 
     /// <summary>
@@ -168,25 +169,13 @@ public sealed class ShellPolicy
         IEnumerable<string>? allowList = null,
         Func<ShellRequest, ShellPolicyOutcome?>? custom = null)
     {
-        var deny = new List<Regex>();
-        if (denyList is not null)
-        {
-            foreach (var pattern in denyList)
-            {
-                deny.Add(new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase));
-            }
-        }
-        this._denies = deny;
+        this._denyList = denyList?
+            .Select(pattern => new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase))
+            .ToArray() ?? Array.Empty<Regex>();
 
-        if (allowList is not null)
-        {
-            var allow = new List<Regex>();
-            foreach (var pattern in allowList)
-            {
-                allow.Add(new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase));
-            }
-            this._allows = allow;
-        }
+        this._allowList = allowList?
+            .Select(pattern => new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase))
+            .ToArray();
 
         this._custom = custom;
     }
@@ -209,7 +198,7 @@ public sealed class ShellPolicy
             return ShellPolicyOutcome.Deny("empty command");
         }
 
-        foreach (var deny in this._denies)
+        foreach (var deny in this._denyList)
         {
             if (deny.IsMatch(command))
             {
@@ -217,18 +206,9 @@ public sealed class ShellPolicy
             }
         }
 
-        if (this._allows is not null)
+        if (this._allowList is not null)
         {
-            var matched = false;
-            foreach (var allow in this._allows)
-            {
-                if (allow.IsMatch(command))
-                {
-                    matched = true;
-                    break;
-                }
-            }
-
+            var matched = this._allowList.Any(allow => allow.IsMatch(command));
             if (!matched)
             {
                 return ShellPolicyOutcome.Deny("command does not match allow list");

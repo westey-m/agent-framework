@@ -101,7 +101,7 @@ public sealed class LocalShellExecutorTests
     }
 
     [Fact]
-    public void Policy_Custom_RunsAfterDenyAndAllowLists()
+    public void Policy_Custom_DoesNotRunWhenDenyListMatches()
     {
         // Deny-list match short-circuits before the custom callback runs, so a
         // permissive custom callback cannot re-enable a denied command.
@@ -109,6 +109,18 @@ public sealed class LocalShellExecutorTests
             denyList: ["echo"],
             custom: _ => ShellPolicyOutcome.Allow);
         Assert.False(policy.Evaluate(new ShellRequest("echo hello")).Allowed);
+    }
+
+    [Fact]
+    public void Policy_Custom_DoesNotOverrideAllowListDenial()
+    {
+        // An allow-list denial short-circuits before the custom callback runs,
+        // so a permissive custom callback cannot re-enable a command that is
+        // outside the allow list.
+        var policy = new ShellPolicy(
+            allowList: ["^echo "],
+            custom: _ => ShellPolicyOutcome.Allow);
+        Assert.False(policy.Evaluate(new ShellRequest("ls -la")).Allowed);
     }
 
     [Fact]

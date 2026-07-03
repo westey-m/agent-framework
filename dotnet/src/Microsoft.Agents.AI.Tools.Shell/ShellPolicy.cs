@@ -131,9 +131,11 @@ public readonly struct ShellPolicyOutcome : IEquatable<ShellPolicyOutcome>
 /// <em>none</em> of the allow patterns is denied. Supplying an empty allow
 /// list therefore denies every command; leaving the allow list
 /// <see langword="null"/> disables the allow list entirely. An optional
-/// <c>custom</c> callback gets the final say and may override the outcome.
-/// Prefer narrowly anchored regexes (like <c>^git\s+status$</c>) over
-/// substring matches when building an allow list.
+/// <c>custom</c> callback runs last — after the deny and allow lists have
+/// passed — and may override the default allow (for example, turning it into
+/// a deny); it cannot re-enable a command already rejected by the deny list
+/// or the allow list. Prefer narrowly anchored regexes (like
+/// <c>^git\s+status$</c>) over substring matches when building an allow list.
 /// </para>
 /// </remarks>
 public sealed class ShellPolicy

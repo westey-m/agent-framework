@@ -20,10 +20,11 @@ public sealed class RoutingChatClientOptions
     /// <remarks>
     /// <para>
     /// The function receives a <see cref="RoutingContext"/> and a <see cref="CancellationToken"/> and returns
-    /// the key of the destination that should handle the request, or <see langword="null"/> to route to the
-    /// default destination (the first inner client). It is asynchronous so callers can perform I/O
-    /// (for example, an inference call) to decide the best destination. When <see langword="null"/> (the default),
-    /// the currently active destination for the session is used (see <see cref="RoutingContext.ActiveDestination"/>).
+    /// the key of the destination that should handle the request, or <see langword="null"/> to route the request
+    /// directly to the fallback factory (invoked with a <see langword="null"/> key). It is asynchronous so callers
+    /// can perform I/O (for example, an inference call) to decide the best destination. When <see langword="null"/>
+    /// (the default), the currently active destination for the session is used (see
+    /// <see cref="RoutingContext.ActiveDestination"/>).
     /// </para>
     /// <para>
     /// The returned key is used only for the current request; it does not change the session's active

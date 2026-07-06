@@ -19,13 +19,15 @@ public sealed class RoutingState
 {
     /// <summary>
     /// Gets or sets the key of the currently active destination for this session, or <see langword="null"/>
-    /// to use the default destination.
+    /// to route the request directly to the fallback factory.
     /// </summary>
     /// <remarks>
     /// When non-<see langword="null"/>, the value corresponds to a key in the inner clients dictionary supplied
     /// to the <see cref="RoutingChatClient"/> (or a key handled by a fallback factory). It is used by the default
-    /// router to select a destination. When <see langword="null"/>, the request is routed to the first inner
-    /// client (the default destination).
+    /// router to select a destination. When <see langword="null"/>, the request is routed directly to the fallback
+    /// factory (invoked with a <see langword="null"/> key) without a dictionary lookup, and an
+    /// <see cref="System.InvalidOperationException"/> is thrown if no fallback factory is configured. A new
+    /// session's default destination (the first inner client) is set by the state initializer.
     /// </remarks>
     [JsonPropertyName("activeDestination")]
     public string? ActiveDestination { get; set; }

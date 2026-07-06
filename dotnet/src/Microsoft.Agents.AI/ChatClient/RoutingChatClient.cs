@@ -250,8 +250,8 @@ public sealed class RoutingChatClient : IChatClient
     /// </summary>
     /// <param name="session">The session whose active destination key should be returned.</param>
     /// <returns>
-    /// The active destination key for the session, or <see langword="null"/> when the default destination
-    /// (the first inner client) is in effect.
+    /// The active destination key for the session, or <see langword="null"/> when the request is routed directly
+    /// to the fallback factory.
     /// </returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="session"/> is <see langword="null"/>.</exception>
     public string? GetActiveDestinationKey(AgentSession session)
@@ -267,7 +267,8 @@ public sealed class RoutingChatClient : IChatClient
     /// <param name="session">The session whose active destination key should be updated.</param>
     /// <param name="destinationKey">
     /// The destination key to make active. May be any string (a registered inner client key or a key handled by
-    /// the fallback factory), or <see langword="null"/> to use the default destination (the first inner client).
+    /// the fallback factory), or <see langword="null"/> to route the request directly to the fallback factory
+    /// (invoked with a <see langword="null"/> key), which throws if no fallback factory is configured.
     /// </param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="session"/> is <see langword="null"/>.</exception>
     public void SetActiveDestinationKey(AgentSession session, string? destinationKey)

@@ -96,7 +96,7 @@ AIAgent agent = new ChatClientAgent(
 AgentSession session = await agent.CreateSessionAsync();
 
 // The RoutingChatClient can be retrieved back from the agent via GetService.
-// This is uesful when you don't hold a direct reference to it — for example when
+// This is useful when you don't hold a direct reference to it — for example when
 // the agent was created elsewhere or resolved from a DI container.
 RoutingChatClient routing = agent.GetService<RoutingChatClient>()
     ?? throw new InvalidOperationException("The agent is not backed by a RoutingChatClient.");

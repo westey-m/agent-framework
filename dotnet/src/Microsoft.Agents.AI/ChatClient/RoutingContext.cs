@@ -66,8 +66,8 @@ public sealed class RoutingContext
     public IReadOnlyDictionary<string, IChatClient> InnerClients { get; }
 
     /// <summary>
-    /// Gets the currently active destination key for the session, or <see langword="null"/> when the default
-    /// destination (the first inner client) should be used.
+    /// Gets the currently active destination key for the session, or <see langword="null"/> when the request
+    /// is routed directly to the fallback factory.
     /// </summary>
     /// <remarks>
     /// This is the value returned by the default router. It reflects the destination stored in the

@@ -31,6 +31,14 @@ namespace Microsoft.Agents.AI.Compaction;
 /// via <see cref="ChatClientAgentOptions.AIContextProviders"/> or via <c>UseAIContextProviders</c>
 /// on a <see cref="ChatClientBuilder"/> or <see cref="AIAgentBuilder"/>.
 /// </para>
+/// <para>
+/// <strong>Security consideration:</strong> Adding this provider, and choosing which
+/// <see cref="CompactionStrategy"/> it applies, is entirely opt-in and developer-configured. Most
+/// strategies (e.g. truncation, sliding-window) only remove or reorder existing messages and carry no
+/// additional risk. <see cref="SummarizationCompactionStrategy"/> is the exception: it calls out to an
+/// LLM to produce replacement content and introduces risk that a compromised
+/// summarization service could inject unsafe instructions that persist in chat history.
+/// </para>
 /// </remarks>
 [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class CompactionProvider : AIContextProvider

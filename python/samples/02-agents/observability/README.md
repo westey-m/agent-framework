@@ -465,7 +465,8 @@ contact any external system. Where that telemetry is sent (a local collector, a 
 observability backend, the VS Code extension port, etc.) is entirely determined by the
 exporters and pipeline the developer configures. By default, emitted telemetry is limited to
 metadata (e.g. token counts, operation names, durations) and does not include message content.
-Enabling sensitive data (`ENABLE_SENSITIVE_DATA` / `enable_sensitive_data`) is an explicit,
-separate opt-in that additionally emits raw chat message content, function-call arguments, and
-function-call results — treat that data as sensitive and only send it to a telemetry backend
+Enabling sensitive-data capture — via `enable_sensitive_telemetry()` or the
+`ENABLE_SENSITIVE_DATA` environment variable — is an explicit, separate opt-in that
+additionally emits raw chat message content, function-call arguments, and function-call
+results — treat that data as sensitive and only send it to a telemetry backend
 you have secured appropriately.

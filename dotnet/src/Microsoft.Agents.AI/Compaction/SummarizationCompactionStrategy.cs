@@ -71,7 +71,7 @@ public sealed class SummarizationCompactionStrategy : CompactionStrategy
     /// </summary>
     /// <param name="chatClient">
     /// The <see cref="IChatClient"/> to use for generating summaries. A smaller, faster model is
-    /// recommended. <strong>Security:</strong> its output permanently replaces the original messages in
+    /// recommended. <strong>Security:</strong> Its output permanently replaces the original messages in
     /// chat history, so only use a summarization service you trust as much as the primary model — see
     /// the type-level security considerations for the indirect-prompt-injection risk of an untrusted
     /// summarizer.

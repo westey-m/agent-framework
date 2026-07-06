@@ -70,7 +70,7 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     /// Initializes a new instance of the <see cref="BackgroundAgentsProvider"/> class.
     /// </summary>
     /// <param name="agents">
-    /// The collection of background agents available for delegation. <strong>Security:</strong> each
+    /// The collection of background agents available for delegation. <strong>Security:</strong> Each
     /// supplied agent should be vetted and trusted, since it will receive text input from the parent
     /// agent and its output is fed back into the parent's context — see the type-level security
     /// considerations for details on the exfiltration and prompt-injection risks of untrusted agents.

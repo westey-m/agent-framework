@@ -117,7 +117,7 @@ public sealed class AIJudgeLoopEvaluator : LoopEvaluator
     /// </summary>
     /// <param name="judgeClient">
     /// The chat client used to judge whether the original request was answered. <strong>Security:</strong>
-    /// this client is sent the original request and the agent's latest response on every iteration, so
+    /// This client is sent the original request and the agent's latest response on every iteration, so
     /// only point it at a service you trust as much as the primary model — see the type-level security
     /// considerations for the exfiltration and prompt-injection risks of an untrusted judge.
     /// </param>

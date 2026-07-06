@@ -86,6 +86,13 @@ var routingChatClient = new RoutingChatClient(
     {
         Console.WriteLine($"  (fallback factory building a client for model '{destinationKey}')");
         return new ValueTask<IChatClient>(responsesClient.AsIChatClientWithStoredOutputDisabled(destinationKey, includeReasoningEncryptedContent: false));
+    },
+    options: new RoutingChatClientOptions
+    {
+        // If set, can be used to override the active destination in session state for a request.
+        // E.g. you could implement a routing heuristic that inspects the request and chooses a model based on its content,
+        // or even perform an inference call to a model to decide which model should handle the request.
+        Router = null,
     });
 
 AIAgent agent = new ChatClientAgent(

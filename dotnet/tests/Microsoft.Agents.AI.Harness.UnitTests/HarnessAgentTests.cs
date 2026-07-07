@@ -847,11 +847,12 @@ public class HarnessAgentTests
     }
 
     /// <summary>
-    /// Verify that the inner agent's ChatClient pipeline includes OpenTelemetryChatClient by default,
-    /// so model calls are traced in addition to the agent-level <see cref="OpenTelemetryAgent"/> wrapper.
+    /// Verify that the inner agent's ChatClient pipeline includes OpenTelemetryChatClient when
+    /// OpenTelemetry is enabled, so model calls are traced in addition to the agent-level
+    /// <see cref="OpenTelemetryAgent"/> wrapper.
     /// </summary>
     [Fact]
-    public void Pipeline_IncludesOpenTelemetryChatClientByDefault()
+    public void Pipeline_IncludesOpenTelemetryChatClientWhenEnabled()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;

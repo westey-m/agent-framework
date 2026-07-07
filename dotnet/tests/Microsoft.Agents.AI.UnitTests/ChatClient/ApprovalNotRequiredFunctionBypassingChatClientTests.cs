@@ -10,7 +10,7 @@ using Moq;
 
 namespace Microsoft.Agents.AI.UnitTests;
 
-public class NonApprovalRequiredFunctionBypassingChatClientTests
+public class ApprovalNotRequiredFunctionBypassingChatClientTests
 {
     #region GetResponseAsync Tests
 
@@ -21,7 +21,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Hello")])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -44,7 +44,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [approval])])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [approvalTool] };
 
@@ -60,7 +60,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetResponseAsync_MixedApproval_RemovesNonApprovalItemsAsync()
+    public async Task GetResponseAsync_MixedApproval_RemovesApprovalNotRequiredItemsAsync()
     {
         // Arrange
         var normalTool = AIFunctionFactory.Create(() => "result", "normalTool");
@@ -76,7 +76,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [approvalNormal, approvalRequired])
             ])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [normalTool, approvalTool] };
 
@@ -108,7 +108,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [approvalNormal, approvalRequired])
             ])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [normalTool, approvalTool] };
 
@@ -117,14 +117,14 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         // Assert — the auto-approved item should be stored in the session
         Assert.True(session.StateBag.TryGetValue<List<ToolApprovalRequestContent>>(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
         Assert.NotNull(stored);
         Assert.Single(stored!);
         Assert.Equal("req1", stored![0].RequestId);
     }
 
     [Fact]
-    public async Task GetResponseAsync_AllNonApproval_RemovesAllApprovalsAndRemovesEmptyMessageAsync()
+    public async Task GetResponseAsync_AllApprovalNotRequired_RemovesAllApprovalsAndRemovesEmptyMessageAsync()
     {
         // Arrange
         var normalTool = AIFunctionFactory.Create(() => "result", "normalTool");
@@ -137,7 +137,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [approvalNormal])
             ])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [normalTool] };
 
@@ -157,7 +157,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey,
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey,
             new List<ToolApprovalRequestContent> { storedApproval },
             AgentJsonUtilities.DefaultOptions);
 
@@ -168,7 +168,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
             return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Done")]));
         });
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var options = new ChatOptions { Tools = [AIFunctionFactory.Create(() => "result", "normalTool")] };
 
         // Act
@@ -199,14 +199,14 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey,
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey,
             new List<ToolApprovalRequestContent> { storedApproval },
             AgentJsonUtilities.DefaultOptions);
 
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Done")])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var options = new ChatOptions { Tools = [AIFunctionFactory.Create(() => "result", "normalTool")] };
 
         // Act
@@ -214,7 +214,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         // Assert — the stored data should be cleared after successful injection
         Assert.False(session.StateBag.TryGetValue<List<ToolApprovalRequestContent>>(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [approvalUnknown])
             ])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [] };
 
@@ -253,7 +253,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey,
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey,
             new List<ToolApprovalRequestContent> { storedApproval },
             AgentJsonUtilities.DefaultOptions);
 
@@ -264,7 +264,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
             return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Done")]));
         });
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
 
         // The tool is now wrapped in ApprovalRequiredAIFunction — but we still inject unconditionally
         var approvalTool = new ApprovalRequiredAIFunction(AIFunctionFactory.Create(() => "result", "changingTool"));
@@ -284,7 +284,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         // Session should be cleared
         Assert.False(session.StateBag.TryGetValue<List<ToolApprovalRequestContent>>(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
     }
 
     #endregion
@@ -299,7 +299,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
             ToAsyncEnumerableAsync(
                 new ChatResponseUpdate(ChatRole.Assistant, "Hello")));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -313,7 +313,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetStreamingResponseAsync_MixedApproval_FiltersNonApprovalItemsAsync()
+    public async Task GetStreamingResponseAsync_MixedApproval_FiltersApprovalNotRequiredItemsAsync()
     {
         // Arrange
         var normalTool = AIFunctionFactory.Create(() => "result", "normalTool");
@@ -329,7 +329,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
                 new ChatResponseUpdate(ChatRole.Assistant, "text"),
                 new ChatResponseUpdate { Contents = [approvalNormal, approvalRequired] }));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [normalTool, approvalTool] };
 
@@ -363,7 +363,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
             ToAsyncEnumerableAsync(
                 new ChatResponseUpdate { Contents = [approvalNormal, approvalRequired] }));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [normalTool, approvalTool] };
 
@@ -373,14 +373,14 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
 
         // Assert — the auto-approved item should be stored in the session
         Assert.True(session.StateBag.TryGetValue<List<ToolApprovalRequestContent>>(
-            NonApprovalRequiredFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
+            ApprovalNotRequiredFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
         Assert.NotNull(stored);
         Assert.Single(stored!);
         Assert.Equal("req1", stored![0].RequestId);
     }
 
     [Fact]
-    public async Task GetStreamingResponseAsync_AllNonApproval_SkipsEmptyUpdateAsync()
+    public async Task GetStreamingResponseAsync_AllApprovalNotRequired_SkipsEmptyUpdateAsync()
     {
         // Arrange
         var normalTool = AIFunctionFactory.Create(() => "result", "normalTool");
@@ -393,7 +393,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
                 new ChatResponseUpdate(ChatRole.Assistant, "text"),
                 new ChatResponseUpdate { Contents = [approvalNormal] }));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
         var options = new ChatOptions { Tools = [normalTool] };
 
@@ -417,7 +417,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "response")])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
 
         // Act & Assert — calling directly without agent context
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -431,7 +431,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "response")])));
 
-        var decorator = new NonApprovalRequiredFunctionBypassingChatClient(innerClient);
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
 
         // Act & Assert — run with null session
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -443,46 +443,46 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
     #region Builder Extension Tests
 
     [Fact]
-    public void UseNonApprovalRequiredFunctionBypassing_AddsDecoratorToPipeline()
+    public void UseApprovalNotRequiredFunctionBypassing_AddsDecoratorToPipeline()
     {
         // Arrange
         var innerClient = new Mock<IChatClient>().Object;
 
         // Act
         var pipeline = innerClient.AsBuilder()
-            .UseNonApprovalRequiredFunctionBypassing()
+            .UseApprovalNotRequiredFunctionBypassing()
             .Build();
 
         // Assert
-        Assert.NotNull(pipeline.GetService<NonApprovalRequiredFunctionBypassingChatClient>());
+        Assert.NotNull(pipeline.GetService<ApprovalNotRequiredFunctionBypassingChatClient>());
     }
 
     [Fact]
-    public void WithDefaultAgentMiddleware_EnableNonApprovalRequiredFunctionBypassing_InjectsDecorator()
+    public void WithDefaultAgentMiddleware_ByDefault_InjectsDecorator()
     {
         // Arrange
         var innerClient = new Mock<IChatClient>().Object;
-        var options = new ChatClientAgentOptions { EnableNonApprovalRequiredFunctionBypassing = true };
+        var options = new ChatClientAgentOptions();
 
         // Act
         var pipeline = innerClient.WithDefaultAgentMiddleware(options);
 
         // Assert
-        Assert.NotNull(pipeline.GetService<NonApprovalRequiredFunctionBypassingChatClient>());
+        Assert.NotNull(pipeline.GetService<ApprovalNotRequiredFunctionBypassingChatClient>());
     }
 
     [Fact]
-    public void WithDefaultAgentMiddleware_EnableNonApprovalRequiredFunctionBypassingFalse_DoesNotInjectDecorator()
+    public void WithDefaultAgentMiddleware_DisableApprovalNotRequiredFunctionBypassing_DoesNotInjectDecorator()
     {
         // Arrange
         var innerClient = new Mock<IChatClient>().Object;
-        var options = new ChatClientAgentOptions { EnableNonApprovalRequiredFunctionBypassing = false };
+        var options = new ChatClientAgentOptions { DisableApprovalNotRequiredFunctionBypassing = true };
 
         // Act
         var pipeline = innerClient.WithDefaultAgentMiddleware(options);
 
         // Assert
-        Assert.Null(pipeline.GetService<NonApprovalRequiredFunctionBypassingChatClient>());
+        Assert.Null(pipeline.GetService<ApprovalNotRequiredFunctionBypassingChatClient>());
     }
 
     #endregion
@@ -490,7 +490,7 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
     #region Helpers
 
     private static async Task<ChatResponse> RunWithAgentContextAsync(
-        NonApprovalRequiredFunctionBypassingChatClient decorator,
+        ApprovalNotRequiredFunctionBypassingChatClient decorator,
         AgentSession? session,
         ChatOptions? options = null)
     {
@@ -510,12 +510,12 @@ public class NonApprovalRequiredFunctionBypassingChatClientTests
     }
 
     private static Task<ChatResponse> RunWithAgentContextAsync(
-        NonApprovalRequiredFunctionBypassingChatClient decorator,
+        ApprovalNotRequiredFunctionBypassingChatClient decorator,
         AgentSession session)
         => RunWithAgentContextAsync(decorator, session, options: null);
 
     private static async Task RunStreamingWithAgentContextAsync(
-        NonApprovalRequiredFunctionBypassingChatClient decorator,
+        ApprovalNotRequiredFunctionBypassingChatClient decorator,
         AgentSession session,
         List<ChatResponseUpdate> updates,
         ChatOptions? options = null)

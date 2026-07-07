@@ -36,7 +36,7 @@ namespace Microsoft.Agents.AI;
 /// run context or session is available.
 /// </para>
 /// </remarks>
-internal sealed class NonApprovalRequiredFunctionBypassingChatClient : DelegatingChatClient
+internal sealed class ApprovalNotRequiredFunctionBypassingChatClient : DelegatingChatClient
 {
     /// <summary>
     /// The key used in <see cref="AgentSessionStateBag"/> to store pending auto-approved function calls
@@ -45,10 +45,10 @@ internal sealed class NonApprovalRequiredFunctionBypassingChatClient : Delegatin
     internal const string StateBagKey = "_autoApprovedFunctionCalls";
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="NonApprovalRequiredFunctionBypassingChatClient"/> class.
+    /// Initializes a new instance of the <see cref="ApprovalNotRequiredFunctionBypassingChatClient"/> class.
     /// </summary>
     /// <param name="innerClient">The underlying chat client (typically a <see cref="FunctionInvokingChatClient"/>).</param>
-    public NonApprovalRequiredFunctionBypassingChatClient(IChatClient innerClient)
+    public ApprovalNotRequiredFunctionBypassingChatClient(IChatClient innerClient)
         : base(innerClient)
     {
     }
@@ -110,12 +110,12 @@ internal sealed class NonApprovalRequiredFunctionBypassingChatClient : Delegatin
     {
         var runContext = AIAgent.CurrentRunContext
             ?? throw new InvalidOperationException(
-                $"{nameof(NonApprovalRequiredFunctionBypassingChatClient)} can only be used within the context of a running AIAgent. " +
+                $"{nameof(ApprovalNotRequiredFunctionBypassingChatClient)} can only be used within the context of a running AIAgent. " +
                 "Ensure that the chat client is being invoked as part of an AIAgent.RunAsync or AIAgent.RunStreamingAsync call.");
 
         return runContext.Session
             ?? throw new InvalidOperationException(
-                $"{nameof(NonApprovalRequiredFunctionBypassingChatClient)} requires a session. " +
+                $"{nameof(ApprovalNotRequiredFunctionBypassingChatClient)} requires a session. " +
                 "Ensure the agent has a resolved session before invoking the chat client.");
     }
 

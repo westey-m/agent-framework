@@ -219,9 +219,9 @@ public sealed class HarnessAgent : DelegatingAIAgent
 
         ChatClientBuilder chatClientBuilder = chatClient.AsBuilder();
 
-        if (options?.DisableNonApprovalRequiredFunctionBypassing is not true)
+        if (options?.DisableApprovalNotRequiredFunctionBypassing is not true)
         {
-            chatClientBuilder.UseNonApprovalRequiredFunctionBypassing();
+            chatClientBuilder.UseApprovalNotRequiredFunctionBypassing();
         }
 
         ChatClientBuilder pipeline = chatClientBuilder

@@ -1850,6 +1850,17 @@ class SkillsProvider(ContextProvider):
     and file-based resource reads are guarded against path traversal and
     symlink escape.  Only use skills from trusted sources.
 
+    **Security considerations (external skill sources):** which skills are
+    available, and how much trust to place in them, is entirely determined by
+    the :class:`SkillsSource` instances this provider is configured with — see
+    :class:`SkillsSource` for source-level trust-boundary guidance (this
+    includes external sources such as skills discovered over MCP via
+    :class:`MCPSkillsSource`). Skill content (names, descriptions, and full
+    bodies loaded via ``load_skill``) is injected into the agent's context
+    as-is, so a compromised or adversarial source can attempt indirect prompt
+    injection, and the ``run_skill_script`` tool executes scripts supplied by
+    the source. Only enable script-capable or external sources you trust.
+
     **Tool approval:** by default every tool exposed by this provider
     (``load_skill``, ``read_skill_resource``, and ``run_skill_script``) is
     registered with ``approval_mode="always_require"``, so each skill operation
@@ -2647,6 +2658,20 @@ class SkillsSource(ABC):
     are discovered (filesystem, memory, network, etc.).
 
     Subclass this to create custom skill sources.
+
+    Security considerations:
+        A skill source is a trust boundary. The skills it returns — their
+        names, descriptions, instructions, and any scripts or resources — are
+        injected into the agent's context and tool surface, and may be
+        executed (for sources that support script execution). Skills only
+        reach the agent when a source is explicitly registered, so this is
+        opt-in. Sources that read from a remote or third-party origin (e.g. a
+        remote MCP server via :class:`MCPSkillsSource`, a shared filesystem, or
+        a database) can be compromised or adversarial, and may return skill
+        content designed to manipulate the agent (indirect prompt injection) or
+        to exfiltrate data through instructions or scripts the agent is induced
+        to run. Only register skill sources for origins you trust, and evaluate
+        the content they can return before enabling them in production.
     """
 
     @abstractmethod
@@ -3985,6 +4010,19 @@ class MCPSkillsSource(SkillsSource):
 
     If ``skill://index.json`` is absent, unreadable, empty, or fails to
     parse, this source returns an empty list.
+
+    Security considerations:
+        Discovering skills over MCP means an *external* MCP server controls
+        what skill content (including instructions and, for script-capable
+        skills, the scripts the agent may run) reaches the agent. This source
+        is never enabled by default; it is only used when the caller connects
+        it to a server explicitly. A compromised, malicious, or simply
+        untrustworthy server can return adversarial skill content designed to
+        manipulate the agent through indirect prompt injection, or
+        instructions/scripts designed to exfiltrate data once loaded and, for
+        script-capable skills, executed. Only connect this source to MCP
+        servers you have vetted and trust, and treat their responses as
+        untrusted input.
 
     Examples:
         .. code-block:: python

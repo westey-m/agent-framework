@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Microsoft.Agents.AI.UnitTests;
@@ -408,34 +409,67 @@ public class ApprovalNotRequiredFunctionBypassingChatClientTests
 
     #endregion
 
-    #region Error Handling Tests
+    #region No-Context Pass-Through Tests
 
     [Fact]
-    public async Task GetResponseAsync_NoRunContext_ThrowsInvalidOperationExceptionAsync()
+    public async Task GetResponseAsync_NoRunContext_PassesThroughWithoutBypassingAsync()
     {
         // Arrange
+        var fcc = new FunctionCallContent("call1", "normalTool");
+        var approval = new ToolApprovalRequestContent("req1", fcc);
         var innerClient = CreateMockChatClient((_, _, _) =>
-            Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "response")])));
+            Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [approval])])));
 
         var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
 
-        // Act & Assert — calling directly without agent context
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => decorator.GetResponseAsync([new ChatMessage(ChatRole.User, "test")]));
+        // Act — calling directly without agent context; the decorator should no-op and pass through.
+        var response = await decorator.GetResponseAsync([new ChatMessage(ChatRole.User, "test")]);
+
+        // Assert — the approval request is surfaced to the caller unchanged (not bypassed).
+        var contents = response.Messages.Single().Contents;
+        Assert.IsType<ToolApprovalRequestContent>(Assert.Single(contents));
     }
 
     [Fact]
-    public async Task GetResponseAsync_NoSession_ThrowsInvalidOperationExceptionAsync()
+    public async Task GetResponseAsync_NoSession_PassesThroughWithoutBypassingAsync()
     {
         // Arrange
+        var fcc = new FunctionCallContent("call1", "normalTool");
+        var approval = new ToolApprovalRequestContent("req1", fcc);
         var innerClient = CreateMockChatClient((_, _, _) =>
-            Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "response")])));
+            Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [approval])])));
 
         var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
 
-        // Act & Assert — run with null session
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => RunWithAgentContextAsync(decorator, session: null!));
+        // Act — run with an agent context but a null session; the decorator should no-op and pass through.
+        var response = await RunWithAgentContextAsync(decorator, session: null!);
+
+        // Assert — the approval request is surfaced to the caller unchanged (not bypassed).
+        var contents = response.Messages.Single().Contents;
+        Assert.IsType<ToolApprovalRequestContent>(Assert.Single(contents));
+    }
+
+    [Fact]
+    public async Task GetStreamingResponseAsync_NoRunContext_PassesThroughWithoutBypassingAsync()
+    {
+        // Arrange
+        var fcc = new FunctionCallContent("call1", "normalTool");
+        var approval = new ToolApprovalRequestContent("req1", fcc);
+        var innerClient = CreateMockStreamingChatClient((_, _, _) =>
+            ToAsyncEnumerableAsync(
+                new ChatResponseUpdate(ChatRole.Assistant, [approval])));
+
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
+
+        // Act — calling directly without agent context; the decorator should no-op and pass through.
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in decorator.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "test")]))
+        {
+            updates.Add(update);
+        }
+
+        // Assert — the approval request is surfaced to the caller unchanged (not bypassed).
+        Assert.Contains(updates.SelectMany(u => u.Contents), c => c is ToolApprovalRequestContent);
     }
 
     #endregion
@@ -455,6 +489,41 @@ public class ApprovalNotRequiredFunctionBypassingChatClientTests
 
         // Assert
         Assert.NotNull(pipeline.GetService<ApprovalNotRequiredFunctionBypassingChatClient>());
+    }
+
+    [Fact]
+    public async Task UseApprovalNotRequiredFunctionBypassing_ExplicitLoggerFactory_IsUsedForWarningAsync()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger>();
+        loggerMock.Setup(l => l.IsEnabled(LogLevel.Warning)).Returns(true);
+        var loggerFactoryMock = new Mock<ILoggerFactory>();
+        loggerFactoryMock.Setup(f => f.CreateLogger(It.IsAny<string>())).Returns(loggerMock.Object);
+
+        var fcc = new FunctionCallContent("call1", "normalTool");
+        var approval = new ToolApprovalRequestContent("req1", fcc);
+        var innerClient = CreateMockChatClient((_, _, _) =>
+            Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [approval])])));
+
+        var pipeline = innerClient.AsBuilder()
+            .UseApprovalNotRequiredFunctionBypassing(loggerFactoryMock.Object)
+            .Build();
+
+        // Act — invoked without an agent run context, so the decorator no-ops and logs a warning
+        // via the explicitly provided logger factory.
+        var response = await pipeline.GetResponseAsync([new ChatMessage(ChatRole.User, "test")]);
+
+        // Assert — the provided factory was used to emit a warning, and the approval request is surfaced.
+        loggerFactoryMock.Verify(f => f.CreateLogger(It.IsAny<string>()), Times.Once);
+        loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()),
+            Times.Once);
+        Assert.IsType<ToolApprovalRequestContent>(Assert.Single(response.Messages.Single().Contents));
     }
 
     [Fact]

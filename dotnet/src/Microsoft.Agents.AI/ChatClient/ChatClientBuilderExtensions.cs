@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Shared.DiagnosticIds;
 using Microsoft.Shared.Diagnostics;
@@ -167,14 +168,21 @@ public static class ChatClientBuilderExtensions
     /// <see cref="ChatClientAgentOptions.DisableApprovalNotRequiredFunctionBypassing"/> is <see langword="true"/>.
     /// </para>
     /// <para>
-    /// This decorator only works within the context of a running <see cref="ChatClientAgent"/> with
-    /// an active session, and will throw an exception if used in any other stack.
+    /// This decorator is intended for use within the context of a running <see cref="ChatClientAgent"/> with
+    /// an active session. When invoked outside of an agent run (for example when the built chat client is used
+    /// directly), the decorator becomes a no-op, passing the request through unchanged and logging a warning.
     /// </para>
     /// </remarks>
     /// <param name="builder">The <see cref="ChatClientBuilder"/> to add the decorator to.</param>
+    /// <param name="loggerFactory">
+    /// An optional <see cref="ILoggerFactory"/> used to create a logger for the decorator. When not provided,
+    /// the factory is resolved from the pipeline's <see cref="IServiceProvider"/>; if none is available,
+    /// logging is a no-op.
+    /// </param>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
-    public static ChatClientBuilder UseApprovalNotRequiredFunctionBypassing(this ChatClientBuilder builder)
+    public static ChatClientBuilder UseApprovalNotRequiredFunctionBypassing(this ChatClientBuilder builder, ILoggerFactory? loggerFactory = null)
     {
-        return builder.Use(innerClient => new ApprovalNotRequiredFunctionBypassingChatClient(innerClient));
+        return builder.Use((innerClient, services) =>
+            new ApprovalNotRequiredFunctionBypassingChatClient(innerClient, loggerFactory ?? services.GetService<ILoggerFactory>()));
     }
 }

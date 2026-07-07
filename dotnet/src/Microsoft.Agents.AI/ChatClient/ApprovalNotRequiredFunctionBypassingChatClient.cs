@@ -237,23 +237,26 @@ internal sealed partial class ApprovalNotRequiredFunctionBypassingChatClient : D
     {
         List<ToolApprovalRequestContent>? autoApproved = null;
 
-        foreach (var message in messages)
+        for (int i = messages.Count - 1; i >= 0; i--)
         {
-            for (int i = message.Contents.Count - 1; i >= 0; i--)
+            var message = messages[i];
+            bool removedFromMessage = false;
+
+            for (int j = message.Contents.Count - 1; j >= 0; j--)
             {
-                if (message.Contents[i] is ToolApprovalRequestContent approval
+                if (message.Contents[j] is ToolApprovalRequestContent approval
                     && IsAutoApprovable(approval, autoApprovableNames))
                 {
                     (autoApproved ??= []).Add(approval);
-                    message.Contents.RemoveAt(i);
+                    message.Contents.RemoveAt(j);
+                    removedFromMessage = true;
                 }
             }
-        }
 
-        // Remove messages that are now empty after filtering.
-        for (int i = messages.Count - 1; i >= 0; i--)
-        {
-            if (messages[i].Contents.Count == 0)
+            // Only remove a message that this decorator emptied by stripping auto-approved
+            // content. Messages that were already empty (for example metadata-only messages)
+            // are left untouched.
+            if (removedFromMessage && message.Contents.Count == 0)
             {
                 messages.RemoveAt(i);
             }

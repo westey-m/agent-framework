@@ -150,6 +150,29 @@ public class ApprovalNotRequiredFunctionBypassingChatClientTests
     }
 
     [Fact]
+    public async Task GetResponseAsync_PreExistingEmptyMessage_IsPreservedAsync()
+    {
+        // Arrange — the response contains a metadata-only message that was already empty
+        // (no content items) before the decorator runs, alongside a normal text message.
+        var innerClient = CreateMockChatClient((_, _, _) =>
+            Task.FromResult(new ChatResponse([
+                new ChatMessage(ChatRole.Assistant, contents: []),
+                new ChatMessage(ChatRole.Assistant, "Hello")
+            ])));
+
+        var decorator = new ApprovalNotRequiredFunctionBypassingChatClient(innerClient);
+        var session = new ChatClientAgentSession();
+
+        // Act
+        var response = await RunWithAgentContextAsync(decorator, session);
+
+        // Assert — the decorator must not drop a message it did not empty itself.
+        Assert.Equal(2, response.Messages.Count);
+        Assert.Empty(response.Messages[0].Contents);
+        Assert.Equal("Hello", response.Messages[1].Text);
+    }
+
+    [Fact]
     public async Task GetResponseAsync_NextRequest_InjectsStoredAutoApprovalsAsync()
     {
         // Arrange

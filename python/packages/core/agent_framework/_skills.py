@@ -51,9 +51,11 @@ import json
 import logging
 import os
 import re
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from html import escape as xml_escape
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, TypeAlias, TypeVar, cast, runtime_checkable
@@ -2012,6 +2014,7 @@ class SkillsProvider(ContextProvider):
         *,
         instruction_template: str | None = None,
         disable_caching: bool = False,
+        cache_refresh_interval: timedelta | None = None,
         disable_load_skill_approval: bool = False,
         disable_read_skill_resource_approval: bool = False,
         disable_run_skill_script_approval: bool = False,
@@ -2056,6 +2059,15 @@ class SkillsProvider(ContextProvider):
                 skills, or :meth:`from_paths`); a caller-supplied
                 :class:`SkillsSource` is never auto-cached regardless of this
                 flag. Defaults to ``False``.
+            cache_refresh_interval: Optional duration after which the built-in
+                cache is considered stale and skills are re-discovered on the
+                next invocation. Like ``disable_caching``, this only affects the
+                :class:`CachingSkillsSource` the provider builds internally
+                (from a :class:`Skill` or a sequence of skills); it has no
+                effect on a caller-supplied :class:`SkillsSource` (compose your
+                own :class:`CachingSkillsSource` with a ``refresh_interval`` for
+                those) and is ignored when ``disable_caching=True``. When
+                ``None`` (the default), the built-in cache never expires.
             disable_load_skill_approval: When ``True``, the ``load_skill`` tool
                 is registered with ``approval_mode="never_require"`` so it runs
                 without approval.  Defaults to ``False`` (approval required).
@@ -2098,7 +2110,9 @@ class SkillsProvider(ContextProvider):
 
         if isinstance(source, Skill):
             leaf: SkillsSource = InMemorySkillsSource([source])
-            source = DeduplicatingSkillsSource(leaf if disable_caching else CachingSkillsSource(leaf))
+            source = DeduplicatingSkillsSource(
+                leaf if disable_caching else CachingSkillsSource(leaf, refresh_interval=cache_refresh_interval)
+            )
         elif isinstance(source, SkillsSource):
             # Caller-supplied source: the caller owns the whole pipeline, so it
             # is used as-is with no automatic caching (or deduplication).
@@ -2114,11 +2128,14 @@ class SkillsProvider(ContextProvider):
             pass
         else:
             leaf = InMemorySkillsSource(list(source))
-            source = DeduplicatingSkillsSource(leaf if disable_caching else CachingSkillsSource(leaf))
+            source = DeduplicatingSkillsSource(
+                leaf if disable_caching else CachingSkillsSource(leaf, refresh_interval=cache_refresh_interval)
+            )
 
         self._source = source
         self._instruction_template = instruction_template
         self._disable_caching = disable_caching
+        self._cache_refresh_interval = cache_refresh_interval
         self._disable_load_skill_approval = disable_load_skill_approval
         self._disable_read_skill_resource_approval = disable_read_skill_resource_approval
         self._disable_run_skill_script_approval = disable_run_skill_script_approval
@@ -2136,6 +2153,7 @@ class SkillsProvider(ContextProvider):
         resource_filter: Callable[[str, str], bool] | None = None,
         instruction_template: str | None = None,
         disable_caching: bool = False,
+        cache_refresh_interval: timedelta | None = None,
         disable_load_skill_approval: bool = False,
         disable_read_skill_resource_approval: bool = False,
         disable_run_skill_script_approval: bool = False,
@@ -2176,6 +2194,10 @@ class SkillsProvider(ContextProvider):
             disable_caching: When ``True``, the file-discovery source is not
                 wrapped in a :class:`CachingSkillsSource`, so skills are
                 re-discovered on every invocation. Defaults to ``False``.
+            cache_refresh_interval: Optional duration after which the file-
+                discovery cache is considered stale and skills are re-discovered
+                on the next invocation. When ``None`` (the default) the cache
+                never expires; ignored when ``disable_caching=True``.
             disable_load_skill_approval: When ``True``, the ``load_skill`` tool
                 runs without approval.  Defaults to ``False``.  Only enable this
                 for skills from a trusted source.
@@ -2216,21 +2238,26 @@ class SkillsProvider(ContextProvider):
         # caller-supplied source, which is intentionally left un-wrapped, so
         # caching is applied here. The file source is context-independent, so a
         # single shared cache is safe.
-        source = DeduplicatingSkillsSource(file_source if disable_caching else CachingSkillsSource(file_source))
-        # Only forward the approval-disable kwargs when explicitly enabled.
-        approval_overrides: dict[str, bool] = {}
+        source = DeduplicatingSkillsSource(
+            file_source
+            if disable_caching
+            else CachingSkillsSource(file_source, refresh_interval=cache_refresh_interval)
+        )
+        # Only forward the approval-disable kwargs when explicitly enabled, so a
+        # subclass with the previous __init__ signature keeps working.
+        forwarded_kwargs: dict[str, Any] = {}
         if disable_load_skill_approval:
-            approval_overrides["disable_load_skill_approval"] = True
+            forwarded_kwargs["disable_load_skill_approval"] = True
         if disable_read_skill_resource_approval:
-            approval_overrides["disable_read_skill_resource_approval"] = True
+            forwarded_kwargs["disable_read_skill_resource_approval"] = True
         if disable_run_skill_script_approval:
-            approval_overrides["disable_run_skill_script_approval"] = True
+            forwarded_kwargs["disable_run_skill_script_approval"] = True
         return cls(
             source,
             instruction_template=instruction_template,
             disable_caching=disable_caching,
             source_id=source_id,
-            **approval_overrides,
+            **forwarded_kwargs,
         )
 
     @staticmethod
@@ -3711,8 +3738,21 @@ class CachingSkillsSource(DelegatingSkillsSource):
 
     Concurrency: concurrent callers for the same cache key share a single
     in-flight fetch, so the inner source is queried at most once per key even
-    under concurrent access.  If the fetch fails (or is cancelled), the cache
-    is left empty so the next call retries.
+    under concurrent access.  If a fetch fails (or is cancelled), the cache is
+    not updated, so the next call retries: an initial failure leaves the cache
+    empty, and a refresh failure (see below) keeps the previously cached list.
+
+    Refresh interval: by default a cached list never expires and the inner
+    source is queried only once per key. Pass a *refresh_interval* to treat a
+    cached list as stale once it is older than the interval; the next call for
+    that key then re-queries the inner source and replaces the cached list.
+    This is useful for inner sources whose skills can change over the process
+    lifetime — for example an :class:`MCPSkillsSource` whose remote server
+    updates its advertised skills. A ``timedelta`` of zero or a negative
+    duration makes every cached list immediately stale, effectively disabling
+    caching (the inner source is queried on every call). A failed refresh
+    leaves the previous cached list in place and keeps retrying on subsequent
+    calls until one succeeds.
 
     Cache isolation: by default all callers share a single cache bucket. Pass
     a *cache_isolation_key_selector* to derive a cache key from the
@@ -3740,6 +3780,17 @@ class CachingSkillsSource(DelegatingSkillsSource):
                 expensive_source,
                 cache_isolation_key_selector=lambda context: context.agent.name,
             )
+
+        Refreshing the cache periodically:
+
+        .. code-block:: python
+
+            from datetime import timedelta
+
+            cached = CachingSkillsSource(
+                expensive_source,
+                refresh_interval=timedelta(minutes=5),
+            )
     """
 
     _SHARED_CACHE_KEY: Final[str] = "__caching_skills_source_shared__"
@@ -3749,6 +3800,7 @@ class CachingSkillsSource(DelegatingSkillsSource):
         inner_source: SkillsSource,
         *,
         cache_isolation_key_selector: Callable[[SkillsSourceContext], str | None] | None = None,
+        refresh_interval: timedelta | None = None,
     ) -> None:
         """Initialize a CachingSkillsSource.
 
@@ -3762,12 +3814,20 @@ class CachingSkillsSource(DelegatingSkillsSource):
                 stored in a single shared bucket. Otherwise skills are cached
                 under the returned key. Keys should be low-cardinality and
                 stable to keep the cache bounded.
+            refresh_interval: Optional duration after which a cached skills list
+                is considered stale and re-fetched from the inner source on the
+                next request. When ``None`` (the default), cached results never
+                expire and the inner source is queried only once per cache key.
+                A zero or negative ``timedelta`` makes every cached result
+                immediately stale, effectively disabling caching.
         """
         super().__init__(inner_source)
         self._cache_isolation_key_selector = cache_isolation_key_selector
+        self._refresh_interval = refresh_interval
         self._locks_guard = asyncio.Lock()
         self._locks: dict[str, asyncio.Lock] = {}
         self._cached_skills: dict[str, list[Skill]] = {}
+        self._cache_timestamps: dict[str, float] = {}
 
     def _resolve_cache_key(self, context: SkillsSourceContext) -> str:
         """Resolve the cache bucket key for *context*."""
@@ -3776,6 +3836,22 @@ class CachingSkillsSource(DelegatingSkillsSource):
             if selected is not None:
                 return selected
         return self._SHARED_CACHE_KEY
+
+    def _get_fresh_cached(self, key: str) -> list[Skill] | None:
+        """Return the cached skills for *key* when present and still fresh.
+
+        Returns ``None`` when nothing is cached for *key*, or when a
+        *refresh_interval* is configured and the cached list is older than the
+        interval (so the caller re-queries the inner source).
+        """
+        cached = self._cached_skills.get(key)
+        if cached is None:
+            return None
+        if self._refresh_interval is not None:
+            age = time.monotonic() - self._cache_timestamps.get(key, 0.0)
+            if age >= self._refresh_interval.total_seconds():
+                return None
+        return cached
 
     async def _get_lock(self, key: str) -> asyncio.Lock:
         """Return the per-key lock, creating it under a guard if needed."""
@@ -3797,26 +3873,29 @@ class CachingSkillsSource(DelegatingSkillsSource):
 
         Returns:
             The cached list of :class:`Skill` instances for the resolved cache
-            key.  On the first call for a key the inner source is queried;
-            subsequent calls return the cached list.  If the first query fails,
-            the cache is not populated and the next call retries.
+            key.  On the first call for a key (or the first call after the
+            configured *refresh_interval* has elapsed) the inner source is
+            queried; otherwise the cached list is returned.  If the query
+            fails, the cache is not updated and the next call retries.
         """
         key = self._resolve_cache_key(context)
 
-        cached = self._cached_skills.get(key)
+        cached = self._get_fresh_cached(key)
         if cached is not None:
             return cached
 
         lock = await self._get_lock(key)
         async with lock:
-            # Another coroutine may have populated the cache while we awaited
-            # the lock; re-check before querying the inner source.
-            cached = self._cached_skills.get(key)
+            # Another coroutine may have populated (or refreshed) the cache
+            # while we awaited the lock; re-check before querying the inner
+            # source.
+            cached = self._get_fresh_cached(key)
             if cached is not None:
                 return cached
 
             skills = await self._inner_source.get_skills(context)
             self._cached_skills[key] = skills
+            self._cache_timestamps[key] = time.monotonic()
             return skills
 
 

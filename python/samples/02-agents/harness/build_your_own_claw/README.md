@@ -173,5 +173,5 @@ Try these in order (the sample starts in **execute** mode — quick lookups don'
    toolbox and Foundry skills enabled (`FOUNDRY_TOOLBOX_MCP_SERVER_URL`), the agent loads it,
    recognizes the question is off-topic, and politely declines, steering you back to finance.
 
-See the [Part 3 blog post](https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-its-capabilities)
+See the [Part 3 blog post](https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-the-claw-or-harness-capabilities/)
 for more on the `financial-agent-rules` skill — including the SKILL.md to publish to your Foundry toolbox.

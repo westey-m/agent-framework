@@ -2,7 +2,7 @@
 
 // "Scaling its capabilities" — Post 3 of the "Build your own claw and agent harness with Microsoft
 // Agent Framework" series.
-// See: https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-its-capabilities.
+// See: https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-the-claw-or-harness-capabilities/.
 //
 // This sample builds on Post 2's personal finance assistant and makes it *more capable* in four ways:
 //   1. Skills        — package finance know-how (valuation, risk-scoring) as discoverable SKILL.md

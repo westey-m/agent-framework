@@ -20,7 +20,7 @@
 """Scaling its capabilities (Post 3) — Python.
 
 The third runnable sample from the "Build your own claw and agent harness with Microsoft Agent
-Framework" blog series. See: https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-its-capabilities.
+Framework" blog series. See: https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-the-claw-or-harness-capabilities/.
 It builds on Post 2's personal finance assistant and makes it *more capable* in four ways:
 
 1. Skills        — package finance know-how (valuation, risk-scoring) as discoverable SKILL.md

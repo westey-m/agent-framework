@@ -1,7 +1,7 @@
 # Scaling its capabilities (Post 3) — .NET
 
 The third runnable sample from the [**"Build your own claw and agent harness with Microsoft Agent Framework"** blog](https://devblogs.microsoft.com/agent-framework/build-your-own-claw-and-agent-harness-with-microsoft-agent-framework)
-series ([Part 3 — Scaling its capabilities](https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-its-capabilities)).
+series ([Part 3 — Scaling its capabilities](https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-the-claw-or-harness-capabilities/)).
 It builds on Post 2's personal finance assistant and makes it *more capable* along four axes.
 
 ## What this sample demonstrates
@@ -76,5 +76,5 @@ these in order:
    toolbox and Foundry skills enabled (`FOUNDRY_TOOLBOX_MCP_SERVER_URL`), the agent loads it,
    recognizes the question is off-topic, and politely declines, steering you back to finance.
 
-See the [Part 3 blog post](https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-its-capabilities)
+See the [Part 3 blog post](https://devblogs.microsoft.com/agent-framework/agent-harness-scaling-the-claw-or-harness-capabilities/)
 for more on the `financial-agent-rules` skill — including the SKILL.md to publish to your Foundry toolbox.

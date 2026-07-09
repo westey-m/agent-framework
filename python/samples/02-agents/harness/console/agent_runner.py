@@ -158,9 +158,15 @@ class HarnessAgentRunner:
 
         pending = self._message_injector.get_pending_messages(session)
 
-        consumed_count = len(self._last_pending_messages) - len(pending)
-        for i in range(min(consumed_count, len(self._last_pending_messages))):
-            self._ux.write_user_input_echo(self._last_pending_messages[i].text or "")
+        # The injection middleware drains the whole queue at once, so a message
+        # is consumed when it is no longer present in the pending list. Compare
+        # by object identity (snapshots share the same Message objects until the
+        # queue is cleared) so consumed messages are echoed correctly even if a
+        # drain is followed by a new enqueue before the next sync.
+        current_ids = {id(m) for m in pending}
+        for msg in self._last_pending_messages:
+            if id(msg) not in current_ids:
+                self._ux.write_user_input_echo(msg.text or "")
 
         self._last_pending_messages = pending
         self._ux.set_queued_messages([m.text for m in pending])

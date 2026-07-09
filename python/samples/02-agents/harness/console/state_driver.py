@@ -341,6 +341,8 @@ class SimpleConsoleStateDriver:
         """Set the queued (pending injected) message display."""
         if pending:
             print(f"[Queued: {', '.join(pending)}]")
+        else:
+            print("[Queued: (none)]")
 
     def request_shutdown(self) -> None:
         """Request application shutdown."""

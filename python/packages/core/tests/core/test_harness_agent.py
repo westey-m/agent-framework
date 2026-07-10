@@ -503,15 +503,15 @@ async def test_harness_chat_client_middleware_execution_order(
 
     original_injection = MessageInjectionMiddleware.process
 
-    async def recording_injection(self: Any, context: Any, call_next: Any) -> Any:
+    async def recording_injection(self: Any, context: Any, call_next: Any) -> None:
         order.append("message_injection")
-        return await original_injection(self, context, call_next)
+        await original_injection(self, context, call_next)
 
     original_persistence = PerServiceCallHistoryPersistingMiddleware.process
 
-    async def recording_persistence(self: Any, context: Any, call_next: Any) -> Any:
+    async def recording_persistence(self: Any, context: Any, call_next: Any) -> None:
         order.append("per_service_call")
-        return await original_persistence(self, context, call_next)
+        await original_persistence(self, context, call_next)
 
     monkeypatch.setattr(FunctionInvocationLayer, "get_response", recording_function_loop)
     monkeypatch.setattr(MessageInjectionMiddleware, "process", recording_injection)

@@ -93,7 +93,7 @@ public sealed class HarnessAgentRunner : IDisposable
             {
                 if (await handler.TryHandleAsync(text, this._session, this._ux).ConfigureAwait(false))
                 {
-                    this._ux.CurrentMode = this._modeProvider?.GetMode(this._session);
+                    this._ux.CurrentMode = this._modeProvider is null ? null : await this._modeProvider.GetModeAsync(this._session).ConfigureAwait(false);
                     return;
                 }
             }
@@ -136,7 +136,7 @@ public sealed class HarnessAgentRunner : IDisposable
         {
             if (messages.Count == 0)
             {
-                this.CompleteTurn();
+                await this.CompleteTurnAsync().ConfigureAwait(false);
                 return;
             }
 
@@ -158,10 +158,10 @@ public sealed class HarnessAgentRunner : IDisposable
             var runOptions = new AgentRunOptions();
             foreach (var observer in this._observers)
             {
-                observer.ConfigureRunOptions(runOptions, this._agent, this._session);
+                await observer.ConfigureRunOptionsAsync(runOptions, this._agent, this._session).ConfigureAwait(false);
             }
 
-            this._ux.CurrentMode = this._modeProvider?.GetMode(this._session);
+            this._ux.CurrentMode = this._modeProvider is null ? null : await this._modeProvider.GetModeAsync(this._session).ConfigureAwait(false);
             this._ux.BeginStreaming();
             this._ux.BeginStreamingOutput();
 
@@ -171,7 +171,7 @@ public sealed class HarnessAgentRunner : IDisposable
                 {
                     if (this._modeProvider is not null)
                     {
-                        string currentMode = this._modeProvider.GetMode(this._session);
+                        string currentMode = await this._modeProvider.GetModeAsync(this._session).ConfigureAwait(false);
                         if (currentMode != this._ux.CurrentMode)
                         {
                             this._ux.CurrentMode = currentMode;
@@ -261,13 +261,13 @@ public sealed class HarnessAgentRunner : IDisposable
             nextMessages = drained.Count > 0 ? [.. drained] : null;
         }
 
-        this.CompleteTurn();
+        await this.CompleteTurnAsync().ConfigureAwait(false);
     }
 
-    private void CompleteTurn()
+    private async Task CompleteTurnAsync()
     {
         this._ux.EndStreaming();
-        this._ux.CurrentMode = this._modeProvider?.GetMode(this._session);
+        this._ux.CurrentMode = this._modeProvider is null ? null : await this._modeProvider.GetModeAsync(this._session).ConfigureAwait(false);
     }
 
     /// <summary>

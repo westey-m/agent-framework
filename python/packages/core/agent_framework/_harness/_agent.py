@@ -123,8 +123,8 @@ def _assemble_compaction(
         )
 
     # Resolve each phase: caller-supplied strategy wins; otherwise fall back to the shared default.
-    before_strategy = before_compaction_strategy or default_strategy
-    after_strategy = after_compaction_strategy or default_strategy
+    before_strategy = before_compaction_strategy if before_compaction_strategy is not None else default_strategy
+    after_strategy = after_compaction_strategy if after_compaction_strategy is not None else default_strategy
 
     # The after-strategy runs post-turn against the persisted history via a CompactionProvider;
     # the before-strategy runs per model call via the agent's compaction_strategy option.

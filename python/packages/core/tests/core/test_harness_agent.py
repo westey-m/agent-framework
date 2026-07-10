@@ -342,6 +342,8 @@ def test_create_harness_agent_custom_after_strategy_enables_compaction_without_t
     # Before phase is skipped (no token budget, no custom before strategy), after phase is set.
     assert compaction_providers[0].before_strategy is None
     assert compaction_providers[0].after_strategy is not None
+    # An after-only strategy must not wire anything as the agent-level (per-call) compaction.
+    assert agent.compaction_strategy is None
 
 
 def test_create_harness_agent_default_tokens_split_compaction_phases() -> None:

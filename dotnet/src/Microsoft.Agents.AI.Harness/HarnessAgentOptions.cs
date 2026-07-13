@@ -375,8 +375,17 @@ public sealed class HarnessAgentOptions
     /// Gets or sets the name of the shell execution tool exposed to the model.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// When <see langword="null"/> (the default), the shell executor's default tool name (<c>run_shell</c>) is used.
     /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
+    /// </para>
+    /// <para>
+    /// <b>Security warning:</b> auto-approval rules match tool calls solely by name. Pay attention to
+    /// the tool names approved by auto-approval rules for other features. Setting this property to a
+    /// value that collides with a tool name that is approved by an auto-approval rule for another feature will cause
+    /// the shell tool to also be auto-approved, bypassing the human approval boundary. Choose a unique
+    /// name that no other registered tool uses.
+    /// </para>
     /// </remarks>
     public string? ShellToolName { get; set; }
 

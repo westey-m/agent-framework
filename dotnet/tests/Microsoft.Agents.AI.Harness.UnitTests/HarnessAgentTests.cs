@@ -1273,24 +1273,43 @@ public class HarnessAgentTests
     }
 
     /// <summary>
-    /// Verify that FileAccessProviderOptions are honored when a FileAccessStore is provided.
+    /// Verify that FileAccessProviderOptions are honored: setting DisableWriteTools must remove the
+    /// write tools from the provider that HarnessAgent wires up, while the read-only tools remain.
     /// </summary>
     [Fact]
-    public void FileAccessProvider_UsesProvidedOptions()
+    public async Task FileAccessProvider_UsesProvidedOptionsAsync()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;
         var options = CreateAllDisabledOptions();
-        options.FileAccessStore = new Mock<AgentFileStore>().Object;
+        options.FileAccessStore = new InMemoryAgentFileStore();
         options.FileAccessProviderOptions = new FileAccessProviderOptions { DisableWriteTools = true };
 
         // Act
         var agent = new HarnessAgent(chatClient, options);
         var innerAgent = agent.GetService<ChatClientAgent>();
 
-        // Assert — FileAccessProvider should be present when options are supplied alongside a store.
+        // Assert — the FileAccessProvider is present and honors the supplied options.
         Assert.NotNull(innerAgent?.AIContextProviders);
-        Assert.Contains(innerAgent!.AIContextProviders!, p => p is FileAccessProvider);
+        var fileAccessProvider = Assert.IsType<FileAccessProvider>(
+            Assert.Single(innerAgent!.AIContextProviders!, p => p is FileAccessProvider));
+
+        var mockAgent = new Mock<AIAgent>().Object;
+        var session = await agent.CreateSessionAsync();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(mockAgent, session, new AIContext());
+#pragma warning restore MAAI001
+        AIContext result = await fileAccessProvider.InvokingAsync(context);
+        var toolNames = result.Tools!.OfType<AIFunction>().Select(t => t.Name).ToList();
+
+        // DisableWriteTools = true => only the read-only tools are exposed.
+        Assert.Contains(FileAccessProvider.ReadFileToolName, toolNames);
+        Assert.Contains(FileAccessProvider.LsToolName, toolNames);
+        Assert.Contains(FileAccessProvider.GrepToolName, toolNames);
+        Assert.DoesNotContain(FileAccessProvider.WriteToolName, toolNames);
+        Assert.DoesNotContain(FileAccessProvider.DeleteFileToolName, toolNames);
+        Assert.DoesNotContain(FileAccessProvider.ReplaceToolName, toolNames);
+        Assert.DoesNotContain(FileAccessProvider.ReplaceLinesToolName, toolNames);
     }
 
     #endregion

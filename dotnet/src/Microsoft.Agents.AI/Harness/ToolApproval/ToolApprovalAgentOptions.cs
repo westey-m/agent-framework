@@ -41,8 +41,8 @@ public class ToolApprovalAgentOptions
     /// causes the function call to be auto-approved.
     /// </para>
     /// <para>
-    /// <b>Security warning:</b> auto-approval rules match tool calls solely by name. A rule provided for
-    /// one feature (for example a provider's read-only rule) will auto-approve <b>any</b> registered tool
+    /// <b>Security warning:</b> auto-approval rules may match tool calls solely by name. A rule provided for
+    /// one feature (for example a provider's read-only rule) may auto-approve <b>any</b> registered tool
     /// whose name matches, not just the tool the rule was designed for. When adding rules here, ensure
     /// no unrelated tools you register collide with a name approved by any rule in this list,
     /// otherwise that tool will be auto-approved without a human prompt, bypassing the approval boundary.

@@ -326,7 +326,7 @@ public sealed class LocalShellExecutor : ShellExecutor
     /// </param>
     /// <returns>An <see cref="AIFunction"/> wrapping <see cref="RunAsync"/>.</returns>
     /// <remarks>
-    /// <b>Security warning:</b> auto-approval rules match tool calls solely by name. Pay attention to
+    /// <b>Security warning:</b> auto-approval rules may match tool calls solely by name. Pay attention to
     /// the tool names approved by auto-approval rules for other features. Setting <paramref name="name"/>
     /// to a value that collides with a tool name that is approved by an auto-approval rule for another feature will
     /// cause this shell tool to also be auto-approved even when <paramref name="requireApproval"/> is

@@ -1,11 +1,11 @@
 ﻿# What this sample demonstrates
 
-This sample demonstrates how to use a `HarnessAgent` with the default `FileAccessProvider` to give an agent access to a folder of data files for reading, analyzing, and writing results. The `HarnessAgent` pre-configures function invocation, per-service-call chat history persistence, in-loop compaction, tool approval, and OpenTelemetry — so the sample only needs to supply the chat client, token limits, custom instructions, and opt out of unused features.
+This sample demonstrates how to use a `HarnessAgent` with the `FileAccessProvider` to give an agent access to a folder of data files for reading, analyzing, and writing results. The `HarnessAgent` pre-configures function invocation, per-service-call chat history persistence, in-loop compaction, tool approval, and OpenTelemetry — so the sample only needs to supply the chat client, token limits, custom instructions, a `FileAccessStore`, and opt out of unused features.
 
 Key features showcased:
 
 - **HarnessAgent** — a pre-configured agent that wraps a `ChatClientAgent` with function invocation, per-service-call persistence, and context-window compaction
-- **FileAccessProvider** — the HarnessAgent's default file access provider uses `{cwd}/working` as its working directory, matching this sample's `working/` folder
+- **FileAccessProvider** — file access is opt-in; setting `HarnessAgentOptions.FileAccessStore` to the sample's `working/` folder enables the provider's read/write tools
 - **CSV data processing** — the agent reads sales transaction data and performs analysis on demand
 - **Output file creation** — the agent can write summaries, filtered data, or reports back to the data folder
 - **Streaming output** — responses are streamed token-by-token for a natural experience

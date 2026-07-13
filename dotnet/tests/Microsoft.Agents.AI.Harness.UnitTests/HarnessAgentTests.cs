@@ -32,7 +32,6 @@ public class HarnessAgentTests
         DisableToolAutoApproval = true,
         DisableOpenTelemetry = true,
         DisableFileMemory = true,
-        DisableFileAccess = true,
         DisableWebSearch = true,
         DisableTodoProvider = true,
         DisableAgentModeProvider = true,
@@ -1212,15 +1211,15 @@ public class HarnessAgentTests
     #region Feature: FileAccessProvider
 
     /// <summary>
-    /// Verify that FileAccessProvider is included in AIContextProviders by default.
+    /// Verify that FileAccessProvider is included in AIContextProviders when a FileAccessStore is provided.
     /// </summary>
     [Fact]
-    public void FileAccessProvider_IncludedByDefault()
+    public void FileAccessProvider_IncludedWhenStoreProvided()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;
         var options = CreateAllDisabledOptions();
-        options.DisableFileAccess = false;
+        options.FileAccessStore = new Mock<AgentFileStore>().Object;
 
         // Act
         var agent = new HarnessAgent(chatClient, options);
@@ -1232,10 +1231,10 @@ public class HarnessAgentTests
     }
 
     /// <summary>
-    /// Verify that FileAccessProvider is excluded when disabled.
+    /// Verify that FileAccessProvider is excluded by default (opt-in: no store provided).
     /// </summary>
     [Fact]
-    public void FileAccessProvider_ExcludedWhenDisabled()
+    public void FileAccessProvider_ExcludedByDefault()
     {
         // Arrange
         var chatClient = new Mock<IChatClient>().Object;
@@ -1262,7 +1261,6 @@ public class HarnessAgentTests
         var chatClient = new Mock<IChatClient>().Object;
         var customStore = new Mock<AgentFileStore>().Object;
         var options = CreateAllDisabledOptions();
-        options.DisableFileAccess = false;
         options.FileAccessStore = customStore;
 
         // Act
@@ -1270,6 +1268,27 @@ public class HarnessAgentTests
         var innerAgent = agent.GetService<ChatClientAgent>();
 
         // Assert — FileAccessProvider should be present with the custom store.
+        Assert.NotNull(innerAgent?.AIContextProviders);
+        Assert.Contains(innerAgent!.AIContextProviders!, p => p is FileAccessProvider);
+    }
+
+    /// <summary>
+    /// Verify that FileAccessProviderOptions are honored when a FileAccessStore is provided.
+    /// </summary>
+    [Fact]
+    public void FileAccessProvider_UsesProvidedOptions()
+    {
+        // Arrange
+        var chatClient = new Mock<IChatClient>().Object;
+        var options = CreateAllDisabledOptions();
+        options.FileAccessStore = new Mock<AgentFileStore>().Object;
+        options.FileAccessProviderOptions = new FileAccessProviderOptions { DisableWriteTools = true };
+
+        // Act
+        var agent = new HarnessAgent(chatClient, options);
+        var innerAgent = agent.GetService<ChatClientAgent>();
+
+        // Assert — FileAccessProvider should be present when options are supplied alongside a store.
         Assert.NotNull(innerAgent?.AIContextProviders);
         Assert.Contains(innerAgent!.AIContextProviders!, p => p is FileAccessProvider);
     }
@@ -1419,7 +1438,6 @@ public class HarnessAgentTests
         Assert.Contains(providers, p => p is TodoProvider);
         Assert.Contains(providers, p => p is AgentModeProvider);
         Assert.Contains(providers, p => p is FileMemoryProvider);
-        Assert.Contains(providers, p => p is FileAccessProvider);
         Assert.Contains(providers, p => p is AgentSkillsProvider);
 
         // Assert — HostedWebSearchTool is present in the tools sent to the model
@@ -1903,7 +1921,6 @@ public class HarnessAgentTests
             DisableToolAutoApproval = true,
             DisableOpenTelemetry = true,
             DisableFileMemory = true,
-            DisableFileAccess = true,
             DisableWebSearch = true,
             DisableTodoProvider = true,
             DisableAgentModeProvider = true,
@@ -1954,7 +1971,6 @@ public class HarnessAgentTests
             DisableToolAutoApproval = true,
             DisableOpenTelemetry = true,
             DisableFileMemory = true,
-            DisableFileAccess = true,
             DisableWebSearch = true,
             DisableTodoProvider = true,
             DisableAgentModeProvider = true,
@@ -1986,7 +2002,6 @@ public class HarnessAgentTests
             DisableToolAutoApproval = true,
             DisableOpenTelemetry = true,
             DisableFileMemory = true,
-            DisableFileAccess = true,
             DisableWebSearch = true,
             DisableTodoProvider = true,
             DisableAgentModeProvider = true,

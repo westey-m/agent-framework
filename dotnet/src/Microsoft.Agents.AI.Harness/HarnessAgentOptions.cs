@@ -237,24 +237,24 @@ public sealed class HarnessAgentOptions
     public AgentFileStore? FileMemoryStore { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the <see cref="FileAccessProvider"/> is disabled.
+    /// Gets or sets the <see cref="AgentFileStore"/> that enables the <see cref="FileAccessProvider"/>.
     /// </summary>
     /// <remarks>
-    /// When <see langword="false"/> (the default), a <see cref="FileAccessProvider"/> is included in the
-    /// agent's context providers, using either <see cref="FileAccessStore"/> or a default
-    /// <see cref="FileSystemAgentFileStore"/> rooted at <c>{cwd}/working</c>.
-    /// </remarks>
-    public bool DisableFileAccess { get; set; }
-
-    /// <summary>
-    /// Gets or sets a custom <see cref="AgentFileStore"/> for the <see cref="FileAccessProvider"/>.
-    /// </summary>
-    /// <remarks>
-    /// When <see langword="null"/> and <see cref="DisableFileAccess"/> is <see langword="false"/>,
-    /// a default <see cref="FileSystemAgentFileStore"/> is created.
-    /// This property is ignored when <see cref="DisableFileAccess"/> is <see langword="true"/>.
+    /// File access is opt-in. When <see langword="null"/> (the default), no <see cref="FileAccessProvider"/>
+    /// is added and the agent has no file access tools. When set, a <see cref="FileAccessProvider"/> is
+    /// included in the agent's context providers, backed by the supplied store and configured with
+    /// <see cref="FileAccessProviderOptions"/> when provided.
     /// </remarks>
     public AgentFileStore? FileAccessStore { get; set; }
+
+    /// <summary>
+    /// Gets or sets the <see cref="FileAccessProviderOptions"/> used to configure the <see cref="FileAccessProvider"/>.
+    /// </summary>
+    /// <remarks>
+    /// This property is only used when <see cref="FileAccessStore"/> is set (file access is opt-in).
+    /// When <see langword="null"/>, the provider uses its default options.
+    /// </remarks>
+    public FileAccessProviderOptions? FileAccessProviderOptions { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the <see cref="HostedWebSearchTool"/> is disabled.

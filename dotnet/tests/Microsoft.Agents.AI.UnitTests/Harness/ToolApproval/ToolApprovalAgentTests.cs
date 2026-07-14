@@ -18,6 +18,9 @@ namespace Microsoft.Agents.AI.UnitTests;
 /// </summary>
 public class ToolApprovalAgentTests
 {
+    private static ToolAutoApprovalRuleContext CreateRuleContext(FunctionCallContent functionCall) =>
+        new(functionCall, new Mock<AIAgent>().Object, session: null, requestMessages: [], agentRunOptions: null);
+
     #region Constructor
 
     /// <summary>
@@ -1690,7 +1693,7 @@ public class ToolApprovalAgentTests
         var functionCall = new FunctionCallContent("call1", toolName);
 
         // Act
-        bool approved = await ToolApprovalAgent.AllToolsAutoApprovalRule(functionCall);
+        bool approved = await ToolApprovalAgent.AllToolsAutoApprovalRule(CreateRuleContext(functionCall));
 
         // Assert
         Assert.True(approved);
@@ -1778,7 +1781,7 @@ public class ToolApprovalAgentTests
 
         var options = new ToolApprovalAgentOptions
         {
-            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "ReadTool")]
+            AutoApprovalRules = [context => new ValueTask<bool>(context.FunctionCallContent.Name == "ReadTool")]
         };
         var agent = new ToolApprovalAgent(innerAgent.Object, options);
 
@@ -1806,7 +1809,7 @@ public class ToolApprovalAgentTests
 
         var options = new ToolApprovalAgentOptions
         {
-            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "ReadTool")]  // Only approves ReadTool
+            AutoApprovalRules = [context => new ValueTask<bool>(context.FunctionCallContent.Name == "ReadTool")]  // Only approves ReadTool
         };
         var agent = new ToolApprovalAgent(innerAgent.Object, options);
 
@@ -1857,8 +1860,8 @@ public class ToolApprovalAgentTests
         {
             AutoApprovalRules =
             [
-                fcc => { rule1Called = true; return new ValueTask<bool>(fcc.Name == "SpecialTool"); },
-                fcc => { rule2Called = true; return new ValueTask<bool>(true); }  // Should not be reached
+                context => { rule1Called = true; return new ValueTask<bool>(context.FunctionCallContent.Name == "SpecialTool"); },
+                context => { rule2Called = true; return new ValueTask<bool>(true); }  // Should not be reached
             ]
         };
         var agent = new ToolApprovalAgent(innerAgent.Object, options);
@@ -1904,7 +1907,7 @@ public class ToolApprovalAgentTests
         var heuristicCalled = false;
         var options = new ToolApprovalAgentOptions
         {
-            AutoApprovalRules = [fcc => { heuristicCalled = true; return new ValueTask<bool>(true); }]
+            AutoApprovalRules = [context => { heuristicCalled = true; return new ValueTask<bool>(true); }]
         };
         var agent = new ToolApprovalAgent(innerAgent.Object, options);
 
@@ -1969,7 +1972,7 @@ public class ToolApprovalAgentTests
 
         var options = new ToolApprovalAgentOptions
         {
-            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "HeuristicTool")]
+            AutoApprovalRules = [context => new ValueTask<bool>(context.FunctionCallContent.Name == "HeuristicTool")]
         };
         var agent = new ToolApprovalAgent(innerAgent.Object, options);
 
@@ -2031,7 +2034,7 @@ public class ToolApprovalAgentTests
 
         var options = new ToolApprovalAgentOptions
         {
-            AutoApprovalRules = [fcc => new ValueTask<bool>(fcc.Name == "ReadTool")]
+            AutoApprovalRules = [context => new ValueTask<bool>(context.FunctionCallContent.Name == "ReadTool")]
         };
         var agent = new ToolApprovalAgent(innerAgent.Object, options);
 

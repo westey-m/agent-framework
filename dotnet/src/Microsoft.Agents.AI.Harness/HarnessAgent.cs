@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using Microsoft.Agents.AI.Compaction;
@@ -11,7 +10,6 @@ using Microsoft.Agents.AI.Tools.Shell;
 #endif
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using Microsoft.Shared.DiagnosticIds;
 using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Agents.AI;
@@ -80,7 +78,6 @@ namespace Microsoft.Agents.AI;
 /// and combined with agent-specific instructions via <see cref="ChatOptions.Instructions"/>.
 /// </para>
 /// </remarks>
-[Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class HarnessAgent : DelegatingAIAgent
 {
     /// <summary>

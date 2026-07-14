@@ -14,7 +14,6 @@ namespace Microsoft.Agents.AI;
 /// <summary>
 /// Represents configuration options for a <see cref="HarnessAgent"/>.
 /// </summary>
-[Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
 public sealed class HarnessAgentOptions
 {
     /// <summary>
@@ -46,6 +45,7 @@ public sealed class HarnessAgentOptions
     /// <see langword="true"/>.
     /// </para>
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public int? MaxContextWindowTokens { get; set; }
 
     /// <summary>
@@ -62,6 +62,7 @@ public sealed class HarnessAgentOptions
     /// is provided and <see cref="DisableCompaction"/> is <see langword="false"/>.
     /// </para>
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public int? MaxOutputTokens { get; set; }
 
     /// <summary>
@@ -81,6 +82,7 @@ public sealed class HarnessAgentOptions
     /// This property is ignored when <see cref="DisableCompaction"/> is <see langword="true"/>.
     /// </para>
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public CompactionStrategy? CompactionStrategy { get; set; }
 
     /// <summary>
@@ -92,6 +94,7 @@ public sealed class HarnessAgentOptions
     /// <see cref="CompactionProvider"/> is added to the chat client pipeline, and the default
     /// <see cref="InMemoryChatHistoryProvider"/> is configured without a chat reducer.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public bool DisableCompaction { get; set; }
 
     /// <summary>
@@ -162,6 +165,7 @@ public sealed class HarnessAgentOptions
     /// as a single-shot agent.
     /// </para>
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public IEnumerable<LoopEvaluator>? LoopEvaluators { get; set; }
 
     /// <summary>
@@ -171,6 +175,7 @@ public sealed class HarnessAgentOptions
     /// When <see langword="null"/>, the <see cref="LoopAgent"/> uses its default settings. This property is ignored
     /// when <see cref="LoopEvaluators"/> is <see langword="null"/> or empty.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public LoopAgentOptions? LoopAgentOptions { get; set; }
 
     /// <summary>
@@ -234,6 +239,7 @@ public sealed class HarnessAgentOptions
     /// a default <see cref="FileSystemAgentFileStore"/> is created.
     /// This property is ignored when <see cref="DisableFileMemory"/> is <see langword="true"/>.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public AgentFileStore? FileMemoryStore { get; set; }
 
     /// <summary>
@@ -245,6 +251,7 @@ public sealed class HarnessAgentOptions
     /// included in the agent's context providers, backed by the supplied store and configured with
     /// <see cref="FileAccessProviderOptions"/> when provided.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public AgentFileStore? FileAccessStore { get; set; }
 
     /// <summary>
@@ -254,6 +261,7 @@ public sealed class HarnessAgentOptions
     /// This property is only used when <see cref="FileAccessStore"/> is set (file access is opt-in).
     /// When <see langword="null"/>, the provider uses its default options.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public FileAccessProviderOptions? FileAccessProviderOptions { get; set; }
 
     /// <summary>
@@ -348,6 +356,7 @@ public sealed class HarnessAgentOptions
     /// (case-insensitive). If these requirements are not met, <see cref="BackgroundAgentsProvider"/> will throw
     /// an <see cref="System.ArgumentException"/> during construction.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public IEnumerable<AIAgent>? BackgroundAgents { get; set; }
 
     /// <summary>
@@ -357,6 +366,7 @@ public sealed class HarnessAgentOptions
     /// Use this to customize instructions or agent list formatting for the background agents feature.
     /// This property is ignored when <see cref="BackgroundAgents"/> is <see langword="null"/> or empty.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public BackgroundAgentsProviderOptions? BackgroundAgentsProviderOptions { get; set; }
 
 #if NET
@@ -369,6 +379,7 @@ public sealed class HarnessAgentOptions
     /// <see cref="ShellExecutor.AsAIFunction"/> is registered as a callable tool.
     /// When <see langword="null"/> (the default), no shell features are enabled.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public ShellExecutor? ShellExecutor { get; set; }
 
     /// <summary>
@@ -387,6 +398,7 @@ public sealed class HarnessAgentOptions
     /// name that no other registered tool uses.
     /// </para>
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public string? ShellToolName { get; set; }
 
     /// <summary>
@@ -396,6 +408,7 @@ public sealed class HarnessAgentOptions
     /// When <see langword="null"/> (the default), the shell executor's built-in description is used.
     /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public string? ShellToolDescription { get; set; }
 
     /// <summary>
@@ -417,6 +430,7 @@ public sealed class HarnessAgentOptions
     /// <see cref="DockerShellExecutor"/> impose no such requirement.
     /// </para>
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public bool DisableShellToolApproval { get; set; }
 
     /// <summary>
@@ -427,6 +441,7 @@ public sealed class HarnessAgentOptions
     /// or the instructions formatter.
     /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
     /// </remarks>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public ShellEnvironmentProviderOptions? ShellEnvironmentProviderOptions { get; set; }
 #endif
 }

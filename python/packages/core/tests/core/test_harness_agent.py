@@ -1392,3 +1392,41 @@ def test_create_harness_agent_shell_executor_emits_experimental_warning() -> Non
             shell_executor=_FakeShellTool(),
         )
     assert "shell_tool_instance" in agent.default_options.get("tools", [])
+
+
+@_requires_shell_tools
+def test_create_harness_agent_shell_dedup_does_not_suppress_harness_warning() -> None:
+    """The shell tooling uses a dedup key separate from HARNESS.
+
+    Enabling shell tooling must only seed the SHELL_TOOLING dedup key, so a subsequent
+    opt-in to an experimental HARNESS feature (e.g. ``background_agents``) must still warn.
+    This guards the separate-dedup-key strategy against regressions.
+    """
+    from agent_framework._feature_stage import ExperimentalWarning
+
+    _clear_harness_experimental_dedup()
+    _clear_harness_shell_dedup()
+
+    # Enabling shell tooling seeds only the SHELL_TOOLING dedup key, not HARNESS.
+    with pytest.warns(ExperimentalWarning, match="shell_executor"):
+        create_harness_agent(
+            client=_FakeShellClient(),
+            max_context_window_tokens=128_000,
+            max_output_tokens=16_384,
+            disable_web_search=True,
+            disable_file_memory=True,
+            shell_executor=_FakeShellTool(),
+        )
+
+    # HARNESS was never seeded by the shell warning, so opting into an experimental
+    # HARNESS feature afterwards must still emit its own ExperimentalWarning.
+    bg_agent = _FakeBackgroundAgent("WebSearcher", "Searches the web")
+    with pytest.warns(ExperimentalWarning, match="background_agents"):
+        create_harness_agent(
+            client=_FakeChatClient(),
+            max_context_window_tokens=128_000,
+            max_output_tokens=16_384,
+            disable_web_search=True,
+            disable_file_memory=True,
+            background_agents=[bg_agent],  # type: ignore[list-item]  # pyrefly: ignore[bad-argument-type]  # ty: ignore[invalid-argument-type]
+        )

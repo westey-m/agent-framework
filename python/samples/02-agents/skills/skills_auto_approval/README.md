@@ -22,6 +22,14 @@ prompt for safe operations.
 
 Both rules reject any call carrying a `server_label`, so they stay scoped to this provider's local tools and never auto-approve a same-named hosted tool.
 
+> ⚠️ **Security — avoid tool-name collisions:** these rules approve local skill
+> tools by tool name only (`load_skill`, `read_skill_resource`, and — for
+> `all_tools_auto_approval_rule` — `run_skill_script`). Auto-approval rules may
+> match by name, so any other local tool registered under one of these names —
+> for example a tool with a caller-configurable name such as the shell tool — may
+> also be auto-approved, bypassing the human approval boundary. Ensure no other
+> tool collides with these reserved names.
+
 > **Note:** To use auto-approval rules, the agent must have `ToolApprovalMiddleware` in its middleware stack.
 
 ## Key Components

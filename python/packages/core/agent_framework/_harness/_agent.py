@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import sys
-import warnings
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -20,7 +19,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from .._agents import Agent, SupportsAgentRun
 from .._clients import SupportsShellTool, SupportsWebSearchTool
 from .._compaction import CompactionProvider, ContextWindowCompactionStrategy
-from .._feature_stage import _WARNED_FEATURES, ExperimentalFeature, ExperimentalWarning
+from .._feature_stage import ExperimentalFeature, warn_experimental_feature
 from .._sessions import ContextProvider, HistoryProvider, InMemoryHistoryProvider, MessageInjectionMiddleware
 from .._skills import SkillsProvider
 from .._types import ChatOptions
@@ -291,17 +290,12 @@ def _warn_experimental_harness_params(
     """
     if not param_names:
         return
-    dedup_key = (ExperimentalWarning, feature_id)
-    if dedup_key in _WARNED_FEATURES:
-        return
     joined = ", ".join(repr(name) for name in param_names)
-    warnings.warn(
+    warn_experimental_feature(
         f"[{feature_id}] create_harness_agent parameter(s) {joined} enable "
         f"{detail} that may change or be removed in future versions without notice.",
-        ExperimentalWarning,
-        stacklevel=3,
+        feature_id=feature_id,
     )
-    _WARNED_FEATURES.add(dedup_key)
 
 
 def create_harness_agent(

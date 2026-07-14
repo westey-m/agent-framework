@@ -2191,7 +2191,7 @@ def _last_non_empty_assistant_message_text(messages: Sequence[Message]) -> str:
     for message in reversed(messages):
         if message.role != "assistant":
             continue
-        text = message.text
+        text = "".join((content.text or "") for content in message.contents if content.type == "text")
         if text.strip():
             return text
     return ""

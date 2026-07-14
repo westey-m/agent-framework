@@ -884,6 +884,17 @@ def test_chat_response_with_mapping_response_format() -> None:
     assert response.value["response"] == "Hello"
 
 
+def test_chat_response_value_parses_split_structured_text_without_changing_message_text() -> None:
+    """ChatResponse.value should not use Message.text spacing between structured output chunks."""
+    message = Message(role="assistant", contents=[Content.from_text('{ "respon'), Content.from_text('se": "Hello" }')])
+    response = ChatResponse(messages=message, response_format=OutputModel)
+
+    assert message.text == '{ "respon se": "Hello" }'
+    assert response.text == '{ "respon se": "Hello" }'
+    assert response.value is not None
+    assert response.value.response == "Hello"
+
+
 def test_chat_response_value_parses_final_message_with_response_format() -> None:
     """ChatResponse.value should ignore intermediate messages when parsing structured output."""
     response = ChatResponse(
@@ -895,6 +906,17 @@ def test_chat_response_value_parses_final_message_with_response_format() -> None
     )
 
     assert response.text == '{"skill_name": "building-permit-compliance"}\n{"response": "Hello"}'
+    assert response.value is not None
+    assert response.value.response == "Hello"
+
+
+def test_agent_response_value_parses_split_structured_text_without_changing_message_text() -> None:
+    """AgentResponse.value should not use Message.text spacing between structured output chunks."""
+    message = Message(role="assistant", contents=[Content.from_text('{"response": "Hel'), Content.from_text('lo"}')])
+    response = AgentResponse(messages=message, response_format=OutputModel)
+
+    assert message.text == '{"response": "Hel lo"}'
+    assert response.text == '{"response": "Hel lo"}'
     assert response.value is not None
     assert response.value.response == "Hello"
 
@@ -912,6 +934,14 @@ def test_agent_response_value_parses_final_message_with_response_format() -> Non
     assert response.text == '{"skill_name": "building-permit-compliance"}{"response": "Hello"}'
     assert response.value is not None
     assert response.value.response == "Hello"
+
+
+def test_chat_response_value_handles_text_content_without_text() -> None:
+    """ChatResponse.value should ignore text content with no text value."""
+    message = Message(role="assistant", contents=[Content.from_dict({"type": "text"})])
+    response = ChatResponse(messages=message, response_format=OutputModel)
+
+    assert response.value is None
 
 
 def test_agent_response_mapping_value_parses_final_message() -> None:

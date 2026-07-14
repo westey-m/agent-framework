@@ -51,6 +51,15 @@ You can ask the agent to:
 
 E.g. try the following prompt `Please process the sales.csv file by first filtering it to only North region sales, and then calculating the sum of sales by person. I'd like to write the results of the processing to north_region_totals.csv`.
 
+## ⚠️ Security: avoid tool-name collisions
+
+This sample uses `FileAccessProvider.ReadOnlyToolsAutoApprovalRule` to auto-approve read-only file
+access tools. Built-in auto-approval rules match tool calls **solely by tool name**, so any other
+registered tool that shares one of the approved names (`file_access_read`, `file_access_ls`,
+`file_access_grep`) would be **silently auto-approved**, bypassing the
+human approval boundary. Ensure no other tool's name collides with the reserved names an
+auto-approval rule approves.
+
 ## Sample Data
 
 The included `working/sales.csv` contains sales transactions from January to March 2025 with the following columns:

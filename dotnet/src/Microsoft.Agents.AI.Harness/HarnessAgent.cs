@@ -5,9 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Agents.AI.Compaction;
-#if NET
-using Microsoft.Agents.AI.Tools.Shell;
-#endif
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Shared.Diagnostics;
@@ -49,7 +46,6 @@ namespace Microsoft.Agents.AI;
 /// <list type="bullet">
 /// <item><description><see cref="FileAccessProvider"/> — shared file access providing read/write tools for a working directory. Enable by setting <see cref="HarnessAgentOptions.FileAccessStore"/>; configure via <see cref="HarnessAgentOptions.FileAccessProviderOptions"/>.</description></item>
 /// <item><description><see cref="BackgroundAgentsProvider"/> — enables delegation to background agents for parallel work. Enable by setting <see cref="HarnessAgentOptions.BackgroundAgents"/>.</description></item>
-/// <item><description><c>ShellEnvironmentProvider</c> — injects OS/shell/CWD information and a shell execution tool. Enable by setting <c>HarnessAgentOptions.ShellExecutor</c> (.NET only).</description></item>
 /// </list>
 /// </para>
 /// <para>
@@ -276,16 +272,6 @@ public sealed class HarnessAgent : DelegatingAIAgent
             result.Tools.Add(new HostedWebSearchTool());
         }
 
-#if NET
-        if (options?.ShellExecutor is ShellExecutor shellExecutor)
-        {
-            result.Tools ??= [];
-            result.Tools.Add(options.ShellToolName is { } shellToolName
-                ? shellExecutor.AsAIFunction(shellToolName, options.ShellToolDescription, !options.DisableShellToolApproval)
-                : shellExecutor.AsAIFunction(description: options.ShellToolDescription, requireApproval: !options.DisableShellToolApproval));
-        }
-#endif
-
         return result;
     }
 
@@ -339,13 +325,6 @@ public sealed class HarnessAgent : DelegatingAIAgent
                 providers.Add(new BackgroundAgentsProvider(materializedAgents, options.BackgroundAgentsProviderOptions));
             }
         }
-
-#if NET
-        if (options?.ShellExecutor is ShellExecutor shellExecutor)
-        {
-            providers.Add(new ShellEnvironmentProvider(shellExecutor, options.ShellEnvironmentProviderOptions));
-        }
-#endif
 
         if (options?.AIContextProviders is IEnumerable<AIContextProvider> userProviders)
         {

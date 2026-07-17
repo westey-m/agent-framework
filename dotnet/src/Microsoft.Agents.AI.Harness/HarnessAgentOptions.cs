@@ -3,9 +3,6 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Agents.AI.Compaction;
-#if NET
-using Microsoft.Agents.AI.Tools.Shell;
-#endif
 using Microsoft.Extensions.AI;
 using Microsoft.Shared.DiagnosticIds;
 
@@ -368,80 +365,4 @@ public sealed class HarnessAgentOptions
     /// </remarks>
     [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
     public BackgroundAgentsProviderOptions? BackgroundAgentsProviderOptions { get; set; }
-
-#if NET
-    /// <summary>
-    /// Gets or sets the shell executor used to enable shell tool and environment probing via <see cref="ShellEnvironmentProvider"/>.
-    /// </summary>
-    /// <remarks>
-    /// When non-null, a <see cref="ShellEnvironmentProvider"/> is automatically included in the agent's context
-    /// providers (injecting OS/shell/CWD information into the system prompt), and the executor's
-    /// <see cref="ShellExecutor.AsAIFunction"/> is registered as a callable tool.
-    /// When <see langword="null"/> (the default), no shell features are enabled.
-    /// </remarks>
-    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public ShellExecutor? ShellExecutor { get; set; }
-
-    /// <summary>
-    /// Gets or sets the name of the shell execution tool exposed to the model.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// When <see langword="null"/> (the default), the shell executor's default tool name (<c>run_shell</c>) is used.
-    /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
-    /// </para>
-    /// <para>
-    /// <b>Security warning:</b> auto-approval rules may match tool calls solely by name. Pay attention to
-    /// the tool names approved by auto-approval rules for other features. Setting this property to a
-    /// value that collides with a tool name that is approved by an auto-approval rule for another feature will cause
-    /// the shell tool to also be auto-approved, bypassing the human approval boundary. Choose a unique
-    /// name that no other registered tool uses.
-    /// </para>
-    /// </remarks>
-    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public string? ShellToolName { get; set; }
-
-    /// <summary>
-    /// Gets or sets the description of the shell execution tool shown to the model.
-    /// </summary>
-    /// <remarks>
-    /// When <see langword="null"/> (the default), the shell executor's built-in description is used.
-    /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
-    /// </remarks>
-    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public string? ShellToolDescription { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether approval is disabled for the shell execution tool.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// When <see langword="false"/> (the default), the shell tool is wrapped in an <see cref="ApprovalRequiredAIFunction"/>
-    /// so every command requires explicit approval before executing. When <see langword="true"/>, the tool can be invoked
-    /// without approval. This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
-    /// </para>
-    /// <para>
-    /// Setting this to <see langword="true"/> also requires the underlying <see cref="ShellExecutor"/> to permit
-    /// unapproved use. The inverse of this value is forwarded as the <c>requireApproval</c> argument to
-    /// <see cref="ShellExecutor.AsAIFunction"/>, and some executors enforce their own security boundary:
-    /// <see cref="LocalShellExecutor"/> throws an <see cref="System.InvalidOperationException"/> unless it was
-    /// constructed with <see cref="LocalShellExecutorOptions.AcknowledgeUnsafe"/> set to <see langword="true"/>,
-    /// because running unapproved commands directly on the host is inherently unsafe. Sandboxed executors such as
-    /// <see cref="DockerShellExecutor"/> impose no such requirement.
-    /// </para>
-    /// </remarks>
-    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public bool DisableShellToolApproval { get; set; }
-
-    /// <summary>
-    /// Gets or sets optional configuration for the <see cref="ShellEnvironmentProvider"/>.
-    /// </summary>
-    /// <remarks>
-    /// Use this to customize which tools are probed, the probe timeout, shell family override,
-    /// or the instructions formatter.
-    /// This property is ignored when <see cref="ShellExecutor"/> is <see langword="null"/>.
-    /// </remarks>
-    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public ShellEnvironmentProviderOptions? ShellEnvironmentProviderOptions { get; set; }
-#endif
 }

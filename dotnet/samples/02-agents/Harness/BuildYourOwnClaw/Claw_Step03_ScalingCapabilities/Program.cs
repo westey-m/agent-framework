@@ -133,7 +133,7 @@ AIAgent researchAgent = ResearchAgent.Create(chatClient);
 // A sandboxed shell, confined to the trade-confirmation vault. ConfineWorkingDirectory re-anchors
 // every command to the vault, and the deny-list policy pre-filters obviously destructive commands.
 // (Patterns are a UX guardrail, not a security boundary — for hard isolation use DockerShellExecutor.)
-await using var shell = new LocalShellExecutor(new LocalShellExecutorOptions
+await using var shellExecutor = new LocalShellExecutor(new LocalShellExecutorOptions
 {
     WorkingDirectory = vaultDir,
     ConfineWorkingDirectory = true,
@@ -162,7 +162,7 @@ using var codeAct = new HyperlightCodeActProvider(HyperlightCodeActProviderOptio
 // CodeAct.
 // The shell is wired up in two parts: the ShellEnvironmentProvider injects OS/shell/CWD info into the
 // system prompt, and the shell tool is registered below in ChatOptions.
-List<AIContextProvider> contextProviders = [skillsProvider, codeAct, new ShellEnvironmentProvider(shell)];
+List<AIContextProvider> contextProviders = [skillsProvider, codeAct, new ShellEnvironmentProvider(shellExecutor)];
 
 AIAgent agent = chatClient.AsHarnessAgent(new HarnessAgentOptions
 {
@@ -189,7 +189,7 @@ AIAgent agent = chatClient.AsHarnessAgent(new HarnessAgentOptions
             StockTools.CreateGetStockPriceTool(),
             TradingTools.CreatePlaceTradeTool(),
             // The confined shell, exposed as the approval-gated run_shell tool.
-            shell.AsAIFunction(requireApproval: true),
+            shellExecutor.AsAIFunction(requireApproval: true),
         ],
         Reasoning = new() { Effort = ReasoningEffort.Medium },
     },

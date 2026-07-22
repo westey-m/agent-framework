@@ -6,11 +6,11 @@
 .DESCRIPTION
   The IT fixture targets stable, scenario-keyed agent names (e.g. it-happy-path) and only
   manages versions on each test run. The agent itself must already exist AND its managed
-  identity must hold the Azure AI User role on the project scope, otherwise inbound
+  identity must hold the Foundry User role on the project scope, otherwise inbound
   inference calls fail with HTTP 500 PermissionDenied.
 
   This script idempotently creates each scenario agent (with a placeholder version) and
-  grants Azure AI User on the project to its managed identity. Re-run it safely; existing
+  grants Foundry User on the project to its managed identity. Re-run it safely; existing
   agents and role assignments are left in place.
 
 .PARAMETER ProjectEndpoint
@@ -19,6 +19,13 @@
 .PARAMETER Image
   Container image reference for the placeholder version (e.g. <acr>.azurecr.io/foundry-hosting-it:<tag>).
   Use the value emitted by scripts/it-build-image.ps1.
+
+.NOTES
+  Per-scenario data-plane RBAC (e.g. `Search Index Data Reader` on the Azure AI Search service
+  for the `azure-search-rag` scenario) is intentionally NOT performed by this script. Search,
+  Cosmos, and other backing services are treated as pre-existing infrastructure. Grant the
+  scenario-specific data role to the agent's managed identity manually after the first run
+  (see dotnet/tests/Foundry.Hosting.IntegrationTests/README.md).
 
 .EXAMPLE
   ./it-bootstrap-agents.ps1 `
@@ -34,11 +41,17 @@ $ErrorActionPreference = 'Stop'
 
 $Scenarios = @(
     'happy-path',
+    'store-config',
     'tool-calling',
     'tool-calling-approval',
-    'toolbox',
     'mcp-toolbox',
-    'custom-storage'
+    'toolbox-oauth-consent',
+    'custom-storage',
+    'memory',
+    'azure-search-rag',
+    'session-files',
+    'agent-skills',
+    'unsupported-protocol'
 )
 
 # Resolve project ARM scope from the endpoint.
@@ -79,7 +92,7 @@ foreach ($scenario in $Scenarios) {
         $body = @{
             definition = @{
                 kind = 'hosted'
-                container_protocol_versions = @(@{ protocol = 'responses'; version = '1.0.0' })
+                container_protocol_versions = @(@{ protocol = 'responses'; version = '2.0.0' })
                 cpu = '0.25'
                 memory = '0.5Gi'
                 environment_variables = @{ IT_SCENARIO = $scenario }
@@ -125,20 +138,20 @@ foreach ($scenario in $Scenarios) {
             -Body $patchBody | Out-Null
     }
 
-    # 3. Grant Azure AI User on the project scope to the agent MI (idempotent).
+    # 3. Grant Foundry User on the project scope to the agent MI (idempotent).
     $existing = az role assignment list --assignee $principalId --scope $projectScope `
-        --query "[?roleDefinitionName=='Azure AI User']" 2>$null | ConvertFrom-Json
+        --query "[?roleDefinitionName=='Foundry User']" 2>$null | ConvertFrom-Json
     if ($existing) {
         Write-Host "  role already assigned"
     } else {
-        Write-Host "  granting Azure AI User..."
+        Write-Host "  granting Foundry User..."
         $maxAttempts = 12
         $granted = $false
         for ($i = 1; $i -le $maxAttempts; $i++) {
             $output = az role assignment create `
                 --assignee-object-id $principalId `
                 --assignee-principal-type ServicePrincipal `
-                --role 'Azure AI User' `
+                --role 'Foundry User' `
                 --scope $projectScope 2>&1
             if ($LASTEXITCODE -eq 0) {
                 $granted = $true

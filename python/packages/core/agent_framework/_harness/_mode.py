@@ -6,7 +6,6 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from .._feature_stage import ExperimentalFeature, experimental
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._tools import tool
 from .._types import Message
@@ -14,30 +13,59 @@ from .._types import Message
 DEFAULT_MODE_SOURCE_ID = "agent_mode"
 DEFAULT_MODE_INSTRUCTIONS = (
     "## Agent Mode\n\n"
-    "You can operate in different modes. Depending on the mode you are in, "
+    "- You can operate in different modes. Depending on the mode you are in, "
     "you will be required to follow different processes.\n\n"
-    "Use the get_mode tool to check your current operating mode.\n"
-    "Use the set_mode tool to switch between modes as your work progresses. "
-    "Only use set_mode if the user explicitly instructs/allows you to change modes.\n\n"
+    "Use the mode_get tool to check your current operating mode.\n"
+    "Use the mode_set tool to switch between modes as your work progresses. "
+    "Only use mode_set if the user explicitly instructs/allows you to change modes.\n\n"
+    "You are currently operating in the {current_mode} mode.\n\n"
+    "### Mandatory Mode based Workflow\n\n"
+    "For every new substantive user request, including short factual questions, "
+    "your behavior is determined by the mode you are in.\n\n"
     "{available_modes}\n"
-    "\n"
-    "You are currently operating in the {current_mode} mode.\n"
 )
 DEFAULT_MODE_CHANGE_NOTIFICATION = (
     '[Mode changed: The operating mode has been switched from "{previous_mode}" to "{current_mode}". '
     'You must now adjust your behavior to match the "{current_mode}" mode.]'
 )
-DEFAULT_MODE_DESCRIPTIONS: dict[str, str] = {
+DEFAULT_MODE_MAP: dict[str, str] = {
     "plan": (
         "Use this mode when analyzing requirements, breaking down tasks, and creating plans. "
         "This is the interactive mode — ask clarifying questions, discuss options, and get user approval before "
-        "proceeding."
+        "proceeding.\n\n"
+        "Process to follow when in plan mode:\n"
+        "1. Analyze the request with the purpose of building a research plan.\n"
+        "2. Create a list of todo items.\n"
+        "3. If needed, use the provided tools to do some exploratory checks to help build a plan and determine "
+        "what clarifying questions you may need from the user.\n"
+        "4. Ask for clarifications from the user where needed.\n"
+        "   1. Ask each clarification one by one.\n"
+        "   2. When asking for clarification and you have specific options in mind, present them to the user, "
+        "so they can choose the option instead of having to retype the entire response.\n"
+        "   3. Do not proceed until you have received all the needed clarifications.\n"
+        "   4. Do short exploratory research if it helps with being able to ask sensible clarifications from "
+        "the user.\n"
+        "5. Write the plan to a memory file, so that it is retained even if compaction happens. "
+        "Make sure to update the plan file if the user requests changes.\n"
+        "6. Present the plan to the user and ask for approval to switch to execute mode and process the plan.\n"
+        "7. When approval is granted, always switch to execute mode (using the `mode_set` tool), "
+        "and follow the steps for *Execute mode*."
     ),
     "execute": (
-        "Use this mode when carrying out approved plans. Work autonomously using your best judgement — do not ask "
-        "the user questions or wait for feedback. Make reasonable decisions on your own so that there is a complete, "
-        "useful result when the user returns. If you encounter ambiguity, choose the most reasonable option and note "
-        "your choice."
+        "Determine the type of ask:\n"
+        "1. Simple question that doesn't require any further work to answer.\n"
+        "2. Any other work, including complex user request that requires a multi-step process to satisfy.\n\n"
+        "If 1. just answer the question directly.\n"
+        "If 2. Work autonomously using your best judgment — do not ask the user questions or wait for feedback "
+        "and follow the following process:\n"
+        "1. If you don't have a plan or tasks yet, analyze the user request and create tasks and a plan. "
+        "(**Skip this step if you came from plan mode**)\n"
+        "2. Work autonomously — use your best judgment to make decisions and keep progressing without asking "
+        "the user questions. The goal is to have a complete, useful result ready when the user returns.\n"
+        "3. If you encounter ambiguity or an unexpected situation during execution, choose the most reasonable "
+        "option, note your choice, and keep going.\n"
+        "4. Mark tasks as completed as you finish them.\n"
+        "5. Continue working, thinking and calling tools until you have the research result for the user."
     ),
 }
 
@@ -86,7 +114,6 @@ def _resolve_default_mode(default_mode: str | None, *, available_modes: Mapping[
     return _normalize_mode(default_mode, available_modes=available_modes)
 
 
-@experimental(feature_id=ExperimentalFeature.HARNESS)
 def get_agent_mode(
     session: AgentSession,
     *,
@@ -108,7 +135,7 @@ def get_agent_mode(
     Returns:
         The current mode string.
     """
-    normalized_modes = _normalize_available_modes(tuple(available_modes or DEFAULT_MODE_DESCRIPTIONS))
+    normalized_modes = _normalize_available_modes(tuple(available_modes or DEFAULT_MODE_MAP))
     normalized_default_mode = _resolve_default_mode(default_mode, available_modes=normalized_modes)
     provider_state = _get_mode_state(session, source_id=source_id)
     current_mode = provider_state.get("current_mode")
@@ -123,7 +150,6 @@ def get_agent_mode(
     return normalized_default_mode
 
 
-@experimental(feature_id=ExperimentalFeature.HARNESS)
 def set_agent_mode(
     session: AgentSession,
     mode: str,
@@ -153,7 +179,7 @@ def set_agent_mode(
     Raises:
         ValueError: The requested mode is not configured.
     """
-    normalized_modes = _normalize_available_modes(tuple(available_modes or DEFAULT_MODE_DESCRIPTIONS))
+    normalized_modes = _normalize_available_modes(tuple(available_modes or DEFAULT_MODE_MAP))
     normalized_mode = _normalize_mode(mode, available_modes=normalized_modes)
     provider_state = _get_mode_state(session, source_id=source_id)
     previous_mode = provider_state.get("current_mode")
@@ -167,7 +193,6 @@ def set_agent_mode(
     return normalized_mode
 
 
-@experimental(feature_id=ExperimentalFeature.HARNESS)
 class AgentModeProvider(ContextProvider):
     """Track the agent's operating mode in session state and provide mode tools.
 
@@ -175,12 +200,12 @@ class AgentModeProvider(ContextProvider):
     The current mode is persisted in the ``AgentSession`` state and is included in the instructions provided to the
     agent on each invocation.
 
-    The set of available modes is configurable with ``mode_descriptions``. By default, two modes are provided:
+    The set of available modes is configurable with ``mode_instructions``. By default, two modes are provided:
     ``"plan"`` (interactive planning) and ``"execute"`` (autonomous execution).
 
     This provider exposes the following tools to the agent:
-    - ``set_mode``: Switch the agent's operating mode.
-    - ``get_mode``: Retrieve the agent's current operating mode.
+    - ``mode_set``: Switch the agent's operating mode.
+    - ``mode_get``: Retrieve the agent's current operating mode.
 
     Public helper functions ``get_agent_mode`` and ``set_agent_mode`` allow external code to programmatically read
     and change the mode.
@@ -191,7 +216,7 @@ class AgentModeProvider(ContextProvider):
         source_id: str = DEFAULT_MODE_SOURCE_ID,
         *,
         default_mode: str | None = None,
-        mode_descriptions: Mapping[str, str] | None = None,
+        mode_instructions: Mapping[str, str] | None = None,
         instructions: str | None = None,
     ) -> None:
         """Initialize a new agent mode provider.
@@ -201,8 +226,8 @@ class AgentModeProvider(ContextProvider):
 
         Keyword Args:
             default_mode: Initial mode used when no mode is stored yet. When omitted, the first entry of
-                ``mode_descriptions`` is used.
-            mode_descriptions: Mapping of supported modes to descriptions of when and how to use each mode.
+                ``mode_instructions`` is used.
+            mode_instructions: Mapping of supported modes to instructions on when and how to use each mode.
             instructions: Custom instructions for using the mode tools. The instructions can contain an
                 ``{available_modes}`` placeholder for the configured list of modes and a ``{current_mode}`` placeholder
                 for the currently active mode. When omitted, the provider uses a default set of instructions.
@@ -211,11 +236,13 @@ class AgentModeProvider(ContextProvider):
             ValueError: No modes are configured, or the default mode is not configured.
         """
         super().__init__(source_id)
-        mode_descriptions = dict(DEFAULT_MODE_DESCRIPTIONS if mode_descriptions is None else mode_descriptions)
-        self._mode_display_names = _normalize_available_modes(tuple(mode_descriptions))
+        mode_instructions = dict(DEFAULT_MODE_MAP if mode_instructions is None else mode_instructions)
+        self._mode_display_names = _normalize_available_modes(tuple(mode_instructions))
         if not self._mode_display_names:
-            raise ValueError("mode_descriptions must contain at least one mode.")
-        self.mode_descriptions = {mode.strip().lower(): description for mode, description in mode_descriptions.items()}
+            raise ValueError("mode_instructions must contain at least one mode.")
+        self.mode_instructions = {
+            mode.strip().lower(): mode_instruction for mode, mode_instruction in mode_instructions.items()
+        }
         self.available_modes = tuple(self._mode_display_names)
         self.default_mode = _resolve_default_mode(default_mode, available_modes=self._mode_display_names)
         self.instructions = instructions
@@ -223,8 +250,8 @@ class AgentModeProvider(ContextProvider):
     def _build_instructions(self, current_mode: str) -> str:
         """Build the mode guidance injected for the current session."""
         mode_lines = "".join(
-            f'- "{self._mode_display_names[mode]}": {description}\n'
-            for mode, description in self.mode_descriptions.items()
+            f"#### {self._mode_display_names[mode]}\n\n{mode_instruction}\n\n"
+            for mode, mode_instruction in self.mode_instructions.items()
         )
         instructions = self.instructions or DEFAULT_MODE_INSTRUCTIONS
         return instructions.replace("{available_modes}", mode_lines).replace("{current_mode}", current_mode)
@@ -257,8 +284,8 @@ class AgentModeProvider(ContextProvider):
         provider_state = _get_mode_state(session, source_id=self.source_id)
         previous_mode = provider_state.pop(_PREVIOUS_MODE_STATE_KEY, None)
 
-        @tool(name="set_mode", approval_mode="never_require")
-        def set_mode(mode: str) -> str:
+        @tool(name="mode_set", approval_mode="never_require")
+        def mode_set(mode: str) -> str:
             """Switch the agent's operating mode."""
             # The agent invoked the tool itself, so it knows the mode just changed — bypass
             # ``set_agent_mode`` to avoid triggering a notification message on the next turn.
@@ -267,8 +294,8 @@ class AgentModeProvider(ContextProvider):
             tool_state["current_mode"] = normalized_mode
             return json.dumps({"mode": normalized_mode, "message": f"Mode changed to '{normalized_mode}'."})
 
-        @tool(name="get_mode", approval_mode="never_require")
-        def get_mode() -> str:
+        @tool(name="mode_get", approval_mode="never_require")
+        def mode_get() -> str:
             """Get the agent's current operating mode."""
             current_mode_value = get_agent_mode(
                 session,
@@ -282,11 +309,11 @@ class AgentModeProvider(ContextProvider):
             self.source_id,
             [self._build_instructions(current_mode)],
         )
-        context.extend_tools(self.source_id, [set_mode, get_mode])
+        context.extend_tools(self.source_id, [mode_set, mode_get])
         if isinstance(previous_mode, str) and previous_mode != current_mode:
             # Inject a user-role message announcing the external mode change. System instructions
             # always render first in the chat history, so the agent can otherwise stay anchored to
-            # the most recent ``set_mode`` tool call rather than the new mode.
+            # the most recent ``mode_set`` tool call rather than the new mode.
             previous_display = self._mode_display_names.get(previous_mode, previous_mode)
             current_display = self._mode_display_names.get(current_mode, current_mode)
             notification = DEFAULT_MODE_CHANGE_NOTIFICATION.format(

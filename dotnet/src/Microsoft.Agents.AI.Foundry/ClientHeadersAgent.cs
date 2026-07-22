@@ -35,30 +35,24 @@ internal sealed class ClientHeadersAgent : DelegatingAIAgent
     }
 
     /// <inheritdoc/>
-    protected override Task<AgentResponse> RunCoreAsync(
+    protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
         AgentRunOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         var snapshot = TrySnapshot(options);
-        if (snapshot is null)
+        if (snapshot is not null)
         {
-            return this.InnerAgent.RunAsync(messages, session, options, cancellationToken);
+            // This method is async, so the runtime restores the caller's ExecutionContext (and
+            // therefore the previous ClientHeadersScope.Current value) when the returned task
+            // completes. Awaiting the inner call is what establishes that async-method boundary,
+            // so the per-run scope set here cannot carry into a later run on the same async flow.
+            // See ClientHeadersScope remarks. The streaming path relies on the same behavior.
+            ClientHeadersScope.Current = snapshot;
         }
 
-        return RunAsyncCoreAsync(messages, session, options, snapshot, cancellationToken);
-
-        async Task<AgentResponse> RunAsyncCoreAsync(
-            IEnumerable<ChatMessage> innerMessages,
-            AgentSession? innerSession,
-            AgentRunOptions? innerOptions,
-            Dictionary<string, string> innerSnapshot,
-            CancellationToken innerCt)
-        {
-            using var _ = ClientHeadersScope.Push(innerSnapshot);
-            return await this.InnerAgent.RunAsync(innerMessages, innerSession, innerOptions, innerCt).ConfigureAwait(false);
-        }
+        return await this.InnerAgent.RunAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -69,7 +63,10 @@ internal sealed class ClientHeadersAgent : DelegatingAIAgent
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var snapshot = TrySnapshot(options);
-        using var _ = snapshot is null ? default : ClientHeadersScope.Push(snapshot);
+        if (snapshot is not null)
+        {
+            ClientHeadersScope.Current = snapshot;
+        }
 
         await foreach (var update in this.InnerAgent.RunStreamingAsync(messages, session, options, cancellationToken).ConfigureAwait(false))
         {

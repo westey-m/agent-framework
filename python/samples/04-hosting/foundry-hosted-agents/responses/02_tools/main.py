@@ -6,8 +6,7 @@ from random import randint
 from typing import Annotated
 
 from agent_framework import Agent, tool
-from agent_framework.foundry import FoundryChatClient
-from agent_framework_foundry_hosting import ResponsesHostServer
+from agent_framework.foundry import FoundryChatClient, ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 from pydantic import Field
@@ -25,7 +24,7 @@ def get_weather(
     return f"The weather in {location} is {conditions[randint(0, 3)]} with a high of {randint(10, 30)}°C."
 
 
-@tool(approval_mode="never_require")
+@tool(approval_mode="always_require")
 def run_bash(command: str) -> str:
     """Execute a shell command locally and return stdout, stderr, and exit code."""
     try:

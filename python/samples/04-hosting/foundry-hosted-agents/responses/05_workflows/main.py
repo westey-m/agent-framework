@@ -3,8 +3,7 @@
 import os
 
 from agent_framework import Agent, AgentExecutor, WorkflowBuilder
-from agent_framework.foundry import FoundryChatClient
-from agent_framework_foundry_hosting import ResponsesHostServer
+from agent_framework.foundry import FoundryChatClient, ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 
@@ -52,9 +51,9 @@ def main():
     workflow_agent = (
         WorkflowBuilder(
             start_executor=writer_executor,
-            # Limiting the output to only the final formatted result.
-            # If this is not set, all intermediate results will be included in the output.
-            output_executors=[format_executor],
+            # Select only the formatted result as Workflow Output.
+            # Unselected executor payloads are hidden unless selected as Intermediate Output.
+            output_from=[format_executor],
         )
         .add_edge(writer_executor, legal_executor)
         .add_edge(legal_executor, format_executor)

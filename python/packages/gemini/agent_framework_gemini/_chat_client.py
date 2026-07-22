@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import sys
-from collections.abc import AsyncIterable, Awaitable, Mapping, Sequence
+from collections.abc import AsyncIterable, Awaitable, Callable, Mapping, Sequence
 from typing import Any, ClassVar, Generic, cast
 from uuid import uuid4
 
@@ -24,10 +25,13 @@ from agent_framework import (
     Message,
     ResponseStream,
     UsageDetails,
+    detect_media_type_from_base64,
     validate_tool_mode,
 )
 from agent_framework._settings import SecretString, load_settings
 from agent_framework._telemetry import get_user_agent
+from agent_framework._types import _get_data_bytes  # type: ignore[reportPrivateUsage]
+from agent_framework.exceptions import ContentError
 from agent_framework.observability import ChatTelemetryLayer
 from google import genai
 from google.auth.credentials import Credentials
@@ -35,19 +39,19 @@ from google.genai import types
 from pydantic import BaseModel
 
 if sys.version_info >= (3, 13):
-    from typing import TypeVar  # type: ignore # pragma: no cover
+    from typing import TypeVar  # pragma: no cover
 else:
-    from typing_extensions import TypeVar  # type: ignore # pragma: no cover
+    from typing_extensions import TypeVar  # pragma: no cover
 
 if sys.version_info >= (3, 12):
-    from typing import override  # type: ignore # pragma: no cover
+    from typing import override  # pragma: no cover
 else:
-    from typing_extensions import override  # type: ignore # pragma: no cover
+    from typing_extensions import override  # pragma: no cover
 
 if sys.version_info >= (3, 11):
-    from typing import TypedDict  # type: ignore # pragma: no cover
+    from typing import TypedDict  # pragma: no cover
 else:
-    from typing_extensions import TypedDict  # type: ignore # pragma: no cover
+    from typing_extensions import TypedDict  # pragma: no cover
 
 logger = logging.getLogger("agent_framework.gemini")
 
@@ -109,8 +113,8 @@ class GeminiChatOptions(ChatOptions[ResponseModelT], Generic[ResponseModelT], to
             or ``types.Tool`` objects returned by ``get_code_interpreter_tool``, ``get_web_search_tool``,
             ``get_mcp_tool``, ``get_file_search_tool``, or ``get_maps_grounding_tool``.
         tool_choice: How the model picks a tool. One of ``'auto'``, ``'none'``, or ``'required'``.
-        response_format: Pydantic model type for structured JSON output. The response text is
-            parsed into the model and exposed via ``ChatResponse.value``.
+        response_format: Pydantic model type or JSON schema mapping for structured JSON output.
+            The response text is parsed and exposed via ``ChatResponse.value``.
         instructions: Extra system-level instructions prepended to the system message.
 
     Not supported, and passing these raises a type error:
@@ -255,6 +259,29 @@ _OPTION_CONSUMED_KEYS: frozenset[str] = frozenset({
 
 _OPTION_EXCLUDE_KEYS: frozenset[str] = _OPTION_EXPLICIT_KEYS | _OPTION_CONSUMED_KEYS
 
+_JSON_SCHEMA_TYPES: frozenset[str] = frozenset({
+    "array",
+    "boolean",
+    "integer",
+    "null",
+    "number",
+    "object",
+    "string",
+})
+
+_JSON_SCHEMA_KEYWORDS: frozenset[str] = frozenset({
+    "$defs",
+    "additionalProperties",
+    "allOf",
+    "anyOf",
+    "enum",
+    "items",
+    "oneOf",
+    "properties",
+    "required",
+    "type",
+})
+
 _FINISH_REASON_MAP: dict[str, FinishReasonLiteral] = {
     "STOP": "stop",
     "MAX_TOKENS": "length",
@@ -283,7 +310,7 @@ class RawGeminiChatClient(
     client with batteries included, use `GeminiChatClient` instead.
     """
 
-    OTEL_PROVIDER_NAME: ClassVar[str] = "gcp.gemini"  # type: ignore[reportIncompatibleVariableOverride, misc]
+    OTEL_PROVIDER_NAME: ClassVar[str] = "gcp.gemini"
 
     def __init__(
         self,
@@ -512,9 +539,13 @@ class RawGeminiChatClient(
             async def _stream() -> AsyncIterable[ChatResponseUpdate]:
                 validated = await self._validate_options(options)
                 model, contents, config = self._prepare_request(messages, validated)
-                async for chunk in await self._genai_client.aio.models.generate_content_stream(  # pyright: ignore[reportUnknownMemberType]
+                generate_content_stream = cast(
+                    Callable[..., Awaitable[AsyncIterable[types.GenerateContentResponse]]],
+                    cast(Any, self._genai_client.aio.models).generate_content_stream,
+                )
+                async for chunk in await generate_content_stream(
                     model=model,
-                    contents=contents,  # type: ignore[arg-type]
+                    contents=contents,
                     config=config,
                 ):
                     yield self._process_chunk(chunk)
@@ -637,12 +668,42 @@ class RawGeminiChatClient(
             A list of Gemini Part objects representing the message contents.
         """
         parts: list[types.Part] = []
+        pending_signature: bytes | None = None
         for content in message_contents:
+            if content.type == "text_reasoning":
+                # Gemini 3's thought_signature travels as base64 protected_data on reasoning content;
+                # hold it for the function call it precedes (reasoning is not sent back as a Part).
+                pending_signature = None
+                encoded_signature = content.protected_data
+                if isinstance(encoded_signature, str) and encoded_signature:
+                    try:
+                        pending_signature = base64.b64decode(encoded_signature, validate=True)
+                    except ValueError:
+                        logger.warning("Ignoring malformed thought_signature on reasoning content")
+                continue
+            # A signature applies only to a function call immediately following its reasoning content.
+            thought_signature = pending_signature
+            pending_signature = None
             match content.type:
                 case "text":
                     parts.append(types.Part(text=content.text or ""))
                 case "function_call":
                     call_id = content.call_id or self._generate_tool_call_id()
+                    raw_part = content.raw_representation
+                    if (
+                        content.informational_only
+                        and isinstance(raw_part, types.Part)
+                        and raw_part.tool_call is not None
+                    ):
+                        tool_call = raw_part.tool_call.model_copy(
+                            update={
+                                "id": call_id,
+                                "args": content.parse_arguments() or {},
+                            },
+                            deep=True,
+                        )
+                        parts.append(raw_part.model_copy(update={"tool_call": tool_call}, deep=True))
+                        continue
                     if content.name:
                         call_id_to_name[call_id] = content.name
                     function_call = types.FunctionCall(
@@ -650,14 +711,77 @@ class RawGeminiChatClient(
                         name=content.name or "",
                         args=content.parse_arguments() or {},
                     )
-                    raw_part = content.raw_representation
+                    # Echo the signature from the preceding reasoning content, backfilling only when
+                    # the raw Part lacks one.
                     if isinstance(raw_part, types.Part) and raw_part.function_call is not None:
-                        parts.append(raw_part.model_copy(update={"function_call": function_call}, deep=True))
+                        replayed_part = raw_part.model_copy(update={"function_call": function_call}, deep=True)
+                        if replayed_part.thought_signature is None and thought_signature is not None:
+                            replayed_part.thought_signature = thought_signature
+                        parts.append(replayed_part)
                     else:
-                        parts.append(types.Part(function_call=function_call))
+                        parts.append(types.Part(function_call=function_call, thought_signature=thought_signature))
+                case "function_result":
+                    raw_part = content.raw_representation
+                    if isinstance(raw_part, types.Part) and raw_part.tool_response is not None:
+                        tool_response = raw_part.tool_response.model_copy(
+                            update={
+                                "id": content.call_id or self._generate_tool_call_id(),
+                                "response": content.result,
+                            },
+                            deep=True,
+                        )
+                        parts.append(raw_part.model_copy(update={"tool_response": tool_response}, deep=True))
+                    else:
+                        logger.debug("Skipping unsupported content type for Gemini: %s", content.type)
+                case "data" | "uri":
+                    part = self._convert_data_or_uri_content(content)
+                    if part is not None:
+                        parts.append(part)
                 case _:
                     logger.debug("Skipping unsupported content type for Gemini: %s", content.type)
         return parts
+
+    def _convert_data_or_uri_content(self, content: Content) -> types.Part | None:
+        """Convert a ``data`` or ``uri`` Content to a Gemini Part.
+
+        Data URIs (``type="data"``) become ``inline_data`` Parts with the decoded bytes.
+        External URIs (``type="uri"``) become ``file_data`` Parts referencing the resource.
+
+        Args:
+            content: The framework Content object, expected to be of type ``data`` or ``uri``.
+
+        Returns:
+            A Gemini Part carrying the multimodal content, or None if the content cannot be
+            converted (e.g. missing URI, non-base64 data URI, or undecodable data).
+        """
+        uri = content.uri
+        if not uri:
+            logger.warning("Skipping %s content for Gemini: missing uri", content.type)
+            return None
+
+        if uri.startswith("data:"):
+            try:
+                raw_bytes = _get_data_bytes(content)
+            except ContentError:
+                logger.warning("Skipping data content for Gemini: data URI is not valid base64")
+                return None
+            if not raw_bytes:
+                logger.warning("Skipping data content for Gemini: no data found in URI")
+                return None
+            mime_type = content.media_type or detect_media_type_from_base64(data_bytes=raw_bytes)
+            if not mime_type:
+                logger.warning("Skipping data content for Gemini: missing media_type")
+                return None
+            return types.Part.from_bytes(data=raw_bytes, mime_type=mime_type)
+
+        try:
+            return types.Part.from_uri(file_uri=uri, mime_type=content.media_type)
+        except ValueError:
+            # from_uri raises when no media_type is given and one cannot be inferred from the URI
+            # (e.g. presigned URLs or API endpoints without an extension). Pass the URI through
+            # without a mime type rather than dropping the content or raising.
+            logger.warning("Could not determine media_type for URI content; sending to Gemini without one: %s", uri)
+            return types.Part(file_data=types.FileData(file_uri=uri, mime_type=None))
 
     def _convert_function_result(
         self,
@@ -676,6 +800,17 @@ class RawGeminiChatClient(
         """
         if content.type != "function_result":
             return None
+
+        raw_part = content.raw_representation
+        if isinstance(raw_part, types.Part) and raw_part.tool_response is not None:
+            tool_response = raw_part.tool_response.model_copy(
+                update={
+                    "id": content.call_id or self._generate_tool_call_id(),
+                    "response": content.result,
+                },
+                deep=True,
+            )
+            return raw_part.model_copy(update={"tool_response": tool_response}, deep=True)
 
         name = call_id_to_name.get(content.call_id or "")
         if not name:
@@ -747,9 +882,13 @@ class RawGeminiChatClient(
                 continue
             kwargs[_OPTION_TRANSLATIONS.get(key, key)] = value
 
-        if options.get("response_format") or options.get("response_schema"):
+        response_format = options.get("response_format")
+        response_schema = options.get("response_schema")
+        if response_format is not None or response_schema is not None:
             kwargs["response_mime_type"] = "application/json"
-        if schema := options.get("response_schema"):
+        if response_schema is not None:
+            kwargs["response_schema"] = response_schema
+        elif (schema := self._extract_response_schema(response_format)) is not None:
             kwargs["response_schema"] = schema
         if tools := self._prepare_tools(options):
             kwargs["tools"] = tools
@@ -761,6 +900,48 @@ class RawGeminiChatClient(
                 kwargs["thinking_config"] = types.ThinkingConfig(**thinking_config_kwargs)
 
         return types.GenerateContentConfig(**kwargs)
+
+    @staticmethod
+    def _extract_response_schema(response_format: Any) -> dict[str, Any] | None:
+        """Extract a Gemini response schema from supported mapping response_format shapes."""
+        if not isinstance(response_format, Mapping):
+            return None
+        mapping = cast("Mapping[str, Any]", response_format)
+
+        if (nested := RawGeminiChatClient._extract_response_schema(mapping.get("format"))) is not None:
+            return nested
+
+        json_schema = mapping.get("json_schema")
+        if isinstance(json_schema, Mapping):
+            schema = cast("Mapping[str, Any]", json_schema).get("schema")
+            if isinstance(schema, Mapping):
+                return dict(cast("Mapping[str, Any]", schema))
+
+        schema = mapping.get("schema")
+        if isinstance(schema, Mapping):
+            return dict(cast("Mapping[str, Any]", schema))
+
+        if RawGeminiChatClient._is_json_schema_mapping(mapping):
+            return dict(mapping)
+
+        return None
+
+    @staticmethod
+    def _is_json_schema_mapping(value: Mapping[str, Any]) -> bool:
+        """Return True when a mapping appears to be a JSON Schema rather than a response-format envelope."""
+        if not any(keyword in value for keyword in _JSON_SCHEMA_KEYWORDS):
+            return False
+
+        schema_type = value.get("type")
+        if schema_type is None:
+            return True
+        if isinstance(schema_type, str):
+            return schema_type in _JSON_SCHEMA_TYPES
+        if isinstance(schema_type, Sequence) and not isinstance(schema_type, (str, bytes)):
+            entries = cast("Sequence[object]", schema_type)
+            return all(isinstance(item, str) and item in _JSON_SCHEMA_TYPES for item in entries)
+
+        return False
 
     def _prepare_tools(self, options: Mapping[str, Any]) -> list[types.Tool] | None:
         """Translate the framework tool list into Gemini API tool objects.
@@ -930,6 +1111,35 @@ class RawGeminiChatClient(
                 continue
             if part.text is not None:
                 contents.append(Content.from_text(text=part.text, raw_representation=part))
+            elif part.tool_call is not None:
+                tool_call = part.tool_call
+                if tool_call.id:
+                    call_id = tool_call.id
+                else:
+                    call_id = self._generate_tool_call_id()
+                    logger.debug("tool_call missing id; generated fallback call_id=%r", call_id)
+                if isinstance(tool_call.tool_type, types.ToolType):
+                    tool_name = tool_call.tool_type.value
+                else:
+                    tool_name = str(tool_call.tool_type or "tool_call")
+                contents.append(
+                    Content.from_function_call(
+                        call_id=call_id,
+                        name=tool_name,
+                        arguments=tool_call.args or {},
+                        informational_only=True,
+                        raw_representation=part,
+                    )
+                )
+            elif part.tool_response is not None:
+                tool_response = part.tool_response
+                contents.append(
+                    Content.from_function_result(
+                        call_id=tool_response.id or self._generate_tool_call_id(),
+                        result=tool_response.response,
+                        raw_representation=part,
+                    )
+                )
             elif part.function_call is not None:
                 function_call = part.function_call
                 if function_call.id:
@@ -937,6 +1147,14 @@ class RawGeminiChatClient(
                 else:
                     call_id = self._generate_tool_call_id()
                     logger.debug("function_call missing id; generated fallback call_id=%r", call_id)
+                # Surface Gemini 3's thought_signature as reasoning content preceding the call so it
+                # survives when the call is later reconstructed without its raw Part.
+                if part.thought_signature is not None:
+                    contents.append(
+                        Content.from_text_reasoning(
+                            protected_data=base64.b64encode(part.thought_signature).decode("utf-8")
+                        )
+                    )
                 contents.append(
                     Content.from_function_call(
                         call_id=call_id,
@@ -982,6 +1200,10 @@ class RawGeminiChatClient(
             details["output_token_count"] = v
         if (v := usage.total_token_count) is not None:
             details["total_token_count"] = v
+        if (v := usage.cached_content_token_count) is not None:
+            details["cache_read_input_token_count"] = v
+        if (v := usage.thoughts_token_count) is not None:
+            details["reasoning_output_token_count"] = v
         return details or None
 
     def _map_finish_reason(self, reason: str | None) -> FinishReasonLiteral | None:

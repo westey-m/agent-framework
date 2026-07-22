@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -12,6 +12,7 @@ from typing import (
     Literal,
     Protocol,
     TypeAlias,
+    cast,
     runtime_checkable,
 )
 
@@ -27,7 +28,7 @@ GROUP_ID_KEY = "id"
 GROUP_KIND_KEY = "kind"
 GROUP_INDEX_KEY = "index"
 GROUP_HAS_REASONING_KEY = "has_reasoning"
-GROUP_TOKEN_COUNT_KEY = "token_count"  # noqa: S105 # nosec B105 - compaction metadata key, not a credential
+GROUP_TOKEN_COUNT_KEY = "token_count"  # ruff:ignore[hardcoded-password-string] # nosec B105 - compaction metadata key, not a credential
 EXCLUDED_KEY = "_excluded"
 EXCLUDE_REASON_KEY = "_exclude_reason"
 SUMMARY_OF_MESSAGE_IDS_KEY = "_summary_of_message_ids"
@@ -36,6 +37,14 @@ SUMMARIZED_BY_SUMMARY_ID_KEY = "_summarized_by_summary_id"
 
 
 logger = logging.getLogger("agent_framework")
+
+_TOOL_CALL_CONTENT_TYPES: Final[set[str]] = {
+    "function_call",
+    "mcp_server_tool_call",
+    "code_interpreter_tool_call",
+    "shell_tool_call",
+    "image_generation_tool_call",
+}
 
 
 @runtime_checkable
@@ -74,8 +83,8 @@ def _has_content_type(message: Message, content_type: str) -> bool:
     return any(content.type == content_type for content in message.contents)
 
 
-def _has_function_call(message: Message) -> bool:
-    return _has_content_type(message, "function_call")
+def _has_tool_call(message: Message) -> bool:
+    return any(content.type in _TOOL_CALL_CONTENT_TYPES for content in message.contents)
 
 
 def _has_reasoning(message: Message) -> bool:
@@ -83,7 +92,7 @@ def _has_reasoning(message: Message) -> bool:
 
 
 def _is_tool_call_assistant(message: Message) -> bool:
-    return message.role == "assistant" and _has_function_call(message)
+    return message.role == "assistant" and _has_tool_call(message)
 
 
 def _is_reasoning_only_assistant(message: Message) -> bool:
@@ -92,10 +101,23 @@ def _is_reasoning_only_assistant(message: Message) -> bool:
     return all(content.type == "text_reasoning" for content in message.contents)
 
 
-def _ensure_message_ids(messages: list[Message]) -> None:
+def _ensure_message_ids(
+    messages: list[Message], *, id_offset: int = 0, reserved_ids: Iterable[str] | None = None
+) -> None:
+    existing_ids: set[str] = set(reserved_ids) if reserved_ids is not None else set()
+    existing_ids.update(message.message_id for message in messages if message.message_id)
     for index, message in enumerate(messages):
-        if not message.message_id:
-            message.message_id = f"msg_{index}"
+        if message.message_id:
+            continue
+        candidate = f"msg_{id_offset + index}"
+        if candidate in existing_ids:
+            counter = id_offset + len(messages)
+            candidate = f"msg_{counter}"
+            while candidate in existing_ids:
+                counter += 1
+                candidate = f"msg_{counter}"
+        message.message_id = candidate
+        existing_ids.add(candidate)
 
 
 def _group_id_for(message: Message, group_index: int) -> str:
@@ -104,14 +126,27 @@ def _group_id_for(message: Message, group_index: int) -> str:
     return f"group_index_{group_index}"
 
 
-def group_messages(messages: list[Message]) -> list[dict[str, Any]]:
+def group_messages(
+    messages: list[Message], *, id_offset: int = 0, reserved_ids: Iterable[str] | None = None
+) -> list[dict[str, Any]]:
     """Compute group spans and metadata for annotation.
+
+    Args:
+        messages: The messages (or a slice of them) to group.
+
+    Keyword Args:
+        id_offset: Absolute starting index used when auto-assigning ``message_id``
+            values, so incremental annotation of a list slice produces ids that
+            stay unique across the full list.
+        reserved_ids: Message ids that already exist outside ``messages`` (for
+            example in a preserved prefix). Auto-assigned ids are guaranteed not
+            to collide with these, preventing duplicate ids across the full list.
 
     Returns:
         Ordered list of lightweight span dicts with keys:
         ``group_id``, ``kind``, ``start_index``, ``end_index``, ``has_reasoning``.
     """
-    _ensure_message_ids(messages)
+    _ensure_message_ids(messages, id_offset=id_offset, reserved_ids=reserved_ids)
     spans: list[dict[str, Any]] = []
     i = 0
     group_index = 0
@@ -439,7 +474,8 @@ def annotate_message_groups(
         if previous_group_index is not None:
             group_index_offset = previous_group_index + 1
 
-    spans = group_messages(messages[start_index:])
+    reserved_ids = {message.message_id for message in messages[:start_index] if message.message_id}
+    spans = group_messages(messages[start_index:], id_offset=start_index, reserved_ids=reserved_ids)
     for span_index, span in enumerate(spans):
         group_id = str(span["group_id"])
         kind = _coerce_group_kind(span["kind"])
@@ -479,7 +515,9 @@ def _serialize_message(message: Message) -> str:
         "message_id": message.message_id,
         "contents": serialized_contents,
     }
-    return json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str)
+    # ensure_ascii=False so non-ASCII text (e.g. CJK) is token-counted as the
+    # actual characters the model sees, not as inflated ``\uXXXX`` escapes.
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
 
 def annotate_token_counts(
@@ -612,6 +650,17 @@ def _included_group_ids(messages: list[Message], ordered_group_ids: list[str]) -
     return included_ids
 
 
+def _minimum_retained_group_ids(
+    messages: list[Message], ordered_group_ids: list[str], kinds: dict[str, GroupKind]
+) -> set[str]:
+    """Return the group ids needed to keep a compaction projection non-empty."""
+    included_ids = _included_group_ids(messages, ordered_group_ids)
+    non_system_ids = [group_id for group_id in included_ids if kinds.get(group_id) != "system"]
+    if non_system_ids:
+        return {non_system_ids[-1]}
+    return {included_ids[-1]} if included_ids else set()
+
+
 def _count_included_messages(messages: list[Message]) -> int:
     return len(included_messages(messages))
 
@@ -627,8 +676,9 @@ class TruncationStrategy:
     groups (never partial tool-call groups). The metric is:
     - token count when ``tokenizer`` is provided
     - included message count when ``tokenizer`` is not provided
-    Compaction triggers when the metric exceeds ``max_n`` and trims to
-    ``compact_to``.
+    Compaction triggers when the metric exceeds ``max_n`` and trims toward
+    ``compact_to``. The minimum retained group is never excluded, so the
+    result may remain above ``compact_to`` when that group alone exceeds it.
     """
 
     def __init__(
@@ -675,6 +725,7 @@ class TruncationStrategy:
         protected_ids: set[str] = set()
         if self.preserve_system:
             protected_ids = {group_id for group_id in ordered_group_ids if kinds.get(group_id) == "system"}
+        protected_ids.update(_minimum_retained_group_ids(messages, ordered_group_ids, kinds))
 
         changed = False
         for group_id in ordered_group_ids:
@@ -849,6 +900,8 @@ class ToolResultCompactionStrategy:
                 for content in msg.contents:
                     if content.type == "function_call" and content.call_id and content.name:
                         call_id_to_name[content.call_id] = content.name
+                    elif content.type == "mcp_server_tool_call" and content.call_id and content.tool_name:
+                        call_id_to_name[content.call_id] = content.tool_name
             # Collect tool results with the function name for context.
             tool_results: list[str] = []
             for msg in group_msgs:
@@ -857,6 +910,11 @@ class ToolResultCompactionStrategy:
                         result_text = content.result if isinstance(content.result, str) else str(content.result)
                         func_name = call_id_to_name.get(content.call_id or "", "")
                         label = f"{func_name}: {result_text}" if func_name else result_text
+                        tool_results.append(label.strip())
+                    elif content.type == "mcp_server_tool_result":
+                        result_text = _tool_result_text(content.output)
+                        tool_name = call_id_to_name.get(content.call_id or "", "")
+                        label = f"{tool_name}: {result_text}" if tool_name else result_text
                         tool_results.append(label.strip())
             summary_label = "; ".join(tool_results) if tool_results else "no results"
             summary_text = f"[Tool results: {summary_label}]"
@@ -889,6 +947,26 @@ class ToolResultCompactionStrategy:
             grouped = _group_messages_by_id(messages)
 
         return changed
+
+
+def _tool_result_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray, str)):
+        text_parts: list[str] = []
+        for item in cast(Sequence[object], value):
+            if isinstance(item, Content) and item.type == "text" and item.text is not None:
+                text_parts.append(item.text)
+            elif isinstance(item, Mapping):
+                item_mapping = cast(Mapping[str, object], item)
+                text = item_mapping.get("text")
+                if item_mapping.get("type") == "text" and isinstance(text, str):
+                    text_parts.append(text)
+        if text_parts:
+            return "\n".join(text_parts)
+    if isinstance(value, Mapping):
+        return json.dumps(cast(Mapping[str, object], value), ensure_ascii=False)
+    return str(cast(object, value))
 
 
 def _format_messages_for_summary(messages: list[Message]) -> str:
@@ -928,6 +1006,17 @@ class SummarizationStrategy:
     ``target_count`` (subject to atomic group boundaries). It writes trace
     metadata in both directions: summary -> original message/group IDs and
     original -> summary ID.
+
+    Security considerations:
+        Unlike strategies that only remove or reorder existing messages (which carry no additional
+        risk), this strategy calls out to an LLM to produce replacement summary content that
+        permanently becomes part of chat history and is trusted the same as any other assistant
+        message going forward. Using it is an explicit opt-in — it must be constructed with a
+        summarization ``client``. A compromised or malicious summarization service could therefore
+        return a summary containing unsafe instructions, which become a persistent part of the
+        conversation — a form of indirect prompt injection that survives beyond the turn in which it
+        was introduced. Only point ``client`` at a summarization service you trust as much as the
+        primary model.
     """
 
     def __init__(
@@ -942,7 +1031,10 @@ class SummarizationStrategy:
 
         Keyword Args:
             client: A chat client compatible with ``SupportsChatGetResponse``
-                used to generate summary text.
+                used to generate summary text. **Security:** its output permanently replaces the
+                original messages in chat history, so only use a summarization service you trust as
+                much as the primary model — see the class-level security considerations for the
+                indirect-prompt-injection risk of an untrusted summarizer.
             target_count: Target number of included non-system messages to
                 retain after summarization. Must be greater than 0.
             threshold: Extra included non-system messages allowed above
@@ -1067,7 +1159,9 @@ class TokenBudgetComposedStrategy:
     Strategies run in the provided order over shared message annotations. After
     each step, token counts are refreshed. If no strategy reaches budget, a
     deterministic fallback excludes oldest groups (and finally anchors when
-    necessary) to enforce the limit.
+    necessary) to enforce the limit, while retaining the minimum group needed
+    for a non-empty projection. The result may remain above the budget when
+    that group alone exceeds it.
     """
 
     def __init__(
@@ -1112,8 +1206,9 @@ class TokenBudgetComposedStrategy:
         ordered_group_ids = annotate_message_groups(messages)
         grouped = _group_messages_by_id(messages)
         kinds = _group_kind_map(messages)
+        minimum_retained_ids = _minimum_retained_group_ids(messages, ordered_group_ids, kinds)
         for group_id in ordered_group_ids:
-            if kinds.get(group_id) == "system":
+            if kinds.get(group_id) == "system" or group_id in minimum_retained_ids:
                 continue
             for message in grouped.get(group_id, []):
                 changed = set_excluded(message, excluded=True, reason="token_budget_fallback") or changed
@@ -1124,7 +1219,7 @@ class TokenBudgetComposedStrategy:
 
         # Strict budget enforcement fallback: if anchors alone exceed budget, exclude remaining groups.
         for group_id in ordered_group_ids:
-            if kinds.get(group_id) != "system":
+            if kinds.get(group_id) != "system" or group_id in minimum_retained_ids:
                 continue
             for message in grouped.get(group_id, []):
                 changed = set_excluded(message, excluded=True, reason="token_budget_fallback_strict") or changed
@@ -1277,6 +1372,121 @@ class CompactionProvider(ContextProvider):
         # whether excluded messages are loaded on the next turn.
 
 
+class ContextWindowCompactionStrategy:
+    """Token-budget compaction derived from a model's context window size.
+
+    Computes an input budget from the model's context window and output token
+    limits, then applies a two-phase compaction pipeline:
+
+    1. **Tool result eviction** — collapses older tool-call groups into summaries
+       when included tokens exceed ``tool_eviction_threshold`` of the input budget.
+    2. **Truncation** — removes oldest non-system groups when included tokens
+       exceed ``truncation_threshold`` of the input budget.
+
+    The class uses two independent :class:`TokenBudgetComposedStrategy`
+    instances — one per phase — so each fires only when its own threshold
+    is exceeded.
+
+    Examples:
+        .. code-block:: python
+
+            from agent_framework import ContextWindowCompactionStrategy, CompactionProvider
+
+            strategy = ContextWindowCompactionStrategy(
+                max_context_window_tokens=128_000,
+                max_output_tokens=16_384,
+            )
+            provider = CompactionProvider(before_strategy=strategy)
+    """
+
+    DEFAULT_TOOL_EVICTION_THRESHOLD: float = 0.5
+    """Default fraction of input budget at which tool result eviction triggers."""
+
+    DEFAULT_TRUNCATION_THRESHOLD: float = 0.8
+    """Default fraction of input budget at which truncation triggers."""
+
+    def __init__(
+        self,
+        *,
+        max_context_window_tokens: int,
+        max_output_tokens: int,
+        tokenizer: TokenizerProtocol | None = None,
+        tool_eviction_threshold: float = DEFAULT_TOOL_EVICTION_THRESHOLD,
+        truncation_threshold: float = DEFAULT_TRUNCATION_THRESHOLD,
+        keep_last_tool_call_groups: int = 4,
+    ) -> None:
+        """Create a context-window compaction strategy.
+
+        Keyword Args:
+            max_context_window_tokens: The model's maximum context window size
+                in tokens (e.g. 128,000).
+            max_output_tokens: The model's maximum output tokens per response
+                (e.g. 16,384).
+            tokenizer: Token counter for measuring message sizes. Defaults to
+                :class:`CharacterEstimatorTokenizer` (4 chars/token heuristic).
+            tool_eviction_threshold: Fraction of input budget (0.0, 1.0] at
+                which tool result eviction triggers. Defaults to 0.5.
+            truncation_threshold: Fraction of input budget (0.0, 1.0] at which
+                truncation triggers. Must be ≥ ``tool_eviction_threshold``.
+                Defaults to 0.8.
+            keep_last_tool_call_groups: Number of most recent tool-call groups
+                to retain verbatim during tool eviction. Older groups are
+                collapsed into summaries. Defaults to 4.
+
+        Raises:
+            ValueError: If thresholds are out of range or inconsistent.
+        """
+        if max_context_window_tokens <= 0:
+            raise ValueError("max_context_window_tokens must be positive.")
+        if max_output_tokens < 0 or max_output_tokens >= max_context_window_tokens:
+            raise ValueError("max_output_tokens must be >= 0 and < max_context_window_tokens.")
+        if not (0.0 < tool_eviction_threshold <= 1.0):
+            raise ValueError("tool_eviction_threshold must be in (0.0, 1.0].")
+        if not (0.0 < truncation_threshold <= 1.0):
+            raise ValueError("truncation_threshold must be in (0.0, 1.0].")
+        if truncation_threshold < tool_eviction_threshold:
+            raise ValueError("truncation_threshold must be >= tool_eviction_threshold.")
+
+        resolved_tokenizer = tokenizer or CharacterEstimatorTokenizer()
+        input_budget = max_context_window_tokens - max_output_tokens
+        tool_eviction_tokens = int(input_budget * tool_eviction_threshold)
+        truncation_tokens = int(input_budget * truncation_threshold)
+
+        self.max_context_window_tokens = max_context_window_tokens
+        self.max_output_tokens = max_output_tokens
+        self.input_budget_tokens = input_budget
+        self.tool_eviction_threshold = tool_eviction_threshold
+        self.truncation_threshold = truncation_threshold
+
+        self._tool_eviction = TokenBudgetComposedStrategy(
+            token_budget=tool_eviction_tokens,
+            tokenizer=resolved_tokenizer,
+            strategies=[
+                ToolResultCompactionStrategy(keep_last_tool_call_groups=keep_last_tool_call_groups),
+            ],
+        )
+        self._truncation = TokenBudgetComposedStrategy(
+            token_budget=truncation_tokens,
+            tokenizer=resolved_tokenizer,
+            strategies=[
+                TruncationStrategy(
+                    max_n=truncation_tokens,
+                    compact_to=tool_eviction_tokens,
+                    tokenizer=resolved_tokenizer,
+                ),
+            ],
+        )
+
+    async def __call__(self, messages: list[Message]) -> bool:
+        """Apply the two-phase compaction pipeline.
+
+        Returns:
+            True if compaction changed message inclusion; otherwise False.
+        """
+        changed = await self._tool_eviction(messages)
+        return (await self._truncation(messages)) or changed
+
+
 __all__ = [
     "COMPACTION_STATE_KEY",
     "EXCLUDED_KEY",
@@ -1293,6 +1503,7 @@ __all__ = [
     "CharacterEstimatorTokenizer",
     "CompactionProvider",
     "CompactionStrategy",
+    "ContextWindowCompactionStrategy",
     "GroupKind",
     "SelectiveToolCallCompactionStrategy",
     "SlidingWindowStrategy",

@@ -73,7 +73,7 @@ public class AgentModeProviderTests
     {
         // Arrange
         var (tools, state) = await CreateToolsWithStateAsync();
-        AIFunction setMode = GetTool(tools, "AgentMode_Set");
+        AIFunction setMode = GetTool(tools, "mode_set");
 
         // Act
         await setMode.InvokeAsync(new AIFunctionArguments() { ["mode"] = "execute" });
@@ -90,7 +90,7 @@ public class AgentModeProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction setMode = GetTool(tools, "AgentMode_Set");
+        AIFunction setMode = GetTool(tools, "mode_set");
 
         // Act
         object? result = await setMode.InvokeAsync(new AIFunctionArguments() { ["mode"] = "execute" });
@@ -107,8 +107,8 @@ public class AgentModeProviderTests
     {
         // Arrange
         var (tools, provider, session) = await CreateToolsWithProviderAndSessionAsync();
-        AIFunction setMode = GetTool(tools, "AgentMode_Set");
-        AIFunction getMode = GetTool(tools, "AgentMode_Get");
+        AIFunction setMode = GetTool(tools, "mode_set");
+        AIFunction getMode = GetTool(tools, "mode_get");
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(async () =>
@@ -131,7 +131,7 @@ public class AgentModeProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction getMode = GetTool(tools, "AgentMode_Get");
+        AIFunction getMode = GetTool(tools, "mode_get");
 
         // Act
         object? result = await getMode.InvokeAsync(new AIFunctionArguments());
@@ -148,8 +148,8 @@ public class AgentModeProviderTests
     {
         // Arrange
         var (tools, _) = await CreateToolsWithStateAsync();
-        AIFunction setMode = GetTool(tools, "AgentMode_Set");
-        AIFunction getMode = GetTool(tools, "AgentMode_Get");
+        AIFunction setMode = GetTool(tools, "mode_set");
+        AIFunction getMode = GetTool(tools, "mode_get");
 
         // Act
         await setMode.InvokeAsync(new AIFunctionArguments() { ["mode"] = "execute" });
@@ -167,14 +167,14 @@ public class AgentModeProviderTests
     /// Verify that the public GetMode helper returns the default mode.
     /// </summary>
     [Fact]
-    public void PublicGetMode_ReturnsDefaultMode()
+    public async Task PublicGetMode_ReturnsDefaultModeAsync()
     {
         // Arrange
         var provider = new AgentModeProvider();
         var session = new ChatClientAgentSession();
 
         // Act
-        string mode = provider.GetMode(session);
+        string mode = await provider.GetModeAsync(session);
 
         // Assert
         Assert.Equal("plan", mode);
@@ -184,15 +184,15 @@ public class AgentModeProviderTests
     /// Verify that the public SetMode helper changes the mode.
     /// </summary>
     [Fact]
-    public void PublicSetMode_ChangesMode()
+    public async Task PublicSetMode_ChangesModeAsync()
     {
         // Arrange
         var provider = new AgentModeProvider();
         var session = new ChatClientAgentSession();
 
         // Act
-        provider.SetMode(session, "execute");
-        string mode = provider.GetMode(session);
+        await provider.SetModeAsync(session, "execute");
+        string mode = await provider.GetModeAsync(session);
 
         // Assert
         Assert.Equal("execute", mode);
@@ -202,17 +202,17 @@ public class AgentModeProviderTests
     /// Verify that the public SetMode helper throws for an unsupported value and does not persist the mode.
     /// </summary>
     [Fact]
-    public void PublicSetMode_InvalidMode_Throws()
+    public async Task PublicSetMode_InvalidMode_ThrowsAsync()
     {
         // Arrange
         var provider = new AgentModeProvider();
         var session = new ChatClientAgentSession();
 
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => provider.SetMode(session, "foo"));
+        await Assert.ThrowsAsync<ArgumentException>(() => provider.SetModeAsync(session, "foo"));
 
         // Verify mode was not changed from default
-        string mode = provider.GetMode(session);
+        string mode = await provider.GetModeAsync(session);
         Assert.Equal("plan", mode);
     }
 
@@ -228,7 +228,7 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Set mode via public helper
-        provider.SetMode(session, "execute");
+        await provider.SetModeAsync(session, "execute");
 
 #pragma warning disable MAAI001
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
@@ -236,7 +236,7 @@ public class AgentModeProviderTests
 
         // Act
         AIContext result = await provider.InvokingAsync(context);
-        AIFunction getMode = GetTool(result.Tools!, "AgentMode_Get");
+        AIFunction getMode = GetTool(result.Tools!, "mode_get");
         object? modeResult = await getMode.InvokeAsync(new AIFunctionArguments());
 
         // Assert
@@ -264,12 +264,12 @@ public class AgentModeProviderTests
 
         // Act — first invocation changes mode
         AIContext result1 = await provider.InvokingAsync(context);
-        AIFunction setMode = GetTool(result1.Tools!, "AgentMode_Set");
+        AIFunction setMode = GetTool(result1.Tools!, "mode_set");
         await setMode.InvokeAsync(new AIFunctionArguments() { ["mode"] = "execute" });
 
         // Second invocation should see the updated mode
         AIContext result2 = await provider.InvokingAsync(context);
-        AIFunction getMode = GetTool(result2.Tools!, "AgentMode_Get");
+        AIFunction getMode = GetTool(result2.Tools!, "mode_get");
         object? modeResult = await getMode.InvokeAsync(new AIFunctionArguments());
 
         // Assert
@@ -307,7 +307,7 @@ public class AgentModeProviderTests
     /// Verify that custom modes are used.
     /// </summary>
     [Fact]
-    public void Options_CustomModes_AreUsed()
+    public async Task Options_CustomModes_AreUsedAsync()
     {
         // Arrange
         var options = new AgentModeProviderOptions
@@ -322,7 +322,7 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Act
-        string mode = provider.GetMode(session);
+        string mode = await provider.GetModeAsync(session);
 
         // Assert — default mode is first in list
         Assert.Equal("draft", mode);
@@ -332,7 +332,7 @@ public class AgentModeProviderTests
     /// Verify that SetMode validates against custom modes.
     /// </summary>
     [Fact]
-    public void Options_CustomModes_SetModeValidatesAgainstList()
+    public async Task Options_CustomModes_SetModeValidatesAgainstListAsync()
     {
         // Arrange
         var options = new AgentModeProviderOptions
@@ -347,20 +347,20 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Act — valid mode
-        provider.SetMode(session, "review");
+        await provider.SetModeAsync(session, "review");
 
         // Assert
-        Assert.Equal("review", provider.GetMode(session));
+        Assert.Equal("review", await provider.GetModeAsync(session));
 
         // Act & Assert — invalid mode (plan is no longer valid)
-        Assert.Throws<ArgumentException>(() => provider.SetMode(session, "plan"));
+        await Assert.ThrowsAsync<ArgumentException>(() => provider.SetModeAsync(session, "plan"));
     }
 
     /// <summary>
     /// Verify that a custom default mode is used.
     /// </summary>
     [Fact]
-    public void Options_CustomDefaultMode_IsUsed()
+    public async Task Options_CustomDefaultMode_IsUsedAsync()
     {
         // Arrange
         var options = new AgentModeProviderOptions
@@ -376,7 +376,7 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Act
-        string mode = provider.GetMode(session);
+        string mode = await provider.GetModeAsync(session);
 
         // Assert
         Assert.Equal("review", mode);
@@ -517,7 +517,7 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Change mode externally (simulating /mode command)
-        provider.SetMode(session, "execute");
+        await provider.SetModeAsync(session, "execute");
 
 #pragma warning disable MAAI001
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
@@ -545,7 +545,7 @@ public class AgentModeProviderTests
         var provider = new AgentModeProvider();
         var agent = new Mock<AIAgent>().Object;
         var session = new ChatClientAgentSession();
-        provider.SetMode(session, "execute");
+        await provider.SetModeAsync(session, "execute");
 
 #pragma warning disable MAAI001
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());
@@ -579,7 +579,7 @@ public class AgentModeProviderTests
 
         // First call to initialize
         AIContext result1 = await provider.InvokingAsync(context);
-        AIFunction setMode = GetTool(result1.Tools!, "AgentMode_Set");
+        AIFunction setMode = GetTool(result1.Tools!, "mode_set");
 
         // Change mode via the tool (agent-initiated)
         await setMode.InvokeAsync(new AIFunctionArguments() { ["mode"] = "execute" });
@@ -603,7 +603,7 @@ public class AgentModeProviderTests
         var session = new ChatClientAgentSession();
 
         // Set to same default mode
-        provider.SetMode(session, "plan");
+        await provider.SetModeAsync(session, "plan");
 
 #pragma warning disable MAAI001
         var context = new AIContextProvider.InvokingContext(agent, session, new AIContext());

@@ -88,6 +88,7 @@ from pydantic import BaseModel
 from ._exceptions import OpenAIContentFilterException
 from ._shared import (
     AzureTokenProvider,
+    _attach_prompt_cache_breakpoint,  # pyright: ignore[reportPrivateUsage]
     load_openai_service_settings,
     maybe_append_azure_endpoint_guidance,
 )
@@ -104,6 +105,25 @@ if sys.version_info >= (3, 11):
     from typing import TypedDict  # pragma: no cover
 else:
     from typing_extensions import TypedDict  # pragma: no cover
+
+try:
+    from openai.types.responses.response_create_params import PromptCacheOptions
+
+    _prompt_cache_options_supported = True
+except ImportError:  # pragma: no cover
+    _prompt_cache_options_supported = False
+
+    class PromptCacheOptions(TypedDict, total=False):
+        """Fallback for openai versions that predate prompt cache options.
+
+        Mirrors the SDK's shape so ``prompt_cache_options`` type-checks the same on
+        every supported openai version; a runtime guard rejects the option when the
+        installed openai is too old to send it.
+        """
+
+        mode: Literal["implicit", "explicit"]
+        ttl: Literal["30m"]
+
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
@@ -231,6 +251,13 @@ class OpenAIChatOptions(ChatOptions[ResponseFormatT], Generic[ResponseFormatT], 
 
     prompt_cache_retention: Literal["24h"]
     """Retention policy for prompt cache. Set to '24h' for extended caching."""
+
+    prompt_cache_options: PromptCacheOptions
+    """Request-wide prompt cache policy for GPT-5.6 and later models.
+    Set mode to 'explicit' to use only the breakpoints set on content parts via
+    ``Content.additional_properties["prompt_cache_breakpoint"]``.
+    Sending this option requires openai 2.45.0 or later.
+    See: https://developers.openai.com/api/docs/guides/prompt-caching#prompt-cache-breakpoints"""
 
     reasoning: ReasoningOptions
     """Configuration for reasoning models (gpt-5, o-series).
@@ -1380,6 +1407,11 @@ class RawOpenAIChatClient(
         }
         run_options: dict[str, Any] = {k: v for k, v in options.items() if k not in exclude_keys and v is not None}
 
+        if run_options.get("prompt_cache_options") is not None and not _prompt_cache_options_supported:
+            raise ChatClientInvalidRequestException(
+                "prompt_cache_options requires openai>=2.45.0; upgrade the openai package to use it."
+            )
+
         # messages
         # Handle instructions by prepending to messages as system message
         # Only prepend instructions for the first turn (when no conversation/response ID exists)
@@ -1655,10 +1687,13 @@ class RawOpenAIChatClient(
                         "text": content.text,
                         "annotations": _annotations_to_output_text(getattr(content, "annotations", None)),
                     }
-                return {
-                    "type": "input_text",
-                    "text": content.text,
-                }
+                return _attach_prompt_cache_breakpoint(
+                    {
+                        "type": "input_text",
+                        "text": content.text,
+                    },
+                    content,
+                )
             case "text_reasoning":
                 ret: dict[str, Any] = {"type": "reasoning", "summary": []}
                 if content.id:
@@ -1686,7 +1721,7 @@ class RawOpenAIChatClient(
                     file_id = content.additional_properties.get("file_id") if content.additional_properties else None
                     if file_id is not None:
                         result["file_id"] = file_id
-                    return result
+                    return _attach_prompt_cache_breakpoint(result, content)
                 if content.has_top_level_media_type("audio"):
                     if content.media_type and "wav" in content.media_type:
                         format = "wav"
@@ -1714,7 +1749,7 @@ class RawOpenAIChatClient(
                     }
                     if filename:
                         file_obj["filename"] = filename
-                    return file_obj
+                    return _attach_prompt_cache_breakpoint(file_obj, content)
                 return {}
             case "function_call":
                 if not content.call_id:

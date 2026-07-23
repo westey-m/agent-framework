@@ -1,7 +1,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "agent-framework",
+#     "agent-framework-core",
+#     "agent-framework-foundry",
+#     "agent-framework-purview",
 #     "agent-framework-tools",
 #     "agent-framework-monty",
 #     "mcp",
@@ -47,9 +49,8 @@ from opentelemetry.trace.span import format_trace_id
 
 _HARNESS_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_HARNESS_DIR))
-from console import build_observers_with_planning, run_agent_async  # noqa: E402
-
 from agent import build_claw_agent  # noqa: E402
+from console import build_observers_with_planning, run_agent_async  # noqa: E402
 
 
 async def main() -> None:

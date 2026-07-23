@@ -47,15 +47,16 @@ The hosted version **disables file access and shell** on the container. In a sha
 ### Deploy to Foundry
 
 ```bash
-azd ai agent init -m python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/agent.manifest.yaml
+cd python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready
+azd ai agent init -m agent.manifest.yaml --entry-point hosted.py
 azd deploy
 ```
 
-Foundry deploys hosted agents as containers. It builds the image from this folder's `Dockerfile`,
-and the Dockerfile's `CMD ["python", "hosted.py"]` is what tells Foundry to run `hosted.py` — not
-`console.py` or `evals.py`. There is no folder convention or `agent.yaml` field that picks the entry
-point; it is whatever `CMD` names. The `Dockerfile` does `COPY . user_agent/`, so the build context
-is this folder only — it can't reach the shared parent sample folder. That's why `skills/` and
+Foundry deploys this agent with **code (ZIP) deployment** — the default for Python hosted agents.
+It uploads this folder, installs `requirements.txt`, and runs a Python entry point. Which file runs
+is set by `codeConfiguration.entryPoint` in the generated `azure.yaml` and defaults to `main.py`, so
+you must point it at `hosted.py`. We therefore pass `--entry-point hosted.py` to
+`azd ai agent init`. The deploy packages this folder only, so `skills/` and
 `subprocess_script_runner.py` are copied in here, making the folder a self-contained package.
 
 ## Run evals
@@ -65,6 +66,15 @@ uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_producti
 ```
 
 Local evals use `LocalEvaluator` custom checks. When `FOUNDRY_PROJECT_ENDPOINT` is set, the sample also runs `FoundryEvals` with relevance and coherence.
+
+> **Foundry evals permissions.** The `FoundryEvals` step uploads the eval items as a temporary
+> dataset to the storage account backing your Foundry project. The identity running the evals — your
+> `az login` user for local runs, or the project's managed identity when it reaches storage via
+> Entra ID — needs the **Storage Blob Data Contributor** role on that storage account, plus an
+> appropriate project role (for example **Azure AI User**). Without the blob role the run fails at
+> the dataset upload with `UnauthorizedUserAction` (`POST .../assetstore/v1.0/temporaryDataReference`)
+> even though the local evals pass. See
+> [Troubleshoot evaluation and observability issues](https://learn.microsoft.com/azure/foundry/observability/how-to/troubleshooting).
 
 ## Observability and Purview
 

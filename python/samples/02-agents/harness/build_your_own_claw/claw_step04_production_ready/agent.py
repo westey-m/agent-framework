@@ -1,7 +1,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "agent-framework",
+#     "agent-framework-core",
+#     "agent-framework-foundry",
+#     "agent-framework-purview",
 #     "agent-framework-tools",
 #     "agent-framework-monty",
 #     "mcp",
@@ -41,9 +43,9 @@ from typing import Annotated, Any, Literal
 
 import httpx
 from agent_framework import (
-    AggregatingSkillsSource,
     Agent,
     AgentModeProvider,
+    AggregatingSkillsSource,
     DeduplicatingSkillsSource,
     FileAccessProvider,
     FileSkillsSource,
@@ -139,6 +141,8 @@ def get_stock_price(
         "currency": "USD",
         "as_of": datetime.now(timezone.utc).isoformat(),
     }
+
+
 # </get_stock_price>
 
 
@@ -153,17 +157,19 @@ def place_trade(
     verb = "Sold" if action == "sell" else "Bought"
     confirmation = f"TRADE-{uuid.uuid4().hex[:8].upper()}"
     return f"{verb} {quantity} share(s) of {symbol.upper()}. Confirmation: {confirmation}."
+
+
 # </place_trade>
 
 
 # <skills>
-async def _build_skills_provider(stack: AsyncExitStack) -> SkillsProvider:
+async def _build_skills_provider(stack: AsyncExitStack, credential: TokenCredential) -> SkillsProvider:
     """Build local file-based skills plus optional Foundry Toolbox MCP skills."""
     sources: list[SkillsSource] = [FileSkillsSource(str(_SKILLS_DIR), script_runner=subprocess_script_runner)]
 
-    toolbox_url = os.environ.get("FOUNDRY_TOOLBOX_MCP_SERVER_URL")
-    if toolbox_url:
-        session = await _connect_foundry_toolbox(stack, toolbox_url)
+    toolbox_url = os.environ.get("FOUNDRY_TOOLBOX_MCP_SERVER_URL", "").strip()
+    if toolbox_url.startswith(("http://", "https://")):
+        session = await _connect_foundry_toolbox(stack, toolbox_url, credential)
         sources.append(MCPSkillsSource(client=session))
         print("Foundry skills enabled (Toolbox MCP).")
     else:
@@ -186,9 +192,9 @@ class _ToolboxAuth(httpx.Auth):
         yield request
 
 
-async def _connect_foundry_toolbox(stack: AsyncExitStack, url: str) -> ClientSession:
+async def _connect_foundry_toolbox(stack: AsyncExitStack, url: str, credential: TokenCredential) -> ClientSession:
     """Open an MCP session against a Foundry Toolbox endpoint tied to ``stack``'s lifetime."""
-    token_provider = get_bearer_token_provider(AzureCliCredential(), "https://ai.azure.com/.default")
+    token_provider = get_bearer_token_provider(credential, "https://ai.azure.com/.default")
     http_client = await stack.enter_async_context(
         httpx.AsyncClient(
             auth=_ToolboxAuth(token_provider),
@@ -201,6 +207,8 @@ async def _connect_foundry_toolbox(stack: AsyncExitStack, url: str) -> ClientSes
     session = await stack.enter_async_context(ClientSession(read, write))
     await session.initialize()
     return session
+
+
 # </skills>
 
 
@@ -218,6 +226,8 @@ def _build_research_agent(client: FoundryChatClient) -> Any:
             "with no preamble."
         ),
     )
+
+
 # </background>
 
 
@@ -239,20 +249,27 @@ def _build_shell() -> LocalShellTool:
         ),
         timeout=15,
     )
+
+
 # </shell>
 
 
-def _build_purview_middleware() -> list[PurviewChatPolicyMiddleware]:
-    """Build opt-in Purview chat middleware from environment variables."""
-    client_app_id = os.environ.get("PURVIEW_CLIENT_APP_ID")
-    if not client_app_id:
+def _build_purview_middleware(credential: TokenCredential | None = None) -> list[PurviewChatPolicyMiddleware]:
+    """Build opt-in Purview chat middleware from environment variables.
+
+    When ``credential`` is provided (for example the container's managed identity on hosted
+    deployments), it is used to authenticate against Purview. Otherwise an
+    ``InteractiveBrowserCredential`` is used, which suits local interactive runs.
+    """
+    client_app_id = os.environ.get("PURVIEW_CLIENT_APP_ID", "").strip()
+    if not client_app_id or client_app_id.startswith("{{"):
         print("Purview disabled. Set PURVIEW_CLIENT_APP_ID to enable chat policy enforcement.")
         return []
 
-    credential = InteractiveBrowserCredential(client_id=client_app_id)
+    purview_credential = credential or InteractiveBrowserCredential(client_id=client_app_id)
     settings = PurviewSettings(app_name="Claw")
     print("Purview enabled (chat policy middleware).")
-    return [PurviewChatPolicyMiddleware(credential, settings)]
+    return [PurviewChatPolicyMiddleware(purview_credential, settings)]
 
 
 # <build_claw_agent>
@@ -267,6 +284,7 @@ async def build_claw_agent(
     enable_file_access: bool = True,
     file_access_store: Any = None,
     enable_shell: bool = True,
+    purview_credential: TokenCredential | None = None,
 ) -> Agent[Any]:
     """Build the production-ready claw harness agent.
 
@@ -287,6 +305,9 @@ async def build_claw_agent(
         enable_shell: When True (default), the agent can run shell commands. Disable it on
             shared/hosted deployments: arbitrary command execution inside the container is a serious
             security risk (data exfiltration, persistence, tampering) even behind a deny-list.
+        purview_credential: Optional credential for Purview chat policy enforcement. Pass the
+            container's managed identity (``DefaultAzureCredential``) on hosted deployments; when None,
+            an ``InteractiveBrowserCredential`` is used for local interactive runs.
 
     Returns:
         A fully configured harness agent with Step 03 capabilities plus opt-in Purview middleware.
@@ -296,15 +317,16 @@ async def build_claw_agent(
     _VAULT_DIR.mkdir(parents=True, exist_ok=True)
 
     # <create_client>
+    resolved_credential = credential or AzureCliCredential()
     client = FoundryChatClient(
         project_endpoint=project_endpoint,
         model=model,
-        credential=credential or AzureCliCredential(),
-        middleware=_build_purview_middleware(),
+        credential=resolved_credential,
+        middleware=_build_purview_middleware(purview_credential),
     )
     # </create_client>
 
-    skills_provider = await _build_skills_provider(stack)
+    skills_provider = await _build_skills_provider(stack, resolved_credential)
     research_agent = _build_research_agent(client)
 
     if enable_shell:
@@ -338,7 +360,6 @@ async def build_claw_agent(
         agent_instructions=FINANCE_INSTRUCTIONS,
         tools=[get_stock_price, place_trade],
         history_provider=history_provider or InMemoryHistoryProvider(),
-        disable_file_access=not enable_file_access,
         file_access_store=access_store,
         skills_provider=skills_provider,
         background_agents=[research_agent],

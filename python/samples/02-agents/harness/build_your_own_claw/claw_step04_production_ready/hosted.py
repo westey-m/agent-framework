@@ -1,7 +1,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "agent-framework",
+#     "agent-framework-core",
+#     "agent-framework-foundry",
+#     "agent-framework-purview",
 #     "agent-framework-tools",
 #     "agent-framework-monty",
 #     "agent-framework-foundry-hosting",
@@ -43,12 +45,11 @@ import asyncio
 import os
 from contextlib import AsyncExitStack
 
+from agent import build_claw_agent
 from agent_framework import InMemoryHistoryProvider
 from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
-
-from agent import build_claw_agent
 
 
 async def main() -> None:
@@ -56,9 +57,10 @@ async def main() -> None:
     load_dotenv()
 
     async with AsyncExitStack() as stack:
+        credential = DefaultAzureCredential()
         agent = await build_claw_agent(
             stack,
-            credential=DefaultAzureCredential(),
+            credential=credential,
             project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
             model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
             default_options={"store": False},
@@ -69,6 +71,9 @@ async def main() -> None:
             # external file_access_store (e.g. one backed by Azure Blob Storage) instead of the disk.
             enable_file_access=False,
             enable_shell=False,
+            # Purview authenticates via the container's managed identity; InteractiveBrowserCredential
+            # cannot run on a headless hosted container.
+            purview_credential=credential,
         )
         server = ResponsesHostServer(agent)
         await server.run_async()

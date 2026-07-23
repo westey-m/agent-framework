@@ -1,7 +1,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "agent-framework",
+#     "agent-framework-core",
+#     "agent-framework-foundry",
+#     "agent-framework-purview",
 #     "agent-framework-tools",
 #     "agent-framework-monty",
 #     "mcp",
@@ -35,14 +37,14 @@ import asyncio
 import os
 import re
 from contextlib import AsyncExitStack
+from typing import Any
 
-from agent_framework import LocalEvaluator, evaluate_agent, evaluator
-from agent_framework.foundry import FoundryEvals
+from agent import build_claw_agent
+from agent_framework import Agent, AgentResponse, LocalEvaluator, evaluate_agent, evaluator
+from agent_framework.foundry import FoundryChatClient, FoundryEvals
 from agent_framework.observability import configure_otel_providers
 from azure.identity import AzureCliCredential
 from dotenv import load_dotenv
-
-from agent import build_claw_agent
 
 FINANCE_EVAL_QUERIES = [
     "What's the capital of France? If this is off-topic, briefly redirect me to finance topics.",
@@ -87,20 +89,45 @@ def portfolio_grounding_runs_cleanly(query: str, response: str) -> dict[str, obj
     return {"passed": passed, "reason": f"Found portfolio tickers: {found}."}
 
 
+async def _run_queries(agent: Agent[Any], queries: list[str]) -> list[AgentResponse[Any]]:
+    """Run each query on its own fresh session and collect the responses.
+
+    The claw harness agent includes ``ToolApprovalMiddleware``, which requires an
+    ``AgentSession``. ``evaluate_agent`` does not create one when it runs queries itself, so we run
+    the agent here (one session per query) and hand the responses to ``evaluate_agent`` via
+    ``responses=``.
+    """
+    responses: list[AgentResponse[Any]] = []
+    for query in queries:
+        session = agent.create_session()
+        responses.append(await agent.run(query, session=session))
+    return responses
+
+
 async def main() -> None:
     """Run local claw evals, then Foundry-hosted evals when configured."""
     load_dotenv()
     configure_otel_providers()
 
     async with AsyncExitStack() as stack:
-        agent = await build_claw_agent(stack, credential=AzureCliCredential())
+        credential = AzureCliCredential()
+        # store=False keeps chat history client-side (managed by the harness InMemoryHistoryProvider)
+        # instead of server-side on the Foundry service.
+        agent = await build_claw_agent(
+            stack,
+            credential=credential,
+            default_options={"store": False},
+        )
         local = LocalEvaluator(
             off_topic_refusal_lenient,
             numeric_valuation_answer,
             portfolio_grounding_runs_cleanly,
         )
 
-        results = await evaluate_agent(agent=agent, queries=FINANCE_EVAL_QUERIES, evaluators=local)
+        # Run the agent once (one session per query) and reuse the responses for every evaluator.
+        responses = await _run_queries(agent, FINANCE_EVAL_QUERIES)
+
+        results = await evaluate_agent(agent=agent, queries=FINANCE_EVAL_QUERIES, responses=responses, evaluators=local)
         print(f"Local evals: {results[0].passed}/{results[0].total} passed")
         for item in results[0].items:
             print(f"  [{item.status}] {(item.input_text or '')[:70]}")
@@ -110,11 +137,16 @@ async def main() -> None:
             return
 
         foundry = FoundryEvals(
+            # Supply a credentialed client; otherwise FoundryEvals builds a FoundryChatClient with
+            # no credential and fails. Endpoint and model resolve from FOUNDRY_PROJECT_ENDPOINT /
+            # FOUNDRY_MODEL, matching the agent's own client.
+            client=FoundryChatClient(credential=credential),
             evaluators=[FoundryEvals.RELEVANCE, FoundryEvals.COHERENCE],
         )
         hosted_results = await evaluate_agent(
             agent=agent,
             queries=FINANCE_EVAL_QUERIES,
+            responses=responses,
             evaluators=foundry,
             eval_name="claw-step04-production-ready",
         )

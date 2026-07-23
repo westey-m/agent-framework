@@ -1006,7 +1006,7 @@ public sealed partial class ChatClientAgent : AIAgent
             if (this._agentOptions?.ThrowOnChatHistoryProviderConflict is true && serviceStoresHistory)
             {
                 throw new InvalidOperationException(
-                    $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. The current {nameof(ChatClientAgentSession)} has a {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management, but an override {nameof(this.ChatHistoryProvider)} was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");
+                    $"Only {nameof(ChatClientAgentSession.ConversationId)} or {nameof(this.ChatHistoryProvider)} may be used, but not both. A {nameof(ChatClientAgentSession.ConversationId)} indicating server-side chat history management is present (on the {nameof(ChatClientAgentSession)} or the {nameof(this.ChatOptions)}), but an override {nameof(this.ChatHistoryProvider)} was provided via {nameof(AgentRunOptions.AdditionalProperties)}.");
             }
 
             // Validate that the override provider's StateKeys do not clash with any AIContextProvider's StateKeys.

@@ -459,7 +459,7 @@ public class ChatClientAgent_ChatHistoryManagementTests
             s => s.GetStreamingResponseAsync(
                 It.IsAny<IEnumerable<ChatMessage>>(),
                 It.IsAny<ChatOptions>(),
-                It.IsAny<CancellationToken>())).Returns(ToAsyncEnumerableAsync(returnUpdates));
+                It.IsAny<CancellationToken>())).Returns(returnUpdates.ToAsyncEnumerable());
         ChatClientAgent agent = new(mockService.Object, options: new()
         {
             ChatOptions = new() { Instructions = "test instructions" },
@@ -795,13 +795,4 @@ public class ChatClientAgent_ChatHistoryManagementTests
     }
 
     #endregion
-
-    private static async IAsyncEnumerable<T> ToAsyncEnumerableAsync<T>(IEnumerable<T> values)
-    {
-        await Task.Yield();
-        foreach (var value in values)
-        {
-            yield return value;
-        }
-    }
 }

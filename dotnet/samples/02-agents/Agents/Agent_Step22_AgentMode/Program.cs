@@ -96,7 +96,7 @@ Console.WriteLine();
 while (true)
 {
     Console.Write("> ");
-    string? input = Console.ReadLine();
+    string? input = Console.ReadLine()?.Trim();
 
     // Treat empty input or end-of-stream (Ctrl+D / Ctrl+Z) as a request to exit.
     if (string.IsNullOrWhiteSpace(input) || input.Equals("/exit", StringComparison.OrdinalIgnoreCase))

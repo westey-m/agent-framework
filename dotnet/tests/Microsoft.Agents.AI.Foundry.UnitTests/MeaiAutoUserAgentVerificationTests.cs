@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
+using OpenAI;
 using OpenAI.Responses;
 
 #pragma warning disable OPENAI001
@@ -35,7 +36,7 @@ public sealed class MeaiAutoUserAgentVerificationTests
         using var httpClient = new HttpClient(handler);
 #pragma warning restore CA5399
 
-        var options = new ResponsesClientOptions
+        var options = new OpenAIClientOptions
         {
             Transport = new HttpClientPipelineTransport(httpClient),
             Endpoint = new Uri("https://example.test/v1"),

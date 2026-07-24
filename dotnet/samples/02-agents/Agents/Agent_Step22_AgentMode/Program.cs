@@ -137,6 +137,10 @@ while (true)
     // Anything else is a message for the agent. The mode provider injects the current mode (and any
     // pending mode-change notification) into the context for this turn.
     Console.WriteLine(await agent.RunAsync(input, session));
+
+    // Print the mode after the turn: the agent may have switched it itself via the mode_set tool as
+    // its work progressed, so this reflects any change the agent made during the turn.
+    Console.WriteLine($"Current mode: {await modeProvider.GetModeAsync(session)}");
 }
 
 static void PrintHelp(string[] availableModes)

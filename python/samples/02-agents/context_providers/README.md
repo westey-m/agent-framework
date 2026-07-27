@@ -35,8 +35,8 @@ These samples demonstrate how to use context providers to enrich agent conversat
 **For `agent_mode_provider.py`:**
 - `FOUNDRY_PROJECT_ENDPOINT`: Your Microsoft Foundry project endpoint
 - `FOUNDRY_MODEL`: Model deployment name
-- `AGENT_MODE_USE_CUSTOM` (optional): set to `true` to use the custom `concise`/`detailed` modes instead of the built-in `plan`/`execute` modes
 - Azure CLI authentication (`az login`)
+- To try the custom `concise`/`detailed` modes instead of the built-in `plan`/`execute` modes, set the in-file `USE_CUSTOM_MODES` constant to `True`.
 - This sample is interactive: it reads commands from the console in a loop (type `/exit` to quit).
 
 **For `azure_ai_foundry_memory.py`:**

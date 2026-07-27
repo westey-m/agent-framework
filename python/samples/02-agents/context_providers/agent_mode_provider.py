@@ -21,7 +21,8 @@ instructions sent to the model on every turn, so different modes can drive diffe
 
 The sample demonstrates two things:
   1. The built-in default modes ("plan" and "execute") that ship with the provider.
-  2. How to customize the available modes via ``default_mode`` / ``mode_instructions``.
+  2. How to customize the available modes via ``default_mode`` / ``mode_instructions``. Flip the
+     ``USE_CUSTOM_MODES`` constant below to ``True`` to try a simple concise/detailed mode set.
 
 It runs a simple interactive loop. In addition to chatting with the agent, you can switch the
 agent's mode yourself using a slash command:
@@ -36,12 +37,14 @@ clearly sees the change and adjusts its behavior accordingly.
 Environment variables:
     FOUNDRY_PROJECT_ENDPOINT — Microsoft Foundry project endpoint URL
     FOUNDRY_MODEL            — Model deployment name
-    AGENT_MODE_USE_CUSTOM    — Set to "true" to use the custom concise/detailed modes instead of the
-                               built-in plan/execute modes (optional)
 
 Authentication:
     Run ``az login`` before running this sample.
 """
+
+# Flip to True to run the sample with the custom modes defined below instead of the provider's
+# built-in "plan" / "execute" defaults.
+USE_CUSTOM_MODES = False
 
 
 def print_help(available_modes: tuple[str, ...]) -> None:
@@ -60,12 +63,8 @@ async def main() -> None:
         credential=AzureCliCredential(),
     )
 
-    # Set AGENT_MODE_USE_CUSTOM=true to run the sample with the custom modes defined below instead
-    # of the provider's built-in "plan" / "execute" defaults.
-    use_custom_modes = os.environ.get("AGENT_MODE_USE_CUSTOM", "").lower() == "true"
-
     # <create_mode_provider>
-    if use_custom_modes:
+    if USE_CUSTOM_MODES:
         # Customize the set of modes by supplying ``mode_instructions``. Each mode maps a name to a
         # block of instructions describing how the agent should behave while operating in that mode.
         # ``default_mode`` selects the mode new sessions start in (defaults to the first mode when
@@ -118,9 +117,7 @@ async def main() -> None:
     print()
 
     while True:
-        # ``input`` blocks the event loop, but this sample is single-user and interactive, so running
-        # it on a worker thread keeps the example simple without any behavioral downside.
-        user_input = (await asyncio.to_thread(input, "> ")).strip()
+        user_input = input("> ").strip()
 
         # Treat empty input or /exit as a request to quit.
         if not user_input or user_input.lower() == "/exit":

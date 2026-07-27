@@ -40,6 +40,8 @@ from agent_framework._harness._mode import AgentModeProvider
 from agent_framework._sessions import ContextProvider, PerServiceCallHistoryPersistingMiddleware
 from agent_framework._tools import FunctionInvocationLayer
 
+from .conftest import MockBaseChatClient
+
 
 class _FakeChatClient(BaseChatClient[ChatOptions[Any]]):
     """Minimal chat client stub for testing assembly."""
@@ -1430,3 +1432,63 @@ def test_create_harness_agent_shell_dedup_does_not_suppress_harness_warning() ->
             disable_file_memory=True,
             background_agents=[bg_agent],  # type: ignore[list-item]  # pyrefly: ignore[bad-argument-type]  # ty: ignore[invalid-argument-type]
         )
+
+
+# --- function_loop_max_iterations Tests ---
+
+
+def test_create_harness_agent_sets_function_loop_max_iterations() -> None:
+    """function_loop_max_iterations should update the client's function-invocation loop cap."""
+    from agent_framework._tools import DEFAULT_MAX_ITERATIONS
+
+    client = MockBaseChatClient()
+    assert client.function_invocation_configuration["max_iterations"] == DEFAULT_MAX_ITERATIONS
+
+    create_harness_agent(
+        client=client,
+        disable_web_search=True,
+        disable_file_memory=True,
+        function_loop_max_iterations=7,
+    )
+    assert client.function_invocation_configuration["max_iterations"] == 7
+
+
+def test_create_harness_agent_function_loop_max_iterations_default_leaves_config() -> None:
+    """When omitted, the client's function-invocation configuration is left unchanged."""
+    from agent_framework._tools import DEFAULT_MAX_ITERATIONS
+
+    client = MockBaseChatClient()
+    create_harness_agent(
+        client=client,
+        disable_web_search=True,
+        disable_file_memory=True,
+    )
+    assert client.function_invocation_configuration["max_iterations"] == DEFAULT_MAX_ITERATIONS
+
+
+def test_create_harness_agent_function_loop_max_iterations_rejects_below_one() -> None:
+    """A value below 1 should raise ValueError."""
+    with pytest.raises(ValueError, match="function_loop_max_iterations must be at least 1"):
+        create_harness_agent(
+            client=MockBaseChatClient(),
+            disable_web_search=True,
+            disable_file_memory=True,
+            function_loop_max_iterations=0,
+        )
+
+
+def test_create_harness_agent_function_loop_max_iterations_warns_when_unsupported(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A client without function_invocation_configuration should warn and be ignored."""
+    client = _FakeChatClient()
+    assert not hasattr(client, "function_invocation_configuration")
+
+    with caplog.at_level("WARNING"):
+        create_harness_agent(
+            client=client,
+            disable_web_search=True,
+            disable_file_memory=True,
+            function_loop_max_iterations=5,
+        )
+    assert any("function_invocation_configuration" in record.message for record in caplog.records)

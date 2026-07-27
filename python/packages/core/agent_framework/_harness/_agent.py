@@ -336,6 +336,7 @@ def create_harness_agent(
     loop_should_continue: ShouldContinueCallable | None = None,
     loop_next_message: NextMessageCallable | None = None,
     loop_max_iterations: int | None = DEFAULT_MAX_ITERATIONS,
+    function_loop_max_iterations: int | None = None,
     otel_provider_name: str | None = None,
     context_providers: Sequence[ContextProvider] | None = None,
     middleware: Sequence[MiddlewareTypes] | None = None,
@@ -500,19 +501,31 @@ def create_harness_agent(
             content and returns ``True`` to approve it. Rules are evaluated after standing rules
             (derived from prior user approvals) but before prompting the user. Only used when
             ``disable_tool_auto_approval`` is False.
-        loop_should_continue: Optional predicate that enables the looping middleware. When provided, the
-            agent is re-run in a loop (via :class:`~agent_framework.AgentLoopMiddleware`, wired as
-            the outermost middleware so each iteration is a full agent run including tool approval)
-            for as long as the predicate returns ``True``, up to ``loop_max_iterations``. If an
-            iteration returns a pending tool-approval request, the loop stops and returns it so the
-            caller can approve before continuing. When None (default), no loop is added.
-        loop_next_message: Optional callable controlling the input for the next loop iteration.
-            Only takes effect when ``loop_should_continue`` is set (otherwise no loop is added and
-            this is ignored).
-        loop_max_iterations: Safety cap on the number of loop iterations. ``None`` means unbounded;
-            a positive integer caps the loop (defaults to the loop middleware's default cap). Only
-            takes effect when ``loop_should_continue`` is set (otherwise no loop is added and this
-            is ignored).
+        loop_should_continue: Optional predicate that enables the agent-level **looping**
+            middleware. This loop **re-runs the entire agent** (via
+            :class:`~agent_framework.AgentLoopMiddleware`, wired as the outermost middleware so
+            each iteration is a full agent run including tool approval) for as long as the
+            predicate returns ``True``, up to ``loop_max_iterations``. It is distinct from the
+            per-request function/tool-calling loop capped by ``function_loop_max_iterations``. If
+            an iteration returns a pending tool-approval request, the loop stops and returns it so
+            the caller can approve before continuing. When None (default), no loop is added.
+        loop_next_message: Optional callable controlling the input for the next **agent re-run**
+            iteration of the ``AgentLoopMiddleware`` loop. Only takes effect when
+            ``loop_should_continue`` is set (otherwise no loop is added and this is ignored).
+        loop_max_iterations: Safety cap on the number of **agent re-run** iterations performed by
+            the ``AgentLoopMiddleware`` loop (this is *not* the function/tool-calling loop; see
+            ``function_loop_max_iterations`` for that). ``None`` means unbounded; a positive
+            integer caps the loop (defaults to the loop middleware's default cap). Only takes
+            effect when ``loop_should_continue`` is set (otherwise no loop is added and this is
+            ignored).
+        function_loop_max_iterations: Maximum number of **function/tool-calling loop iterations
+            per request** (LLM round-trips) the chat client performs while resolving tool calls
+            for a single model request. When set, it is applied to the client's
+            ``function_invocation_configuration["max_iterations"]``. This is unrelated to the
+            agent-level ``loop_*`` parameters, which re-run the whole agent. Must be at least 1
+            when provided. When None (default), the client's existing configuration is left
+            unchanged (the built-in default is 40). A warning is logged if the supplied client
+            does not expose ``function_invocation_configuration``.
         otel_provider_name: Custom OpenTelemetry provider/source name for telemetry.
         context_providers: Additional context providers to include after the built-in ones.
         middleware: Additional middleware to include.
@@ -524,7 +537,8 @@ def create_harness_agent(
     Raises:
         ValueError: If max_context_window_tokens is provided and <= 0, or
             max_output_tokens is provided and <= 0, or max_output_tokens >=
-            max_context_window_tokens when both are provided.
+            max_context_window_tokens when both are provided, or
+            function_loop_max_iterations is provided and < 1.
     """
     if max_context_window_tokens is not None and max_context_window_tokens <= 0:
         raise ValueError("max_context_window_tokens must be positive.")
@@ -536,6 +550,22 @@ def create_harness_agent(
         and max_output_tokens >= max_context_window_tokens
     ):
         raise ValueError("max_output_tokens must be less than max_context_window_tokens.")
+    if function_loop_max_iterations is not None and function_loop_max_iterations < 1:
+        raise ValueError("function_loop_max_iterations must be at least 1.")
+
+    # Apply the per-request function/tool-calling loop cap to the chat client. This is the
+    # Python counterpart of the .NET harness's MaximumIterationsPerRequest option. When None,
+    # the client's existing function_invocation_configuration is left untouched.
+    if function_loop_max_iterations is not None:
+        function_invocation_configuration = getattr(client, "function_invocation_configuration", None)
+        if function_invocation_configuration is None:
+            logger.warning(
+                "function_loop_max_iterations was set but client %r does not expose "
+                "function_invocation_configuration; the setting will be ignored.",
+                type(client).__name__,
+            )
+        else:
+            function_invocation_configuration["max_iterations"] = function_loop_max_iterations
 
     # Warn when opting into harness features that are still experimental. create_harness_agent
     # itself is released, but background agents, file access, and looping remain experimental,

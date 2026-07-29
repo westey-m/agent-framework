@@ -432,17 +432,24 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetStreamingResponseAsync_EmptiedUpdateWithFinishReason_IsStillSurfacedAsync()
+    public async Task GetStreamingResponseAsync_EmptiedUpdateRetainsMetadataAsync()
     {
-        // Arrange — the update carrying the bypassed backend call also carries the stream's FinishReason,
-        // which must not be discarded along with the stripped content.
+        // Arrange — the update carrying the bypassed backend call carries nothing else, so stripping empties
+        // it. It still holds stream metadata (conversation/response ids) that the caller needs. Deliberately
+        // no FinishReason, since that alone is not what makes an emptied update worth keeping.
         var backendCall = new FunctionCallContent("call1", BackendToolName);
         var frontendCall = new FunctionCallContent("call2", FrontendToolName);
 
         var innerClient = CreateMockStreamingChatClient((_, _, _) =>
             ToAsyncEnumerableAsync(
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [frontendCall] },
-                new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [backendCall], FinishReason = ChatFinishReason.ToolCalls }));
+                new ChatResponseUpdate
+                {
+                    Role = ChatRole.Assistant,
+                    Contents = [backendCall],
+                    ConversationId = "conv-1",
+                    ResponseId = "resp-1",
+                }));
 
         var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
@@ -451,11 +458,42 @@ public class ExecutableFunctionBypassingChatClientTests
         var updates = new List<ChatResponseUpdate>();
         await RunStreamingWithAgentContextAsync(decorator, session, updates, CreateMixedToolOptions());
 
-        // Assert — the backend call is stripped but its FinishReason still reaches the caller.
+        // Assert — the backend call is stripped, but the emptied update is still surfaced with its metadata.
         Assert.DoesNotContain(
             updates.SelectMany(u => u.Contents).OfType<FunctionCallContent>(),
             c => c.Name == BackendToolName);
-        Assert.Contains(updates, u => u.FinishReason == ChatFinishReason.ToolCalls);
+
+        var emptied = Assert.Single(updates, u => u.Contents.Count == 0);
+        Assert.Equal("conv-1", emptied.ConversationId);
+        Assert.Equal("resp-1", emptied.ResponseId);
+    }
+
+    [Fact]
+    public async Task GetStreamingResponseAsync_InnerClientThrowsSynchronously_RestoresPendingCallsAsync()
+    {
+        // Arrange — the inner client validates eagerly and throws before any update is produced, so the
+        // failure happens while the enumerator is being acquired rather than during enumeration.
+        var storedBackendCall = new FunctionCallContent("call1", BackendToolName);
+
+        var session = new ChatClientAgentSession();
+        session.StateBag.SetValue(
+            ExecutableFunctionBypassingChatClient.StateBagKey,
+            new List<FunctionCallContent> { storedBackendCall },
+            AgentJsonUtilities.DefaultOptions);
+
+        var innerClient = CreateMockStreamingChatClient((_, _, _) => throw new InvalidOperationException("invalid"));
+
+        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+
+        // Act
+        var updates = new List<ChatResponseUpdate>();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RunStreamingWithAgentContextAsync(decorator, session, updates, CreateMixedToolOptions()));
+
+        // Assert — the pending call survives the failure so a retry can still execute it.
+        Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
+            ExecutableFunctionBypassingChatClient.StateBagKey, out var restored, AgentJsonUtilities.DefaultOptions));
+        Assert.Equal("call1", Assert.Single(restored!).CallId);
     }
 
     [Fact]

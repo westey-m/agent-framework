@@ -50,6 +50,12 @@ namespace Microsoft.Agents.AI;
 /// (for example when the chat client is used directly outside of an agent run), the decorator becomes
 /// a no-op: it passes the request through to the inner client unchanged and logs a warning.
 /// </para>
+/// <para>
+/// When the pipeline also contains an <see cref="ApprovalResponseBindingChatClient"/>, this decorator must sit
+/// <em>below</em> it. That client drops any <see cref="ToolApprovalResponseContent"/> without a request it
+/// recorded, so that a forged approval cannot execute; the responses injected here are synthetic and have no
+/// such request. The default agent pipeline already orders them correctly.
+/// </para>
 /// </remarks>
 internal sealed partial class ExecutableFunctionBypassingChatClient : DelegatingChatClient
 {
@@ -134,11 +140,22 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
         // leaving the calls non-informational) is held to the end of the stream.
         List<ChatResponseUpdate>? tail = null;
 
-        // The enumerator is driven manually so that a failure part-way through the stream can restore the
-        // pending calls, which cannot be done with an await foreach because yield return is not allowed
-        // inside a try with a catch clause.
-        var stream = base.GetStreamingResponseAsync(messages, options, cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
+        // The enumerator is driven manually so that a failure anywhere in the stream can restore the pending
+        // calls, which cannot be done with an await foreach because yield return is not allowed inside a try
+        // with a catch clause. Acquiring the enumerator is guarded too: the inner client may validate its
+        // arguments eagerly and throw synchronously, before the first MoveNextAsync.
+        IAsyncEnumerator<ChatResponseUpdate> stream;
+        try
+        {
+            stream = base.GetStreamingResponseAsync(messages, options, cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
+        }
+        catch
+        {
+            RestorePendingBypassedCalls(session, pendingCalls);
+            throw;
+        }
+
         try
         {
             while (true)
@@ -194,28 +211,19 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             contentLists[i] = tail[i].Contents;
         }
 
-        var emptied = this.StripAndStoreBypassableExecutableCalls(contentLists, options, session);
+        this.StripAndStoreBypassableExecutableCalls(contentLists, options, session);
 
-        for (int i = 0; i < tail.Count; i++)
+        // Every buffered update is surfaced, including any left with no contents by the stripping above. An
+        // update carries metadata beyond its contents — ConversationId, ContinuationToken, ResponseId,
+        // MessageId, RawRepresentation and more — so dropping one would discard state the caller needs, and a
+        // content-free update is unremarkable in a stream. This differs from the non-streaming path, where an
+        // emptied message is removed because it would otherwise be persisted to history and resent to the
+        // provider on the next turn.
+        foreach (var update in tail)
         {
-            // Drop only updates this decorator emptied by stripping bypassed content, and only when they
-            // carry no metadata that would be lost with them. Updates that were already empty (metadata-only)
-            // are always preserved.
-            if (emptied?.Contains(i) == true && !CarriesMetadata(tail[i]))
-            {
-                continue;
-            }
-
-            yield return tail[i];
+            yield return update;
         }
     }
-
-    /// <summary>
-    /// Returns <see langword="true"/> if the update carries stream metadata that must still reach the caller
-    /// even when all of its contents were stripped.
-    /// </summary>
-    private static bool CarriesMetadata(ChatResponseUpdate update)
-        => update.FinishReason is not null;
 
     /// <summary>
     /// Attempts to get the current <see cref="AgentSession"/> from the ambient run context. When no run
@@ -382,7 +390,9 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
         }
 
         // Remove messages that were emptied by stripping bypassed content (high index first). Messages that
-        // were already empty (for example metadata-only messages) are left untouched.
+        // were already empty (for example metadata-only messages) are left untouched. Unlike a streaming
+        // update, an emptied message is worth removing because it would otherwise be persisted to the
+        // conversation history and resent to the provider on the next turn.
         for (int i = messages.Count - 1; i >= 0; i--)
         {
             if (emptied.Contains(i))

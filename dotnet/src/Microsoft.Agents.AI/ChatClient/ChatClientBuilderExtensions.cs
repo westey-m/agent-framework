@@ -237,6 +237,13 @@ public static class ChatClientBuilderExtensions
     /// pre-approved responses so <see cref="FunctionInvokingChatClient"/> reconstructs and executes them.
     /// </para>
     /// <para>
+    /// If the pipeline also contains an <see cref="ApprovalResponseBindingChatClient"/>, this decorator must be
+    /// positioned <em>below</em> it. That client drops any <see cref="ToolApprovalResponseContent"/> that does not
+    /// correspond to a request it recorded, so that a forged approval cannot execute. The responses this decorator
+    /// injects are synthetic and have no such request, so placing the binding client below this decorator would
+    /// silently discard them and prevent the stored calls from ever executing.
+    /// </para>
+    /// <para>
     /// This extension method is intended for use with custom chat client stacks when
     /// <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="true"/>.
     /// When <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="false"/> (the default),

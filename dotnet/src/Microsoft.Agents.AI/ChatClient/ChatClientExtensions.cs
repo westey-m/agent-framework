@@ -68,7 +68,7 @@ public static class ChatClientExtensions
         // ApprovalNotRequiredFunctionBypassingChatClient is registered before FunctionInvokingChatClient so that
         // it sits above FICC in the pipeline. ChatClientBuilder.Build applies factories in reverse order,
         // making the first Use() call outermost. By adding this decorator here, the resulting pipeline is:
-        //   [ApprovalResponseBindingChatClient] → ApprovalNotRequiredFunctionBypassingChatClient → FunctionInvokingChatClient
+        //   [ApprovalResponseBindingChatClient] → ApprovalNotRequiredFunctionBypassingChatClient → [ExecutableFunctionBypassingChatClient] → FunctionInvokingChatClient
         //     → [MessageInjectingChatClient] → [PerServiceCallChatHistoryPersistingChatClient] → DeferredOpenTelemetryChatClient → leaf IChatClient
         // This allows the decorator to intercept FICC's responses and remove approval requests for tools
         // that don't actually require approval, storing them for automatic re-injection on the next request.
@@ -76,6 +76,18 @@ public static class ChatClientExtensions
         {
             chatBuilder.Use((innerClient, services) =>
                 new ApprovalNotRequiredFunctionBypassingChatClient(innerClient, services.GetService<ILoggerFactory>()));
+        }
+
+        // ExecutableFunctionBypassingChatClient is opt-in via EnableExecutableFunctionBypassing. It is
+        // registered after the approval decorators and immediately before FunctionInvokingChatClient, so it
+        // sits directly above FICC (ChatClientBuilder.Build applies factories in reverse order). It intercepts
+        // FICC responses that contain both invocable (backend) and declaration-only (frontend) function calls,
+        // removes the invocable calls, stores them in the session, and re-injects them as pre-approved
+        // responses on the next request so FICC reconstructs and executes them.
+        if (options?.EnableExecutableFunctionBypassing is true)
+        {
+            chatBuilder.Use((innerClient, services) =>
+                new ExecutableFunctionBypassingChatClient(innerClient, services.GetService<ILoggerFactory>()));
         }
 
         if (chatClient.GetService<FunctionInvokingChatClient>() is null)

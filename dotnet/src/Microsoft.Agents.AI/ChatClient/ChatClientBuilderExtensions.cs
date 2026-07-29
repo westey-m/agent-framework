@@ -2,9 +2,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Shared.DiagnosticIds;
 using Microsoft.Shared.Diagnostics;
 
 namespace Microsoft.Extensions.AI;
@@ -220,5 +222,44 @@ public static class ChatClientBuilderExtensions
     {
         return builder.Use((innerClient, services) =>
             new ApprovalResponseBindingChatClient(innerClient, loggerFactory ?? services.GetService<ILoggerFactory>()));
+    }
+
+    /// <summary>
+    /// Adds an <see cref="ExecutableFunctionBypassingChatClient"/> to the chat client pipeline.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This decorator should be positioned above the <see cref="FunctionInvokingChatClient"/> in the pipeline.
+    /// When <see cref="FunctionInvokingChatClient"/> returns a response containing both an invocable (backend)
+    /// <see cref="FunctionCallContent"/> and a declaration-only (frontend) <see cref="FunctionCallContent"/> in
+    /// the same iteration, this decorator removes the invocable calls, stores them in the session, and returns
+    /// only the declaration-only calls to the caller. On the next request the stored calls are re-injected as
+    /// pre-approved responses so <see cref="FunctionInvokingChatClient"/> reconstructs and executes them.
+    /// </para>
+    /// <para>
+    /// This extension method is intended for use with custom chat client stacks when
+    /// <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="true"/>.
+    /// When <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="false"/> (the default),
+    /// the <see cref="ChatClientAgent"/> automatically injects this decorator when
+    /// <see cref="ChatClientAgentOptions.EnableExecutableFunctionBypassing"/> is <see langword="true"/>.
+    /// </para>
+    /// <para>
+    /// This decorator is intended for use within the context of a running <see cref="ChatClientAgent"/> with
+    /// an active session. When invoked outside of an agent run (for example when the built chat client is used
+    /// directly), the decorator becomes a no-op, passing the request through unchanged and logging a warning.
+    /// </para>
+    /// </remarks>
+    /// <param name="builder">The <see cref="ChatClientBuilder"/> to add the decorator to.</param>
+    /// <param name="loggerFactory">
+    /// An optional <see cref="ILoggerFactory"/> used to create a logger for the decorator. When not provided,
+    /// the factory is resolved from the pipeline's <see cref="IServiceProvider"/>; if none is available,
+    /// logging is a no-op.
+    /// </param>
+    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
+    public static ChatClientBuilder UseExecutableFunctionBypassing(this ChatClientBuilder builder, ILoggerFactory? loggerFactory = null)
+    {
+        return builder.Use((innerClient, services) =>
+            new ExecutableFunctionBypassingChatClient(innerClient, loggerFactory ?? services.GetService<ILoggerFactory>()));
     }
 }

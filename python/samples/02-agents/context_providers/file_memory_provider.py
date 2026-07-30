@@ -1,6 +1,21 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Sample: give an agent file-based memory with ``FileMemoryProvider``.
+import asyncio
+import os
+from pathlib import Path
+
+from agent_framework import Agent, AgentSession, FileMemoryProvider, FileSystemAgentFileStore
+from agent_framework.foundry import FoundryChatClient
+from azure.identity import AzureCliCredential
+from dotenv import load_dotenv
+
+# Load python/.env (python-dotenv walks up from this file by default). Pass
+# override=True so values from .env take precedence over any pre-existing OS
+# environment variables — without this, OS-level values silently win.
+load_dotenv(override=True)
+
+"""
+Sample: give an agent file-based memory with ``FileMemoryProvider``.
 
 This sample shows how to attach :class:`FileMemoryProvider` directly to a plain
 ``Agent`` via ``context_providers``, and how to control the *scope* of the
@@ -28,20 +43,6 @@ Prerequisites:
     - ``FOUNDRY_MODEL``: Chat model deployment name.
     - Run ``az login`` before executing the sample.
 """
-
-import asyncio
-import os
-from pathlib import Path
-
-from agent_framework import Agent, AgentSession, FileMemoryProvider, FileSystemAgentFileStore
-from agent_framework.foundry import FoundryChatClient
-from azure.identity import AzureCliCredential
-from dotenv import load_dotenv
-
-# Load python/.env (python-dotenv walks up from this file by default). Pass
-# override=True so values from .env take precedence over any pre-existing OS
-# environment variables — without this, OS-level values silently win.
-load_dotenv(override=True)
 
 # The id of the user we are storing memories for. It is used below as the
 # provider's scope so that each user gets their own memory folder.

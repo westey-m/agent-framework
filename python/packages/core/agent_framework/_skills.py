@@ -66,6 +66,7 @@ from pathlib import Path, PurePosixPath
 from typing import IO, TYPE_CHECKING, Any, ClassVar, Final, Protocol, TypeAlias, TypeVar, cast, runtime_checkable
 
 from ._feature_stage import ExperimentalFeature, experimental
+from ._filesystem import is_link_or_reparse_point
 from ._sessions import ContextProvider
 from ._telemetry import FeatureIndex, mark_feature_used
 from ._tools import ApprovalMode, FunctionTool
@@ -2989,8 +2990,8 @@ class FileSkillsSource(SkillsSource):
             return False
 
     @staticmethod
-    def _has_symlink_in_path(path: str, directory: str) -> bool:
-        """Detect symlinks in the portion of *path* below *directory*.
+    def _has_link_or_reparse_point_in_path(path: str, directory: str) -> bool:
+        """Detect links or reparse points in the portion of *path* below *directory*.
 
         Only segments below *directory* are inspected; the directory itself
         and anything above it are not checked.
@@ -3003,7 +3004,8 @@ class FileSkillsSource(SkillsSource):
             directory: Root directory; segments above it are not checked.
 
         Returns:
-            ``True`` if any intermediate segment below *directory* is a symlink.
+            ``True`` if any segment below *directory* is a symbolic link,
+            junction, other reparse point, or cannot be safely inspected.
 
         Raises:
             ValueError: If *path* is not relative to *directory*.
@@ -3017,7 +3019,11 @@ class FileSkillsSource(SkillsSource):
         current = dir_path
         for part in relative.parts:
             current = current / part
-            if current.is_symlink():
+            try:
+                is_link = is_link_or_reparse_point(current)
+            except OSError:
+                return True
+            if is_link:
                 return True
         return False
 
@@ -3098,9 +3104,10 @@ class FileSkillsSource(SkillsSource):
                 )
                 return
 
-            if FileSkillsSource._has_symlink_in_path(resolved_target, root_directory_path):
+            if FileSkillsSource._has_link_or_reparse_point_in_path(resolved_target, root_directory_path):
                 logger.warning(
-                    "Skipping resource directory '%s': symlink detected in path under skill directory '%s'",
+                    "Skipping resource directory '%s': symbolic link or reparse point detected in path under "
+                    "skill directory '%s'",
                     target_dir,
                     root_directory_path,
                 )
@@ -3143,9 +3150,10 @@ class FileSkillsSource(SkillsSource):
                 )
                 continue
 
-            if FileSkillsSource._has_symlink_in_path(resource_full_path, root_directory_path):
+            if FileSkillsSource._has_link_or_reparse_point_in_path(resource_full_path, root_directory_path):
                 logger.warning(
-                    "Skipping resource '%s': symlink detected in path under skill directory '%s'",
+                    "Skipping resource '%s': symbolic link or reparse point detected in path under "
+                    "skill directory '%s'",
                     entry,
                     root_directory_path,
                 )
@@ -3251,9 +3259,10 @@ class FileSkillsSource(SkillsSource):
                 )
                 return
 
-            if FileSkillsSource._has_symlink_in_path(resolved_target, root_directory_path):
+            if FileSkillsSource._has_link_or_reparse_point_in_path(resolved_target, root_directory_path):
                 logger.warning(
-                    "Skipping script directory '%s': symlink detected in path under skill directory '%s'",
+                    "Skipping script directory '%s': symbolic link or reparse point detected in path under "
+                    "skill directory '%s'",
                     target_dir,
                     root_directory_path,
                 )
@@ -3293,9 +3302,9 @@ class FileSkillsSource(SkillsSource):
                 )
                 continue
 
-            if FileSkillsSource._has_symlink_in_path(script_full_path, root_directory_path):
+            if FileSkillsSource._has_link_or_reparse_point_in_path(script_full_path, root_directory_path):
                 logger.warning(
-                    "Skipping script '%s': symlink detected in path under skill directory '%s'",
+                    "Skipping script '%s': symbolic link or reparse point detected in path under skill directory '%s'",
                     entry,
                     root_directory_path,
                 )
@@ -3359,8 +3368,11 @@ class FileSkillsSource(SkillsSource):
         if not Path(resource_full_path).is_file():
             raise ValueError(f"Resource file '{resource_name}' not found in skill directory '{skill_dir}'.")
 
-        if FileSkillsSource._has_symlink_in_path(resource_full_path, root_directory_path):
-            raise ValueError(f"Resource file '{resource_name}' has a symlink in its path; symlinks are not allowed.")
+        if FileSkillsSource._has_link_or_reparse_point_in_path(resource_full_path, root_directory_path):
+            raise ValueError(
+                f"Resource file '{resource_name}' has a symbolic link or reparse point in its path; "
+                "links and reparse points are not allowed."
+            )
 
         return resource_full_path
 

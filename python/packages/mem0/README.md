@@ -26,6 +26,7 @@ The provider separates the scope used to **store** memories from the scope used 
 - `application_id` / `agent_id` / `user_id` stamp every memory that is written.
 - `search_application_id` / `search_agent_id` / `search_user_id` select which memories are searched.
 
+Note: `application_id` and `search_application_id` are only supported by the Platform client (`AsyncMemoryClient`), not the OSS `AsyncMemory` client.
 Retrieval scope values never inherit from the storage scope. If none of the `search_*` values are
 set, no memories are retrieved and a warning is logged. Set `search_user_id` for per-user memory,
 and only set `search_agent_id` when memories under that agent are safe to share across all of its

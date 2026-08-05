@@ -46,7 +46,7 @@ Storage scope — stamped onto every memory that is written:
 
 - **User scope** (`user_id`): Associate memories with a specific user, shared across all sessions
 - **Agent scope** (`agent_id`): Isolate memories per agent persona
-- **Application scope** (`application_id`): Associate memories with an application context
+- **Application scope** (`application_id`): Associate memories with an application context (Platform client only)
 
 Retrieval scope — used when searching for memories to inject into the context:
 

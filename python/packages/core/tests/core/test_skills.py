@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -1003,6 +1003,65 @@ class TestSymlinkDetection:
         assert "scripts/safe.py" in discovered
         assert "scripts/leak.py" not in discovered
 
+    async def test_discover_skips_symlinked_skill_directory(self, tmp_path: Path) -> None:
+        """A symlinked directory below a configured root must not become a skill root."""
+        root = tmp_path / "root"
+        root.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _write_skill(outside, "evil-skill")
+
+        (root / "evil-skill").symlink_to(outside / "evil-skill", target_is_directory=True)
+        _write_skill(root, "good-skill")
+
+        assert FileSkillsSource._discover_skill_directories([str(root)]) == [str((root / "good-skill").absolute())]
+
+        skills = await _discover_file_skills_for_test([str(root)])
+        assert "evil-skill" not in skills
+        assert "good-skill" in skills
+
+    def test_discover_skips_directory_with_symlinked_skill_file(self, tmp_path: Path) -> None:
+        """A real directory whose SKILL.md is a symlink must not be discovered."""
+        root = tmp_path / "root"
+        root.mkdir()
+        outside_skill_file = tmp_path / "outside-SKILL.md"
+        outside_skill_file.write_text(
+            "---\nname: evil-skill\ndescription: Evil.\n---\nEvil instructions.",
+            encoding="utf-8",
+        )
+
+        evil_dir = root / "evil-skill"
+        evil_dir.mkdir()
+        (evil_dir / "SKILL.md").symlink_to(outside_skill_file)
+
+        assert FileSkillsSource._discover_skill_directories([str(root)]) == []
+
+    def test_discover_keeps_nested_real_skill_directories(self, tmp_path: Path) -> None:
+        """Nested real skill directories are still discovered when links are present."""
+        root = tmp_path / "root"
+        nested = root / "group"
+        nested.mkdir(parents=True)
+        _write_skill(nested, "nested-skill")
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (root / "linked").symlink_to(outside, target_is_directory=True)
+
+        assert FileSkillsSource._discover_skill_directories([str(root)]) == [str((nested / "nested-skill").absolute())]
+
+    def test_configured_root_may_itself_be_a_link(self, tmp_path: Path) -> None:
+        """The host-configured root defines the trust boundary and is not link-checked."""
+        real_root = tmp_path / "real-root"
+        real_root.mkdir()
+        _write_skill(real_root, "my-skill")
+
+        linked_root = tmp_path / "linked-root"
+        linked_root.symlink_to(real_root, target_is_directory=True)
+
+        assert FileSkillsSource._discover_skill_directories([str(linked_root)]) == [
+            str((linked_root / "my-skill").absolute())
+        ]
+
 
 class TestJunctionDetection:
     """Tests for Windows junction guards in file-based skills."""
@@ -1026,6 +1085,54 @@ class TestJunctionDetection:
                 FileSkillsSource._get_validated_resource_path(str(skill_dir), "linked/leak.md")
         finally:
             junction.rmdir()
+
+    async def test_junctioned_skill_directory_is_not_discovered(self, tmp_path: Path) -> None:
+        """A junction below a configured root must not be adopted as a skill root."""
+        root = tmp_path / "root"
+        root.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _write_skill(outside, "evil-skill")
+        _write_skill(root, "good-skill")
+
+        junction = root / "evil-skill"
+        create_junction_or_skip(link=junction, target=outside / "evil-skill")
+
+        try:
+            assert FileSkillsSource._discover_skill_directories([str(root)]) == [str((root / "good-skill").absolute())]
+            skills = await _discover_file_skills_for_test([str(root)])
+            assert "evil-skill" not in skills
+            assert "good-skill" in skills
+        finally:
+            junction.rmdir()
+
+
+class TestSkillDiscoveryFailsClosed:
+    """Discovery must fail closed when an entry cannot be inspected."""
+
+    def test_entry_that_cannot_be_inspected_is_skipped(self, tmp_path: Path) -> None:
+        root = tmp_path / "root"
+        root.mkdir()
+        _write_skill(root, "my-skill")
+
+        def _raise(path: Path) -> bool:
+            raise OSError("cannot inspect")
+
+        with patch("agent_framework._skills.is_link_or_reparse_point", side_effect=_raise):
+            assert FileSkillsSource._discover_skill_directories([str(root)]) == []
+
+    def test_skill_file_that_cannot_be_inspected_is_skipped(self, tmp_path: Path) -> None:
+        root = tmp_path / "root"
+        root.mkdir()
+        _write_skill(root, "my-skill")
+
+        def _raise_for_skill_file(path: Path) -> bool:
+            if path.name == "SKILL.md":
+                raise OSError("cannot inspect")
+            return False
+
+        with patch("agent_framework._skills.is_link_or_reparse_point", side_effect=_raise_for_skill_file):
+            assert FileSkillsSource._discover_skill_directories([str(root)]) == []
 
 
 # ---------------------------------------------------------------------------

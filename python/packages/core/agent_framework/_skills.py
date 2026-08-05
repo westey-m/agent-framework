@@ -3548,6 +3548,15 @@ class FileSkillsSource(SkillsSource):
         search does not descend into its subdirectories: everything beneath a skill
         boundary is part of that skill, not an independent skill root.
 
+        Discovery fails closed on links: any entry below a configured root that is a
+        symbolic link, junction, other reparse point, or cannot be inspected is skipped
+        and never adopted as a skill root, and a directory whose ``SKILL.md`` is itself
+        such a link is skipped too. Without this check a link below a root would become
+        the skill root, and because every later guard treats the skill root as the trust
+        boundary and only inspects segments below it, the link itself would never be
+        inspected. The configured root paths are not checked: the host chose them
+        explicitly, so they define the trust boundary rather than sit inside it.
+
         Args:
             skill_paths: Root directory paths to search.
 
@@ -3556,11 +3565,26 @@ class FileSkillsSource(SkillsSource):
         """
         discovered: list[str] = []
 
+        def _is_unsafe_link(path: Path) -> bool:
+            try:
+                return is_link_or_reparse_point(path)
+            except OSError:
+                return True
+
         def _search(directory: str, current_depth: int) -> None:
             dir_path = Path(directory)
-            if (dir_path / SKILL_FILE_NAME).is_file():
+            skill_file = dir_path / SKILL_FILE_NAME
+            if skill_file.is_file():
                 # This directory is a skill root. Subdirectories are part of this
                 # skill and must not be treated as independent skill roots.
+                if _is_unsafe_link(skill_file):
+                    logger.warning(
+                        "Skipping skill directory '%s': '%s' is a symbolic link or reparse point, "
+                        "or could not be inspected",
+                        directory,
+                        SKILL_FILE_NAME,
+                    )
+                    return
                 discovered.append(str(dir_path.absolute()))
                 return
 
@@ -3573,6 +3597,13 @@ class FileSkillsSource(SkillsSource):
                 return
 
             for entry in entries:
+                if _is_unsafe_link(entry):
+                    logger.warning(
+                        "Skipping discovery entry '%s': symbolic link or reparse point detected, "
+                        "or the entry could not be inspected",
+                        entry,
+                    )
+                    continue
                 if entry.is_dir():
                     _search(str(entry), current_depth + 1)
 

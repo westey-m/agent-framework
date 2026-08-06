@@ -140,6 +140,11 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
         //    invocation, so a per-request cap (FunctionInvokingChatClient.MaximumIterationsPerRequest)
         //    restarts every time and cannot bound it; without a cap here a model that keeps
         //    requesting an auto-approved tool bills indefinitely.
+        //
+        //    Usage is accumulated across every re-invocation so the caller sees the token cost
+        //    of the whole run, not just its final inner call.
+        UsageDetails? aggregatedUsage = null;
+
         for (int iteration = 0; ; iteration++)
         {
             // Inject any collected approval responses as a user message ahead of the caller's messages.
@@ -156,13 +161,16 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
 
             var response = await this.InnerAgent.RunAsync(processedMessages, session, options, cancellationToken).ConfigureAwait(false);
 
+            UsageAggregationExtensions.AccumulateUsage(ref aggregatedUsage, response.Usage);
+
             // Classify approval requests: auto-approve matching, queue excess, keep first unapproved.
             bool allAutoApproved = await this.ProcessAndQueueOutboundApprovalRequestsAsync(response.Messages, state, session, options, requestMessages).ConfigureAwait(false);
 
             if (!allAutoApproved)
             {
                 // Response has real content or an unapproved approval request — return to caller.
-                return response;
+                // Return a copy carrying the aggregated usage rather than mutating the inner agent's response.
+                return response.WithAggregatedUsage(aggregatedUsage);
             }
 
             // All approval requests were auto-approved. Loop to re-invoke with them injected.

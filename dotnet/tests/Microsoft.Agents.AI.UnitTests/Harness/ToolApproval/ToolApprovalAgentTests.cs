@@ -1782,6 +1782,136 @@ public class ToolApprovalAgentTests
 
     #endregion
 
+    #region Usage aggregation
+
+    /// <summary>
+    /// Verify that usage from every auto-approval re-invocation of the inner agent is summed into the
+    /// response returned to the caller.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_AutoApprovalLoop_AggregatesUsageAcrossInvocationsAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                var usage = new UsageDetails { InputTokenCount = callCount is 1 ? 2 : callCount is 2 ? 11 : 29, OutputTokenCount = callCount is 1 ? 3 : callCount is 2 ? 5 : 7, TotalTokenCount = callCount is 1 ? 5 : callCount is 2 ? 16 : 36 };
+                if (callCount < 3)
+                {
+                    var request = new ToolApprovalRequestContent($"req{callCount}", new FunctionCallContent($"call{callCount}", "DangerousTool"));
+                    return new AgentResponse([new ChatMessage(ChatRole.Assistant, [request])]) { Usage = usage };
+                }
+
+                return new AgentResponse([new ChatMessage(ChatRole.Assistant, "Done")]) { Usage = usage };
+            });
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [ToolApprovalAgent.AllToolsAutoApprovalRule]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert
+        Assert.Equal(3, callCount);
+        Assert.Equal("Done", response.Text);
+        Assert.NotNull(response.Usage);
+        Assert.Equal(42, response.Usage!.InputTokenCount);
+        Assert.Equal(15, response.Usage.OutputTokenCount);
+        Assert.Equal(57, response.Usage.TotalTokenCount);
+    }
+
+    /// <summary>
+    /// Verify that a single inner invocation still surfaces its usage unchanged and does not mutate the
+    /// inner agent's usage instance.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_SingleInvocation_SurfacesUsageWithoutMutatingInnerResponseAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var innerUsage = new UsageDetails { InputTokenCount = 12, OutputTokenCount = 3, TotalTokenCount = 15 };
+        var innerResponse = new AgentResponse([new ChatMessage(ChatRole.Assistant, "Done")]) { Usage = innerUsage };
+        var agent = new ToolApprovalAgent(CreateMockAgent(innerResponse).Object);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert
+        Assert.NotNull(response.Usage);
+        Assert.NotSame(innerUsage, response.Usage);
+        Assert.Equal(12, response.Usage!.InputTokenCount);
+        Assert.Equal(3, response.Usage.OutputTokenCount);
+        Assert.Equal(15, response.Usage.TotalTokenCount);
+        Assert.Equal(12, innerUsage.InputTokenCount);
+        Assert.Equal(3, innerUsage.OutputTokenCount);
+        Assert.Equal(15, innerUsage.TotalTokenCount);
+    }
+
+    /// <summary>
+    /// Verify that the streaming path surfaces every auto-approval iteration's usage so an aggregated
+    /// response built from the updates reports the usage of the whole run.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_AutoApprovalLoop_SurfacesUsageFromEveryInvocationAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<IAsyncEnumerable<AgentResponseUpdate>>("RunCoreStreamingAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Returns<IEnumerable<ChatMessage>, AgentSession?, AgentRunOptions?, CancellationToken>((_, _, _, ct) =>
+            {
+                callCount++;
+                var usageUpdate = new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = callCount is 1 ? 2 : callCount is 2 ? 11 : 29, OutputTokenCount = callCount is 1 ? 3 : callCount is 2 ? 5 : 7, TotalTokenCount = callCount is 1 ? 5 : callCount is 2 ? 16 : 36 })]);
+                AgentResponseUpdate[] updates = callCount < 3
+                    ? [new AgentResponseUpdate(ChatRole.Assistant, [new ToolApprovalRequestContent($"req{callCount}", new FunctionCallContent($"call{callCount}", "DangerousTool"))]), usageUpdate]
+                    : [new AgentResponseUpdate(ChatRole.Assistant, "Done"), usageUpdate];
+                return ToAsyncEnumerableAsync(updates, ct);
+            });
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [ToolApprovalAgent.AllToolsAutoApprovalRule]
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var updates = new List<AgentResponseUpdate>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "Hi")], session))
+        {
+            updates.Add(update);
+        }
+
+        // Assert
+        Assert.Equal(3, callCount);
+        var response = updates.ToAgentResponse();
+        Assert.NotNull(response.Usage);
+        Assert.Equal(42, response.Usage!.InputTokenCount);
+        Assert.Equal(15, response.Usage.OutputTokenCount);
+        Assert.Equal(57, response.Usage.TotalTokenCount);
+    }
+
+    #endregion
+
     #region Helpers
 
     private static Mock<AIAgent> CreateMockAgent(AgentResponse response)

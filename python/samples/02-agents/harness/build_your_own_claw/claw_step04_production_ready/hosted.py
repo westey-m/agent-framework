@@ -26,7 +26,8 @@ there is no ``configure_otel_providers()`` call. When deployed, Foundry injects
 this host with ``azd ai agent run`` to see telemetry; running it directly won't export anything.
 
 File access and shell are disabled on the hosted container (see ``enable_file_access`` /
-``enable_shell`` below).
+``enable_shell`` below). File memory stays enabled, but its store is pointed at a writable directory
+under the home directory.
 
 Environment variables:
     FOUNDRY_PROJECT_ENDPOINT       — Microsoft Foundry project endpoint URL
@@ -44,12 +45,18 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import AsyncExitStack
+from pathlib import Path
 
 from agent import build_claw_agent
-from agent_framework import InMemoryHistoryProvider
+from agent_framework import FileSystemAgentFileStore, InMemoryHistoryProvider
 from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
+
+# File memory writes to disk, and the deployed code directory is read-only on Foundry hosted agents,
+# so the harness default of ``{cwd}/agent-file-memory`` cannot be created. The home directory is
+# writable, so root the store there.
+_FILE_MEMORY_DIR = Path.home() / ".claw" / "agent-file-memory"
 
 
 async def main() -> None:
@@ -58,6 +65,7 @@ async def main() -> None:
 
     async with AsyncExitStack() as stack:
         credential = DefaultAzureCredential()
+        print(f"File memory enabled (local filesystem at {_FILE_MEMORY_DIR}).")
         agent = await build_claw_agent(
             stack,
             credential=credential,
@@ -71,6 +79,8 @@ async def main() -> None:
             # external file_access_store (e.g. one backed by Azure Blob Storage) instead of the disk.
             enable_file_access=False,
             enable_shell=False,
+            # File memory is on by default; keep it, but on a writable path (see _FILE_MEMORY_DIR).
+            file_memory_store=FileSystemAgentFileStore(_FILE_MEMORY_DIR),
             # Purview authenticates via the container's managed identity; InteractiveBrowserCredential
             # cannot run on a headless hosted container.
             purview_credential=credential,

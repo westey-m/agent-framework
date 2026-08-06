@@ -283,6 +283,7 @@ async def build_claw_agent(
     history_provider: HistoryProvider | None = None,
     enable_file_access: bool = True,
     file_access_store: Any = None,
+    file_memory_store: Any = None,
     enable_shell: bool = True,
     purview_credential: TokenCredential | None = None,
 ) -> Agent[Any]:
@@ -302,6 +303,10 @@ async def build_claw_agent(
         file_access_store: Optional custom ``AgentFileStore``. When None (and ``enable_file_access`` is
             True), a ``FileSystemAgentFileStore`` rooted at the working dir is used. Supply your own — for
             example, one backed by Azure Blob Storage — to keep files off the container disk when hosted.
+        file_memory_store: Optional custom ``AgentFileStore`` backing the harness file memory. When
+            None, the harness default is used, which writes to ``{cwd}/agent-file-memory``. Hosted
+            deployments must supply a store rooted at a writable path, because the deployed code
+            directory is mounted read-only.
         enable_shell: When True (default), the agent can run shell commands. Disable it on
             shared/hosted deployments: arbitrary command execution inside the container is a serious
             security risk (data exfiltration, persistence, tampering) even behind a deny-list.
@@ -361,6 +366,7 @@ async def build_claw_agent(
         tools=[get_stock_price, place_trade],
         history_provider=history_provider or InMemoryHistoryProvider(),
         file_access_store=access_store,
+        file_memory_store=file_memory_store,
         skills_provider=skills_provider,
         background_agents=[research_agent],
         shell_executor=shell,

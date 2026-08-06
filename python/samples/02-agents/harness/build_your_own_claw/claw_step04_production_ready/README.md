@@ -44,6 +44,11 @@ uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_producti
 
 The hosted version **disables file access and shell** on the container. In a shared, hosted environment, giving the model arbitrary read/write access to the container filesystem or letting it run shell commands is a serious security risk (data exfiltration, tampering, persistence), and the local confirmations vault the shell operates on doesn't exist there. Background agents and Monty CodeAct (alpha) remain enabled. If you need file access when hosted, pass an external `file_access_store` (for example, one backed by Azure Blob Storage) instead of the container disk.
 
+File memory **stays enabled** when hosted, but its store has to move. The harness writes file memory
+to `{cwd}/agent-file-memory` by default, and the deployed code directory (`/app`) is mounted
+**read-only** on Foundry hosted agents, so the default directory fails. `hosted.py` therefore passes a
+`FileSystemAgentFileStore` rooted at `~/.claw/agent-file-memory`, which is writable.
+
 ### Deploy to Foundry
 
 ```bash

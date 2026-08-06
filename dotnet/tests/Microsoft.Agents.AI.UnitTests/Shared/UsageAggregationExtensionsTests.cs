@@ -347,7 +347,7 @@ public class UsageAggregationExtensionsTests
             ResponseId = "resp-1",
             ConversationId = "conv-1",
             ModelId = "model-1",
-            CreatedAt = DateTimeOffset.UnixEpoch,
+            CreatedAt = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero),
             FinishReason = ChatFinishReason.Stop,
             Usage = CreateUsage(1, 1, 2),
             ContinuationToken = new TestContinuationToken(),
@@ -380,7 +380,7 @@ public class UsageAggregationExtensionsTests
         {
             AgentId = "agent-1",
             ResponseId = "resp-1",
-            CreatedAt = DateTimeOffset.UnixEpoch,
+            CreatedAt = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero),
             FinishReason = ChatFinishReason.Stop,
             Usage = CreateUsage(1, 1, 2),
             ContinuationToken = new TestContinuationToken(),

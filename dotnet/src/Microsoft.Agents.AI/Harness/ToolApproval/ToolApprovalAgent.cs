@@ -156,7 +156,13 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
                 // request it surfaces goes to the caller to decide rather than continuing the chain.
                 // Returning here without this call would hand back a response whose approval requests
                 // were already stripped — the empty response the loop exists to avoid.
-                return await this.InnerAgent.RunAsync(processedMessages, session, options, cancellationToken).ConfigureAwait(false);
+                var cappedResponse = await this.InnerAgent.RunAsync(processedMessages, session, options, cancellationToken).ConfigureAwait(false);
+
+                // This turn is still part of the same run, so its usage joins the aggregate rather
+                // than replacing it; otherwise hitting the cap would discard every prior turn's cost.
+                UsageAggregationExtensions.AccumulateUsage(ref aggregatedUsage, cappedResponse.Usage);
+
+                return cappedResponse.WithAggregatedUsage(aggregatedUsage);
             }
 
             var response = await this.InnerAgent.RunAsync(processedMessages, session, options, cancellationToken).ConfigureAwait(false);

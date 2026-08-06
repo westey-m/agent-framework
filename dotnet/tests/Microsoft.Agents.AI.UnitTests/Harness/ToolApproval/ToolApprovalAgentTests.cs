@@ -2615,6 +2615,122 @@ public class ToolApprovalAgentTests
     }
 
     /// <summary>
+    /// Verify that hitting <see cref="ToolApprovalAgentOptions.MaxAutoApprovalIterations"/> still reports the
+    /// usage of the entire run. The capped path takes an extra final turn outside the accumulating loop, so a
+    /// naive early return there would discard every prior turn's cost — the exact under-reporting this
+    /// aggregation exists to prevent, and the case most likely to involve a large token spend.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_StopsAtIterationCap_AggregatesUsageAcrossEveryTurnAsync()
+    {
+        // Arrange — always asks for an auto-approved tool, reporting distinct usage per turn.
+        var session = new ChatClientAgentSession();
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                return new AgentResponse([new ChatMessage(ChatRole.Assistant,
+                    [new ToolApprovalRequestContent($"req{callCount}", new FunctionCallContent($"call{callCount}", "load_skill"))])])
+                {
+                    Usage = new UsageDetails
+                    {
+                        InputTokenCount = callCount,
+                        OutputTokenCount = callCount * 10,
+                        TotalTokenCount = callCount * 11,
+                    },
+                };
+            });
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [ToolApprovalAgent.AllToolsAutoApprovalRule],
+            MaxAutoApprovalIterations = 3,
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert — 3 auto-approving passes plus the final capped turn, all four counted.
+        Assert.Equal(4, callCount);
+        Assert.NotNull(response.Usage);
+        Assert.Equal(1 + 2 + 3 + 4, response.Usage!.InputTokenCount);
+        Assert.Equal(10 + 20 + 30 + 40, response.Usage.OutputTokenCount);
+        Assert.Equal(11 + 22 + 33 + 44, response.Usage.TotalTokenCount);
+    }
+
+    /// <summary>
+    /// Verify the streaming path reports the whole run's usage when the cap is hit. Streaming aggregates by
+    /// passing every <see cref="UsageContent"/> through to the caller, including those from the final capped
+    /// turn, so no update may be swallowed by the cap branch.
+    /// </summary>
+    [Fact]
+    public async Task RunStreamingAsync_StopsAtIterationCap_AggregatesUsageAcrossEveryTurnAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<IAsyncEnumerable<AgentResponseUpdate>>("RunCoreStreamingAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Returns(() =>
+            {
+                callCount++;
+                int call = callCount;
+                return ToAsyncEnumerableAsync([
+                    new AgentResponseUpdate(ChatRole.Assistant,
+                        new List<AIContent> { new ToolApprovalRequestContent($"req{call}", new FunctionCallContent($"call{call}", "load_skill")) }),
+                    new AgentResponseUpdate(ChatRole.Assistant,
+                        new List<AIContent>
+                        {
+                            new UsageContent(new UsageDetails
+                            {
+                                InputTokenCount = call,
+                                OutputTokenCount = call * 10,
+                                TotalTokenCount = call * 11,
+                            }),
+                        }),
+                ]);
+            });
+
+        var options = new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = [ToolApprovalAgent.AllToolsAutoApprovalRule],
+            MaxAutoApprovalIterations = 3,
+        };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var updates = new List<AgentResponseUpdate>();
+        await foreach (var update in agent.RunStreamingAsync([new ChatMessage(ChatRole.User, "Hi")], session))
+        {
+            updates.Add(update);
+        }
+
+        var response = updates.ToAgentResponse();
+
+        // Assert
+        Assert.Equal(4, callCount);
+        Assert.NotNull(response.Usage);
+        Assert.Equal(1 + 2 + 3 + 4, response.Usage!.InputTokenCount);
+        Assert.Equal(10 + 20 + 30 + 40, response.Usage.OutputTokenCount);
+        Assert.Equal(11 + 22 + 33 + 44, response.Usage.TotalTokenCount);
+    }
+
+    /// <summary>
     /// Verify that the cap defaults to <see cref="ToolApprovalAgent.DefaultMaxAutoApprovalIterations"/>
     /// when the caller does not configure one.
     /// </summary>

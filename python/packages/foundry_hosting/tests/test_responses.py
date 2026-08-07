@@ -2065,16 +2065,24 @@ class TestItemToMessage:
             assert type(msg.role) is str
             assert msg.role == "user"
 
-    async def test_normalized_role_survives_durable_session_state_serialization(self) -> None:
-        from agent_framework import AgentSession
+    async def test_normalized_role_survives_durable_session_state_serialization(self, tmp_path: Path) -> None:
+        from agent_framework import AgentSession, FileSessionStore
         from azure.ai.agentserver.responses.models import ItemMessage, MessageRole
 
+        # Persist through a real session store: durable state is validated on save, and an enum role
+        # fails there with "unsupported serialized type 'MessageRole'". AgentSession.to_dict() alone
+        # would not catch it, because it skips that validation.
         msg = await _item_to_message(ItemMessage({"type": "message", "role": MessageRole.USER, "content": "hello"}))
         assert msg is not None
         session = AgentSession(session_id="enum-role")
         session.state["messages"] = [msg]
 
-        assert AgentSession.from_dict(session.to_dict()).state["messages"][0].role == "user"
+        store = FileSessionStore(tmp_path)
+        await store.set("enum-role", session)
+        restored = await store.get("enum-role")
+
+        assert restored is not None
+        assert type(restored.state["messages"][0].role) is str
 
     async def test_message_with_input_text_content(self) -> None:
         from azure.ai.agentserver.responses.models import ItemMessage, MessageContentInputTextContent

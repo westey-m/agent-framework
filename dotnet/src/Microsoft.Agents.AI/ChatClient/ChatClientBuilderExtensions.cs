@@ -225,7 +225,7 @@ public static class ChatClientBuilderExtensions
     }
 
     /// <summary>
-    /// Adds an <see cref="ExecutableFunctionBypassingChatClient"/> to the chat client pipeline.
+    /// Adds an <see cref="InvocableFunctionBypassingChatClient"/> to the chat client pipeline.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -248,7 +248,7 @@ public static class ChatClientBuilderExtensions
     /// <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="true"/>.
     /// When <see cref="ChatClientAgentOptions.UseProvidedChatClientAsIs"/> is <see langword="false"/> (the default),
     /// the <see cref="ChatClientAgent"/> automatically injects this decorator when
-    /// <see cref="ChatClientAgentOptions.EnableExecutableFunctionBypassing"/> is <see langword="true"/>.
+    /// <see cref="ChatClientAgentOptions.EnableInvocableFunctionBypassing"/> is <see langword="true"/>.
     /// </para>
     /// <para>
     /// This decorator is intended for use within the context of a running <see cref="ChatClientAgent"/> with
@@ -264,9 +264,9 @@ public static class ChatClientBuilderExtensions
     /// </param>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public static ChatClientBuilder UseExecutableFunctionBypassing(this ChatClientBuilder builder, ILoggerFactory? loggerFactory = null)
+    public static ChatClientBuilder UseInvocableFunctionBypassing(this ChatClientBuilder builder, ILoggerFactory? loggerFactory = null)
     {
         return builder.Use((innerClient, services) =>
-            new ExecutableFunctionBypassingChatClient(innerClient, loggerFactory ?? services.GetService<ILoggerFactory>()));
+            new InvocableFunctionBypassingChatClient(innerClient, loggerFactory ?? services.GetService<ILoggerFactory>()));
     }
 }

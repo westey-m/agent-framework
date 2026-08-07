@@ -57,27 +57,27 @@ namespace Microsoft.Agents.AI;
 /// such request. The default agent pipeline already orders them correctly.
 /// </para>
 /// </remarks>
-internal sealed partial class ExecutableFunctionBypassingChatClient : DelegatingChatClient
+internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingChatClient
 {
     /// <summary>
-    /// The key used in <see cref="AgentSessionStateBag"/> to store bypassed executable function calls
+    /// The key used in <see cref="AgentSessionStateBag"/> to store bypassed invocable function calls
     /// between agent runs.
     /// </summary>
-    internal const string StateBagKey = "_bypassedExecutableFunctionCalls";
+    internal const string StateBagKey = "_bypassedInvocableFunctionCalls";
 
     private readonly ILogger _logger;
 
     private bool _warnedNoSession;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExecutableFunctionBypassingChatClient"/> class.
+    /// Initializes a new instance of the <see cref="InvocableFunctionBypassingChatClient"/> class.
     /// </summary>
     /// <param name="innerClient">The underlying chat client (typically a <see cref="FunctionInvokingChatClient"/>).</param>
     /// <param name="loggerFactory">An optional <see cref="ILoggerFactory"/> used to create a logger for diagnostics.</param>
-    public ExecutableFunctionBypassingChatClient(IChatClient innerClient, ILoggerFactory? loggerFactory = null)
+    public InvocableFunctionBypassingChatClient(IChatClient innerClient, ILoggerFactory? loggerFactory = null)
         : base(innerClient)
     {
-        this._logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<ExecutableFunctionBypassingChatClient>();
+        this._logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<InvocableFunctionBypassingChatClient>();
     }
 
     /// <inheritdoc/>
@@ -91,20 +91,11 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
         }
 
-        messages = InjectPendingBypassedCalls(messages, session, out var pendingCalls);
+        messages = InjectPendingBypassedCalls(messages, session);
 
-        ChatResponse response;
-        try
-        {
-            response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            RestorePendingBypassedCalls(session, pendingCalls);
-            throw;
-        }
+        var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
-        this.RemoveAndStoreBypassableExecutableCalls(response.Messages, options, session);
+        this.RemoveAndStoreBypassableInvocableCalls(response.Messages, options, session);
 
         return response;
     }
@@ -125,7 +116,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             yield break;
         }
 
-        messages = InjectPendingBypassedCalls(messages, session, out var pendingCalls);
+        messages = InjectPendingBypassedCalls(messages, session);
 
         // Stream updates live until a surfaced (non-informational) FunctionCallContent appears, then hold the
         // tail so the strip/store decision can observe every call in the same batch before re-emitting.
@@ -140,64 +131,25 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
         // leaving the calls non-informational) is held to the end of the stream.
         List<ChatResponseUpdate>? tail = null;
 
-        // The enumerator is driven manually so that a failure anywhere in the stream can restore the pending
-        // calls, which cannot be done with an await foreach because yield return is not allowed inside a try
-        // with a catch clause. Acquiring the enumerator is guarded too: the inner client may validate its
-        // arguments eagerly and throw synchronously, before the first MoveNextAsync.
-        IAsyncEnumerator<ChatResponseUpdate> stream;
-        try
+        await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
         {
-            stream = base.GetStreamingResponseAsync(messages, options, cancellationToken)
-                .GetAsyncEnumerator(cancellationToken);
-        }
-        catch
-        {
-            RestorePendingBypassedCalls(session, pendingCalls);
-            throw;
-        }
-
-        try
-        {
-            while (true)
+            if (tail is not null && !ContainsNonInformationalFunctionCall(tail))
             {
-                ChatResponseUpdate update;
-                try
+                foreach (var buffered in tail)
                 {
-                    if (!await stream.MoveNextAsync().ConfigureAwait(false))
-                    {
-                        break;
-                    }
-
-                    update = stream.Current;
-                }
-                catch
-                {
-                    RestorePendingBypassedCalls(session, pendingCalls);
-                    throw;
+                    yield return buffered;
                 }
 
-                if (tail is not null && !ContainsNonInformationalFunctionCall(tail))
-                {
-                    foreach (var buffered in tail)
-                    {
-                        yield return buffered;
-                    }
-
-                    tail = null;
-                }
-
-                if (tail is null && !UpdateHasNonInformationalFunctionCall(update))
-                {
-                    yield return update;
-                    continue;
-                }
-
-                (tail ??= []).Add(update);
+                tail = null;
             }
-        }
-        finally
-        {
-            await stream.DisposeAsync().ConfigureAwait(false);
+
+            if (tail is null && !UpdateHasNonInformationalFunctionCall(update))
+            {
+                yield return update;
+                continue;
+            }
+
+            (tail ??= []).Add(update);
         }
 
         if (tail is null)
@@ -211,7 +163,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             contentLists[i] = tail[i].Contents;
         }
 
-        this.StripAndStoreBypassableExecutableCalls(contentLists, options, session);
+        this.StripAndStoreBypassableInvocableCalls(contentLists, options, session);
 
         // Every buffered update is surfaced, including any left with no contents by the stripping above. An
         // update carries metadata beyond its contents — ConversationId, ContinuationToken, ResponseId,
@@ -248,32 +200,43 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
         return true;
     }
 
-    [LoggerMessage(LogLevel.Warning, "ExecutableFunctionBypassingChatClient was invoked without an active agent run context or session. Executable function bypassing is skipped and all function calls are surfaced to the caller. Invoke the chat client through AIAgent.RunAsync or AIAgent.RunStreamingAsync to enable bypassing.")]
+    [LoggerMessage(LogLevel.Warning, "InvocableFunctionBypassingChatClient was invoked without an active agent run context or session. Invocable function bypassing is skipped and all function calls are surfaced to the caller. Invoke the chat client through AIAgent.RunAsync or AIAgent.RunStreamingAsync to enable bypassing.")]
     private static partial void LogBypassingSkipped(ILogger logger);
 
     /// <summary>
-    /// Checks the session for executable function calls stored on a previous turn and injects them as
+    /// Checks the session for invocable function calls stored on a previous turn and injects them as
     /// a user message containing pre-approved <see cref="ToolApprovalResponseContent"/> items appended to
     /// the input messages, so that <see cref="FunctionInvokingChatClient"/> reconstructs and executes them.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Pending calls are consumed exactly once: the session entry is removed here and is never put back, so a
+    /// turn that fails or whose stream is abandoned drops them.
+    /// </para>
+    /// <para>
+    /// That is deliberate. The calls are injected as one batch and the service expects a
+    /// <see cref="FunctionResultContent"/> for every <see cref="FunctionCallContent"/> in it.
+    /// <see cref="FunctionInvokingChatClient"/> invokes approved approval responses before the main loop and
+    /// before any downstream service call, so by the time a request fails part of the batch has usually
+    /// already run — and because a failure surfaces as an exception rather than a response, the results of
+    /// those invocations are unrecoverable. Re-injecting the remainder would therefore still leave the batch
+    /// incomplete while invoking already-executed functions a second time. Dropping the calls avoids the
+    /// duplicate invocation, and matches
+    /// <see cref="ApprovalNotRequiredFunctionBypassingChatClient"/>, which likewise never restores its entry.
+    /// </para>
+    /// </remarks>
     /// <param name="messages">The outgoing messages.</param>
     /// <param name="session">The session holding any calls bypassed on a previous turn.</param>
-    /// <param name="pendingCalls">
-    /// The calls removed from the session, so that they can be restored if the request fails; or
-    /// <see langword="null"/> when there was nothing pending.
-    /// </param>
     private static IEnumerable<ChatMessage> InjectPendingBypassedCalls(
         IEnumerable<ChatMessage> messages,
-        AgentSession session,
-        out List<FunctionCallContent>? pendingCalls)
+        AgentSession session)
     {
         if (!session.StateBag.TryGetValue(
             StateBagKey,
-            out pendingCalls,
+            out List<FunctionCallContent>? pendingCalls,
             AgentJsonUtilities.DefaultOptions)
             || pendingCalls is not { Count: > 0 })
         {
-            pendingCalls = null;
             return messages;
         }
 
@@ -293,37 +256,24 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
     }
 
     /// <summary>
-    /// Restores calls removed by <see cref="InjectPendingBypassedCalls"/> when the request failed, so that a
-    /// transient error does not silently drop a bypassed call that was never executed. Only called on the
-    /// failure path, where the inner client cannot have stored a newer set.
-    /// </summary>
-    private static void RestorePendingBypassedCalls(AgentSession session, List<FunctionCallContent>? pendingCalls)
-    {
-        if (pendingCalls is { Count: > 0 })
-        {
-            session.StateBag.SetValue(StateBagKey, pendingCalls, AgentJsonUtilities.DefaultOptions);
-        }
-    }
-
-    /// <summary>
     /// Composes the approval-request id for a bypassed call. The prefix deliberately differs from the
     /// <c>ficc_</c> prefix <see cref="FunctionInvokingChatClient"/> uses for its own approval requests, so
     /// that a synthetic id can never collide with a genuine one.
     /// </summary>
-    private static string ComposeApprovalRequestId(string callId) => $"efbcc_{callId}";
+    private static string ComposeApprovalRequestId(string callId) => $"ifbcc_{callId}";
 
     /// <summary>
     /// Builds the set of invocable (backend) tool names and the set of declaration-only (frontend) tool
     /// names from <see cref="ChatOptions.Tools"/> and <see cref="FunctionInvokingChatClient.AdditionalTools"/>.
     /// </summary>
-    private (HashSet<string> Executable, HashSet<string> DeclarationOnly) GetToolNameSets(ChatOptions? options)
+    private (HashSet<string> Invocable, HashSet<string> DeclarationOnly) GetToolNameSets(ChatOptions? options)
     {
         var ficc = this.GetService<FunctionInvokingChatClient>();
 
         var allTools = (options?.Tools ?? Enumerable.Empty<AITool>())
             .Concat(ficc?.AdditionalTools ?? Enumerable.Empty<AITool>());
 
-        HashSet<string> executable = new(StringComparer.Ordinal);
+        HashSet<string> invocable = new(StringComparer.Ordinal);
         HashSet<string> declarationOnly = new(StringComparer.Ordinal);
 
         foreach (var tool in allTools)
@@ -331,7 +281,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             // AIFunction derives from AIFunctionDeclaration, so check the invocable type first.
             if (tool is AIFunction function)
             {
-                executable.Add(function.Name);
+                invocable.Add(function.Name);
             }
             else if (tool is AIFunctionDeclaration declaration)
             {
@@ -339,7 +289,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             }
         }
 
-        return (executable, declarationOnly);
+        return (invocable, declarationOnly);
     }
 
     /// <summary>
@@ -372,7 +322,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
     /// declaration-only (frontend) <see cref="FunctionCallContent"/>, removes the invocable calls from the
     /// response and stores them in the session for re-injection and execution on the next request.
     /// </summary>
-    private void RemoveAndStoreBypassableExecutableCalls(
+    private void RemoveAndStoreBypassableInvocableCalls(
         IList<ChatMessage> messages,
         ChatOptions? options,
         AgentSession session)
@@ -383,7 +333,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             contentLists[i] = messages[i].Contents;
         }
 
-        var emptied = this.StripAndStoreBypassableExecutableCalls(contentLists, options, session);
+        var emptied = this.StripAndStoreBypassableInvocableCalls(contentLists, options, session);
         if (emptied is null)
         {
             return;
@@ -411,7 +361,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
     /// The set of content-list indices that were emptied by the removal, or <see langword="null"/> when
     /// nothing was bypassed.
     /// </returns>
-    private HashSet<int>? StripAndStoreBypassableExecutableCalls(
+    private HashSet<int>? StripAndStoreBypassableInvocableCalls(
         IList<AIContent>[] contentLists,
         ChatOptions? options,
         AgentSession session)
@@ -423,15 +373,15 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             return null;
         }
 
-        var (executable, declarationOnly) = this.GetToolNameSets(options);
+        var (invocable, declarationOnly) = this.GetToolNameSets(options);
 
-        if (executable.Count == 0 || declarationOnly.Count == 0)
+        if (invocable.Count == 0 || declarationOnly.Count == 0)
         {
             // The mixed backend/frontend scenario is impossible without at least one of each kind of tool.
             return null;
         }
 
-        bool hasExecutableCall = false;
+        bool hasInvocableCall = false;
         bool hasDeclarationOnlyCall = false;
 
         foreach (var contents in contentLists)
@@ -444,18 +394,18 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
                     {
                         hasDeclarationOnlyCall = true;
                     }
-                    else if (executable.Contains(fcc.Name))
+                    else if (invocable.Contains(fcc.Name))
                     {
-                        hasExecutableCall = true;
+                        hasInvocableCall = true;
                     }
                 }
             }
         }
 
-        // Only bypass when the two kinds coexist in the same response. An all-executable response is already
+        // Only bypass when the two kinds coexist in the same response. An all-invocable response is already
         // handled by FunctionInvokingChatClient (never surfaced unexecuted), and an all-declaration-only
         // response is the normal frontend-tools flow that must pass through unchanged.
-        if (!hasExecutableCall || !hasDeclarationOnlyCall)
+        if (!hasInvocableCall || !hasDeclarationOnlyCall)
         {
             return null;
         }
@@ -472,7 +422,7 @@ internal sealed partial class ExecutableFunctionBypassingChatClient : Delegating
             for (int j = 0; j < contents.Count;)
             {
                 if (contents[j] is FunctionCallContent { InformationalOnly: false } fcc
-                    && executable.Contains(fcc.Name)
+                    && invocable.Contains(fcc.Name)
                     && !declarationOnly.Contains(fcc.Name))
                 {
                     (bypassed ??= []).Add(fcc);

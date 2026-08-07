@@ -255,7 +255,7 @@ public sealed class ChatClientAgentOptions
     /// next request.
     /// </para>
     /// <para>
-    /// When this property is set to <see langword="true"/>, an <see cref="ExecutableFunctionBypassingChatClient"/>
+    /// When this property is set to <see langword="true"/>, an <see cref="InvocableFunctionBypassingChatClient"/>
     /// decorator is injected above <see cref="FunctionInvokingChatClient"/> in the pipeline. For responses that
     /// contain both invocable and declaration-only function calls, the decorator removes the invocable calls,
     /// stores them in the session, and returns only the declaration-only calls to the caller. On the next
@@ -264,8 +264,8 @@ public sealed class ChatClientAgentOptions
     /// </para>
     /// <para>
     /// This option has no effect when <see cref="UseProvidedChatClientAsIs"/> is <see langword="true"/>.
-    /// When using a custom chat client stack, you can add an <see cref="ExecutableFunctionBypassingChatClient"/>
-    /// manually via the <see cref="ChatClientBuilderExtensions.UseExecutableFunctionBypassing"/>
+    /// When using a custom chat client stack, you can add an <see cref="InvocableFunctionBypassingChatClient"/>
+    /// manually via the <see cref="ChatClientBuilderExtensions.UseInvocableFunctionBypassing"/>
     /// extension method.
     /// </para>
     /// </remarks>
@@ -273,7 +273,7 @@ public sealed class ChatClientAgentOptions
     /// Default is <see langword="false"/>.
     /// </value>
     [Experimental(DiagnosticIds.Experiments.AgentsAIExperiments)]
-    public bool EnableExecutableFunctionBypassing { get; set; }
+    public bool EnableInvocableFunctionBypassing { get; set; }
 
     /// <summary>
     /// Creates a new instance of <see cref="ChatClientAgentOptions"/> with the same values as this instance.
@@ -295,6 +295,6 @@ public sealed class ChatClientAgentOptions
             EnableMessageInjection = this.EnableMessageInjection,
             DisableApprovalNotRequiredFunctionBypassing = this.DisableApprovalNotRequiredFunctionBypassing,
             DisableApprovalResponseBinding = this.DisableApprovalResponseBinding,
-            EnableExecutableFunctionBypassing = this.EnableExecutableFunctionBypassing,
+            EnableInvocableFunctionBypassing = this.EnableInvocableFunctionBypassing,
         };
 }

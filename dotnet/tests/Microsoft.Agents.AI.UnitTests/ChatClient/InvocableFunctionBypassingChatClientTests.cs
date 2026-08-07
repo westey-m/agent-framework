@@ -10,7 +10,7 @@ using Moq;
 
 namespace Microsoft.Agents.AI.UnitTests;
 
-public class ExecutableFunctionBypassingChatClientTests
+public class InvocableFunctionBypassingChatClientTests
 {
     private const string BackendToolName = "backendTool";
     private const string FrontendToolName = "frontendTool";
@@ -33,7 +33,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Hello")])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -46,7 +46,7 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetResponseAsync_OnlyExecutableCalls_PassesThroughUnchangedAsync()
+    public async Task GetResponseAsync_OnlyInvocableCalls_PassesThroughUnchangedAsync()
     {
         // Arrange — no declaration-only sibling, so nothing should be bypassed.
         var backendCall = new FunctionCallContent("call1", BackendToolName);
@@ -54,7 +54,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [backendCall])])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -76,7 +76,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [frontendCall])])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -90,7 +90,7 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetResponseAsync_MixedCalls_RemovesExecutableCallFromResponseAsync()
+    public async Task GetResponseAsync_MixedCalls_RemovesInvocableCallFromResponseAsync()
     {
         // Arrange
         var backendCall = new FunctionCallContent("call1", BackendToolName);
@@ -101,7 +101,7 @@ public class ExecutableFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [backendCall, frontendCall])
             ])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -114,7 +114,7 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetResponseAsync_MixedCalls_StoresExecutableCallInSessionAsync()
+    public async Task GetResponseAsync_MixedCalls_StoresInvocableCallInSessionAsync()
     {
         // Arrange
         var backendCall = new FunctionCallContent("call1", BackendToolName);
@@ -125,7 +125,7 @@ public class ExecutableFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [backendCall, frontendCall])
             ])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -133,7 +133,7 @@ public class ExecutableFunctionBypassingChatClientTests
 
         // Assert — the backend call is stored in the session for the next turn.
         Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
+            InvocableFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
         Assert.NotNull(stored);
         var storedCall = Assert.Single(stored!);
         Assert.Equal("call1", storedCall.CallId);
@@ -153,7 +153,7 @@ public class ExecutableFunctionBypassingChatClientTests
                 new ChatMessage(ChatRole.Assistant, [frontendCall])
             ])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -174,7 +174,7 @@ public class ExecutableFunctionBypassingChatClientTests
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            ExecutableFunctionBypassingChatClient.StateBagKey,
+            InvocableFunctionBypassingChatClient.StateBagKey,
             new List<FunctionCallContent> { storedBackendCall },
             AgentJsonUtilities.DefaultOptions);
 
@@ -193,7 +193,7 @@ public class ExecutableFunctionBypassingChatClientTests
             return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Done")]));
         });
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
 
         // Act
         await RunWithAgentContextAsync(decorator, session, CreateMixedToolOptions(), history);
@@ -209,7 +209,7 @@ public class ExecutableFunctionBypassingChatClientTests
             .ToList();
         var approvalResponse = Assert.Single(approvalResponses);
         Assert.True(approvalResponse.Approved);
-        Assert.Equal($"efbcc_{approvalResponse.ToolCall.CallId}", approvalResponse.RequestId);
+        Assert.Equal($"ifbcc_{approvalResponse.ToolCall.CallId}", approvalResponse.RequestId);
         var approvedCall = Assert.IsType<FunctionCallContent>(approvalResponse.ToolCall);
         Assert.Equal("call1", approvedCall.CallId);
         Assert.Equal(BackendToolName, approvedCall.Name);
@@ -228,21 +228,21 @@ public class ExecutableFunctionBypassingChatClientTests
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            ExecutableFunctionBypassingChatClient.StateBagKey,
+            InvocableFunctionBypassingChatClient.StateBagKey,
             new List<FunctionCallContent> { storedBackendCall },
             AgentJsonUtilities.DefaultOptions);
 
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Done")])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
 
         // Act
         await RunWithAgentContextAsync(decorator, session, CreateMixedToolOptions());
 
         // Assert — the stored data is cleared after successful injection.
         Assert.False(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
+            InvocableFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
     }
 
     #endregion
@@ -256,7 +256,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockStreamingChatClient((_, _, _) =>
             ToAsyncEnumerableAsync(new ChatResponseUpdate(ChatRole.Assistant, "Hello")));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -269,7 +269,7 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetStreamingResponseAsync_MixedCalls_RemovesAndStoresExecutableCallAsync()
+    public async Task GetStreamingResponseAsync_MixedCalls_RemovesAndStoresInvocableCallAsync()
     {
         // Arrange
         var backendCall = new FunctionCallContent("call1", BackendToolName);
@@ -280,7 +280,7 @@ public class ExecutableFunctionBypassingChatClientTests
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [backendCall] },
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [frontendCall] }));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -296,7 +296,7 @@ public class ExecutableFunctionBypassingChatClientTests
         Assert.Equal(FrontendToolName, surfaced.Name);
 
         Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
+            InvocableFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
         var storedCall = Assert.Single(stored!);
         Assert.Equal(BackendToolName, storedCall.Name);
     }
@@ -309,7 +309,7 @@ public class ExecutableFunctionBypassingChatClientTests
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            ExecutableFunctionBypassingChatClient.StateBagKey,
+            InvocableFunctionBypassingChatClient.StateBagKey,
             new List<FunctionCallContent> { storedBackendCall },
             AgentJsonUtilities.DefaultOptions);
 
@@ -320,7 +320,7 @@ public class ExecutableFunctionBypassingChatClientTests
             return ToAsyncEnumerableAsync(new ChatResponseUpdate(ChatRole.Assistant, "Done"));
         });
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
 
         // Act
         var updates = new List<ChatResponseUpdate>();
@@ -351,7 +351,7 @@ public class ExecutableFunctionBypassingChatClientTests
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [backendCall] },
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [frontendCall] }));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -367,14 +367,14 @@ public class ExecutableFunctionBypassingChatClientTests
         Assert.Equal(FrontendToolName, surfaced.Name);
 
         Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
+            InvocableFunctionBypassingChatClient.StateBagKey, out var stored, AgentJsonUtilities.DefaultOptions));
         Assert.Equal(BackendToolName, Assert.Single(stored!).Name);
     }
 
     [Fact]
-    public async Task GetStreamingResponseAsync_ExecutableOnly_PassesThroughWithoutBypassingAsync()
+    public async Task GetStreamingResponseAsync_InvocableOnly_PassesThroughWithoutBypassingAsync()
     {
-        // Arrange — two executable calls and no declaration-only call: the both-kinds gate must not trigger.
+        // Arrange — two invocable calls and no declaration-only call: the both-kinds gate must not trigger.
         var firstCall = new FunctionCallContent("call1", BackendToolName);
         var secondCall = new FunctionCallContent("call2", BackendToolName);
 
@@ -383,14 +383,14 @@ public class ExecutableFunctionBypassingChatClientTests
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [firstCall] },
                 new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [secondCall] }));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
         var updates = new List<ChatResponseUpdate>();
         await RunStreamingWithAgentContextAsync(decorator, session, updates, CreateMixedToolOptions());
 
-        // Assert — both executable calls are surfaced and nothing is stored.
+        // Assert — both invocable calls are surfaced and nothing is stored.
         var surfacedCalls = updates.SelectMany(u => u.Contents).OfType<FunctionCallContent>().ToList();
         Assert.Equal(2, surfacedCalls.Count);
         Assert.Equal(0, session.StateBag.Count);
@@ -408,7 +408,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockStreamingChatClient((_, _, _) =>
             ExecuteCallMidStreamAsync(backendCall, log));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -451,7 +451,7 @@ public class ExecutableFunctionBypassingChatClientTests
                     ResponseId = "resp-1",
                 }));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
         var session = new ChatClientAgentSession();
 
         // Act
@@ -469,85 +469,60 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     [Fact]
-    public async Task GetStreamingResponseAsync_InnerClientThrowsSynchronously_RestoresPendingCallsAsync()
+    public async Task GetResponseAsync_InnerClientThrows_DoesNotRestorePendingCallsAsync()
     {
-        // Arrange — the inner client validates eagerly and throws before any update is produced, so the
-        // failure happens while the enumerator is being acquired rather than during enumeration.
+        // Arrange - a call bypassed on a previous turn is pending, and the next request fails.
         var storedBackendCall = new FunctionCallContent("call1", BackendToolName);
 
         var session = new ChatClientAgentSession();
         session.StateBag.SetValue(
-            ExecutableFunctionBypassingChatClient.StateBagKey,
-            new List<FunctionCallContent> { storedBackendCall },
-            AgentJsonUtilities.DefaultOptions);
-
-        var innerClient = CreateMockStreamingChatClient((_, _, _) => throw new InvalidOperationException("invalid"));
-
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
-
-        // Act
-        var updates = new List<ChatResponseUpdate>();
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => RunStreamingWithAgentContextAsync(decorator, session, updates, CreateMixedToolOptions()));
-
-        // Assert — the pending call survives the failure so a retry can still execute it.
-        Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out var restored, AgentJsonUtilities.DefaultOptions));
-        Assert.Equal("call1", Assert.Single(restored!).CallId);
-    }
-
-    [Fact]
-    public async Task GetStreamingResponseAsync_InnerClientThrows_RestoresPendingCallsAsync()
-    {
-        // Arrange — a call bypassed on a previous turn is pending, and the next request fails part-way.
-        var storedBackendCall = new FunctionCallContent("call1", BackendToolName);
-
-        var session = new ChatClientAgentSession();
-        session.StateBag.SetValue(
-            ExecutableFunctionBypassingChatClient.StateBagKey,
-            new List<FunctionCallContent> { storedBackendCall },
-            AgentJsonUtilities.DefaultOptions);
-
-        var innerClient = CreateMockStreamingChatClient((_, _, _) => ThrowAfterFirstUpdateAsync());
-
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
-
-        // Act
-        var updates = new List<ChatResponseUpdate>();
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => RunStreamingWithAgentContextAsync(decorator, session, updates, CreateMixedToolOptions()));
-
-        // Assert — the pending call survives the failure so a retry can still execute it.
-        Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out var restored, AgentJsonUtilities.DefaultOptions));
-        Assert.Equal("call1", Assert.Single(restored!).CallId);
-    }
-
-    [Fact]
-    public async Task GetResponseAsync_InnerClientThrows_RestoresPendingCallsAsync()
-    {
-        // Arrange — a call bypassed on a previous turn is pending, and the next request fails.
-        var storedBackendCall = new FunctionCallContent("call1", BackendToolName);
-
-        var session = new ChatClientAgentSession();
-        session.StateBag.SetValue(
-            ExecutableFunctionBypassingChatClient.StateBagKey,
+            InvocableFunctionBypassingChatClient.StateBagKey,
             new List<FunctionCallContent> { storedBackendCall },
             AgentJsonUtilities.DefaultOptions);
 
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromException<ChatResponse>(new InvalidOperationException("transient")));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
 
         // Act
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => RunWithAgentContextAsync(decorator, session, CreateMixedToolOptions()));
 
-        // Assert — the pending call survives the failure so a retry can still execute it.
-        Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
-            ExecutableFunctionBypassingChatClient.StateBagKey, out var restored, AgentJsonUtilities.DefaultOptions));
-        Assert.Equal("call1", Assert.Single(restored!).CallId);
+        // Assert - pending calls are consumed exactly once and are deliberately not put back. The batch is
+        // injected as a unit and FunctionInvokingChatClient invokes approved responses before the service
+        // call, so part of it has usually already run by the time a failure surfaces; re-injecting would
+        // invoke those functions again while still leaving the batch missing the unrecoverable results.
+        Assert.False(session.StateBag.TryGetValue<List<FunctionCallContent>>(
+            InvocableFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
+    }
+
+    [Fact]
+    public async Task GetStreamingResponseAsync_EnumerationAbandonedEarly_DoesNotRestorePendingCallsAsync()
+    {
+        // Arrange - a call bypassed on a previous turn is pending and the consumer stops enumerating early.
+        var storedBackendCall = new FunctionCallContent("call1", BackendToolName);
+
+        var session = new ChatClientAgentSession();
+        session.StateBag.SetValue(
+            InvocableFunctionBypassingChatClient.StateBagKey,
+            new List<FunctionCallContent> { storedBackendCall },
+            AgentJsonUtilities.DefaultOptions);
+
+        var innerClient = CreateMockStreamingChatClient((_, _, _) => ToAsyncEnumerableAsync(
+            new ChatResponseUpdate(ChatRole.Assistant, "first"),
+            new ChatResponseUpdate(ChatRole.Assistant, "second")));
+
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
+
+        // Act
+        var consumed = await ConsumeFirstUpdateThenAbandonAsync(decorator, session);
+
+        // Assert - as on the failure path, the abandoned turn drops the pending calls rather than risking a
+        // second invocation of functions the inner pipeline may already have run.
+        Assert.Single(consumed);
+        Assert.False(session.StateBag.TryGetValue<List<FunctionCallContent>>(
+            InvocableFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
     }
 
     #endregion
@@ -563,7 +538,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [backendCall, frontendCall])])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
 
         // Act — calling directly without agent context; the decorator should no-op and pass through.
         var response = await decorator.GetResponseAsync([new ChatMessage(ChatRole.User, "test")], CreateMixedToolOptions());
@@ -582,7 +557,7 @@ public class ExecutableFunctionBypassingChatClientTests
         var innerClient = CreateMockChatClient((_, _, _) =>
             Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, [backendCall, frontendCall])])));
 
-        var decorator = new ExecutableFunctionBypassingChatClient(innerClient);
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
 
         // Act — run with an agent context but a null session; the decorator should no-op and pass through.
         var response = await RunWithAgentContextAsync(decorator, session: null!, CreateMixedToolOptions());
@@ -597,32 +572,32 @@ public class ExecutableFunctionBypassingChatClientTests
     #region Builder Extension Tests
 
     [Fact]
-    public void UseExecutableFunctionBypassing_AddsDecoratorToPipeline()
+    public void UseInvocableFunctionBypassing_AddsDecoratorToPipeline()
     {
         // Arrange
         var innerClient = new Mock<IChatClient>().Object;
 
         // Act
         var pipeline = innerClient.AsBuilder()
-            .UseExecutableFunctionBypassing()
+            .UseInvocableFunctionBypassing()
             .Build();
 
         // Assert
-        Assert.NotNull(pipeline.GetService<ExecutableFunctionBypassingChatClient>());
+        Assert.NotNull(pipeline.GetService<InvocableFunctionBypassingChatClient>());
     }
 
     [Fact]
-    public void WithDefaultAgentMiddleware_EnableExecutableFunctionBypassing_InjectsDecorator()
+    public void WithDefaultAgentMiddleware_EnableInvocableFunctionBypassing_InjectsDecorator()
     {
         // Arrange
         var innerClient = new Mock<IChatClient>().Object;
-        var options = new ChatClientAgentOptions { EnableExecutableFunctionBypassing = true };
+        var options = new ChatClientAgentOptions { EnableInvocableFunctionBypassing = true };
 
         // Act
         var pipeline = innerClient.WithDefaultAgentMiddleware(options);
 
         // Assert
-        Assert.NotNull(pipeline.GetService<ExecutableFunctionBypassingChatClient>());
+        Assert.NotNull(pipeline.GetService<InvocableFunctionBypassingChatClient>());
     }
 
     [Fact]
@@ -636,7 +611,31 @@ public class ExecutableFunctionBypassingChatClientTests
         var pipeline = innerClient.WithDefaultAgentMiddleware(options);
 
         // Assert
-        Assert.Null(pipeline.GetService<ExecutableFunctionBypassingChatClient>());
+        Assert.Null(pipeline.GetService<InvocableFunctionBypassingChatClient>());
+    }
+
+    [Fact]
+    public void WithDefaultAgentMiddleware_EnableInvocableFunctionBypassing_PlacesDecoratorBelowApprovalBindingAndAboveFunctionInvocation()
+    {
+        // Arrange — the decorator emits synthetic approval responses that have no recorded approval request,
+        // so ApprovalResponseBindingChatClient (which drops unbound responses) must sit above it, and
+        // FunctionInvokingChatClient must sit below it so that those responses reach the invocation loop.
+        var innerClient = new Mock<IChatClient>().Object;
+        var options = new ChatClientAgentOptions { EnableInvocableFunctionBypassing = true };
+
+        // Act — GetService matches on the current instance and otherwise forwards down the chain, so relative
+        // order is observable by walking from one decorator and looking for the others below it.
+        var pipeline = innerClient.WithDefaultAgentMiddleware(options);
+
+        // Assert
+        var binding = pipeline.GetService<ApprovalResponseBindingChatClient>();
+        Assert.NotNull(binding);
+
+        var bypassing = binding.GetService<InvocableFunctionBypassingChatClient>();
+        Assert.NotNull(bypassing);
+
+        Assert.Null(bypassing.GetService<ApprovalResponseBindingChatClient>());
+        Assert.NotNull(bypassing.GetService<FunctionInvokingChatClient>());
     }
 
     #endregion
@@ -644,7 +643,7 @@ public class ExecutableFunctionBypassingChatClientTests
     #region Helpers
 
     private static async Task<ChatResponse> RunWithAgentContextAsync(
-        ExecutableFunctionBypassingChatClient decorator,
+        InvocableFunctionBypassingChatClient decorator,
         AgentSession? session,
         ChatOptions? options = null,
         IList<ChatMessage>? inputMessages = null)
@@ -665,7 +664,7 @@ public class ExecutableFunctionBypassingChatClientTests
     }
 
     private static async Task RunStreamingWithAgentContextAsync(
-        ExecutableFunctionBypassingChatClient decorator,
+        InvocableFunctionBypassingChatClient decorator,
         AgentSession session,
         List<ChatResponseUpdate> updates,
         ChatOptions? options = null,
@@ -686,6 +685,35 @@ public class ExecutableFunctionBypassingChatClientTests
         };
 
         await agent.RunAsync([new ChatMessage(ChatRole.User, "Hello")], session);
+    }
+
+    /// <summary>
+    /// Consumes a single update from the decorator and then abandons the enumeration, which resumes the
+    /// iterator at the yield return as though it had returned.
+    /// </summary>
+    private static async Task<List<ChatResponseUpdate>> ConsumeFirstUpdateThenAbandonAsync(
+        InvocableFunctionBypassingChatClient decorator,
+        AgentSession session)
+    {
+        var consumed = new List<ChatResponseUpdate>();
+
+        var agent = new TestAIAgent
+        {
+            RunAsyncFunc = async (messages, agentSession, agentOptions, ct) =>
+            {
+                await foreach (var update in decorator.GetStreamingResponseAsync(messages, CreateMixedToolOptions(), ct))
+                {
+                    consumed.Add(update);
+                    break;
+                }
+
+                return new AgentResponse([new ChatMessage(ChatRole.Assistant, "done")]);
+            }
+        };
+
+        await agent.RunAsync([new ChatMessage(ChatRole.User, "Hello")], session);
+
+        return consumed;
     }
 
     private static IChatClient CreateMockChatClient(
@@ -744,14 +772,6 @@ public class ExecutableFunctionBypassingChatClientTests
         yield return new ChatResponseUpdate(ChatRole.Assistant, "The answer");
 
         await Task.CompletedTask;
-    }
-
-    private static async IAsyncEnumerable<ChatResponseUpdate> ThrowAfterFirstUpdateAsync()
-    {
-        yield return new ChatResponseUpdate(ChatRole.Assistant, "Working");
-
-        await Task.CompletedTask;
-        throw new InvalidOperationException("transient");
     }
 
     #endregion

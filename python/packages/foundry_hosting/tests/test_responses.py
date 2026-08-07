@@ -1581,6 +1581,35 @@ class TestOutputItemToMessage:
         assert len(msg.contents) == 1
         assert msg.contents[0].text == "hi"
 
+    async def test_role_enum_is_normalized_to_plain_string(self) -> None:
+        from azure.ai.agentserver.responses.models import (
+            MessageContentInputTextContent,
+            MessageRole,
+            OutputItemMessage,
+            OutputItemOutputMessage,
+            OutputMessageContentOutputTextContent,
+        )
+
+        # The SDK role is a str-subclass enum. Agent Framework types Message.role as a plain str, and
+        # durable session-state serialization rejects scalar subclasses, so it must be unwrapped here.
+        output_message = OutputItemOutputMessage({
+            "type": "output_message",
+            "role": MessageRole.ASSISTANT,
+            "content": [OutputMessageContentOutputTextContent({"type": "output_text", "text": "hello"})],
+            "status": "completed",
+            "id": "msg-1",
+        })
+        message = OutputItemMessage({
+            "type": "message",
+            "role": MessageRole.USER,
+            "content": [MessageContentInputTextContent({"type": "input_text", "text": "hi"})],
+        })
+
+        for item, expected in ((output_message, "assistant"), (message, "user")):
+            msg = await _output_item_to_message(item)
+            assert type(msg.role) is str
+            assert msg.role == expected
+
     async def test_function_call(self) -> None:
         from azure.ai.agentserver.responses.models import OutputItemFunctionToolCall
 
@@ -2017,6 +2046,35 @@ class TestItemToMessage:
         assert len(msg.contents) == 1
         assert msg.contents[0].type == "text"
         assert msg.contents[0].text == "hello"
+
+    async def test_message_role_enum_is_normalized_to_plain_string(self) -> None:
+        from azure.ai.agentserver.responses.models import ItemMessage, MessageContentInputTextContent, MessageRole
+
+        # The SDK role is a str-subclass enum. Agent Framework types Message.role as a plain str, and
+        # durable session-state serialization rejects scalar subclasses, so it must be unwrapped here.
+        string_item = ItemMessage({"type": "message", "role": MessageRole.USER, "content": "hello"})
+        content_item = ItemMessage({
+            "type": "message",
+            "role": MessageRole.USER,
+            "content": [MessageContentInputTextContent({"type": "input_text", "text": "hi"})],
+        })
+
+        for item in (string_item, content_item):
+            msg = await _item_to_message(item)
+            assert msg is not None
+            assert type(msg.role) is str
+            assert msg.role == "user"
+
+    async def test_normalized_role_survives_durable_session_state_serialization(self) -> None:
+        from agent_framework import AgentSession
+        from azure.ai.agentserver.responses.models import ItemMessage, MessageRole
+
+        msg = await _item_to_message(ItemMessage({"type": "message", "role": MessageRole.USER, "content": "hello"}))
+        assert msg is not None
+        session = AgentSession(session_id="enum-role")
+        session.state["messages"] = [msg]
+
+        assert AgentSession.from_dict(session.to_dict()).state["messages"][0].role == "user"
 
     async def test_message_with_input_text_content(self) -> None:
         from azure.ai.agentserver.responses.models import ItemMessage, MessageContentInputTextContent

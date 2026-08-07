@@ -160,23 +160,23 @@ public sealed class ToolApprovalAgent : DelegatingAIAgent
 
                 // This turn is still part of the same run, so its usage joins the aggregate rather
                 // than replacing it; otherwise hitting the cap would discard every prior turn's cost.
-                UsageAggregationExtensions.AccumulateUsage(ref aggregatedUsage, cappedResponse.Usage);
+                UsageAggregator.Accumulate(ref aggregatedUsage, cappedResponse.Usage);
 
-                return cappedResponse.WithAggregatedUsage(aggregatedUsage);
+                return cappedResponse.ApplyAggregatedUsage(aggregatedUsage);
             }
 
             var response = await this.InnerAgent.RunAsync(processedMessages, session, options, cancellationToken).ConfigureAwait(false);
 
-            UsageAggregationExtensions.AccumulateUsage(ref aggregatedUsage, response.Usage);
+            UsageAggregator.Accumulate(ref aggregatedUsage, response.Usage);
 
             // Classify approval requests: auto-approve matching, queue excess, keep first unapproved.
             bool allAutoApproved = await this.ProcessAndQueueOutboundApprovalRequestsAsync(response.Messages, state, session, options, requestMessages).ConfigureAwait(false);
 
             if (!allAutoApproved)
             {
-                // Response has real content or an unapproved approval request — return to caller.
-                // Return a copy carrying the aggregated usage rather than mutating the inner agent's response.
-                return response.WithAggregatedUsage(aggregatedUsage);
+                // Response has real content or an unapproved approval request — return to caller,
+                // reporting the usage accumulated across every turn of the run.
+                return response.ApplyAggregatedUsage(aggregatedUsage);
             }
 
             // All approval requests were auto-approved. Loop to re-invoke with them injected.

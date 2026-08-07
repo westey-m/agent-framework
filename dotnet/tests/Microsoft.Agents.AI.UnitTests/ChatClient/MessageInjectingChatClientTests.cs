@@ -656,6 +656,61 @@ public class MessageInjectingChatClientTests
     }
 
     /// <summary>
+    /// Verifies that a derived <see cref="ChatResponse"/> returned by the underlying client survives the
+    /// injection loop. Aggregated usage is reported by updating the client's own response rather than by
+    /// building a replacement, so a subclass keeps its runtime type and the state it carries.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_InnerClientReturnsDerivedResponse_PreservesRuntimeTypeWhileAggregatingUsageAsync()
+    {
+        // Arrange
+        int serviceCallCount = 0;
+        Mock<IChatClient> mockService = new();
+        MessageInjectingChatClient? injectorRef = null;
+        ChatClientAgentSession? sessionRef = null;
+
+        mockService.Setup(
+            s => s.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.IsAny<ChatOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async (IEnumerable<ChatMessage> msgs, ChatOptions? _, CancellationToken ct) =>
+            {
+                serviceCallCount++;
+                if (serviceCallCount < 3)
+                {
+                    // Enqueue a message so the injection loop runs again.
+                    await injectorRef!.EnqueueMessagesAsync(sessionRef!, [new ChatMessage(ChatRole.User, $"injected {serviceCallCount}")], ct);
+                }
+
+                return new TestDerivedChatResponse([new(ChatRole.Assistant, $"response {serviceCallCount}")])
+                {
+                    DerivedState = $"call {serviceCallCount}",
+                    Usage = new UsageDetails { InputTokenCount = serviceCallCount, OutputTokenCount = serviceCallCount * 10 },
+                };
+            });
+
+        ChatClientAgent agent = new(mockService.Object, options: new()
+        {
+            EnableMessageInjection = true,
+        });
+
+        injectorRef = agent.ChatClient.GetService<MessageInjectingChatClient>()!;
+
+        // Act
+        var session = await agent.CreateSessionAsync() as ChatClientAgentSession;
+        sessionRef = session;
+        var response = await agent.RunAsync([new(ChatRole.User, "original")], session);
+
+        // Assert — the underlying response type reaches the caller intact, carrying the whole run's usage.
+        Assert.Equal(3, serviceCallCount);
+        var derived = Assert.IsType<TestDerivedChatResponse>(response.RawRepresentation);
+        Assert.Equal("call 3", derived.DerivedState);
+        Assert.Equal(1 + 2 + 3, derived.Usage!.InputTokenCount);
+        Assert.Equal(10 + 20 + 30, derived.Usage.OutputTokenCount);
+    }
+
+    /// <summary>
     /// Verifies that a single service call surfaces its usage unchanged and that the underlying
     /// client's usage instance is not mutated.
     /// </summary>

@@ -165,10 +165,8 @@ public class LoopAgentTests
     }
 
     /// <summary>
-    /// Verify that the aggregated transcript is returned even when no iteration reports usage. The shared
-    /// <c>WithAggregatedUsage</c> helper has a fast path that returns the original response when its usage is
-    /// already reference-equal to the aggregate (which is the case when both are <see langword="null"/>), so
-    /// this pins that the fast path can never suppress transcript aggregation.
+    /// Verify that the aggregated transcript is returned even when no iteration reports usage, so that
+    /// transcript aggregation is never coupled to whether any usage happened to be reported.
     /// </summary>
     [Fact]
     public async Task RunAsync_AggregatedTranscript_ReturnsFullTranscriptWhenNoUsageReportedAsync()
@@ -209,6 +207,38 @@ public class LoopAgentTests
         Assert.Equal(3, capture.CallCount);
         Assert.Equal("iteration 3", response.Text);
         Assert.Single(response.Messages);
+    }
+
+    /// <summary>
+    /// Verify that a derived <see cref="AgentResponse"/> returned by the inner agent survives the loop in both
+    /// result modes. The transcript and aggregated usage are applied to the final iteration's response rather
+    /// than to a replacement, so a subclass keeps its runtime type and the state it carries.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_InnerAgentReturnsDerivedResponse_PreservesRuntimeTypeWhileAggregatingUsageAsync(bool lastResponseOnly)
+    {
+        // Arrange
+        var capture = new InnerAgentCapture(call =>
+            new TestDerivedAgentResponse([new ChatMessage(ChatRole.Assistant, $"iteration {call}")])
+            {
+                DerivedState = $"iteration {call}",
+                Usage = new UsageDetails { InputTokenCount = call, OutputTokenCount = call * 10 },
+            });
+        var evaluator = While(ctx => ctx.LastResponse.Text != "iteration 3");
+        var options = new LoopAgentOptions { NonStreamingReturnsLastResponseOnly = lastResponseOnly };
+        var agent = new LoopAgent(capture.Agent, evaluator, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "go")], new ChatClientAgentSession());
+
+        // Assert
+        Assert.Equal(3, capture.CallCount);
+        var derived = Assert.IsType<TestDerivedAgentResponse>(response);
+        Assert.Equal("iteration 3", derived.DerivedState);
+        Assert.Equal(1 + 2 + 3, derived.Usage!.InputTokenCount);
+        Assert.Equal(10 + 20 + 30, derived.Usage.OutputTokenCount);
     }
 
     /// <summary>

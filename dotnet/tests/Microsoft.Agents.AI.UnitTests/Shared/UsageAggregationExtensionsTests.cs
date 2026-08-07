@@ -14,331 +14,12 @@ namespace Microsoft.Agents.AI.UnitTests;
 public class UsageAggregationExtensionsTests
 {
     /// <summary>
-    /// Verify that merging two null usage values returns null.
+    /// Aggregated usage is reported by updating the response in place rather than by copying it, so that a
+    /// derived response type returned by an inner client survives. Only <see cref="ChatResponse.Usage"/> is
+    /// touched; every other property is left exactly as the inner client set it.
     /// </summary>
     [Fact]
-    public void MergeUsage_BothInputsNull_ReturnsNull()
-    {
-        // Arrange, Act
-        UsageDetails? result = UsageAggregationExtensions.MergeUsage(null, null);
-
-        // Assert
-        Assert.Null(result);
-    }
-
-    /// <summary>
-    /// Verify that merging one null usage value returns a new copy of the non-null usage value.
-    /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void MergeUsage_OneInputNull_ReturnsNewCopy(bool currentIsNull)
-    {
-        // Arrange
-        UsageDetails usage = CreateUsage(2, 3, 5, new() { ["cached"] = 7 });
-        UsageSnapshot before = UsageSnapshot.Capture(usage);
-
-        // Act
-        UsageDetails? result = currentIsNull
-            ? UsageAggregationExtensions.MergeUsage(null, usage)
-            : UsageAggregationExtensions.MergeUsage(usage, null);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.NotSame(usage, result);
-        Assert.NotSame(usage.AdditionalCounts, result!.AdditionalCounts);
-        Assert.Equal(2, result.InputTokenCount);
-        Assert.Equal(3, result.OutputTokenCount);
-        Assert.Equal(5, result.TotalTokenCount);
-        Assert.Equal(7, result.AdditionalCounts!["cached"]);
-        Assert.Equal(before, UsageSnapshot.Capture(usage));
-    }
-
-    /// <summary>
-    /// Verify that token counts are summed while preserving null as not reported.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_TokenCounts_SumsNullAware()
-    {
-        // Arrange
-        UsageDetails current = CreateUsage(input: 2, output: null, total: null);
-        UsageDetails incoming = CreateUsage(input: 11, output: 5, total: null);
-
-        // Act
-        UsageDetails? result = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.NotSame(current, result);
-        Assert.NotSame(incoming, result);
-        Assert.Equal(13, result!.InputTokenCount);
-        Assert.Equal(5, result.OutputTokenCount);
-        Assert.Null(result.TotalTokenCount);
-    }
-
-    /// <summary>
-    /// Verify that additional counts are summed per key and preserve disjoint keys.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_AdditionalCounts_SumsOverlappingAndUnionsDisjointKeys()
-    {
-        // Arrange
-        UsageDetails current = CreateUsage(input: null, output: null, total: null, new() { ["cached"] = 2, ["reasoning"] = 3 });
-        UsageDetails incoming = CreateUsage(input: null, output: null, total: null, new() { ["cached"] = 11, ["audio"] = 29 });
-
-        // Act
-        UsageDetails? result = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.NotSame(current.AdditionalCounts, result!.AdditionalCounts);
-        Assert.NotSame(incoming.AdditionalCounts, result.AdditionalCounts);
-        Assert.Equal(13, result.AdditionalCounts!["cached"]);
-        Assert.Equal(3, result.AdditionalCounts["reasoning"]);
-        Assert.Equal(29, result.AdditionalCounts["audio"]);
-    }
-
-    /// <summary>
-    /// Verify that additional counts are handled when one or both sides do not report any keys.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_AdditionalCounts_HandlesNullDictionaries()
-    {
-        // Arrange
-        UsageDetails withCounts = CreateUsage(input: null, output: null, total: null, new() { ["cached"] = 7 });
-        UsageDetails withoutCounts = CreateUsage(input: 1, output: 2, total: 3);
-
-        // Act
-        UsageDetails? oneSide = UsageAggregationExtensions.MergeUsage(withoutCounts, withCounts);
-        UsageDetails? bothSides = UsageAggregationExtensions.MergeUsage(withoutCounts, CreateUsage(input: null, output: null, total: null));
-
-        // Assert
-        Assert.NotNull(oneSide);
-        Assert.Equal(7, oneSide!.AdditionalCounts!["cached"]);
-        Assert.NotNull(bothSides);
-        Assert.Null(bothSides!.AdditionalCounts);
-    }
-
-    /// <summary>
-    /// Verify that merging does not mutate either input usage or additional-count dictionary.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_DoesNotMutateInputs()
-    {
-        // Arrange
-        UsageDetails current = CreateUsage(2, 3, 5, new() { ["cached"] = 7, ["reasoning"] = 11 });
-        UsageDetails incoming = CreateUsage(13, null, 17, new() { ["cached"] = 19, ["audio"] = 23 });
-        UsageSnapshot currentBefore = UsageSnapshot.Capture(current);
-        UsageSnapshot incomingBefore = UsageSnapshot.Capture(incoming);
-
-        // Act
-        UsageDetails? result = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(currentBefore, UsageSnapshot.Capture(current));
-        Assert.Equal(incomingBefore, UsageSnapshot.Capture(incoming));
-    }
-
-    /// <summary>
-    /// Verify that accumulating usage replaces the running aggregate with new combined instances.
-    /// </summary>
-    [Fact]
-    public void AccumulateUsage_SeveralAccumulations_UpdatesAggregate()
-    {
-        // Arrange
-        UsageDetails? aggregate = null;
-        UsageDetails first = CreateUsage(2, 3, 5, new() { ["cached"] = 7 });
-        UsageDetails second = CreateUsage(11, null, 16, new() { ["cached"] = 13, ["audio"] = 17 });
-        UsageDetails third = CreateUsage(null, 29, null);
-
-        // Act
-        UsageAggregationExtensions.AccumulateUsage(ref aggregate, first);
-        UsageDetails firstAggregate = aggregate!;
-        UsageAggregationExtensions.AccumulateUsage(ref aggregate, null);
-        UsageDetails secondAggregate = aggregate!;
-        UsageAggregationExtensions.AccumulateUsage(ref aggregate, second);
-        UsageAggregationExtensions.AccumulateUsage(ref aggregate, third);
-
-        // Assert
-        Assert.NotSame(first, firstAggregate);
-        Assert.NotSame(firstAggregate, secondAggregate);
-        Assert.Equal(13, aggregate!.InputTokenCount);
-        Assert.Equal(32, aggregate.OutputTokenCount);
-        Assert.Equal(21, aggregate.TotalTokenCount);
-        Assert.Equal(20, aggregate.AdditionalCounts!["cached"]);
-        Assert.Equal(17, aggregate.AdditionalCounts["audio"]);
-    }
-
-    /// <summary>
-    /// Verify that every strongly-typed counter exposed by <see cref="UsageDetails"/> is summed, not just the
-    /// three headline token counts. Providers such as the GitHub Copilot agent report
-    /// <see cref="UsageDetails.CachedInputTokenCount"/>, and reasoning tokens are common for OpenAI-family
-    /// models, so dropping any of these would silently lose provider-reported data.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_SumsAllStronglyTypedCounters()
-    {
-        // Arrange
-        UsageDetails current = new()
-        {
-            InputTokenCount = 1,
-            OutputTokenCount = 2,
-            TotalTokenCount = 3,
-            CachedInputTokenCount = 4,
-            ReasoningTokenCount = 5,
-            InputAudioTokenCount = 6,
-            InputTextTokenCount = 7,
-            OutputAudioTokenCount = 8,
-            OutputTextTokenCount = 9,
-        };
-        UsageDetails incoming = new()
-        {
-            InputTokenCount = 10,
-            OutputTokenCount = 20,
-            TotalTokenCount = 30,
-            CachedInputTokenCount = 40,
-            ReasoningTokenCount = 50,
-            InputAudioTokenCount = 60,
-            InputTextTokenCount = 70,
-            OutputAudioTokenCount = 80,
-            OutputTextTokenCount = 90,
-        };
-
-        // Act
-        UsageDetails? result = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(11, result!.InputTokenCount);
-        Assert.Equal(22, result.OutputTokenCount);
-        Assert.Equal(33, result.TotalTokenCount);
-        Assert.Equal(44, result.CachedInputTokenCount);
-        Assert.Equal(55, result.ReasoningTokenCount);
-        Assert.Equal(66, result.InputAudioTokenCount);
-        Assert.Equal(77, result.InputTextTokenCount);
-        Assert.Equal(88, result.OutputAudioTokenCount);
-        Assert.Equal(99, result.OutputTextTokenCount);
-    }
-
-    /// <summary>
-    /// Verify that the extra strongly-typed counters survive a merge where only one side reports them, which
-    /// is the common case when a single iteration of a loop reports cached or reasoning tokens.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_OneSideOnlyReportsExtraCounters_PreservesThem()
-    {
-        // Arrange
-        UsageDetails current = new() { InputTokenCount = 5 };
-        UsageDetails incoming = new() { InputTokenCount = 6, CachedInputTokenCount = 3, ReasoningTokenCount = 4 };
-
-        // Act
-        UsageDetails? result = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(11, result!.InputTokenCount);
-        Assert.Equal(3, result.CachedInputTokenCount);
-        Assert.Equal(4, result.ReasoningTokenCount);
-    }
-
-    /// <summary>
-    /// <see cref="UsageAggregationExtensions.MergeUsage"/> intentionally mirrors the semantics of
-    /// <see cref="UsageDetails.Add"/> (which is what <c>FunctionInvokingChatClient</c> uses to aggregate usage
-    /// across its own function-calling turns) while avoiding that method's in-place mutation. This asserts the
-    /// two agree for every combination of reported and unreported counters.
-    /// </summary>
-    [Theory]
-    [InlineData(true, true)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public void MergeUsage_MatchesUsageDetailsAddSemantics(bool currentReported, bool incomingReported)
-    {
-        // Arrange
-        UsageDetails? current = currentReported ? CreateFullyPopulatedUsage(1) : null;
-        UsageDetails? incoming = incomingReported ? CreateFullyPopulatedUsage(100) : null;
-
-        UsageDetails expected = new();
-        if (current is not null)
-        {
-            expected.Add(current);
-        }
-
-        if (incoming is not null)
-        {
-            expected.Add(incoming);
-        }
-
-        // Act
-        UsageDetails? actual = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        Assert.NotNull(actual);
-        foreach (var property in GetTokenCountProperties())
-        {
-            Assert.Equal((long?)property.GetValue(expected), (long?)property.GetValue(actual));
-        }
-
-        Assert.Equal(
-            expected.AdditionalCounts?.OrderBy(static e => e.Key).Select(static e => $"{e.Key}:{e.Value}") ?? [],
-            actual.AdditionalCounts?.OrderBy(static e => e.Key).Select(static e => $"{e.Key}:{e.Value}") ?? []);
-    }
-
-    /// <summary>
-    /// Guards against a future <see cref="UsageDetails"/> counter being added upstream without being summed here.
-    /// Because every fix site replaces the inner response's usage with a merged instance, an unmerged counter
-    /// would be silently dropped even on single-iteration runs.
-    /// </summary>
-    [Fact]
-    public void MergeUsage_SumsEveryTokenCountPropertyExposedByUsageDetails()
-    {
-        // Arrange
-        UsageDetails current = CreateFullyPopulatedUsage(1);
-        UsageDetails incoming = CreateFullyPopulatedUsage(100);
-
-        // Act
-        UsageDetails? merged = UsageAggregationExtensions.MergeUsage(current, incoming);
-
-        // Assert
-        var properties = GetTokenCountProperties().ToList();
-        Assert.NotEmpty(properties);
-        Assert.NotNull(merged);
-        foreach (var property in properties)
-        {
-            long? currentValue = (long?)property.GetValue(current);
-            long? incomingValue = (long?)property.GetValue(incoming);
-            Assert.Equal(currentValue + incomingValue, (long?)property.GetValue(merged));
-        }
-    }
-
-    private static IEnumerable<PropertyInfo> GetTokenCountProperties()
-        => typeof(UsageDetails)
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(static p => p.PropertyType == typeof(long?) && p.CanRead && p.CanWrite);
-
-    /// <summary>
-    /// Assigns a distinct value to every settable <see cref="long"/> counter so that a counter which is not
-    /// summed by <see cref="UsageAggregationExtensions.MergeUsage"/> produces a detectable mismatch.
-    /// </summary>
-    private static UsageDetails CreateFullyPopulatedUsage(long seed)
-    {
-        UsageDetails usage = new();
-        long offset = 0;
-        foreach (var property in GetTokenCountProperties())
-        {
-            property.SetValue(usage, seed + offset++);
-        }
-
-        usage.AdditionalCounts = new() { ["provider_specific"] = seed };
-        return usage;
-    }
-
-    /// <summary>
-    /// Every settable property other than <see cref="ChatResponse.Usage"/> must survive the copy, otherwise
-    /// replacing the inner client's response with an aggregated one would silently discard response metadata.
-    /// </summary>
-    [Fact]
-    public void WithAggregatedUsage_ChatResponse_CopiesEverySettablePropertyExceptUsage()
+    public void ApplyAggregatedUsage_ChatResponse_UpdatesInPlaceAndLeavesEveryOtherPropertyUntouched()
     {
         // Arrange
         ChatMessage message = new(ChatRole.Assistant, "hello");
@@ -355,24 +36,25 @@ public class UsageAggregationExtensionsTests
             AdditionalProperties = new() { ["key"] = "value" },
         };
 
+        PropertySnapshot before = PropertySnapshot.Capture(original);
         UsageDetails aggregated = CreateUsage(10, 20, 30);
 
         // Act
-        ChatResponse copy = original.WithAggregatedUsage(aggregated);
+        ChatResponse result = original.ApplyAggregatedUsage(aggregated);
 
         // Assert
-        Assert.NotSame(original, copy);
-        Assert.Same(aggregated, copy.Usage);
-        AssertAllSettablePropertiesCopied(original, copy);
-        Assert.Equal([message], copy.Messages);
+        Assert.Same(original, result);
+        Assert.Same(aggregated, result.Usage);
+        Assert.Equal([message], result.Messages);
+        before.AssertUnchangedExceptUsage(result);
     }
 
     /// <summary>
-    /// Every settable property other than <see cref="AgentResponse.Usage"/> must survive the copy, otherwise
-    /// replacing the inner agent's response with an aggregated one would silently discard response metadata.
+    /// The <see cref="AgentResponse"/> overload behaves identically: the inner agent's response instance is
+    /// updated in place so that its runtime type and any state it carries survive.
     /// </summary>
     [Fact]
-    public void WithAggregatedUsage_AgentResponse_CopiesEverySettablePropertyExceptUsage()
+    public void ApplyAggregatedUsage_AgentResponse_UpdatesInPlaceAndLeavesEveryOtherPropertyUntouched()
     {
         // Arrange
         ChatMessage message = new(ChatRole.Assistant, "hello");
@@ -388,24 +70,25 @@ public class UsageAggregationExtensionsTests
             AdditionalProperties = new() { ["key"] = "value" },
         };
 
+        PropertySnapshot before = PropertySnapshot.Capture(original);
         UsageDetails aggregated = CreateUsage(10, 20, 30);
 
         // Act
-        AgentResponse copy = original.WithAggregatedUsage(aggregated);
+        AgentResponse result = original.ApplyAggregatedUsage(aggregated);
 
         // Assert
-        Assert.NotSame(original, copy);
-        Assert.Same(aggregated, copy.Usage);
-        AssertAllSettablePropertiesCopied(original, copy);
-        Assert.Equal([message], copy.Messages);
+        Assert.Same(original, result);
+        Assert.Same(aggregated, result.Usage);
+        Assert.Equal([message], result.Messages);
+        before.AssertUnchangedExceptUsage(result);
     }
 
     /// <summary>
     /// When a run returns a transcript spanning multiple invocations, the supplied messages replace those of
-    /// the final response while the remaining metadata is still carried over.
+    /// the final response while every other property is left as the inner agent set it.
     /// </summary>
     [Fact]
-    public void WithAggregatedUsage_AgentResponse_SubstitutesSuppliedMessagesAndRetainsMetadata()
+    public void ApplyAggregatedUsage_AgentResponse_SubstitutesSuppliedMessagesAndRetainsMetadata()
     {
         // Arrange
         AgentResponse original = new([new ChatMessage(ChatRole.Assistant, "last")])
@@ -413,6 +96,7 @@ public class UsageAggregationExtensionsTests
             AgentId = "agent-1",
             RawRepresentation = new object(),
         };
+        object rawRepresentation = original.RawRepresentation;
 
         List<ChatMessage> transcript =
         [
@@ -421,48 +105,75 @@ public class UsageAggregationExtensionsTests
         ];
 
         // Act
-        AgentResponse copy = original.WithAggregatedUsage(null, transcript);
+        AgentResponse result = original.ApplyAggregatedUsage(null, transcript);
 
         // Assert
-        Assert.Equal(transcript, copy.Messages);
-        Assert.Equal("agent-1", copy.AgentId);
-        Assert.Same(original.RawRepresentation, copy.RawRepresentation);
-        Assert.Null(copy.Usage);
+        Assert.Same(original, result);
+        Assert.Same(transcript, result.Messages);
+        Assert.Equal("agent-1", result.AgentId);
+        Assert.Same(rawRepresentation, result.RawRepresentation);
+        Assert.Null(result.Usage);
     }
 
     /// <summary>
-    /// The copy must never alias the inner response, since replacing usage on a shared instance is exactly the
-    /// mutation hazard these helpers exist to avoid. A substitution request therefore always copies.
+    /// Omitting the messages argument must leave the response's existing messages alone, since most callers
+    /// only need to correct the reported usage.
     /// </summary>
     [Fact]
-    public void WithAggregatedUsage_ReturnsOriginalOnlyWhenUsageAlreadyMatchesAndNoMessagesSupplied()
+    public void ApplyAggregatedUsage_NoMessagesSupplied_LeavesMessagesUntouched()
     {
         // Arrange
-        UsageDetails usage = CreateUsage(1, 2, 3);
-        ChatResponse chatResponse = new([new ChatMessage(ChatRole.Assistant, "hi")]) { Usage = usage };
-        AgentResponse agentResponse = new([new ChatMessage(ChatRole.Assistant, "hi")]) { Usage = usage };
+        List<ChatMessage> messages = [new(ChatRole.Assistant, "hi")];
+        ChatResponse chatResponse = new(messages);
+        AgentResponse agentResponse = new(messages);
 
-        // Act & Assert
-        Assert.Same(chatResponse, chatResponse.WithAggregatedUsage(usage));
-        Assert.Same(agentResponse, agentResponse.WithAggregatedUsage(usage));
-        Assert.NotSame(chatResponse, chatResponse.WithAggregatedUsage(CreateUsage(1, 2, 3)));
-        Assert.NotSame(agentResponse, agentResponse.WithAggregatedUsage(usage, [new ChatMessage(ChatRole.Assistant, "other")]));
+        // Act
+        ChatResponse chatResult = chatResponse.ApplyAggregatedUsage(CreateUsage(1, 2, 3));
+        AgentResponse agentResult = agentResponse.ApplyAggregatedUsage(CreateUsage(1, 2, 3));
+
+        // Assert
+        Assert.Same(messages, chatResult.Messages);
+        Assert.Same(messages, agentResult.Messages);
     }
 
-    private static void AssertAllSettablePropertiesCopied<T>(T original, T copy)
+    /// <summary>
+    /// A derived <see cref="ChatResponse"/> returned by an inner chat client must survive usage aggregation
+    /// with its additional state intact. Building a replacement base response would silently downgrade it.
+    /// </summary>
+    [Fact]
+    public void ApplyAggregatedUsage_DerivedChatResponse_PreservesRuntimeTypeAndDerivedState()
     {
-        var properties = typeof(T)
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(static p => p.CanWrite && p.Name != nameof(AgentResponse.Usage) && p.Name != nameof(AgentResponse.Messages))
-            .ToList();
+        // Arrange
+        TestDerivedChatResponse original = new([new ChatMessage(ChatRole.Assistant, "hi")]) { DerivedState = "custom" };
 
-        Assert.NotEmpty(properties);
-        foreach (var property in properties)
-        {
-            object? expected = property.GetValue(original);
-            Assert.NotNull(expected);
-            Assert.Equal(expected, property.GetValue(copy));
-        }
+        // Act
+        ChatResponse result = original.ApplyAggregatedUsage(CreateUsage(1, 2, 3), [new ChatMessage(ChatRole.Assistant, "transcript")]);
+
+        // Assert
+        TestDerivedChatResponse derived = Assert.IsType<TestDerivedChatResponse>(result);
+        Assert.Same(original, derived);
+        Assert.Equal("custom", derived.DerivedState);
+        Assert.Equal(1, derived.Usage!.InputTokenCount);
+    }
+
+    /// <summary>
+    /// A derived <see cref="AgentResponse"/> such as <c>AgentResponse&lt;T&gt;</c> must likewise survive usage
+    /// aggregation, since replacing it with a base response would discard its deserialized result.
+    /// </summary>
+    [Fact]
+    public void ApplyAggregatedUsage_DerivedAgentResponse_PreservesRuntimeTypeAndDerivedState()
+    {
+        // Arrange
+        TestDerivedAgentResponse original = new([new ChatMessage(ChatRole.Assistant, "hi")]) { DerivedState = "custom" };
+
+        // Act
+        AgentResponse result = original.ApplyAggregatedUsage(CreateUsage(1, 2, 3), [new ChatMessage(ChatRole.Assistant, "transcript")]);
+
+        // Assert
+        TestDerivedAgentResponse derived = Assert.IsType<TestDerivedAgentResponse>(result);
+        Assert.Same(original, derived);
+        Assert.Equal("custom", derived.DerivedState);
+        Assert.Equal(1, derived.Usage!.InputTokenCount);
     }
 
     private sealed class TestContinuationToken : ResponseContinuationToken
@@ -470,32 +181,38 @@ public class UsageAggregationExtensionsTests
         public override ReadOnlyMemory<byte> ToBytes() => new([1, 2, 3]);
     }
 
-    private static UsageDetails CreateUsage(long? input, long? output, long? total, AdditionalPropertiesDictionary<long>? additionalCounts = null)
+    /// <summary>
+    /// Captures every settable property except <see cref="AgentResponse.Usage"/> and
+    /// <see cref="AgentResponse.Messages"/>, so that a helper which starts writing to any of them is caught.
+    /// </summary>
+    private sealed class PropertySnapshot(Dictionary<PropertyInfo, object?> values)
     {
-        UsageDetails usage = new()
+        public static PropertySnapshot Capture<T>(T response)
+            where T : notnull
+            => new(GetProperties<T>().ToDictionary(static p => p, p => p.GetValue(response)));
+
+        public void AssertUnchangedExceptUsage<T>(T response)
+            where T : notnull
+        {
+            Assert.NotEmpty(values);
+            foreach (var entry in values)
+            {
+                Assert.NotNull(entry.Value);
+                Assert.Equal(entry.Value, entry.Key.GetValue(response));
+            }
+        }
+
+        private static IEnumerable<PropertyInfo> GetProperties<T>()
+            => typeof(T)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(static p => p.CanWrite && p.Name is not (nameof(AgentResponse.Usage) or nameof(AgentResponse.Messages)));
+    }
+
+    private static UsageDetails CreateUsage(long? input, long? output, long? total)
+        => new()
         {
             InputTokenCount = input,
             OutputTokenCount = output,
             TotalTokenCount = total,
         };
-
-        if (additionalCounts is not null)
-        {
-            usage.AdditionalCounts = additionalCounts;
-        }
-
-        return usage;
-    }
-
-    private sealed record UsageSnapshot(long? Input, long? Output, long? Total, string AdditionalCounts)
-    {
-        public static UsageSnapshot Capture(UsageDetails usage)
-            => new(
-                usage.InputTokenCount,
-                usage.OutputTokenCount,
-                usage.TotalTokenCount,
-                string.Join(
-                    "|",
-                    usage.AdditionalCounts?.OrderBy(static entry => entry.Key).Select(static entry => $"{entry.Key}:{entry.Value}") ?? []));
-    }
 }

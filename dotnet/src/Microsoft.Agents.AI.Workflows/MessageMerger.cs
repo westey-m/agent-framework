@@ -132,7 +132,7 @@ internal sealed class MessageMerger
                 _ = finishReasons.Add(response.FinishReason.Value);
             }
 
-            usage = UsageAggregationExtensions.MergeUsage(usage, response.Usage);
+            usage = UsageAggregator.Combine(usage, response.Usage);
             additionalProperties = MergeProperties(additionalProperties, response.AdditionalProperties);
         }
 
@@ -219,7 +219,7 @@ internal sealed class MessageMerger
                 Messages = current.Messages.Concat(incoming.Messages).ToList(),
                 ResponseId = current.ResponseId,
                 RawRepresentation = rawRepresentation,
-                Usage = UsageAggregationExtensions.MergeUsage(current.Usage, incoming.Usage),
+                Usage = UsageAggregator.Combine(current.Usage, incoming.Usage),
             };
         }
 

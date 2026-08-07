@@ -178,7 +178,7 @@ public sealed class LoopAgent : DelegatingAIAgent
             AgentResponse response = await this.InnerAgent.RunAsync(currentMessages, activeSession, options, cancellationToken).ConfigureAwait(false);
             iteration++;
 
-            UsageAggregationExtensions.AccumulateUsage(ref aggregatedUsage, response.Usage);
+            UsageAggregator.Accumulate(ref aggregatedUsage, response.Usage);
 
             // Record this iteration's on-behalf-of input (before the response it elicited) and the response itself.
             transcript.AddRange(currentSurfaced);
@@ -452,14 +452,14 @@ public sealed class LoopAgent : DelegatingAIAgent
     }
 
     /// <summary>
-    /// Produces the non-streaming run result: either the final iteration's response (when configured) or an
-    /// aggregated response carrying the full transcript with the final response's metadata. In both cases the
-    /// usage reported is <paramref name="aggregatedUsage"/>, covering every iteration of the run.
+    /// Produces the non-streaming run result from the final iteration's response, which carries either its own
+    /// messages (when configured) or the full transcript of the run. In both cases the usage reported is
+    /// <paramref name="aggregatedUsage"/>, covering every iteration of the run.
     /// </summary>
     private AgentResponse BuildResult(AgentResponse lastResponse, List<ChatMessage> transcript, UsageDetails? aggregatedUsage)
         => this._nonStreamingReturnsLastResponseOnly
-            ? lastResponse.WithAggregatedUsage(aggregatedUsage)
-            : lastResponse.WithAggregatedUsage(aggregatedUsage, transcript);
+            ? lastResponse.ApplyAggregatedUsage(aggregatedUsage)
+            : lastResponse.ApplyAggregatedUsage(aggregatedUsage, transcript);
 
     private static bool HasPendingApprovalRequests(AgentResponse response)
     {

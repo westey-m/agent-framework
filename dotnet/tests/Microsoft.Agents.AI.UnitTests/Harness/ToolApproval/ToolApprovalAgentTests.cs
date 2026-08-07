@@ -2668,6 +2668,54 @@ public class ToolApprovalAgentTests
     }
 
     /// <summary>
+    /// Verify that a derived <see cref="AgentResponse"/> returned by the inner agent survives the
+    /// auto-approval loop. Usage is reported by updating the inner agent's response rather than by building a
+    /// replacement, so a subclass such as <c>AgentResponse&lt;T&gt;</c> keeps its runtime type and the state
+    /// it carries instead of being silently downgraded to a base response.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_InnerAgentReturnsDerivedResponse_PreservesRuntimeTypeWhileAggregatingUsageAsync()
+    {
+        // Arrange — turn 1 asks for an auto-approved tool, turn 2 answers; both return a derived response.
+        var session = new ChatClientAgentSession();
+        var callCount = 0;
+        var innerAgent = new Mock<AIAgent>();
+        innerAgent
+            .Protected()
+            .Setup<Task<AgentResponse>>("RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession?>(),
+                ItExpr.IsAny<AgentRunOptions?>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                IList<ChatMessage> messages = callCount == 1
+                    ? [new ChatMessage(ChatRole.Assistant, [new ToolApprovalRequestContent("req1", new FunctionCallContent("call1", "load_skill"))])]
+                    : [new ChatMessage(ChatRole.Assistant, "done")];
+
+                return new TestDerivedAgentResponse(messages)
+                {
+                    DerivedState = $"turn{callCount}",
+                    Usage = new UsageDetails { InputTokenCount = callCount, OutputTokenCount = callCount * 10 },
+                };
+            });
+
+        var options = new ToolApprovalAgentOptions { AutoApprovalRules = [ToolApprovalAgent.AllToolsAutoApprovalRule] };
+        var agent = new ToolApprovalAgent(innerAgent.Object, options);
+
+        // Act
+        var response = await agent.RunAsync([new ChatMessage(ChatRole.User, "Hi")], session);
+
+        // Assert
+        Assert.Equal(2, callCount);
+        var derived = Assert.IsType<TestDerivedAgentResponse>(response);
+        Assert.Equal("turn2", derived.DerivedState);
+        Assert.Equal(1 + 2, derived.Usage!.InputTokenCount);
+        Assert.Equal(10 + 20, derived.Usage.OutputTokenCount);
+    }
+
+    /// <summary>
     /// Verify the streaming path reports the whole run's usage when the cap is hit. Streaming aggregates by
     /// passing every <see cref="UsageContent"/> through to the caller, including those from the final capped
     /// turn, so no update may be swallowed by the cap branch.

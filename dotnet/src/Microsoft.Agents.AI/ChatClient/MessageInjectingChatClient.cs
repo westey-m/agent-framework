@@ -85,20 +85,20 @@ public sealed class MessageInjectingChatClient : DelegatingChatClient
         {
             var response = await base.GetResponseAsync(newMessages, options, cancellationToken).ConfigureAwait(false);
 
-            UsageAggregationExtensions.AccumulateUsage(ref aggregatedUsage, response.Usage);
+            UsageAggregator.Accumulate(ref aggregatedUsage, response.Usage);
 
             // If the response contains actionable function calls, the parent FunctionInvokingChatClient
             // loop will iterate — return immediately so it can process them.
             if (HasActionableFunctionCalls(response.Messages))
             {
-                return response.WithAggregatedUsage(aggregatedUsage);
+                return response.ApplyAggregatedUsage(aggregatedUsage);
             }
 
             // No actionable function calls. If there are pending injected messages, loop again
             // to send them to the service. Otherwise, we're done.
             if (await this.IsQueueEmptyAsync(session, cancellationToken).ConfigureAwait(false))
             {
-                return response.WithAggregatedUsage(aggregatedUsage);
+                return response.ApplyAggregatedUsage(aggregatedUsage);
             }
 
             // Propagate any ConversationId returned by the service so subsequent iterations

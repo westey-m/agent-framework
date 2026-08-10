@@ -885,6 +885,298 @@ public class BackgroundAgentsProviderTests
 
     #endregion
 
+    #region ReleaseSessionAsync Tests
+
+    /// <summary>
+    /// Verify that releasing a session cancels and awaits an in-flight background task.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_CancelsInFlightTaskAsync()
+    {
+        // Arrange
+        var observedCancellation = new TaskCompletionSource<bool>();
+        var agent = CreateMockAgentWithCancellableCallback("Research", async ct =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                observedCancellation.SetResult(true);
+                throw;
+            }
+
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "never"));
+        });
+
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+        AIFunction startBackgroundTask = GetTool(tools, "background_agents_start_task");
+
+        await startBackgroundTask.InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        // Act
+        await provider.ReleaseSessionAsync(session);
+
+        // Assert — the background run observed cancellation and no tasks remain running.
+        Assert.True(await observedCancellation.Task);
+        Assert.Empty(provider.GetIncompleteTasks(session));
+    }
+
+    /// <summary>
+    /// Verify that releasing a session more than once is a no-op.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_IsIdempotentAsync()
+    {
+        // Arrange
+        var agent = CreateMockAgentWithCancellableCallback("Research", async ct =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "never"));
+        });
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+        AIFunction startBackgroundTask = GetTool(tools, "background_agents_start_task");
+
+        await startBackgroundTask.InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        // Act
+        await provider.ReleaseSessionAsync(session);
+        await provider.ReleaseSessionAsync(session);
+
+        // Assert — the second release did not throw and the state remains released.
+        Assert.Empty(provider.GetIncompleteTasks(session));
+    }
+
+    /// <summary>
+    /// Verify that releasing one session does not affect background tasks in another session.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_DoesNotAffectOtherSessionsAsync()
+    {
+        // Arrange
+        var agent = CreateMockAgentWithCancellableCallback("Research", async ct =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "never"));
+        });
+        var provider = new BackgroundAgentsProvider(new[] { agent });
+
+        var (toolsA, sessionA) = await CreateToolsForSessionAsync(provider);
+        var (toolsB, sessionB) = await CreateToolsForSessionAsync(provider);
+
+        await GetTool(toolsA, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task A",
+            ["description"] = "Session A task",
+        });
+
+        await GetTool(toolsB, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task B",
+            ["description"] = "Session B task",
+        });
+
+        // Act
+        await provider.ReleaseSessionAsync(sessionA);
+
+        // Assert — session B's task is untouched.
+        Assert.Empty(provider.GetIncompleteTasks(sessionA));
+        Assert.Single(provider.GetIncompleteTasks(sessionB));
+    }
+
+    /// <summary>
+    /// Verify that releasing with cancelRunning false throws when tasks are still running.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_CancelRunningFalseWithRunningTask_ThrowsAsync()
+    {
+        // Arrange
+        var tcs = new TaskCompletionSource<AgentResponse>();
+        var agent = CreateMockAgentWithRunResult("Research", tcs.Task);
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => provider.ReleaseSessionAsync(session, cancelRunning: false));
+
+        // Assert — the task is left running because the release was rejected.
+        Assert.Single(provider.GetIncompleteTasks(session));
+
+        tcs.SetResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "done")));
+    }
+
+    /// <summary>
+    /// Verify that releasing with cancelRunning false succeeds when all tasks have completed.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_CancelRunningFalseWithCompletedTask_SucceedsAsync()
+    {
+        // Arrange
+        var agent = CreateMockAgentWithRunResult("Research", Task.FromResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"))));
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        // Ensure the run has completed before releasing.
+        await GetTool(tools, "background_agents_wait_for_first_completion").InvokeAsync(new AIFunctionArguments
+        {
+            ["taskIds"] = new List<int> { 1 },
+        });
+
+        Assert.Empty(provider.GetIncompleteTasks(session));
+
+        // Act
+        await provider.ReleaseSessionAsync(session, cancelRunning: false);
+
+        // Assert — subsequent starts are rejected, confirming the runtime was released.
+        object? result = await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 2",
+            ["description"] = "Second task",
+        });
+
+        Assert.Contains("released", GetStringResult(result));
+    }
+
+    /// <summary>
+    /// Verify that a task still running when the session is released is recorded as failed.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_MarksRunningTasksAsFailedAsync()
+    {
+        // Arrange
+        var agent = CreateMockAgentWithCancellableCallback("Research", async ct =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "never"));
+        });
+
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        // Act
+        await provider.ReleaseSessionAsync(session);
+
+        // Assert
+        object? result = await GetTool(tools, "background_agents_get_all_tasks").InvokeAsync(new AIFunctionArguments());
+        string text = GetStringResult(result);
+        Assert.Contains("[Failed]", text);
+    }
+
+    /// <summary>
+    /// Verify that the start and continue tools return an error after the session is released.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_ToolsReturnErrorAfterReleaseAsync()
+    {
+        // Arrange
+        var agent = CreateMockAgentWithRunResult("Research", Task.FromResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"))));
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        await provider.ReleaseSessionAsync(session);
+
+        // Act
+        object? startResult = await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 2",
+            ["description"] = "Second task",
+        });
+
+        object? continueResult = await GetTool(tools, "background_agents_continue_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["taskId"] = 1,
+            ["text"] = "More work",
+        });
+
+        // Assert
+        Assert.Contains("released", GetStringResult(startResult));
+        Assert.Contains("released", GetStringResult(continueResult));
+    }
+
+    /// <summary>
+    /// Verify that a task ignoring cancellation does not block the release beyond the timeout.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_TimeoutAbandonsUncooperativeTaskAsync()
+    {
+        // Arrange — the run never observes its cancellation token.
+        var tcs = new TaskCompletionSource<AgentResponse>();
+        var agent = CreateMockAgentWithRunResult("Research", tcs.Task);
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        // Act
+        await provider.ReleaseSessionAsync(session, timeout: TimeSpan.FromMilliseconds(50));
+
+        // Assert — release completed despite the task still being pending.
+        Assert.False(tcs.Task.IsCompleted);
+        Assert.Empty(provider.GetIncompleteTasks(session));
+
+        tcs.SetResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "late")));
+    }
+
+    /// <summary>
+    /// Verify that releasing a null session does nothing.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_NullSession_DoesNothingAsync()
+    {
+        // Arrange
+        var agent = CreateMockAgent("Research", "Research agent");
+        var provider = new BackgroundAgentsProvider(new[] { agent });
+
+        // Act & Assert — does not throw.
+        await provider.ReleaseSessionAsync(null);
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static AIAgent CreateMockAgent(string? name, string? description)
@@ -942,6 +1234,45 @@ public class BackgroundAgentsProviderTests
 
         AIContext result = await provider.InvokingAsync(context);
         return (result.Tools!, provider);
+    }
+
+    private static AIAgent CreateMockAgentWithCancellableCallback(string name, Func<CancellationToken, Task<AgentResponse>> callback)
+    {
+        var mock = new Mock<AIAgent>();
+        mock.SetupGet(a => a.Name).Returns(name);
+        mock.Protected()
+            .Setup<ValueTask<AgentSession>>(
+                "CreateSessionCoreAsync",
+                ItExpr.IsAny<CancellationToken>())
+            .Returns(new ValueTask<AgentSession>(new ChatClientAgentSession()));
+        mock.Protected()
+            .Setup<Task<AgentResponse>>(
+                "RunCoreAsync",
+                ItExpr.IsAny<IEnumerable<ChatMessage>>(),
+                ItExpr.IsAny<AgentSession>(),
+                ItExpr.IsAny<AgentRunOptions>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Returns((IEnumerable<ChatMessage> _, AgentSession _, AgentRunOptions _, CancellationToken ct) => callback(ct));
+        return mock.Object;
+    }
+
+    private static async Task<(IEnumerable<AITool> Tools, BackgroundAgentsProvider Provider, AgentSession Session)> CreateToolsWithSessionAsync(AIAgent agent)
+    {
+        var provider = new BackgroundAgentsProvider(new[] { agent });
+        var (tools, session) = await CreateToolsForSessionAsync(provider);
+        return (tools, provider, session);
+    }
+
+    private static async Task<(IEnumerable<AITool> Tools, AgentSession Session)> CreateToolsForSessionAsync(BackgroundAgentsProvider provider)
+    {
+        var mockAgent = new Mock<AIAgent>().Object;
+        var session = new ChatClientAgentSession();
+#pragma warning disable MAAI001
+        var context = new AIContextProvider.InvokingContext(mockAgent, session, new AIContext());
+#pragma warning restore MAAI001
+
+        AIContext result = await provider.InvokingAsync(context);
+        return (result.Tools!, session);
     }
 
     private static AIContextProvider.InvokingContext CreateInvokingContext()

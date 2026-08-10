@@ -1162,17 +1162,17 @@ public class BackgroundAgentsProviderTests
     }
 
     /// <summary>
-    /// Verify that releasing a null session does nothing.
+    /// Verify that releasing a null session throws.
     /// </summary>
     [Fact]
-    public async Task ReleaseSessionAsync_NullSession_DoesNothingAsync()
+    public async Task ReleaseSessionAsync_NullSession_ThrowsAsync()
     {
         // Arrange
         var agent = CreateMockAgent("Research", "Research agent");
         var provider = new BackgroundAgentsProvider(new[] { agent });
 
-        // Act & Assert — does not throw.
-        await provider.ReleaseSessionAsync(null);
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.ReleaseSessionAsync(null!));
     }
 
     #endregion

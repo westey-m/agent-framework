@@ -157,7 +157,7 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     /// <summary>
     /// Releases all runtime state held for the specified session, cancelling and awaiting any in-flight background tasks.
     /// </summary>
-    /// <param name="session">The agent session whose background runtime should be released. If <see langword="null"/>, this method does nothing.</param>
+    /// <param name="session">The agent session whose background runtime should be released.</param>
     /// <param name="cancelRunning">
     /// <see langword="true"/> to cancel any background tasks that are still running; <see langword="false"/> to require that
     /// all background tasks have already completed.
@@ -169,6 +169,7 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     /// </param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests while waiting.</param>
     /// <returns>A task that represents the asynchronous release operation.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException"><paramref name="cancelRunning"/> is <see langword="false"/> and one or more background tasks are still running.</exception>
     /// <remarks>
     /// <para>
@@ -184,15 +185,12 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     /// </para>
     /// </remarks>
     public async Task ReleaseSessionAsync(
-        AgentSession? session,
+        AgentSession session,
         bool cancelRunning = true,
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
-        if (session is null)
-        {
-            return;
-        }
+        _ = Throw.IfNull(session);
 
         BackgroundAgentRuntimeState runtimeState = this._runtimeSessionState.GetOrInitializeState(session);
         if (runtimeState.IsReleased)

@@ -1274,8 +1274,7 @@ def _carry_over_stream_control_state(response: ChatResponse, inner_response: Cha
         response: The outer response rebuilt from the streamed updates.
         inner_response: The final response of the innermost stream that produced those updates.
     """
-    if inner_response.conversation_id is not None:
-        response.conversation_id = inner_response.conversation_id
+    response.conversation_id = inner_response.conversation_id
     if inner_response.has_internal_conversation_id():
         response.mark_internal_conversation_id()
     else:

@@ -192,6 +192,13 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     /// session, and any tasks that were still running are recorded as
     /// <see cref="BackgroundTaskStatus.Failed"/> so a restored session does not report phantom running work.
     /// </para>
+    /// <para>
+    /// It is also safe to call concurrently. A caller that arrives while another release of the same session is
+    /// still in progress waits for that release to finish rather than returning early, so a completed call always
+    /// means the background tasks have been cancelled, awaited and cleaned up. Such a caller observes only its own
+    /// <paramref name="cancellationToken"/>; it neither inherits the in-progress release's failure nor is held up
+    /// by that caller's <paramref name="timeout"/>.
+    /// </para>
     /// </remarks>
     public async Task ReleaseSessionAsync(
         AgentSession session,
@@ -213,44 +220,64 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
         BackgroundAgentRuntimeState runtimeState = this._runtimeSessionState.GetOrInitializeState(session);
         BackgroundAgentState state = this._sessionState.GetOrInitializeState(session);
 
-        KeyValuePair<int, Task<AgentResponse>>[] trackedTasks;
-        HashSet<int> pendingTaskIds;
+        KeyValuePair<int, Task<AgentResponse>>[] trackedTasks = [];
+        HashSet<int> pendingTaskIds = [];
+        TaskCompletionSource<bool>? releaseCompletion = null;
+        Task? releaseInProgress = null;
 
         lock (runtimeState.SyncRoot)
         {
             if (runtimeState.IsReleased)
             {
-                return;
+                // A release is already in progress or has completed. Await it rather than returning early, so that
+                // a completed call always means the in-flight tasks have been cancelled, awaited and cleaned up.
+                releaseInProgress = runtimeState.ReleaseCompletion?.Task;
             }
-
-            trackedTasks = runtimeState.InFlightTasks.ToArray();
-
-            // Snapshot which tasks were still pending before anything is cancelled. Tasks that had already
-            // finished keep their real outcome; only these pending ones are reported as released.
-            pendingTaskIds = [.. trackedTasks.Where(t => !t.Value.IsCompleted).Select(t => t.Key)];
-
-            if (!cancelRunning && pendingTaskIds.Count > 0)
+            else
             {
-                throw new InvalidOperationException(
-                    $"Cannot release the session because {pendingTaskIds.Count} background task(s) are still running. Pass cancelRunning: true to cancel them.");
-            }
+                trackedTasks = runtimeState.InFlightTasks.ToArray();
 
-            runtimeState.IsReleased = true;
+                // Snapshot which tasks were still pending before anything is cancelled. Tasks that had already
+                // finished keep their real outcome; only these pending ones are reported as released.
+                pendingTaskIds = [.. trackedTasks.Where(t => !t.Value.IsCompleted).Select(t => t.Key)];
 
-            foreach (int taskId in pendingTaskIds)
-            {
-                if (runtimeState.TaskCancellations.TryGetValue(taskId, out CancellationTokenSource? cts))
+                if (!cancelRunning && pendingTaskIds.Count > 0)
                 {
-                    try
+                    throw new InvalidOperationException(
+                        $"Cannot release the session because {pendingTaskIds.Count} background task(s) are still running. Pass cancelRunning: true to cancel them.");
+                }
+
+                // Continuations run asynchronously so that a waiting caller never resumes inline on the thread
+                // that is completing the release.
+                releaseCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                runtimeState.ReleaseCompletion = releaseCompletion;
+                runtimeState.IsReleased = true;
+
+                foreach (int taskId in pendingTaskIds)
+                {
+                    if (runtimeState.TaskCancellations.TryGetValue(taskId, out CancellationTokenSource? cts))
                     {
-                        cts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // The source was already disposed by a concurrent finalization; nothing to cancel.
+                        try
+                        {
+                            cts.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // The source was already disposed by a concurrent finalization; nothing to cancel.
+                        }
                     }
                 }
             }
+        }
+
+        if (releaseCompletion is null)
+        {
+            if (releaseInProgress is not null)
+            {
+                await AwaitReleaseInProgressAsync(releaseInProgress, cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
         }
 
         try
@@ -301,6 +328,36 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
 
             this._sessionState.SaveState(session, state);
             this._runtimeSessionState.SaveState(session, runtimeState);
+
+            // Signalled last so that any caller awaiting this release observes fully cleaned-up state. Completed
+            // successfully even when this caller failed, because the cleanup above always runs.
+            releaseCompletion.TrySetResult(true);
+        }
+    }
+
+    /// <summary>
+    /// Waits for a release that another caller started to finish its cleanup, giving up if the caller's own
+    /// <paramref name="cancellationToken"/> is signalled.
+    /// </summary>
+    private static async Task AwaitReleaseInProgressAsync(Task releaseInProgress, CancellationToken cancellationToken)
+    {
+        if (releaseInProgress.IsCompleted || !cancellationToken.CanBeCanceled)
+        {
+            // The release completion is never faulted or cancelled, so awaiting it cannot throw.
+            await releaseInProgress.ConfigureAwait(false);
+            return;
+        }
+
+        // Do not let this caller be held up by the releasing caller's timeout.
+        var cancellation = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using (cancellationToken.Register(static state => ((TaskCompletionSource<bool>)state!).TrySetResult(true), cancellation))
+        {
+            await Task.WhenAny(releaseInProgress, cancellation.Task).ConfigureAwait(false);
+        }
+
+        if (!releaseInProgress.IsCompleted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
@@ -474,13 +531,18 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Starts a background run for the specified task, tracking both the resulting task and a
-    /// <see cref="CancellationTokenSource"/> that allows the run to be cancelled when the session is released.
+    /// Starts a background run for the specified task, tracking the resulting task, the background agent session,
+    /// and a <see cref="CancellationTokenSource"/> that allows the run to be cancelled when the session is released.
     /// </summary>
     /// <returns>
     /// <see langword="true"/> if the run was started and tracked; <see langword="false"/> if the session was
     /// released before the run could be registered, in which case nothing is started.
     /// </returns>
+    /// <remarks>
+    /// All references for the task are registered under a single acquisition of
+    /// <see cref="BackgroundAgentRuntimeState.SyncRoot"/>, so a concurrent release can never observe a partially
+    /// registered task, nor can a caller re-add references to a runtime that has already been released.
+    /// </remarks>
     private static bool StartTrackedRun(BackgroundAgentRuntimeState runtimeState, int taskId, AIAgent agent, string input, AgentSession subSession)
     {
         lock (runtimeState.SyncRoot)
@@ -497,6 +559,11 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
 
             var cts = new CancellationTokenSource();
             runtimeState.TaskCancellations[taskId] = cts;
+
+            // Registered here rather than by the caller so that the session reference cannot be re-added to a
+            // runtime that a concurrent release has already cleared. For a continued task this simply re-assigns
+            // the session the caller read from this same dictionary.
+            runtimeState.BackgroundTaskSessions[taskId] = subSession;
 
             // Wrap in Task.Run to fork the ExecutionContext. AIAgent.RunAsync is a non-async
             // method that synchronously sets the static AsyncLocal CurrentRunContext. Without
@@ -549,11 +616,6 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
                         state.Tasks.Remove(taskInfo);
                         this._sessionState.SaveState(session, state);
                         return ReleasedRuntimeStartError;
-                    }
-
-                    lock (runtimeState.SyncRoot)
-                    {
-                        runtimeState.BackgroundTaskSessions[taskId] = subSession;
                     }
 
                     this._sessionState.SaveState(session, state);

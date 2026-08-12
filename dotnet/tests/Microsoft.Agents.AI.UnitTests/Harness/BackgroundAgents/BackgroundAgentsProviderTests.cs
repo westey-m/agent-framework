@@ -1299,6 +1299,179 @@ public class BackgroundAgentsProviderTests
         Assert.Equal("No tasks.", GetStringResult(allTasks));
     }
 
+    /// <summary>
+    /// Verify that a release racing with a start never leaves behind a background agent session, which would
+    /// otherwise be retained for the lifetime of the parent session.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_ConcurrentWithStart_LeavesNoRegisteredSessionsAsync()
+    {
+        // Registering the task and its session under a single lock makes this invariant hold for every possible
+        // interleaving. Repeat so that a range of interleavings is exercised.
+        for (int i = 0; i < 50; i++)
+        {
+            // Arrange
+            var agent = CreateMockAgentWithCancellableCallback(
+                "Research",
+                _ => Task.FromResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"))));
+            var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+            // Act — start a task and release the session concurrently.
+            Task<object?> startTask = GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+            {
+                ["agentName"] = "Research",
+                ["input"] = "Task 1",
+                ["description"] = "First task",
+            }).AsTask();
+
+            Task releaseTask = Task.Run(() => provider.ReleaseSessionAsync(session));
+
+            await startTask;
+            await releaseTask;
+
+            // Assert — the release owns the cleanup, so no runtime reference may survive it.
+            BackgroundAgentRuntimeState runtimeState = GetRuntimeState(provider, session);
+            Assert.Empty(runtimeState.BackgroundTaskSessions);
+            Assert.Empty(runtimeState.InFlightTasks);
+            Assert.Empty(runtimeState.TaskCancellations);
+        }
+    }
+
+    /// <summary>
+    /// Verify that a caller releasing a session while another release is in progress waits for that release to
+    /// finish rather than returning while tasks are still being cleaned up.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_ConcurrentReleases_AllWaitForCleanupAsync()
+    {
+        // Arrange — the run ignores cancellation, so the first release stays in its wait until the gate opens.
+        var runEntered = new TaskCompletionSource<bool>();
+        var runGate = new TaskCompletionSource<bool>();
+        var agent = CreateMockAgentWithCancellableCallback("Research", async _ =>
+        {
+            runEntered.TrySetResult(true);
+            await runGate.Task;
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"));
+        });
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        Assert.True(await runEntered.Task);
+
+        // Act — the first release blocks on the running task; the second arrives while it is still waiting.
+        Task firstRelease = provider.ReleaseSessionAsync(session, timeout: Timeout.InfiniteTimeSpan);
+        Task secondRelease = provider.ReleaseSessionAsync(session, timeout: Timeout.InfiniteTimeSpan);
+
+        // Assert — the second caller must not report a completed release while cleanup is still outstanding.
+        await Task.Delay(50);
+        Assert.False(firstRelease.IsCompleted);
+        Assert.False(secondRelease.IsCompleted);
+
+        runGate.SetResult(true);
+        await firstRelease;
+        await secondRelease;
+
+        // Assert — both callers observe fully cleaned-up state.
+        BackgroundAgentRuntimeState runtimeState = GetRuntimeState(provider, session);
+        Assert.Empty(runtimeState.InFlightTasks);
+        Assert.Empty(runtimeState.BackgroundTaskSessions);
+        Assert.Empty(runtimeState.TaskCancellations);
+    }
+
+    /// <summary>
+    /// Verify that a caller waiting on an in-progress release observes its own cancellation token rather than
+    /// being held up by the releasing caller.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_ConcurrentRelease_ObservesOwnCancellationAsync()
+    {
+        // Arrange
+        var runEntered = new TaskCompletionSource<bool>();
+        var runGate = new TaskCompletionSource<bool>();
+        var agent = CreateMockAgentWithCancellableCallback("Research", async _ =>
+        {
+            runEntered.TrySetResult(true);
+            await runGate.Task;
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"));
+        });
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        Assert.True(await runEntered.Task);
+
+        Task firstRelease = provider.ReleaseSessionAsync(session, timeout: Timeout.InfiniteTimeSpan);
+
+        // Act & Assert — the second caller gives up on its own token instead of waiting for the first.
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => provider.ReleaseSessionAsync(session, cancellationToken: cts.Token));
+
+        Assert.False(firstRelease.IsCompleted);
+
+        runGate.SetResult(true);
+        await firstRelease;
+    }
+
+    /// <summary>
+    /// Verify that a caller waiting on an in-progress release does not inherit the failure of the caller that
+    /// started it.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_ConcurrentRelease_DoesNotInheritFirstCallerFailureAsync()
+    {
+        // Arrange — the run never completes, so the first release only ends when its own token is cancelled.
+        var runEntered = new TaskCompletionSource<bool>();
+        var runGate = new TaskCompletionSource<bool>();
+        var agent = CreateMockAgentWithCancellableCallback("Research", async _ =>
+        {
+            runEntered.TrySetResult(true);
+            await runGate.Task;
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"));
+        });
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        Assert.True(await runEntered.Task);
+
+        using var cts = new CancellationTokenSource();
+        Task firstRelease = provider.ReleaseSessionAsync(session, timeout: Timeout.InfiniteTimeSpan, cancellationToken: cts.Token);
+        Task secondRelease = provider.ReleaseSessionAsync(session, timeout: Timeout.InfiniteTimeSpan);
+
+        // Act — the first caller abandons its wait.
+        cts.Cancel();
+
+        // Assert — the second caller still completes successfully once the cleanup has run.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstRelease);
+        await secondRelease;
+
+        BackgroundAgentRuntimeState runtimeState = GetRuntimeState(provider, session);
+        Assert.Empty(runtimeState.InFlightTasks);
+        Assert.Empty(runtimeState.BackgroundTaskSessions);
+        Assert.Empty(runtimeState.TaskCancellations);
+
+        runGate.SetResult(true);
+    }
+
     #endregion
 
     #region Helper Methods
@@ -1421,6 +1594,14 @@ public class BackgroundAgentsProviderTests
 
         AIContext result = await provider.InvokingAsync(context);
         return (result.Tools!, session);
+    }
+
+    private static BackgroundAgentRuntimeState GetRuntimeState(BackgroundAgentsProvider provider, AgentSession session)
+    {
+        // The runtime state key is the second of the provider's state keys.
+        string runtimeStateKey = provider.StateKeys[1];
+        Assert.True(session.StateBag.TryGetValue(runtimeStateKey, out BackgroundAgentRuntimeState? runtimeState, AgentJsonUtilities.DefaultOptions));
+        return runtimeState!;
     }
 
     private static AIContextProvider.InvokingContext CreateInvokingContext()

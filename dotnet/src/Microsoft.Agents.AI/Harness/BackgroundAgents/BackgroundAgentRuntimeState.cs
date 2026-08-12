@@ -63,4 +63,18 @@ internal sealed class BackgroundAgentRuntimeState
     /// </remarks>
     [JsonIgnore]
     public bool IsReleased { get; set; }
+
+    /// <summary>
+    /// Gets or sets the completion signalled once the release of this runtime has finished all of its cleanup.
+    /// </summary>
+    /// <remarks>
+    /// Set under <see cref="SyncRoot"/> by the caller that first releases the runtime, and completed once that
+    /// caller has finished waiting for the in-flight tasks and has dropped the runtime references. Callers that
+    /// arrive while a release is already in progress await this instead of returning early, so that a completed
+    /// <see cref="BackgroundAgentsProvider.ReleaseSessionAsync"/> always means the cleanup is done. It is completed
+    /// successfully even when the releasing caller fails, because a waiter should observe that cleanup finished
+    /// rather than inherit another caller's failure.
+    /// </remarks>
+    [JsonIgnore]
+    public TaskCompletionSource<bool>? ReleaseCompletion { get; set; }
 }

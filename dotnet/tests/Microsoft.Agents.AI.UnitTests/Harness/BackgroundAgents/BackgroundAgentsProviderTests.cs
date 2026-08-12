@@ -1258,6 +1258,46 @@ public class BackgroundAgentsProviderTests
     }
 
     /// <summary>
+    /// Verify that a failure to cancel the running tasks leaves the session un-released, rather than marking it
+    /// released while its tasks are still running.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseSessionAsync_CancellationThrows_LeavesSessionUnreleasedAsync()
+    {
+        // Arrange — a cancellation callback that throws makes CancellationTokenSource.Cancel throw.
+        var runEntered = new TaskCompletionSource<bool>();
+        var runGate = new TaskCompletionSource<bool>();
+        var agent = CreateMockAgentWithCancellableCallback("Research", async ct =>
+        {
+            ct.Register(() => throw new InvalidOperationException("Cancellation callback failed."));
+            runEntered.TrySetResult(true);
+            await runGate.Task;
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, "done"));
+        });
+        var (tools, provider, session) = await CreateToolsWithSessionAsync(agent);
+
+        await GetTool(tools, "background_agents_start_task").InvokeAsync(new AIFunctionArguments
+        {
+            ["agentName"] = "Research",
+            ["input"] = "Task 1",
+            ["description"] = "First task",
+        });
+
+        Assert.True(await runEntered.Task);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<AggregateException>(() => provider.ReleaseSessionAsync(session));
+
+        // Assert — the release did not take effect, so the session remains usable and can be released again.
+        BackgroundAgentRuntimeState runtimeState = GetRuntimeState(provider, session);
+        Assert.False(runtimeState.IsReleased);
+        Assert.Null(runtimeState.ReleaseCompletion);
+        Assert.Single(provider.GetIncompleteTasks(session));
+
+        runGate.SetResult(true);
+    }
+
+    /// <summary>
     /// Verify that a start racing with a release does not register an untracked background task.
     /// </summary>
     [Fact]

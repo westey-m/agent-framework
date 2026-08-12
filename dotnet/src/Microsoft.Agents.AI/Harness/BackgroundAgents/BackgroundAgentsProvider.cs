@@ -247,12 +247,8 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
                         $"Cannot release the session because {pendingTaskIds.Count} background task(s) are still running. Pass cancelRunning: true to cancel them.");
                 }
 
-                // Continuations run asynchronously so that a waiting caller never resumes inline on the thread
-                // that is completing the release.
-                releaseCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                runtimeState.ReleaseCompletion = releaseCompletion;
-                runtimeState.IsReleased = true;
-
+                // Cancel before publishing the release. If cancelling throws, the runtime is left un-released so
+                // that the caller can retry, rather than being flagged as released with tasks still running.
                 foreach (int taskId in pendingTaskIds)
                 {
                     if (runtimeState.TaskCancellations.TryGetValue(taskId, out CancellationTokenSource? cts))
@@ -267,6 +263,12 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
                         }
                     }
                 }
+
+                // Continuations run asynchronously so that a waiting caller never resumes inline on the thread
+                // that is completing the release.
+                releaseCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                runtimeState.ReleaseCompletion = releaseCompletion;
+                runtimeState.IsReleased = true;
             }
         }
 

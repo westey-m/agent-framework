@@ -2101,7 +2101,7 @@ def _content_from_state(value: Any) -> Content | None:
 
 
 def _load_pending_approval_requests(invocation_session: AgentSession | None) -> dict[str, Content]:
-    """Load immutable local approval-request snapshots keyed by request ID."""
+    """Load immutable approval-request snapshots keyed by request ID."""
     state = _get_tool_approval_state(invocation_session)
     if state is None:
         return {}
@@ -2111,12 +2111,9 @@ def _load_pending_approval_requests(invocation_session: AgentSession | None) -> 
     pending: dict[str, Content] = {}
     for raw_request in cast(list[Any], raw_requests):
         request = _content_from_state(raw_request)
-        if (
-            request is not None
-            and request.type == "function_approval_request"
-            and request.id is not None
-            and not _is_hosted_tool_approval(request)
-        ):
+        if request is not None and request.type == "function_approval_request" and request.id is not None:
+            if request.id in pending:
+                raise ValueError(f"Duplicate pending approval request id {request.id!r}.")
             pending[request.id] = request
     return pending
 
@@ -2125,7 +2122,7 @@ def _save_pending_approval_requests(
     invocation_session: AgentSession | None,
     pending_requests: Mapping[str, Content],
 ) -> None:
-    """Persist local approval-request snapshots."""
+    """Persist the active approval-request batch."""
     state = _get_tool_approval_state(invocation_session)
     if state is None:
         return
@@ -2139,20 +2136,41 @@ def _store_pending_approval_requests(
     invocation_session: AgentSession | None,
     approval_requests: Sequence[Content],
 ) -> None:
-    """Snapshot surfaced local approval requests for the next invocation."""
+    """Replace the active batch with immutable snapshots of surfaced approval requests."""
     if invocation_session is None:
         return
-    pending = _load_pending_approval_requests(invocation_session)
-    changed = False
+    pending: dict[str, Content] = {}
     for request in approval_requests:
-        if request.type != "function_approval_request" or request.id is None or _is_hosted_tool_approval(request):
+        if request.type != "function_approval_request" or request.id is None:
             continue
+        if request.id in pending:
+            raise ValueError(f"Duplicate approval request id {request.id!r} in the active batch.")
         snapshot = _content_from_state(request.to_dict())
         if snapshot is not None:
             pending[request.id] = snapshot
-            changed = True
-    if changed:
-        _save_pending_approval_requests(invocation_session, pending)
+    _save_pending_approval_requests(invocation_session, pending)
+    state = _get_tool_approval_state(invocation_session)
+    if state is None:
+        return
+    raw_groups = state.get(_ALREADY_APPROVED_APPROVAL_REQUEST_GROUPS_KEY)
+    if not isinstance(raw_groups, list):
+        return
+    active_ids = set(pending)
+    active_groups: list[Any] = []
+    for raw_group in cast(list[Any], raw_groups):
+        if not isinstance(raw_group, Mapping):
+            continue
+        group = cast(Mapping[str, Any], raw_group)
+        raw_ids = group.get("approval_request_ids")
+        if not isinstance(raw_ids, list):
+            continue
+        group_ids = {str(item) for item in cast(list[Any], raw_ids)}
+        if group_ids.issubset(active_ids):
+            active_groups.append(raw_group)
+    if active_groups:
+        state[_ALREADY_APPROVED_APPROVAL_REQUEST_GROUPS_KEY] = active_groups
+    else:
+        state.pop(_ALREADY_APPROVED_APPROVAL_REQUEST_GROUPS_KEY, None)
 
 
 def _bind_approval_response_to_pending_request(
@@ -2161,10 +2179,10 @@ def _bind_approval_response_to_pending_request(
     *,
     consume: bool,
 ) -> Content | None:
-    """Bind one local approval response to a session-recorded request."""
+    """Bind one approval response to a session-recorded request."""
     from ._types import Content
 
-    if invocation_session is None or _is_hosted_tool_approval(response):
+    if invocation_session is None:
         return response
     if response.id is None:
         return None
@@ -2193,7 +2211,7 @@ def _bind_approval_responses_to_pending_requests(
     messages: list[Message],
     invocation_session: AgentSession | None,
 ) -> None:
-    """Rebind local approval responses and remove unissued or duplicate responses."""
+    """Rebind approval responses and remove unissued or duplicate responses."""
     if invocation_session is None:
         return
 
@@ -2201,7 +2219,7 @@ def _bind_approval_responses_to_pending_requests(
     for message in messages:
         filtered_contents: list[Content] = []
         for content in message.contents:
-            if content.type != "function_approval_response" or _is_hosted_tool_approval(content):
+            if content.type != "function_approval_response":
                 filtered_contents.append(content)
                 continue
             rebound = _bind_approval_response_to_pending_request(
@@ -2211,7 +2229,7 @@ def _bind_approval_responses_to_pending_requests(
             )
             if rebound is None:
                 logger.warning(
-                    "Ignored an approval response with request id %r because no pending local approval request exists.",
+                    "Ignored an approval response with request id %r because no pending approval request exists.",
                     content.id,
                 )
                 continue
@@ -2936,14 +2954,23 @@ async def _process_model_function_calls(
     errors_in_a_row: int,
     max_errors: int,
     execute_function_calls: _FunctionCallExecutor,
+    invocation_session: AgentSession | None = None,
 ) -> _FunctionProcessingResult:
     """Execute function calls from a newly completed model response."""
+    approval_requests = [
+        content
+        for message in response.messages
+        for content in message.contents
+        if content.type == "function_approval_request"
+    ]
     # 1. Extract only actionable, unanswered calls from this model turn.
     tools = _extract_tools(options)
     function_calls = _extract_function_calls(response)
     if not (function_calls and tools):
         if function_call_messages is not None:
             _prepend_function_call_messages(response, function_call_messages)
+        if approval_requests:
+            _store_pending_approval_requests(invocation_session, approval_requests)
         return _FunctionProcessingResult(errors_in_a_row=errors_in_a_row, action="return")
 
     # 2. Execute the batch once while preserving each call's result group.
@@ -2964,6 +2991,15 @@ async def _process_model_function_calls(
     )
     if execution.should_terminate:
         processing_result.action = "return"
+    if processing_result.action == "return":
+        returned_approval_requests = [
+            content
+            for message in response.messages
+            for content in message.contents
+            if content.type == "function_approval_request"
+        ]
+        if returned_approval_requests:
+            _store_pending_approval_requests(invocation_session, returned_approval_requests)
     return processing_result
 
 
@@ -3100,6 +3136,7 @@ class FunctionInvocationLayer(Generic[OptionsCoT]):
                 errors_in_a_row=errors_in_a_row,
                 max_errors=max_errors,
                 execute_function_calls=execute_function_calls,
+                invocation_session=invocation_session,
             )
             total_function_calls = _record_function_calls(
                 budget_state,
@@ -3250,6 +3287,7 @@ class FunctionInvocationLayer(Generic[OptionsCoT]):
                 errors_in_a_row=errors_in_a_row,
                 max_errors=max_errors,
                 execute_function_calls=execute_function_calls,
+                invocation_session=invocation_session,
             )
             errors_in_a_row = function_processing.errors_in_a_row
             total_function_calls = _record_function_calls(

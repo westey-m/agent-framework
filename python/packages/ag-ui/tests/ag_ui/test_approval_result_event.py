@@ -674,6 +674,57 @@ async def test_resolve_approval_responses_keeps_fresh_occurrence_when_canonical_
     ]
 
 
+async def test_resolve_approval_responses_treats_non_boolean_decision_as_rejection() -> None:
+    """A malformed decision completes the pending call as an explicit rejection."""
+    from agent_framework import Message
+
+    from agent_framework_ag_ui._agent_run import (
+        _make_pending_approval_entry,
+        _pending_approval_key,
+        _resolve_approval_responses,
+    )
+
+    executions: list[str] = []
+
+    def guarded_write(value: str) -> str:
+        executions.append(value)
+        return value
+
+    tool = FunctionTool(name="guarded_write", description="Write", func=guarded_write)
+    call = Content.from_function_call(call_id="call_bool", name="guarded_write", arguments={"value": "safe"})
+    response = Content.from_function_approval_response(approved=True, id="call_bool", function_call=call)
+    response.approved = "true"  # type: ignore[assignment]  # ty: ignore[invalid-assignment]
+    messages = [Message(role="assistant", contents=[call]), Message(role="user", contents=[response])]
+    key = _pending_approval_key("thread-bool", "call_bool")
+    pending_entry = _make_pending_approval_entry(
+        "guarded_write",
+        '{"value":"safe"}',
+        request_id="call_bool",
+        interrupt_id="call_bool",
+    )
+    pending_approvals: dict[PendingApprovalKey, PendingApprovalEntry] = {key: pending_entry}
+
+    results = await _resolve_approval_responses(
+        messages,
+        [tool],
+        StubAgent(updates=[], default_options={"tools": [tool]}),
+        {},
+        pending_approvals,
+        "thread-bool",
+    )
+
+    assert executions == []
+    assert results == []
+    assert pending_approvals == {}
+    assert all(content.type != "function_approval_response" for message in messages for content in message.contents)
+    rejection_results = [
+        content for message in messages for content in message.contents if content.type == "function_result"
+    ]
+    assert len(rejection_results) == 1
+    assert rejection_results[0].call_id == "call_bool"
+    assert rejection_results[0].result == "Error: Tool call invocation was rejected by user."
+
+
 async def test_resolve_approval_responses_uses_fresh_decision_when_canonical_id_is_reused() -> None:
     """A historical approval does not conflict with a fresh rejection for a reused call id."""
     from agent_framework import Message

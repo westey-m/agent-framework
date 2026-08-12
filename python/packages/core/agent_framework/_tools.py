@@ -97,6 +97,7 @@ DEFAULT_MAX_CONSECUTIVE_ERRORS_PER_REQUEST: Final[int] = 3
 SHELL_TOOL_KIND_VALUE: Final[str] = "shell"
 _TOOL_APPROVAL_STATE_KEY: Final[str] = "tool_approval"
 _ALREADY_APPROVED_APPROVAL_REQUEST_GROUPS_KEY: Final[str] = "already_approved_approval_request_groups"
+_PENDING_APPROVAL_REQUESTS_KEY: Final[str] = "pending_approval_requests"
 _FUNCTION_INVOCATION_BUDGET_STATE_KEY: Final[str] = "_function_invocation_budget_state"
 _FUNCTION_INVOCATION_LIMIT_FALLBACK_TEXT: Final[str] = (
     "Function invocation limit reached before a final answer could be produced."
@@ -1813,6 +1814,7 @@ async def _try_execute_function_call_groups(
             visible_requests,
             already_approved_requests,
         )
+        _store_pending_approval_requests(invocation_session, visible_requests)
         return [[request] for request in visible_requests], False
     if has_declaration_only_call:
         # Declaration-only calls are returned as user input rather than executed locally.
@@ -1964,6 +1966,11 @@ def _is_hosted_tool_approval(content: Any) -> bool:
     return bool(ap and ap.get("server_label"))
 
 
+def _is_approval_granted(value: Any) -> bool:
+    """Return whether an approval decision is the strict boolean ``True``."""
+    return value is True
+
+
 def _is_unexecutable_local_tool_content(content: Content) -> bool:
     if _is_actionable_function_call(content):
         return True
@@ -2091,6 +2098,128 @@ def _content_from_state(value: Any) -> Content | None:
     if isinstance(value, Mapping):
         return Content.from_dict(cast(Mapping[str, Any], value))
     return None
+
+
+def _load_pending_approval_requests(invocation_session: AgentSession | None) -> dict[str, Content]:
+    """Load immutable local approval-request snapshots keyed by request ID."""
+    state = _get_tool_approval_state(invocation_session)
+    if state is None:
+        return {}
+    raw_requests = state.get(_PENDING_APPROVAL_REQUESTS_KEY, [])
+    if not isinstance(raw_requests, list):
+        return {}
+    pending: dict[str, Content] = {}
+    for raw_request in cast(list[Any], raw_requests):
+        request = _content_from_state(raw_request)
+        if (
+            request is not None
+            and request.type == "function_approval_request"
+            and request.id is not None
+            and not _is_hosted_tool_approval(request)
+        ):
+            pending[request.id] = request
+    return pending
+
+
+def _save_pending_approval_requests(
+    invocation_session: AgentSession | None,
+    pending_requests: Mapping[str, Content],
+) -> None:
+    """Persist local approval-request snapshots."""
+    state = _get_tool_approval_state(invocation_session)
+    if state is None:
+        return
+    if pending_requests:
+        state[_PENDING_APPROVAL_REQUESTS_KEY] = [request.to_dict() for request in pending_requests.values()]
+    else:
+        state.pop(_PENDING_APPROVAL_REQUESTS_KEY, None)
+
+
+def _store_pending_approval_requests(
+    invocation_session: AgentSession | None,
+    approval_requests: Sequence[Content],
+) -> None:
+    """Snapshot surfaced local approval requests for the next invocation."""
+    if invocation_session is None:
+        return
+    pending = _load_pending_approval_requests(invocation_session)
+    changed = False
+    for request in approval_requests:
+        if request.type != "function_approval_request" or request.id is None or _is_hosted_tool_approval(request):
+            continue
+        snapshot = _content_from_state(request.to_dict())
+        if snapshot is not None:
+            pending[request.id] = snapshot
+            changed = True
+    if changed:
+        _save_pending_approval_requests(invocation_session, pending)
+
+
+def _bind_approval_response_to_pending_request(
+    response: Content,
+    invocation_session: AgentSession | None,
+    *,
+    consume: bool,
+) -> Content | None:
+    """Bind one local approval response to a session-recorded request."""
+    from ._types import Content
+
+    if invocation_session is None or _is_hosted_tool_approval(response):
+        return response
+    if response.id is None:
+        return None
+    pending = _load_pending_approval_requests(invocation_session)
+    request = pending.get(response.id)
+    if request is None or request.function_call is None:
+        return None
+    rebound_call = _content_from_state(request.function_call.to_dict())
+    if rebound_call is None:
+        return None
+    rebound = Content.from_function_approval_response(
+        approved=_is_approval_granted(response.approved),
+        id=response.id,
+        function_call=rebound_call,
+        annotations=response.annotations,
+        additional_properties=copy.deepcopy(response.additional_properties),
+        raw_representation=response.raw_representation,
+    )
+    if consume:
+        pending.pop(response.id, None)
+        _save_pending_approval_requests(invocation_session, pending)
+    return rebound
+
+
+def _bind_approval_responses_to_pending_requests(
+    messages: list[Message],
+    invocation_session: AgentSession | None,
+) -> None:
+    """Rebind local approval responses and remove unissued or duplicate responses."""
+    if invocation_session is None:
+        return
+
+    filtered_messages: list[Message] = []
+    for message in messages:
+        filtered_contents: list[Content] = []
+        for content in message.contents:
+            if content.type != "function_approval_response" or _is_hosted_tool_approval(content):
+                filtered_contents.append(content)
+                continue
+            rebound = _bind_approval_response_to_pending_request(
+                content,
+                invocation_session,
+                consume=True,
+            )
+            if rebound is None:
+                logger.warning(
+                    "Ignored an approval response with request id %r because no pending local approval request exists.",
+                    content.id,
+                )
+                continue
+            filtered_contents.append(rebound)
+        if filtered_contents:
+            message.contents = filtered_contents
+            filtered_messages.append(message)
+    messages[:] = filtered_messages
 
 
 def _store_already_approved_approval_requests(
@@ -2440,7 +2569,7 @@ def _replace_approval_contents_with_results(
                 if occurrence is None:
                     occurrence = find_open_occurrence(call_id)
                 replacements: list[Content] | None
-                if content.approved:
+                if _is_approval_granted(content.approved):
                     call_result_groups = result_groups_by_call_id.get(call_id)
                     replacements = call_result_groups.popleft() if call_result_groups else None
                 else:
@@ -2729,6 +2858,8 @@ async def _resolve_approval_responses(
     """Resolve inbound approval responses before the next model call."""
     from ._types import Message
 
+    _bind_approval_responses_to_pending_requests(prepared_messages, invocation_session)
+
     # 1. Restore safe siblings hidden with a prior mixed approval batch when its visible decision arrives.
     explicit_approval_response_ids = {
         content.id
@@ -2749,7 +2880,9 @@ async def _resolve_approval_responses(
         return _FunctionProcessingResult(errors_in_a_row=errors_in_a_row)
 
     # 3. Execute approved decisions once. Rejected decisions are converted to results during normalization below.
-    responses_to_execute = [response for response in pending_approval_responses.values() if response.approved]
+    responses_to_execute = [
+        response for response in pending_approval_responses.values() if _is_approval_granted(response.approved)
+    ]
     execution_result_groups: list[list[Content]] = []
     should_terminate = False
     reached_error_limit = False

@@ -10,9 +10,9 @@ import logging
 import uuid
 from collections import OrderedDict
 from collections.abc import AsyncIterable, Awaitable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
-from typing import TYPE_CHECKING, Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ag_ui.core import (
     BaseEvent,
@@ -622,7 +622,7 @@ def _handle_step_based_approval(messages: list[Any]) -> list[BaseEvent]:
         try:
             parsed_result = json.loads(approval_text)
             result: dict[str, Any] = cast(dict[str, Any], parsed_result) if isinstance(parsed_result, dict) else {}
-            accepted = bool(result.get("accepted", False))
+            accepted = result.get("accepted") is True
             steps_raw = result.get("steps", [])
             steps: list[dict[str, Any]] = []
             if isinstance(steps_raw, list):
@@ -679,23 +679,19 @@ def _make_approval_tool_result_events(resolved_approval_results: list[Content]) 
     return events
 
 
-class _PendingApproval(TypedDict):
-    """Pending approval details for a requested function call."""
+@dataclass(frozen=True, slots=True)
+class _PendingApproval:
+    """Immutable server-owned details for a requested function call."""
 
     name: str
     arguments: str | None
     request_id: str | None
     interrupt_id: str | None
+    already_approved_requests: tuple[dict[str, Any], ...] = ()
+    server_label: str | None = None
 
 
-class _PendingApprovalWithSiblings(_PendingApproval, total=False):
-    """Pending approval details including sibling calls and trusted hosted metadata."""
-
-    already_approved_requests: list[dict[str, Any]]
-    server_label: str
-
-
-PendingApprovalEntry = _PendingApprovalWithSiblings | str
+PendingApprovalEntry = _PendingApproval | str
 PendingApprovalKey = tuple[str, str]
 
 
@@ -712,18 +708,15 @@ def _make_pending_approval_entry(
     interrupt_id: str | None = None,
     already_approved_requests: list[dict[str, Any]] | None = None,
     server_label: str | None = None,
-) -> _PendingApprovalWithSiblings:
-    entry: _PendingApprovalWithSiblings = {
-        "name": name,
-        "arguments": arguments,
-        "request_id": request_id,
-        "interrupt_id": interrupt_id,
-    }
-    if already_approved_requests:
-        entry["already_approved_requests"] = already_approved_requests
-    if server_label:
-        entry["server_label"] = server_label
-    return entry
+) -> _PendingApproval:
+    return _PendingApproval(
+        name=name,
+        arguments=arguments,
+        request_id=request_id,
+        interrupt_id=interrupt_id,
+        already_approved_requests=tuple(already_approved_requests or ()),
+        server_label=server_label,
+    )
 
 
 def _register_pending_approval_entry(
@@ -740,25 +733,25 @@ def _register_pending_approval_entry(
 def _pending_approval_name(entry: PendingApprovalEntry) -> str | None:
     if isinstance(entry, str):
         return entry
-    return entry["name"]
+    return entry.name
 
 
 def _pending_approval_arguments(entry: PendingApprovalEntry) -> str | None:
     if isinstance(entry, str):
         return None
-    return entry["arguments"]
+    return entry.arguments
 
 
 def _pending_approval_already_approved_requests(entry: PendingApprovalEntry) -> list[dict[str, Any]]:
     if isinstance(entry, str):
         return []
-    return list(entry.get("already_approved_requests", []))
+    return list(entry.already_approved_requests)
 
 
 def _pending_approval_server_label(entry: PendingApprovalEntry) -> str | None:
     if isinstance(entry, str):
         return None
-    return entry.get("server_label")
+    return entry.server_label
 
 
 def _function_call_server_label(function_call: Content | None) -> str | None:
@@ -869,6 +862,10 @@ def _save_tool_approval_state(
     serialized_state = _serialized_tool_approval_state(raw_state)
     if serialized_state is None:
         return
+    if not any(value for key, value in serialized_state.items() if key != "type"):
+        session.state.pop(_TOOL_APPROVAL_STATE_KEY, None)
+        approval_state_store.tool_approval_states.pop(thread_id, None)
+        return
     approval_state_store.tool_approval_states[thread_id] = serialized_state
     approval_state_store.tool_approval_states.move_to_end(thread_id)
     approval_state_store.evict_oldest()
@@ -975,7 +972,7 @@ def _pending_approval_interrupt_ids(
         if isinstance(entry, str):
             interrupt_ids.add(key[1])
             continue
-        interrupt_id = entry.get("interrupt_id") or entry.get("request_id") or key[1]
+        interrupt_id = entry.interrupt_id or entry.request_id or key[1]
         interrupt_ids.add(str(interrupt_id))
     return interrupt_ids
 
@@ -1024,7 +1021,7 @@ def _approval_state_tool_call_ids(
             call_ids.add(key[1])
             if isinstance(entry, str):
                 continue
-            call_ids.update(_content_tool_call_ids(entry.get("already_approved_requests", [])))
+            call_ids.update(_content_tool_call_ids(list(entry.already_approved_requests)))
 
     if approval_state_store is None:
         return call_ids
@@ -1098,8 +1095,8 @@ def _pending_approval_alias_keys(
 ) -> set[PendingApprovalKey]:
     aliases = {item for item in ids if item}
     if not isinstance(entry, str):
-        request_id = entry.get("request_id")
-        interrupt_id = entry.get("interrupt_id")
+        request_id = entry.request_id
+        interrupt_id = entry.interrupt_id
         if request_id:
             aliases.add(request_id)
         if interrupt_id:
@@ -1167,6 +1164,18 @@ def _consume_pending_approval_entry(
 
     for alias_key in _pending_approval_alias_keys(thread_id, entry, *ids):
         pending_approvals.pop(alias_key, None)
+
+
+def _replace_pending_approval_arguments(
+    pending_approvals: dict[PendingApprovalKey, PendingApprovalEntry],
+    entry: _PendingApproval,
+    arguments: str,
+) -> None:
+    """Replace an immutable pending entry under every server-owned alias."""
+    replacement = replace(entry, arguments=arguments)
+    for key, candidate in list(pending_approvals.items()):
+        if candidate is entry:
+            pending_approvals[key] = replacement
 
 
 def _approval_arguments_match_pending(pending_arguments: str | None, response_arguments: str | None) -> bool:
@@ -1320,7 +1329,7 @@ def _canonical_approval_resume_messages(
             ),
         )
 
-    argument_updates: list[tuple[_PendingApprovalWithSiblings, str]] = []
+    argument_updates: list[tuple[_PendingApproval, str]] = []
     restored_sibling_response_ids: set[str] = set()
     for entry in entries:
         interrupt_id = cast(str, entry["interrupt_id"])
@@ -1446,7 +1455,7 @@ def _canonical_approval_resume_messages(
         messages.append({"role": "user", "function_approvals": function_approvals})
 
     for pending_entry, arguments_json in argument_updates:
-        pending_entry["arguments"] = arguments_json
+        _replace_pending_approval_arguments(pending_approvals, pending_entry, arguments_json)
 
     return messages, handled_ids, cancelled_ids, None
 
@@ -1557,9 +1566,15 @@ async def _resolve_approval_responses(
             # be reused by a later call occurrence, while provider request ids may
             # alias that same pending entry. Only the latest response across every
             # trusted alias can answer the current entry; earlier responses are
-            # stale replay controls and must not authorize a malformed fresh one.
+            # stale replay controls.
             primary_response = responses[-1]
             response_content_ids_to_strip.update(id(response) for response in responses[:-1])
+            if not isinstance(primary_response.approved, bool):
+                logger.warning(
+                    "Treating approval response id=%s as rejected: approved must be a boolean",
+                    primary_response.id,
+                )
+                primary_response.approved = False
             resp_id = primary_response.id
             registry_key = _pending_approval_key(thread_id, resp_id) if resp_id is not None else None
             id_entry = pending_approvals.get(registry_key) if registry_key is not None else None
@@ -1602,6 +1617,16 @@ async def _resolve_approval_responses(
 
             server_label = _pending_approval_server_label(pending_entry)
             if primary_response.function_call is not None:
+                canonical_call_id = (
+                    pending_entry.interrupt_id
+                    if not isinstance(pending_entry, str)
+                    else primary_response.function_call.call_id
+                )
+                primary_response.function_call = Content.from_function_call(
+                    call_id=str(canonical_call_id or primary_response.function_call.call_id or resp_id or ""),
+                    name=pending_name or "",
+                    arguments=pending_arguments,
+                )
                 if server_label:
                     primary_response.function_call.additional_properties["server_label"] = server_label
                 else:
@@ -1616,13 +1641,13 @@ async def _resolve_approval_responses(
                 resp_id,
                 primary_response.function_call.call_id if primary_response.function_call else None,
             )
-            if validated_approved_responses is not None and primary_response.approved and not server_label:
+            if validated_approved_responses is not None and primary_response.approved is True and not server_label:
                 validated_approved_responses.append(primary_response)
     elif validated_approved_responses is not None:
         validated_approved_responses.extend(
             responses[-1]
             for responses in responses_by_id.values()
-            if responses[-1].approved and not _is_hosted_tool_approval(responses[-1])
+            if responses[-1].approved is True and not _is_hosted_tool_approval(responses[-1])
         )
 
     if response_content_ids_to_strip:
@@ -1659,7 +1684,7 @@ async def _resolve_approval_responses(
     if not fcc_todo:
         return []
 
-    approved_responses = [resp for resp in fcc_todo.values() if resp.approved]
+    approved_responses = [resp for resp in fcc_todo.values() if resp.approved is True]
 
     approved_function_result_groups: list[list[Content]] = []
 
@@ -1852,7 +1877,7 @@ def _clean_resolved_approvals_from_snapshot(
             )
             if target_call_id is None:
                 continue
-            if parsed.get("accepted"):
+            if parsed.get("accepted") is True:
                 replacement = result_by_call_id.get(target_call_id)
                 if replacement is None:
                     continue

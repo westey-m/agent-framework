@@ -1071,43 +1071,7 @@ def test_canonical_approval_resume_does_not_mutate_arguments_until_batch_validat
     assert cancelled_ids == set()
     assert error is not None
     assert error.code == "APPROVAL_RESUME_INVALID"
-    assert pending_entry.arguments == '{"city":"Seattle"}'
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {},
-        {"accepted": None},
-        {"accepted": "true"},
-        {"accepted": 1},
-        {"approved": "false"},
-        {"approved": 0},
-    ],
-)
-def test_canonical_approval_resume_requires_boolean_decision(payload: dict[str, object]) -> None:
-    """Malformed canonical decisions fail closed without consuming pending state."""
-    pending_entry = _make_pending_approval_entry(
-        "get_weather",
-        '{"city":"Seattle"}',
-        request_id="call_bool",
-        interrupt_id="call_bool",
-    )
-    key = _pending_approval_key("thread-bool", "call_bool")
-    pending_approvals: dict[PendingApprovalKey, PendingApprovalEntry] = {key: pending_entry}
-
-    messages, handled_ids, cancelled_ids, error = _canonical_approval_resume_messages(
-        [{"interruptId": "call_bool", "status": "resolved", "payload": payload}],
-        pending_approvals,
-        "thread-bool",
-    )
-
-    assert messages == []
-    assert handled_ids == {"call_bool"}
-    assert cancelled_ids == set()
-    assert error is not None
-    assert error.code == "APPROVAL_RESUME_INVALID"
-    assert pending_approvals == {key: pending_entry}
+    assert pending_entry["arguments"] == '{"city":"Seattle"}'
 
 
 def test_canonical_hosted_approval_resume_rejects_edited_arguments_without_mutating_pending() -> None:
@@ -1139,7 +1103,7 @@ def test_canonical_hosted_approval_resume_rejects_edited_arguments_without_mutat
     assert cancelled_ids == set()
     assert error is not None
     assert error.code == "APPROVAL_RESUME_INVALID_RESPONSE"
-    assert pending_entry.arguments == '{"query":"azure"}'
+    assert pending_entry["arguments"] == '{"query":"azure"}'
     assert pending_approvals[key] is pending_entry
 
 

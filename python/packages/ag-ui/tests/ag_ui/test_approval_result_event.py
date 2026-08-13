@@ -696,13 +696,14 @@ async def test_resolve_approval_responses_treats_non_boolean_decision_as_rejecti
     response.approved = "true"  # type: ignore[assignment]  # ty: ignore[invalid-assignment]
     messages = [Message(role="assistant", contents=[call]), Message(role="user", contents=[response])]
     key = _pending_approval_key("thread-bool", "call_bool")
-    pending_entry = _make_pending_approval_entry(
-        "guarded_write",
-        '{"value":"safe"}',
-        request_id="call_bool",
-        interrupt_id="call_bool",
-    )
-    pending_approvals: dict[PendingApprovalKey, PendingApprovalEntry] = {key: pending_entry}
+    pending_approvals: dict[PendingApprovalKey, PendingApprovalEntry] = {
+        key: _make_pending_approval_entry(
+            "guarded_write",
+            '{"value":"safe"}',
+            request_id="call_bool",
+            interrupt_id="call_bool",
+        )
+    }
 
     results = await _resolve_approval_responses(
         messages,

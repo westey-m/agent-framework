@@ -39,5 +39,10 @@ public sealed class RoutePersistingRoutingChatClientOptions
     /// caller. Set to <see langword="true"/> to dispose them together with the
     /// <see cref="RoutePersistingRoutingChatClient"/>.
     /// </value>
+    /// <remarks>
+    /// When enabled, each distinct client still present in
+    /// <see cref="RoutePersistingRoutingChatClient.Routes"/> is disposed once when the routing client is disposed.
+    /// Removing or replacing a route transfers responsibility for the removed client's lifetime back to the caller.
+    /// </remarks>
     public bool OwnsInnerClients { get; set; }
 }

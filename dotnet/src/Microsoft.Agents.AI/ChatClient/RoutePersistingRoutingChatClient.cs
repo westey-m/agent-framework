@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -29,6 +30,10 @@ namespace Microsoft.Agents.AI;
 /// route mid-conversation preserves the full history for whichever client handles the next turn.
 /// </para>
 /// <para>
+/// All route clients must use client-side conversation history. Service-stored history is isolated to its
+/// originating service and cannot be shared when another route handles the next request.
+/// </para>
+/// <para>
 /// A new session starts on <see cref="RoutePersistingRoutingChatClientOptions.DefaultRoute"/>, or on the first entry of
 /// the routes dictionary when no default is configured.
 /// </para>
@@ -37,6 +42,13 @@ namespace Microsoft.Agents.AI;
 /// automatically when an agent's run methods are called. It must therefore be invoked within an agent run that
 /// has a resolved session; invoking it outside of an agent run, or before a session is resolved, throws an
 /// <see cref="InvalidOperationException"/>.
+/// </para>
+/// <para>
+/// Service discovery is best-effort and route-specific: <see cref="GetService"/> forwards to the active route during
+/// a run and to the default route otherwise. When routing among undecorated chat clients, middleware that must apply
+/// consistently to every route, such as <see cref="FunctionInvokingChatClient"/>, should wrap this routing client
+/// rather than individual route clients. Applications that register heterogeneous, pre-decorated route clients are
+/// responsible for ensuring their middleware stacks are compatible.
 /// </para>
 /// <para>
 /// For routing policies that are not persisted per session, such as content-based or failover routing, use the
@@ -54,6 +66,7 @@ public sealed class RoutePersistingRoutingChatClient : RoutingChatClient
     private readonly ProviderSessionState<AgentSessionRoutingState> _sessionState;
     private readonly string? _defaultRoute;
     private readonly bool _ownsInnerClients;
+    private int _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RoutePersistingRoutingChatClient"/> class.
@@ -101,7 +114,8 @@ public sealed class RoutePersistingRoutingChatClient : RoutingChatClient
     /// <para>
     /// When <see cref="RoutePersistingRoutingChatClientOptions.OwnsInnerClients"/> is <see langword="true"/>, only clients
     /// still present in this dictionary when the routing client is disposed are disposed. Removing or replacing an
-    /// entry does not dispose its previous client.
+    /// entry does not dispose its previous client and transfers responsibility for that client's lifetime back to
+    /// the caller.
     /// </para>
     /// </remarks>
     public IDictionary<string, IChatClient> Routes { get; }
@@ -158,31 +172,38 @@ public sealed class RoutePersistingRoutingChatClient : RoutingChatClient
     /// <inheritdoc/>
     public override object? GetService(Type serviceType, object? serviceKey = null)
     {
-        _ = Throw.IfNull(serviceType);
-
-        if (serviceKey is null && serviceType.IsInstanceOfType(this))
+        object? service = base.GetService(serviceType, serviceKey);
+        if (service is not null)
         {
-            return this;
+            return service;
         }
 
         // Best effort: forward to the client of the session's active route when a run is in progress,
         // otherwise to the default route's client.
         var session = AIAgent.CurrentRunContext?.Session;
-        var client = session is not null
-            ? this.GetActiveClient(session)
-            : this.GetClient(this._defaultRoute, "default");
+        string? route = session is not null
+            ? this._sessionState.GetOrInitializeState(session).ActiveRoute ?? this._defaultRoute
+            : this._defaultRoute;
 
-        return client.GetService(serviceType, serviceKey);
+        return route is not null &&
+            this.Routes.TryGetValue(route, out var client) &&
+            client is not null
+                ? client.GetService(serviceType, serviceKey)
+                : null;
     }
 
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing && this._ownsInnerClients)
+        if (disposing && Interlocked.Exchange(ref this._disposed, 1) == 0 && this._ownsInnerClients)
         {
+            HashSet<IChatClient> disposedClients = new(ChatClientReferenceComparer.Instance);
             foreach (var client in this.Routes.Values)
             {
-                client?.Dispose();
+                if (client is not null && disposedClients.Add(client))
+                {
+                    client.Dispose();
+                }
             }
         }
 
@@ -228,5 +249,14 @@ public sealed class RoutePersistingRoutingChatClient : RoutingChatClient
                 route is null
                     ? $"No {routeKind} route is available."
                     : $"No usable chat client is registered for the {routeKind} route '{route}'.");
+    }
+
+    private sealed class ChatClientReferenceComparer : IEqualityComparer<IChatClient>
+    {
+        public static ChatClientReferenceComparer Instance { get; } = new();
+
+        public bool Equals(IChatClient? x, IChatClient? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(IChatClient obj) => RuntimeHelpers.GetHashCode(obj);
     }
 }

@@ -382,6 +382,52 @@ public class RoutePersistingRoutingChatClientTests
     }
 
     [Fact]
+    public async Task GetResponseAsync_AfterCompletedRun_DoesNotUseStaleRunContextAsync()
+    {
+        // Arrange
+        using var client = new RoutePersistingRoutingChatClient(CreateRoutes("a"));
+        var session = new TestAgentSession();
+        await RunAsync(client, session);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.GetResponseAsync([new ChatMessage(ChatRole.User, "Hello")]));
+    }
+
+    [Fact]
+    public async Task GetResponseAsync_AfterNestedRun_UsesOuterSessionAsync()
+    {
+        // Arrange
+        using var client = new RoutePersistingRoutingChatClient(CreateRoutes("a", "b"));
+        var outerSession = new TestAgentSession();
+        var innerSession = new TestAgentSession();
+        client.SetActiveRoute(innerSession, "b");
+
+        var innerAgent = new TestAIAgent
+        {
+            RunAsyncFunc = (messages, session, options, ct) =>
+                Task.FromResult(new AgentResponse([new ChatMessage(ChatRole.Assistant, "inner")]))
+        };
+
+        ChatResponse? routedResponse = null;
+        var outerAgent = new TestAIAgent
+        {
+            RunAsyncFunc = async (messages, session, options, ct) =>
+            {
+                await innerAgent.RunAsync("Inner request", innerSession, cancellationToken: ct);
+                routedResponse = await client.GetResponseAsync(messages, cancellationToken: ct);
+                return new AgentResponse(routedResponse);
+            }
+        };
+
+        // Act
+        await outerAgent.RunAsync("Outer request", outerSession);
+
+        // Assert
+        Assert.Equal("a", routedResponse?.Text);
+    }
+
+    [Fact]
     public async Task GetResponseAsync_NoSession_ThrowsInvalidOperationExceptionAsync()
     {
         // Arrange
@@ -451,14 +497,43 @@ public class RoutePersistingRoutingChatClientTests
     }
 
     [Fact]
-    public void GetService_RemovedDefaultRoute_ThrowsInvalidOperationException()
+    public void GetService_RemovedDefaultRoute_ReturnsNull()
     {
         // Arrange
         using var client = new RoutePersistingRoutingChatClient(CreateRoutes("a"));
         client.Routes.Remove("a");
 
-        // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => client.GetService(typeof(ChatClientMetadata)));
+        // Act
+        var metadata = client.GetService(typeof(ChatClientMetadata));
+
+        // Assert
+        Assert.Null(metadata);
+    }
+
+    [Fact]
+    public void GetService_EmptyRoutes_ReturnsNull()
+    {
+        // Arrange
+        using var client = new RoutePersistingRoutingChatClient(new Dictionary<string, IChatClient>());
+
+        // Act
+        var metadata = client.GetService(typeof(ChatClientMetadata));
+
+        // Assert
+        Assert.Null(metadata);
+    }
+
+    [Fact]
+    public void GetService_EmptyRoutes_CanCreateAgent()
+    {
+        // Arrange
+        using var client = new RoutePersistingRoutingChatClient(new Dictionary<string, IChatClient>());
+
+        // Act
+        var agent = client.AsAIAgent();
+
+        // Assert
+        Assert.NotNull(agent);
     }
 
     [Fact]
@@ -545,6 +620,39 @@ public class RoutePersistingRoutingChatClientTests
         Assert.True(replacement.IsDisposed);
     }
 
+    [Fact]
+    public void Dispose_OwnsInnerClients_DisposesAliasedClientOnce()
+    {
+        // Arrange
+        var inner = new TrackingChatClient("inner");
+        var client = new RoutePersistingRoutingChatClient(
+            new Dictionary<string, IChatClient> { ["a"] = inner, ["alias"] = inner },
+            new RoutePersistingRoutingChatClientOptions { OwnsInnerClients = true });
+
+        // Act
+        client.Dispose();
+
+        // Assert
+        Assert.Equal(1, inner.DisposeCount);
+    }
+
+    [Fact]
+    public void Dispose_CalledMultipleTimes_DisposesInnerClientOnce()
+    {
+        // Arrange
+        var inner = new TrackingChatClient("inner");
+        var client = new RoutePersistingRoutingChatClient(
+            new Dictionary<string, IChatClient> { ["a"] = inner },
+            new RoutePersistingRoutingChatClientOptions { OwnsInnerClients = true });
+
+        // Act
+        client.Dispose();
+        client.Dispose();
+
+        // Assert
+        Assert.Equal(1, inner.DisposeCount);
+    }
+
     #endregion
 
     #region Helpers
@@ -604,7 +712,9 @@ public class RoutePersistingRoutingChatClientTests
 
     private sealed class TrackingChatClient(string id, ChatClientMetadata? metadata = null) : IChatClient
     {
-        public bool IsDisposed { get; private set; }
+        public bool IsDisposed => this.DisposeCount > 0;
+
+        public int DisposeCount { get; private set; }
 
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
@@ -621,7 +731,7 @@ public class RoutePersistingRoutingChatClientTests
         public object? GetService(Type serviceType, object? serviceKey = null)
             => serviceKey is null && serviceType == typeof(ChatClientMetadata) ? metadata : null;
 
-        public void Dispose() => this.IsDisposed = true;
+        public void Dispose() => this.DisposeCount++;
     }
 
     private sealed class TestAgentSession : AgentSession

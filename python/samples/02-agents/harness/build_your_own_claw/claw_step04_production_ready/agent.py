@@ -7,7 +7,6 @@
 #     "agent-framework-tools",
 #     "agent-framework-monty",
 #     "mcp",
-#     "httpx",
 #     "azure-identity",
 #     "python-dotenv",
 # ]
@@ -23,7 +22,7 @@ observability-aware hosts plus opt-in Microsoft Purview chat policy middleware.
 Environment variables:
     FOUNDRY_PROJECT_ENDPOINT       — Microsoft Foundry project endpoint URL
     FOUNDRY_MODEL                  — Model deployment name for local hosts (defaults to gpt-5.4)
-    FOUNDRY_TOOLBOX_MCP_SERVER_URL — Optional Foundry Toolbox MCP endpoint URL for managed skills
+    TOOLBOX_MCP_SERVER_URL         — Optional Foundry Toolbox MCP endpoint URL for managed skills
     PURVIEW_CLIENT_APP_ID          — Optional app/client ID; enables Purview chat policy middleware
 
 Run indirectly through a host, for example:
@@ -32,16 +31,16 @@ Run indirectly through a host, for example:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import uuid
-from collections.abc import Callable, Generator, Mapping
-from contextlib import AsyncExitStack
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
-import httpx
 from agent_framework import (
     Agent,
     AgentModeProvider,
@@ -58,15 +57,14 @@ from agent_framework import (
     create_harness_agent,
     tool,
 )
-from agent_framework.foundry import FoundryChatClient
+from agent_framework.foundry import FoundryChatClient, FoundryToolbox
 from agent_framework.microsoft import PurviewChatPolicyMiddleware, PurviewSettings
 from agent_framework_monty import MontyCodeActProvider
 from agent_framework_tools.shell import LocalShellTool, ShellPolicy
 from azure.core.credentials import TokenCredential
-from azure.identity import AzureCliCredential, InteractiveBrowserCredential, get_bearer_token_provider
+from azure.identity import AzureCliCredential, InteractiveBrowserCredential
 from dotenv import load_dotenv
 from mcp.client.session import ClientSession
-from mcp.client.streamable_http import streamable_http_client
 from pydantic import Field
 
 # Resolve everything the hosted container needs from this folder so it is a self-contained Docker
@@ -80,6 +78,12 @@ from subprocess_script_runner import subprocess_script_runner  # noqa: E402
 _WORKING_DIR = _SELF_DIR.parent / "working"
 _VAULT_DIR = _WORKING_DIR / "confirmations"
 _SKILLS_DIR = _SELF_DIR / "skills"
+
+# Startup diagnostics go through ``logging``, not ``print``. Foundry hosted agents surface only the
+# container's stderr stream, and the agentserver SDK attaches a stderr handler to the root logger —
+# so ``print`` (stdout) output is invisible when hosted. See ``hosted.py`` for the matching
+# ``logging.basicConfig`` call that has to run before this module builds anything.
+logger = logging.getLogger(__name__)
 
 FINANCE_INSTRUCTIONS = """\
 ## Personal Finance Assistant Instructions
@@ -163,50 +167,62 @@ def place_trade(
 
 
 # <skills>
-async def _build_skills_provider(stack: AsyncExitStack, credential: TokenCredential) -> SkillsProvider:
-    """Build local file-based skills plus optional Foundry Toolbox MCP skills."""
-    sources: list[SkillsSource] = [FileSkillsSource(str(_SKILLS_DIR), script_runner=subprocess_script_runner)]
+def _require_toolbox_session(toolbox: FoundryToolbox) -> ClientSession:
+    """Return the toolbox's live MCP session, or explain why it is not there yet."""
+    session = toolbox.session
+    if session is None:
+        raise RuntimeError(
+            "The Foundry Toolbox is not connected, so its skills cannot be read. It is connected by "
+            "the agent because it is passed via ``tools=``; make sure that wiring is still in place."
+        )
+    return session
 
-    toolbox_url = os.environ.get("FOUNDRY_TOOLBOX_MCP_SERVER_URL", "").strip()
+
+def _build_skills_provider(credential: TokenCredential) -> tuple[SkillsProvider, list[Any]]:
+    """Build local file-based skills plus optional Foundry Toolbox MCP skills.
+
+    Returns the provider and any tools it depends on. ``FoundryToolbox`` is returned as a tool so the
+    agent owns its connection lifecycle; it is what authenticates the toolbox and forwards the
+    platform's per-request ``x-agent-foundry-call-id``.
+
+    Note that reading a skill's body requires the caller identity to hold the ``Foundry User`` role
+    on the Foundry account. Discovery does not, so a missing grant shows up as skills that load and
+    advertise fine but fail on first use — see the README.
+    """
+    sources: list[SkillsSource] = [FileSkillsSource(str(_SKILLS_DIR), script_runner=subprocess_script_runner)]
+    tools: list[Any] = []
+    logger.info("Local file skills enabled (from %s).", _SKILLS_DIR)
+
+    toolbox_url = os.environ.get("TOOLBOX_MCP_SERVER_URL", "").strip()
     if toolbox_url.startswith(("http://", "https://")):
-        session = await _connect_foundry_toolbox(stack, toolbox_url, credential)
-        sources.append(MCPSkillsSource(client=session))
-        print("Foundry skills enabled (Toolbox MCP).")
+        # Only the netloc is logged: the full URL carries query parameters.
+        toolbox_host = urlsplit(toolbox_url).netloc or "unknown host"
+        # ``load_tools=False`` surfaces the toolbox's skills without its tools. The toolbox is still
+        # passed to the agent via ``tools=`` because that is what connects the MCP session.
+        toolbox = FoundryToolbox(credential, url=toolbox_url, load_tools=False)
+        tools.append(toolbox)
+        # ``session_provider`` (rather than ``client``) lets the source resolve the session on every
+        # discovery and every on-demand fetch, so it survives a toolbox reconnect.
+        sources.append(MCPSkillsSource(session_provider=lambda: _require_toolbox_session(toolbox)))
+        logger.info("Foundry skills enabled (Toolbox MCP at %s).", toolbox_host)
+    elif toolbox_url:
+        # A set-but-unusable value is almost always an unsubstituted deployment template placeholder
+        # (for example a literal ``{{TOOLBOX_MCP_SERVER_URL}}``). Silently skipping it makes a
+        # deployment error look identical to a deliberate opt-out, so warn instead.
+        logger.warning(
+            "Foundry skills disabled: TOOLBOX_MCP_SERVER_URL is set but is not an http(s) URL (got %r). "
+            "If this looks like an unsubstituted placeholder, check the environment variable wiring "
+            "in azure.yaml / agent.manifest.yaml.",
+            toolbox_url,
+        )
     else:
-        print("Foundry skills disabled. Set FOUNDRY_TOOLBOX_MCP_SERVER_URL to enable them.")
+        logger.info("Foundry skills disabled. Set TOOLBOX_MCP_SERVER_URL to enable them.")
 
     source: SkillsSource = sources[0] if len(sources) == 1 else AggregatingSkillsSource(sources)
-    return SkillsProvider(DeduplicatingSkillsSource(source))
-
-
-class _ToolboxAuth(httpx.Auth):
-    """Attach a fresh Foundry bearer token to every request."""
-
-    def __init__(self, token_provider: Callable[[], str]):
-        """Initialize the auth helper with a token provider."""
-        self._get_token = token_provider
-
-    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
-        """Attach an authorization header to the outgoing MCP request."""
-        request.headers["Authorization"] = f"Bearer {self._get_token()}"
-        yield request
-
-
-async def _connect_foundry_toolbox(stack: AsyncExitStack, url: str, credential: TokenCredential) -> ClientSession:
-    """Open an MCP session against a Foundry Toolbox endpoint tied to ``stack``'s lifetime."""
-    token_provider = get_bearer_token_provider(credential, "https://ai.azure.com/.default")
-    http_client = await stack.enter_async_context(
-        httpx.AsyncClient(
-            auth=_ToolboxAuth(token_provider),
-            headers={"Foundry-Features": "Toolboxes=V1Preview"},
-            timeout=httpx.Timeout(30.0, read=300.0),
-            follow_redirects=True,
-        )
-    )
-    read, write, _ = await stack.enter_async_context(streamable_http_client(url=url, http_client=http_client))
-    session = await stack.enter_async_context(ClientSession(read, write))
-    await session.initialize()
-    return session
+    # ``load_skill`` only reads a skill's own body, so gating it behind an approval prompt costs a
+    # full round-trip without protecting anything. Approval is kept where it earns its keep: on
+    # ``place_trade`` (see its ``approval_mode``) and on ``run_skill_script``, which executes code.
+    return SkillsProvider(DeduplicatingSkillsSource(source), disable_load_skill_approval=True), tools
 
 
 # </skills>
@@ -263,18 +279,17 @@ def _build_purview_middleware(credential: TokenCredential | None = None) -> list
     """
     client_app_id = os.environ.get("PURVIEW_CLIENT_APP_ID", "").strip()
     if not client_app_id or client_app_id.startswith("{{"):
-        print("Purview disabled. Set PURVIEW_CLIENT_APP_ID to enable chat policy enforcement.")
+        logger.info("Purview disabled. Set PURVIEW_CLIENT_APP_ID to enable chat policy enforcement.")
         return []
 
     purview_credential = credential or InteractiveBrowserCredential(client_id=client_app_id)
     settings = PurviewSettings(app_name="Claw")
-    print("Purview enabled (chat policy middleware).")
+    logger.info("Purview enabled (chat policy middleware).")
     return [PurviewChatPolicyMiddleware(purview_credential, settings)]
 
 
 # <build_claw_agent>
 async def build_claw_agent(
-    stack: AsyncExitStack,
     *,
     credential: TokenCredential | None = None,
     project_endpoint: str | None = None,
@@ -290,7 +305,6 @@ async def build_claw_agent(
     """Build the production-ready claw harness agent.
 
     Args:
-        stack: Async exit stack that owns optional MCP client and shell lifetimes.
         credential: Azure credential for the Foundry chat client. Defaults to AzureCliCredential.
         project_endpoint: Optional Foundry project endpoint override.
         model: Optional model deployment override.
@@ -331,30 +345,30 @@ async def build_claw_agent(
     )
     # </create_client>
 
-    skills_provider = await _build_skills_provider(stack, resolved_credential)
+    skills_provider, skills_tools = _build_skills_provider(resolved_credential)
     research_agent = _build_research_agent(client)
 
     if enable_shell:
         shell = _build_shell()
-        print("Shell enabled (confined to the confirmations vault).")
+        logger.info("Shell enabled (confined to the confirmations vault).")
     else:
         shell = None
-        print("Shell disabled.")
+        logger.info("Shell disabled.")
 
     if enable_file_access:
         access_store = file_access_store or FileSystemAgentFileStore(str(_WORKING_DIR))
-        print(
+        logger.info(
             "File access enabled (custom AgentFileStore)."
             if file_access_store is not None
             else "File access enabled (local filesystem)."
         )
     else:
         access_store = None
-        print("File access disabled.")
+        logger.info("File access disabled.")
 
     # <codeact>
     context_providers: list[Any] = [MontyCodeActProvider(approval_mode="never_require")]
-    print("CodeAct enabled (Monty).")
+    logger.info("CodeAct enabled (Monty).")
     # </codeact>
 
     # <create_agent>
@@ -363,7 +377,7 @@ async def build_claw_agent(
         name="ClawFinanceAssistant",
         description="Production-ready personal finance claw harness agent.",
         agent_instructions=FINANCE_INSTRUCTIONS,
-        tools=[get_stock_price, place_trade],
+        tools=[get_stock_price, place_trade, *skills_tools],
         history_provider=history_provider or InMemoryHistoryProvider(),
         file_access_store=access_store,
         file_memory_store=file_memory_store,

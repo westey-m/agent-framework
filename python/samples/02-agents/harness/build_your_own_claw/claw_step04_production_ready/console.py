@@ -23,7 +23,7 @@
 Environment variables:
     FOUNDRY_PROJECT_ENDPOINT       — Microsoft Foundry project endpoint URL
     FOUNDRY_MODEL                  — Model deployment name (defaults to gpt-5.4)
-    FOUNDRY_TOOLBOX_MCP_SERVER_URL — Optional Foundry Toolbox MCP endpoint URL
+    TOOLBOX_MCP_SERVER_URL         — Optional Foundry Toolbox MCP endpoint URL
     PURVIEW_CLIENT_APP_ID          — Optional app/client ID; enables Purview
     ENABLE_INSTRUMENTATION         — Controls Agent Framework instrumentation
     ENABLE_SENSITIVE_DATA          — Enables sensitive telemetry capture when true
@@ -37,8 +37,8 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
-from contextlib import AsyncExitStack
 from pathlib import Path
 
 from agent_framework.observability import configure_otel_providers, get_tracer
@@ -56,12 +56,16 @@ from console import build_observers_with_planning, run_agent_async  # noqa: E402
 async def main() -> None:
     """Run the production-ready claw in the local interactive console."""
     load_dotenv()
+    # The agent factory reports its startup wiring (skills, Purview, shell, file access) through
+    # ``logging``, so that it is visible on Foundry hosted agents, which surface only stderr.
+    # Configure a handler here so those diagnostics also show up in the local console.
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     configure_otel_providers()
 
     with get_tracer().start_as_current_span("Claw Console Session", kind=trace.SpanKind.CLIENT) as current_span:
         print(f"Trace ID: {format_trace_id(current_span.get_span_context().trace_id)}")
-        async with AsyncExitStack() as stack:
-            agent = await build_claw_agent(stack, credential=AzureCliCredential())
+        agent = await build_claw_agent(credential=AzureCliCredential())
+        async with agent:
             session = agent.create_session()
 
             await run_agent_async(

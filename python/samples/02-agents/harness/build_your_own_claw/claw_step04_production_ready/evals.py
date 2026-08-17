@@ -20,7 +20,7 @@
 Environment variables:
     FOUNDRY_PROJECT_ENDPOINT       — Microsoft Foundry project endpoint URL; also gates Foundry evals
     FOUNDRY_MODEL                  — Model deployment name for local eval runs (defaults to gpt-5.4)
-    FOUNDRY_TOOLBOX_MCP_SERVER_URL — Optional Foundry Toolbox MCP endpoint URL
+    TOOLBOX_MCP_SERVER_URL         — Optional Foundry Toolbox MCP endpoint URL
     PURVIEW_CLIENT_APP_ID          — Optional app/client ID; enables Purview
     ENABLE_INSTRUMENTATION         — Controls Agent Framework instrumentation
     ENABLE_SENSITIVE_DATA          — Enables sensitive telemetry capture when true
@@ -36,7 +36,6 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from contextlib import AsyncExitStack
 from typing import Any
 
 from agent import build_claw_agent
@@ -109,15 +108,14 @@ async def main() -> None:
     load_dotenv()
     configure_otel_providers()
 
-    async with AsyncExitStack() as stack:
-        credential = AzureCliCredential()
-        # store=False keeps chat history client-side (managed by the harness InMemoryHistoryProvider)
-        # instead of server-side on the Foundry service.
-        agent = await build_claw_agent(
-            stack,
-            credential=credential,
-            default_options={"store": False},
-        )
+    credential = AzureCliCredential()
+    # store=False keeps chat history client-side (managed by the harness InMemoryHistoryProvider)
+    # instead of server-side on the Foundry service.
+    agent = await build_claw_agent(
+        credential=credential,
+        default_options={"store": False},
+    )
+    async with agent:
         local = LocalEvaluator(
             off_topic_refusal_lenient,
             numeric_valuation_answer,

@@ -24,11 +24,54 @@ export AZURE_AI_MODEL_DEPLOYMENT_NAME="your-hosted-model-deployment"
 Optional:
 
 ```bash
-export FOUNDRY_TOOLBOX_MCP_SERVER_URL="https://.../mcp?api-version=v1"
+export TOOLBOX_MCP_SERVER_URL="https://.../mcp?api-version=v1"
 export PURVIEW_CLIENT_APP_ID="your-purview-app-client-id"
 export ENABLE_CONSOLE_EXPORTERS="true"
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 ```
+
+> **Why `TOOLBOX_MCP_SERVER_URL` and not `FOUNDRY_TOOLBOX_MCP_SERVER_URL`?** Foundry hosted agents
+> reserve the `FOUNDRY_*` (and `AGENT_*`) prefix for platform-injected variables such as
+> `FOUNDRY_PROJECT_ENDPOINT`. A custom variable using that prefix does not reach the container, so
+> the toolbox skills would silently fail to load when deployed. Keep this one unprefixed.
+
+> **How the toolbox is wired.** `agent.py` uses `FoundryToolbox` (from `agent_framework.foundry`)
+> with `load_tools=False`, so only the toolbox's Agent Skills are surfaced, and passes it to the
+> agent via `tools=` — that is what connects its MCP session. `MCPSkillsSource` then reads skills
+> from `toolbox.session`, aggregated with the local file skills. `FoundryToolbox` authenticates each
+> request and forwards the platform's per-request `x-agent-foundry-call-id`. See
+> [`04-hosting/foundry-hosted-agents/responses/foundry_toolbox_mcp_skills`](../../../../04-hosting/foundry-hosted-agents/responses/foundry_toolbox_mcp_skills)
+> for the minimal version of this pattern. Hosted runs connect the toolbox because
+> `ResponsesHostServer` enters the agent; `console.py` and `evals.py` do it explicitly with
+> `async with agent:`.
+
+> **The hosted agent's managed identity needs the `Foundry User` role.** This is the single most
+> likely reason a Toolbox skill fails to load, and the failure actively misleads you: connecting to
+> the toolbox and **discovering** skills both succeed (`skill://index.json` is toolbox metadata, which
+> needs no role), so the skill is advertised to the model exactly as expected. Only the first
+> `load_skill` fails — with `McpError('Failed to read resource.')` — because reading a skill's *body*
+> dereferences the project-level skill resource, which does require the role. The toolbox answers
+> with a bare JSON-RPC `-32603` and no `data`, so nothing in the error names the cause.
+>
+> The container logs the identity to grant it to at startup:
+>
+> ```
+> Agent managed identity (grant it the Foundry User role): <client-id>
+> ```
+>
+> ```bash
+> az role assignment create --assignee-object-id <agent-identity-object-id> \
+>   --assignee-principal-type ServicePrincipal --role "Foundry User" \
+>   --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>
+> ```
+>
+> Resolve the object id with `az ad sp list --filter "startswith(displayName,'<account>')" -o table`
+> (the agent's `…-AgentIdentity` entry), and verify with
+> `az role assignment list --assignee <object-id> --all`.
+>
+> **Allow for RBAC propagation.** A grant can take several minutes to take effect. Retesting
+> immediately can still fail with the identical error, which makes it easy to wrongly conclude the
+> role was not the problem. If the first retest fails, wait and try again before looking elsewhere.
 
 ## Run locally
 

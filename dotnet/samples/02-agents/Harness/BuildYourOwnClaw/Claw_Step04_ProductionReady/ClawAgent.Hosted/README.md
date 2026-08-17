@@ -165,14 +165,14 @@ az role assignment create \
 
 ```bash
 azd up      # first deploy: provisions resources, builds the image, creates the agent version
-# or, once provisioned (remember to re-run step 1 first so out/ is fresh):
+# or, once provisioned (remember to re-run step 2 first so out/ is fresh):
 azd deploy
 ```
 
 **Test the image locally first (optional but recommended):**
 
 ```bash
-# after step 1:
+# after step 2:
 docker build -t personal-finance-claw .
 docker run --rm -p 8088:8088 --env-file .env personal-finance-claw
 # in another shell — should return HTTP 200:
@@ -184,4 +184,3 @@ curl -i http://localhost:8088/readiness
 > have redirected stdin) so startup never blocks. Provide real values via the `env:` map in
 > `azure.yaml` or the container's environment. See the
 > [container deployment guide](https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent).
-

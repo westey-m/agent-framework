@@ -13,8 +13,8 @@ Post 4 restructures the Step 03 claw into a shared agent library plus three thin
 
 ```bash
 export FOUNDRY_PROJECT_ENDPOINT="https://your-project.services.ai.azure.com/api/projects/your-project"
-export FOUNDRY_MODEL="gpt-5.4" # optional
-export FOUNDRY_TOOLBOX_MCP_SERVER_URL="https://.../mcp?api-version=v1" # optional Foundry skills
+export AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4" # optional
+export TOOLBOX_MCP_SERVER_URL="https://.../mcp?api-version=v1" # optional Foundry skills
 export PURVIEW_CLIENT_APP_ID="<app-id>" # optional Purview governance
 ```
 

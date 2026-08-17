@@ -30,16 +30,22 @@ using Azure.Identity;
 using ClawAgent;
 using DotNetEnv;
 using Hosted_Shared_Contributor_Setup;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Agents.AI.LocalCodeAct;
+using Microsoft.Extensions.DependencyInjection;
 
 Env.TraversePath().Load();
 
+var builder = WebApplication.CreateBuilder(args);
+var httpContextAccessor = new HttpContextAccessor();
+builder.Services.AddSingleton<IHttpContextAccessor>(httpContextAccessor);
+
 var projectEndpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
     ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set.");
-var agentName = Environment.GetEnvironmentVariable("AGENT_NAME") ?? "personal-finance-claw";
-var deploymentName = Environment.GetEnvironmentVariable("FOUNDRY_MODEL") ?? "gpt-5.4";
+var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-5.4";
 var pythonExecutable = Environment.GetEnvironmentVariable("LOCAL_CODEACT_PYTHON") ?? "python3";
+var purviewClientAppId = Environment.GetEnvironmentVariable("PURVIEW_CLIENT_APP_ID");
 
 // WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in
 // production. Prefer a specific credential (e.g. ManagedIdentityCredential) when hosted. Here we chain
@@ -54,7 +60,13 @@ await using ClawAgentBuild build = await ClawAgentFactory.CreateAsync(new ClawAg
     ProjectEndpoint = projectEndpoint,
     DeploymentName = deploymentName,
     Credential = credential,
-    AgentName = agentName,
+    AgentDescription = "A production-ready personal finance claw with skills, CodeAct, background agents, telemetry, and optional Purview governance.",
+    PurviewCredential = string.IsNullOrWhiteSpace(purviewClientAppId) ? null : credential,
+    FoundryCallIdProvider = () =>
+    {
+        HttpContext? context = httpContextAccessor.HttpContext;
+        return context is null ? null : context.Request.Headers["x-agent-foundry-call-id"].ToString();
+    },
 
     // Disable filesystem and shell access on the hosted container (see risk note above).
     EnableFileAccess = false,
@@ -66,8 +78,6 @@ await using ClawAgentBuild build = await ClawAgentFactory.CreateAsync(new ClawAg
 
     Log = Console.WriteLine,
 });
-
-var builder = WebApplication.CreateBuilder(args);
 
 // AddFoundryResponses wires up the Responses API host for the agent and auto-applies OpenTelemetry.
 builder.Services.AddFoundryResponses(build.Agent);

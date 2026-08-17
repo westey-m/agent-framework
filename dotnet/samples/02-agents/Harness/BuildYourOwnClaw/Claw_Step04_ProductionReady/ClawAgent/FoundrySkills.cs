@@ -17,9 +17,10 @@ internal static class FoundrySkills
     public static async Task<(McpClient McpClient, HttpClient HttpClient)> ConnectAsync(
         string toolboxMcpServerUrl,
         TokenCredential credential,
+        Func<string?>? foundryCallIdProvider = null,
         CancellationToken cancellationToken = default)
     {
-        var httpClient = new HttpClient(new BearerTokenHandler(credential, "https://ai.azure.com/.default")
+        var httpClient = new HttpClient(new BearerTokenHandler(credential, "https://ai.azure.com/.default", foundryCallIdProvider)
         {
             InnerHandler = new HttpClientHandler(),
         });
@@ -50,7 +51,10 @@ internal static class FoundrySkills
         }
     }
 
-    private sealed class BearerTokenHandler(TokenCredential credential, string scope) : DelegatingHandler
+    private sealed class BearerTokenHandler(
+        TokenCredential credential,
+        string scope,
+        Func<string?>? foundryCallIdProvider) : DelegatingHandler
     {
         private readonly TokenRequestContext _tokenContext = new([scope]);
 
@@ -58,6 +62,13 @@ internal static class FoundrySkills
         {
             AccessToken token = await credential.GetTokenAsync(this._tokenContext, cancellationToken).ConfigureAwait(false);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+            string? callId = foundryCallIdProvider?.Invoke();
+            if (!string.IsNullOrWhiteSpace(callId) && !request.Headers.Contains("x-agent-foundry-call-id"))
+            {
+                request.Headers.TryAddWithoutValidation("x-agent-foundry-call-id", callId);
+            }
+
             return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
     }

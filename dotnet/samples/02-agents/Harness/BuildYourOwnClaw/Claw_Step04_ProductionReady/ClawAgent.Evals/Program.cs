@@ -17,6 +17,9 @@ string[] queries =
 
 await using ClawAgentBuild build = await ClawAgentFactory.CreateAsync(new ClawAgentFactoryOptions
 {
+    // Evals run only the trusted skill scripts bundled with this sample. Auto-approve those scripts
+    // so evaluation receives the completed answer instead of an approval request.
+    AdditionalToolAutoApprovalRules = [AgentSkillsProvider.AllToolsAutoApprovalRule],
     Log = Console.WriteLine,
 });
 
@@ -49,7 +52,7 @@ PrintResults("Local finance evals", localResults, queries);
 string? endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT");
 if (!string.IsNullOrWhiteSpace(endpoint))
 {
-    string deploymentName = Environment.GetEnvironmentVariable("FOUNDRY_MODEL") ?? "gpt-5.4";
+    string deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-5.4";
     AIProjectClient projectClient = new(new Uri(endpoint), new DefaultAzureCredential());
     FoundryEvals foundryEvals = new(projectClient, deploymentName, FoundryEvals.Relevance, FoundryEvals.Coherence);
     AgentEvaluationResults foundryResults = await build.Agent.EvaluateAsync(queries, foundryEvals, evalName: "ClawFoundryQualityEvals");

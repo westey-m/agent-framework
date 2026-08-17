@@ -70,7 +70,7 @@ public static class ClawAgentFactory
             ?? Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
             ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set.");
         string deploymentName = options.DeploymentName
-            ?? Environment.GetEnvironmentVariable("FOUNDRY_MODEL")
+            ?? Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME")
             ?? DefaultDeploymentName;
 
         string workingDir = options.WorkingDirectory ?? Path.Combine(AppContext.BaseDirectory, "working");
@@ -90,16 +90,23 @@ public static class ClawAgentFactory
 
         bool purviewEnabled = false;
         string? purviewClientAppId = Environment.GetEnvironmentVariable("PURVIEW_CLIENT_APP_ID");
-        if (!string.IsNullOrWhiteSpace(purviewClientAppId))
+        TokenCredential? purviewCredential = options.PurviewCredential;
+        if (purviewCredential is null && !string.IsNullOrWhiteSpace(purviewClientAppId))
         {
-            TokenCredential browserCredential = new InteractiveBrowserCredential(
+            purviewCredential = new InteractiveBrowserCredential(
                 new InteractiveBrowserCredentialOptions { ClientId = purviewClientAppId });
+        }
+
+        if (purviewCredential is not null)
+        {
             chatClient = chatClient
                 .AsBuilder()
-                .WithPurview(browserCredential, new PurviewSettings("Claw"))
+                .WithPurview(purviewCredential, new PurviewSettings("Claw"))
                 .Build();
             purviewEnabled = true;
-            log("Purview enabled (PURVIEW_CLIENT_APP_ID is set). ");
+            log(options.PurviewCredential is not null
+                ? "Purview enabled (host-provided credential). "
+                : "Purview enabled (interactive browser credential). ");
         }
         else
         {
@@ -111,18 +118,22 @@ public static class ClawAgentFactory
 
         HttpClient? toolboxHttpClient = null;
         ModelContextProtocol.Client.McpClient? toolboxMcpClient = null;
-        string? toolboxUrl = Environment.GetEnvironmentVariable("FOUNDRY_TOOLBOX_MCP_SERVER_URL");
+        string? toolboxUrl = Environment.GetEnvironmentVariable("TOOLBOX_MCP_SERVER_URL");
         bool foundrySkillsEnabled = false;
         if (!string.IsNullOrWhiteSpace(toolboxUrl))
         {
-            (toolboxMcpClient, toolboxHttpClient) = await FoundrySkills.ConnectAsync(toolboxUrl, credential, cancellationToken).ConfigureAwait(false);
+            (toolboxMcpClient, toolboxHttpClient) = await FoundrySkills.ConnectAsync(
+                toolboxUrl,
+                credential,
+                options.FoundryCallIdProvider,
+                cancellationToken).ConfigureAwait(false);
             skillsBuilder.UseMcpSkills(toolboxMcpClient);
             foundrySkillsEnabled = true;
             log("Foundry skills enabled (Toolbox MCP). ");
         }
         else
         {
-            log("Foundry skills disabled. Set FOUNDRY_TOOLBOX_MCP_SERVER_URL to enable them.");
+            log("Foundry skills disabled. Set TOOLBOX_MCP_SERVER_URL to enable them.");
         }
 
         skillsBuilder.UseOptions((options) =>
@@ -201,6 +212,29 @@ public static class ClawAgentFactory
             contextProviders.Add(codeAct);
         }
 
+        List<AITool> tools =
+        [
+            StockTools.CreateGetStockPriceTool(),
+            TradingTools.CreatePlaceTradeTool(),
+        ];
+
+        // Shell support is composed explicitly: the context provider tells the model about the
+        // environment, while the approval-gated function exposes command execution.
+        if (shell is not null)
+        {
+            contextProviders.Add(new ShellEnvironmentProvider(shell));
+            tools.Add(shell.AsAIFunction(requireApproval: true));
+        }
+
+        List<Func<ToolAutoApprovalRuleContext, ValueTask<bool>>> autoApprovalRules =
+        [
+            FileAccessProvider.ReadOnlyToolsAutoApprovalRule,
+        ];
+        if (options.AdditionalToolAutoApprovalRules is not null)
+        {
+            autoApprovalRules.AddRange(options.AdditionalToolAutoApprovalRules);
+        }
+
         AIAgent agent = chatClient.AsHarnessAgent(new HarnessAgentOptions
         {
             Name = options.AgentName,
@@ -208,22 +242,17 @@ public static class ClawAgentFactory
             FileAccessStore = fileStore,
             DisableAgentSkillsProvider = true,
             BackgroundAgents = [researchAgent],
-            ShellExecutor = shell,
             OpenTelemetrySourceName = OpenTelemetrySourceName,
             ToolApprovalAgentOptions = new ToolApprovalAgentOptions
             {
-                AutoApprovalRules = [FileAccessProvider.ReadOnlyToolsAutoApprovalRule],
+                AutoApprovalRules = autoApprovalRules,
             },
             AgentModeProviderOptions = new AgentModeProviderOptions { DefaultMode = "execute" },
             AIContextProviders = contextProviders,
             ChatOptions = new ChatOptions
             {
                 Instructions = Instructions,
-                Tools =
-                [
-                    StockTools.CreateGetStockPriceTool(),
-                    TradingTools.CreatePlaceTradeTool(),
-                ],
+                Tools = tools,
                 Reasoning = new() { Effort = ReasoningEffort.Medium },
             },
         });

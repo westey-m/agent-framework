@@ -16,7 +16,7 @@ public sealed class ClawAgentFactoryOptions
     public string? ProjectEndpoint { get; set; }
 
     /// <summary>
-    /// Gets or sets the Foundry model deployment name. Defaults to <c>FOUNDRY_MODEL</c> or <c>gpt-5.4</c>.
+    /// Gets or sets the Foundry model deployment name. Defaults to <c>AZURE_AI_MODEL_DEPLOYMENT_NAME</c> or <c>gpt-5.4</c>.
     /// </summary>
     public string? DeploymentName { get; set; }
 
@@ -24,6 +24,18 @@ public sealed class ClawAgentFactoryOptions
     /// Gets or sets the token credential used for Foundry. Defaults to <see cref="Azure.Identity.DefaultAzureCredential" />.
     /// </summary>
     public TokenCredential? Credential { get; set; }
+
+    /// <summary>
+    /// Gets or sets the token credential used for Purview. When provided, Purview is enabled with
+    /// this credential. Otherwise, <c>PURVIEW_CLIENT_APP_ID</c> enables local browser authentication.
+    /// </summary>
+    public TokenCredential? PurviewCredential { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional provider for the current Foundry hosted call ID. When supplied, the
+    /// call ID is forwarded to the Toolbox MCP endpoint as <c>x-agent-foundry-call-id</c>.
+    /// </summary>
+    public Func<string?>? FoundryCallIdProvider { get; set; }
 
     /// <summary>
     /// Gets or sets the agent name exposed to hosting and telemetry.
@@ -104,6 +116,15 @@ public sealed class ClawAgentFactoryOptions
     /// disposed by the returned <see cref="ClawAgentBuild"/>.
     /// </remarks>
     public AIContextProvider? CodeActProvider { get; set; }
+
+    /// <summary>
+    /// Gets or sets additional tool auto-approval rules for this host.
+    /// </summary>
+    /// <remarks>
+    /// The factory always includes the read-only file-access rule. Use additional rules only in
+    /// trusted hosts, such as an evaluation runner that executes bundled skill scripts.
+    /// </remarks>
+    public IEnumerable<Func<ToolAutoApprovalRuleContext, ValueTask<bool>>>? AdditionalToolAutoApprovalRules { get; set; }
 
     /// <summary>
     /// Gets or sets the optional log callback used for setup notes.

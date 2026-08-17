@@ -7,7 +7,7 @@ namespace ClawAgent;
 /// <summary>
 /// Contains the built production-ready claw agent and resources that must live as long as the agent.
 /// </summary>
-public sealed class ClawAgentBuild : IAsyncDisposable, IDisposable
+public sealed class ClawAgentBuild : IAsyncDisposable
 {
     private readonly List<IDisposable> _disposables;
     private readonly List<IAsyncDisposable> _asyncDisposables;
@@ -41,21 +41,6 @@ public sealed class ClawAgentBuild : IAsyncDisposable, IDisposable
     /// Gets a value indicating whether Purview governance was enabled.
     /// </summary>
     public bool PurviewEnabled { get; }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        if (this._disposed)
-        {
-            return;
-        }
-
-        this._disposed = true;
-        foreach (IDisposable disposable in this._disposables)
-        {
-            disposable.Dispose();
-        }
-    }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

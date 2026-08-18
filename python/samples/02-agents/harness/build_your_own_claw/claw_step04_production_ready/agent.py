@@ -67,10 +67,11 @@ from dotenv import load_dotenv
 from mcp.client.session import ClientSession
 from pydantic import Field
 
-# Resolve everything the hosted container needs from this folder so it is a self-contained Docker
-# build context (see Dockerfile / README). ``subprocess_script_runner.py`` and ``skills/`` live
-# beside this file; ``working/`` (used only by the local file-access and shell hosts) stays in the
-# parent sample folder and is unused on the hosted container, where file access and shell are off.
+# Resolve everything the hosted container needs from this folder. Foundry uses code (ZIP)
+# deployment for Python hosted agents and packages *this folder only*, so ``subprocess_script_runner.py``
+# and ``skills/`` live beside this file rather than being shared with the parent sample folder.
+# ``working/`` (used only by the local file-access and shell hosts) stays in the parent folder: it is
+# outside the deployment package and unused on the hosted container, where file access and shell are off.
 _SELF_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SELF_DIR))
 from subprocess_script_runner import subprocess_script_runner  # noqa: E402
@@ -301,6 +302,7 @@ async def build_claw_agent(
     file_memory_store: Any = None,
     enable_shell: bool = True,
     purview_credential: TokenCredential | None = None,
+    auto_approve_skill_scripts: bool = False,
 ) -> Agent[Any]:
     """Build the production-ready claw harness agent.
 
@@ -327,13 +329,15 @@ async def build_claw_agent(
         purview_credential: Optional credential for Purview chat policy enforcement. Pass the
             container's managed identity (``DefaultAzureCredential``) on hosted deployments; when None,
             an ``InteractiveBrowserCredential`` is used for local interactive runs.
+        auto_approve_skill_scripts: When True, ``run_skill_script`` is auto-approved so skills that run
+            a bundled script complete without a human in the loop. Intended for unattended runs such as
+            ``evals.py``; leave it False for interactive and hosted use. It only covers the skill tools —
+            ``place_trade``, the shell, and file writes keep their normal approval behavior.
 
     Returns:
         A fully configured harness agent with Step 03 capabilities plus opt-in Purview middleware.
     """
     load_dotenv()
-    _WORKING_DIR.mkdir(exist_ok=True)
-    _VAULT_DIR.mkdir(parents=True, exist_ok=True)
 
     # <create_client>
     resolved_credential = credential or AzureCliCredential()
@@ -349,6 +353,9 @@ async def build_claw_agent(
     research_agent = _build_research_agent(client)
 
     if enable_shell:
+        # The vault only exists for the local shell host; creating it unconditionally would write
+        # outside the deployed package on a hosted container, where shell is off.
+        _VAULT_DIR.mkdir(parents=True, exist_ok=True)
         shell = _build_shell()
         logger.info("Shell enabled (confined to the confirmations vault).")
     else:
@@ -356,6 +363,9 @@ async def build_claw_agent(
         logger.info("Shell disabled.")
 
     if enable_file_access:
+        if file_access_store is None:
+            # Same reasoning as the vault: only the default local store needs this directory.
+            _WORKING_DIR.mkdir(exist_ok=True)
         access_store = file_access_store or FileSystemAgentFileStore(str(_WORKING_DIR))
         logger.info(
             "File access enabled (custom AgentFileStore)."
@@ -371,6 +381,13 @@ async def build_claw_agent(
     logger.info("CodeAct enabled (Monty).")
     # </codeact>
 
+    auto_approval_rules: list[Any] = [FileAccessProvider.read_only_tools_auto_approval_rule]
+    if auto_approve_skill_scripts:
+        # Adds ``run_skill_script`` to the auto-approved set. The rule is scoped to the skills
+        # provider's own local tools, so it cannot approve anything else.
+        auto_approval_rules.append(SkillsProvider.all_tools_auto_approval_rule)
+        logger.info("Skill script approval disabled (unattended run).")
+
     # <create_agent>
     return create_harness_agent(
         client=client,
@@ -384,7 +401,7 @@ async def build_claw_agent(
         skills_provider=skills_provider,
         background_agents=[research_agent],
         shell_executor=shell,
-        auto_approval_rules=[FileAccessProvider.read_only_tools_auto_approval_rule],
+        auto_approval_rules=auto_approval_rules,
         context_providers=context_providers,
         mode_provider=AgentModeProvider(default_mode="execute"),
         default_options=default_options,

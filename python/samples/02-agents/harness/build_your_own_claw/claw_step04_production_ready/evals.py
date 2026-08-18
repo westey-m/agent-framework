@@ -94,7 +94,8 @@ async def _run_queries(agent: Agent[Any], queries: list[str]) -> list[AgentRespo
     The claw harness agent includes ``ToolApprovalMiddleware``, which requires an
     ``AgentSession``. ``evaluate_agent`` does not create one when it runs queries itself, so we run
     the agent here (one session per query) and hand the responses to ``evaluate_agent`` via
-    ``responses=``.
+    ``responses=``. Skill scripts are auto-approved for this run (see ``main``), so a skill that
+    runs a script completes instead of pausing on an approval request.
     """
     responses: list[AgentResponse[Any]] = []
     for query in queries:
@@ -114,6 +115,11 @@ async def main() -> None:
     agent = await build_claw_agent(
         credential=credential,
         default_options={"store": False},
+        # The valuation skill's instructions tell the agent to run ``scripts/valuation_metrics.py``,
+        # and ``run_skill_script`` requires approval by default — an unattended eval run would stop
+        # at an approval request and score that instead of a real answer. This is eval-only:
+        # ``place_trade``, the shell, and file writes keep their normal approval behavior.
+        auto_approve_skill_scripts=True,
     )
     async with agent:
         local = LocalEvaluator(

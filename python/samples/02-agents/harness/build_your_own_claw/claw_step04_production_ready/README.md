@@ -1,17 +1,17 @@
 # Claw Step 04 — Production-ready
 
 This folder restructures the Step 03 claw into a shared agent module plus thin hosts. It is also a
-self-contained Foundry deployment package (Docker build context):
+self-contained Foundry deployment package: Foundry uses code (ZIP) deployment for Python hosted
+agents and uploads this folder only.
 
-- `agent.py` — `build_claw_agent(stack, ...)` builds the full Step 03 claw and adds opt-in Purview chat middleware.
+- `agent.py` — `build_claw_agent(...)` builds the full Step 03 claw and adds opt-in Purview chat middleware.
 - `console.py` — local interactive Textual console with OpenTelemetry provider setup.
 - `hosted.py` — Foundry Hosted Agent entry point using `ResponsesHostServer`.
 - `evals.py` — local finance checks plus optional Foundry evaluators.
-- `Dockerfile` — image Foundry builds for the hosted agent; its `CMD` selects the entry point.
-- `requirements.txt` — packages installed into the hosted image.
-- `.dockerignore` — files excluded from the image (caches, `.env`, the local `working/` vault).
-- `skills/` and `subprocess_script_runner.py` — local copies so the folder is a self-contained build
-  context (the parent sample folder can't be reached from a Docker `COPY .`).
+- `requirements.txt` — packages installed into the hosted deployment.
+- `.agentignore` — files excluded from the uploaded package (caches, `.env`, azd tooling files).
+- `skills/` and `subprocess_script_runner.py` — local copies so the folder is a self-contained
+  package (the parent sample folder is outside the upload and cannot be reached from the container).
 
 ## Environment
 
@@ -114,6 +114,13 @@ uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_producti
 ```
 
 Local evals use `LocalEvaluator` custom checks. When `FOUNDRY_PROJECT_ENDPOINT` is set, the sample also runs `FoundryEvals` with relevance and coherence.
+
+> **Why the evals auto-approve skill scripts.** `evals.py` passes `auto_approve_skill_scripts=True`
+> to `build_claw_agent`. The valuation skill's instructions tell the agent to run
+> `scripts/valuation_metrics.py`, and `run_skill_script` requires approval by default — so an
+> unattended run would stop at an approval request and the valuation check would score that instead
+> of a real answer. The flag is eval-only and scoped to the skill tools: `place_trade`, the shell,
+> and file writes keep their normal approval behavior.
 
 > **Foundry evals permissions.** The `FoundryEvals` step uploads the eval items as a temporary
 > dataset to the storage account backing your Foundry project. The identity running the evals — your

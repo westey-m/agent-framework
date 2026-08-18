@@ -30,10 +30,8 @@ using Azure.Identity;
 using ClawAgent;
 using DotNetEnv;
 using Hosted_Shared_Contributor_Setup;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Agents.AI.LocalCodeAct;
-using Microsoft.Extensions.DependencyInjection;
 
 Env.TraversePath().Load();
 

@@ -5,7 +5,7 @@ self-contained Foundry deployment package: Foundry uses code (ZIP) deployment fo
 agents and uploads this folder only.
 
 - `agent.py` — `build_claw_agent(...)` builds the full Step 03 claw and adds opt-in Purview chat middleware.
-- `console.py` — local interactive Textual console with OpenTelemetry provider setup.
+- `console_app.py` — local interactive Textual console with OpenTelemetry provider setup.
 - `hosted.py` — Foundry Hosted Agent entry point using `ResponsesHostServer`.
 - `evals.py` — local finance checks plus optional Foundry evaluators.
 - `requirements.txt` — packages installed into the hosted deployment.
@@ -42,7 +42,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 > request and forwards the platform's per-request `x-agent-foundry-call-id`. See
 > [`04-hosting/foundry-hosted-agents/responses/foundry_toolbox_mcp_skills`](../../../../04-hosting/foundry-hosted-agents/responses/foundry_toolbox_mcp_skills)
 > for the minimal version of this pattern. Hosted runs connect the toolbox because
-> `ResponsesHostServer` enters the agent; `console.py` and `evals.py` do it explicitly with
+> `ResponsesHostServer` enters the agent; `console_app.py` and `evals.py` do it explicitly with
 > `async with agent:`.
 
 > **The hosted agent's managed identity needs the `Foundry User` role.** This is the single most
@@ -76,13 +76,17 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 ## Run locally
 
 ```bash
-uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/console.py
+uv run --prerelease=allow python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/console_app.py
 ```
+
+> **Why `--prerelease=allow`?** These entry points depend on `agent-framework-foundry-hosting`
+> (it provides `FoundryToolbox`), which is currently a prerelease. Without the flag uv refuses to
+> resolve the PEP 723 dependency block and the run fails before it starts.
 
 ## Host with Foundry
 
 ```bash
-uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/hosted.py
+uv run --prerelease=allow python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/hosted.py
 ```
 
 The hosted version **disables file access and shell** on the container. In a shared, hosted environment, giving the model arbitrary read/write access to the container filesystem or letting it run shell commands is a serious security risk (data exfiltration, tampering, persistence), and the local confirmations vault the shell operates on doesn't exist there. Background agents and Monty CodeAct (alpha) remain enabled. If you need file access when hosted, pass an external `file_access_store` (for example, one backed by Azure Blob Storage) instead of the container disk.
@@ -110,7 +114,7 @@ you must point it at `hosted.py`. We therefore pass `--entry-point hosted.py` to
 ## Run evals
 
 ```bash
-uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/evals.py
+uv run --prerelease=allow python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/evals.py
 ```
 
 Local evals use `LocalEvaluator` custom checks. When `FOUNDRY_PROJECT_ENDPOINT` is set, the sample also runs `FoundryEvals` with relevance and coherence.
@@ -133,7 +137,7 @@ Local evals use `LocalEvaluator` custom checks. When `FOUNDRY_PROJECT_ENDPOINT` 
 
 ## Observability and Purview
 
-The **local** hosts (`console.py`, `evals.py`) call `configure_otel_providers()` from `agent_framework.observability`, which honors `ENABLE_INSTRUMENTATION`, `ENABLE_SENSITIVE_DATA`, `ENABLE_CONSOLE_EXPORTERS`, and OTLP endpoint environment variables.
+The **local** hosts (`console_app.py`, `evals.py`) call `configure_otel_providers()` from `agent_framework.observability`, which honors `ENABLE_INSTRUMENTATION`, `ENABLE_SENSITIVE_DATA`, `ENABLE_CONSOLE_EXPORTERS`, and OTLP endpoint environment variables.
 
 The **hosted** host (`hosted.py`) wires no exporters: Agent Framework instrumentation is on by default and the Foundry hosting runtime collects and exports telemetry. Foundry injects `APPLICATIONINSIGHTS_CONNECTION_STRING` when deployed; set `ENABLE_SENSITIVE_DATA=true` to include prompt/response content. Because the exporters are Foundry-managed, run the hosted host with `azd ai agent run` to see telemetry.
 

@@ -3,6 +3,7 @@
 # dependencies = [
 #     "agent-framework-core",
 #     "agent-framework-foundry",
+#     "agent-framework-foundry-hosting",
 #     "agent-framework-purview",
 #     "agent-framework-tools",
 #     "agent-framework-monty",
@@ -26,14 +27,14 @@ Environment variables:
     PURVIEW_CLIENT_APP_ID          — Optional app/client ID; enables Purview chat policy middleware
 
 Run indirectly through a host, for example:
-    uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/console.py
+    uv run --prerelease=allow \
+        python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/console_app.py
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import sys
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -73,7 +74,6 @@ from pydantic import Field
 # ``working/`` (used only by the local file-access and shell hosts) stays in the parent folder: it is
 # outside the deployment package and unused on the hosted container, where file access and shell are off.
 _SELF_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(_SELF_DIR))
 from subprocess_script_runner import subprocess_script_runner  # noqa: E402
 
 _WORKING_DIR = _SELF_DIR.parent / "working"

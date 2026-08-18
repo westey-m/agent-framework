@@ -3,6 +3,7 @@
 # dependencies = [
 #     "agent-framework-core",
 #     "agent-framework-foundry",
+#     "agent-framework-foundry-hosting",
 #     "agent-framework-purview",
 #     "agent-framework-tools",
 #     "agent-framework-monty",
@@ -31,7 +32,8 @@ Environment variables:
     OTEL_EXPORTER_OTLP_ENDPOINT    — Optional OTLP collector endpoint
 
 Run:
-    uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/console.py
+    uv run --prerelease=allow \
+        python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/console_app.py
 """
 
 from __future__ import annotations

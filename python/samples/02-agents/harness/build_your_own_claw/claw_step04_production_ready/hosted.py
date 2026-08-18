@@ -37,7 +37,8 @@ Environment variables:
     ENABLE_SENSITIVE_DATA          — Enables sensitive telemetry capture (prompts/responses) when true
 
 Run locally:
-    uv run python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/hosted.py
+    uv run --prerelease=allow \
+        python/samples/02-agents/harness/build_your_own_claw/claw_step04_production_ready/hosted.py
 """
 
 from __future__ import annotations

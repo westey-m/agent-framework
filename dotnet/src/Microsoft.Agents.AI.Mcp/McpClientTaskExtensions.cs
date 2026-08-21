@@ -43,6 +43,10 @@ public static class McpClientTaskExtensions
     {
         _ = Throw.IfNull(client);
 
+#pragma warning disable MAAI001
+        FeatureUsage.MarkUsed((int)FeatureIndex.CoreMcp);
+#pragma warning restore MAAI001
+
         McpTaskOptions effectiveOptions = options ?? new();
         if (effectiveOptions.MaxConsecutiveStuckPolls <= 0)
         {

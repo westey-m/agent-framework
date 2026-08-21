@@ -70,6 +70,7 @@ public static class FoundryHostingExtensions
         ConfigureFoundryResponsesOptions(services, configure);
         services.TryAddSingleton<AgentSessionStore>(_ => CreateDefaultAgentSessionStore());
         services.TryAddSingleton<ResponseHandler, AgentFrameworkResponseHandler>();
+        MarkFeatureUsed();
         return services;
     }
 
@@ -128,6 +129,7 @@ public static class FoundryHostingExtensions
         services.TryAddSingleton(agentSessionStore);
 
         services.TryAddSingleton<ResponseHandler, AgentFrameworkResponseHandler>();
+        MarkFeatureUsed();
         return services;
     }
 
@@ -318,7 +320,15 @@ public static class FoundryHostingExtensions
             endpoints.ServiceProvider.GetRequiredService<ILogger<HostedProtocolCompatibilityFilter>>()));
         responsesEndpoints.MapResponsesServer(prefix);
         MapReadinessIfMissing(endpoints);
+        MarkFeatureUsed();
         return endpoints;
+    }
+
+    private static void MarkFeatureUsed()
+    {
+#pragma warning disable MAAI001
+        FeatureUsage.MarkUsed((int)FeatureIndex.FoundryHosting);
+#pragma warning restore MAAI001
     }
 
     /// <summary>

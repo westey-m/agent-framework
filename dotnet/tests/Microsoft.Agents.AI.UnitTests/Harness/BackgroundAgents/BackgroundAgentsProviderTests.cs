@@ -129,6 +129,43 @@ public class BackgroundAgentsProviderTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new BackgroundAgentsProvider(new[] { agent }, options));
     }
 
+    /// <summary>
+    /// Verify that the constructor rejects wait timeouts above the maximum supported delay.
+    /// </summary>
+    [Fact]
+    public void Constructor_ExcessiveWaitTimeout_Throws()
+    {
+        // Arrange
+        var agent = CreateMockAgent("Research", "Research agent");
+        var options = new BackgroundAgentsProviderOptions
+        {
+            WaitTimeout = TimeSpan.MaxValue,
+        };
+
+        // Act & Assert
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BackgroundAgentsProvider(new[] { agent }, options));
+    }
+
+    /// <summary>
+    /// Verify that the constructor accepts the maximum supported wait timeout.
+    /// </summary>
+    [Fact]
+    public void Constructor_MaximumWaitTimeout_Succeeds()
+    {
+        // Arrange
+        var agent = CreateMockAgent("Research", "Research agent");
+        var options = new BackgroundAgentsProviderOptions
+        {
+            WaitTimeout = BackgroundAgentsProviderOptions.MaximumWaitTimeout,
+        };
+
+        // Act
+        var provider = new BackgroundAgentsProvider(new[] { agent }, options);
+
+        // Assert
+        Assert.NotNull(provider);
+    }
+
     #endregion
 
     #region ProvideAIContextAsync Tests

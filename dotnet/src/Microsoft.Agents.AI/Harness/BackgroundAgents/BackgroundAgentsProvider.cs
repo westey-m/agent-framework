@@ -94,7 +94,7 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
     /// <exception cref="ArgumentNullException"><paramref name="agents"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">An agent has a null or empty name, or agent names are not unique.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <see cref="BackgroundAgentsProviderOptions.WaitTimeout"/> is not positive.
+    /// <see cref="BackgroundAgentsProviderOptions.WaitTimeout"/> is not positive or exceeds the maximum supported delay.
     /// </exception>
     public BackgroundAgentsProvider(IEnumerable<AIAgent> agents, BackgroundAgentsProviderOptions? options = null)
     {
@@ -108,6 +108,14 @@ public sealed class BackgroundAgentsProvider : AIContextProvider
                 nameof(options),
                 this._waitTimeout,
                 $"{nameof(BackgroundAgentsProviderOptions.WaitTimeout)} must be positive.");
+        }
+
+        if (this._waitTimeout > BackgroundAgentsProviderOptions.MaximumWaitTimeout)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                this._waitTimeout,
+                $"{nameof(BackgroundAgentsProviderOptions.WaitTimeout)} must not exceed {BackgroundAgentsProviderOptions.MaximumWaitTimeout.TotalMilliseconds} milliseconds.");
         }
 
         string baseInstructions = options?.Instructions ?? DefaultInstructions;

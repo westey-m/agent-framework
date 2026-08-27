@@ -351,7 +351,10 @@ async def test_wait_timeout_returns_without_stopping_task(monkeypatch: pytest.Mo
             tools["background_agents_wait_for_first_completion"],
             task_ids=[1],
         )
-        assert result == "No background task completed within 7 seconds."
+        assert result == (
+            "No background task completed within 7 seconds. "
+            "The tasks are still running; call this tool again if you wish to continue waiting."
+        )
         assert observed_timeout == 7
 
         runtime = provider._get_runtime(session)

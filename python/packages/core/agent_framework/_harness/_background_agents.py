@@ -547,7 +547,10 @@ class BackgroundAgentsProvider(ContextProvider):
                 return_when=asyncio.FIRST_COMPLETED,
             )
             if not done:
-                return f"No background task completed within {self._wait_timeout_seconds} seconds."
+                return (
+                    f"No background task completed within {self._wait_timeout_seconds} seconds. "
+                    "The tasks are still running; call this tool again if you wish to continue waiting."
+                )
 
             # Find which ID completed.
             completed_id: int | None = None

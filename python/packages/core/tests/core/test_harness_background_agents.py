@@ -166,8 +166,12 @@ async def test_wait_timeout_is_not_model_settable() -> None:
     """The model-facing wait tool should only accept task IDs."""
     provider = _make_provider(_FakeAgent("Worker"))
     tools = await _get_tools(provider, _make_session())
-    wait_parameters = tools["background_agents_wait_for_first_completion"].parameters()
+    wait_tool = tools["background_agents_wait_for_first_completion"]
+    wait_parameters = wait_tool.parameters()
     assert set(wait_parameters["properties"]) == {"task_ids"}
+    assert "configured timeout expires" in wait_tool.description
+    assert "tasks remain running" in wait_tool.description
+    assert "called again" in wait_tool.description
 
 
 async def test_before_run_injects_instructions() -> None:

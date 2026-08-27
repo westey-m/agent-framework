@@ -276,7 +276,8 @@ class BackgroundAgentsProvider(ContextProvider):
     This provider exposes the following tools to the agent:
 
     - ``background_agents_start_task`` — Start a background task on a named agent with text input.
-    - ``background_agents_wait_for_first_completion`` — Block until the first of the specified tasks completes.
+    - ``background_agents_wait_for_first_completion`` — Wait until the first specified task completes or the
+      configured timeout expires. A timeout leaves the tasks running so the tool can be called again.
     - ``background_agents_get_task_results`` — Retrieve the text output of a completed background task.
     - ``background_agents_get_all_tasks`` — List all background tasks with their IDs, statuses, and descriptions.
     - ``background_agents_continue_task`` — Send follow-up input to a completed task's session to resume work.
@@ -514,7 +515,11 @@ class BackgroundAgentsProvider(ContextProvider):
 
         @tool(name="background_agents_wait_for_first_completion", approval_mode="never_require")
         async def background_agents_wait_for_first_completion(task_ids: list[int]) -> str:
-            """Block until the first of the specified background tasks completes. Returns the completed task's ID."""
+            """Wait until the first of the specified tasks completes or the configured timeout expires.
+
+            Returns the completed task's ID. On timeout, the tasks remain running and this tool
+            can be called again to continue waiting.
+            """
             if runtime.closed:
                 return "Error: Session is being released; cannot wait for background tasks."
 

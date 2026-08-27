@@ -27,6 +27,7 @@ from .._types import AgentResponse, Message
 logger = logging.getLogger(__name__)
 
 DEFAULT_BACKGROUND_AGENTS_SOURCE_ID = "background_agents"
+DEFAULT_BACKGROUND_AGENTS_WAIT_TIMEOUT_SECONDS = 300
 
 DEFAULT_BACKGROUND_AGENTS_INSTRUCTIONS = """\
 ## Background Agents
@@ -297,6 +298,7 @@ class BackgroundAgentsProvider(ContextProvider):
         *,
         source_id: str = DEFAULT_BACKGROUND_AGENTS_SOURCE_ID,
         instructions: str | None = None,
+        wait_timeout_seconds: int = DEFAULT_BACKGROUND_AGENTS_WAIT_TIMEOUT_SECONDS,
     ) -> None:
         """Initialize the background agents provider.
 
@@ -312,13 +314,23 @@ class BackgroundAgentsProvider(ContextProvider):
             source_id: Unique source ID for serializable task state in session.
             instructions: Optional instruction override. May include ``{background_agents}``
                 placeholder which will be replaced with the agent listing.
+            wait_timeout_seconds: Maximum seconds the wait tool blocks for a task to complete.
+                Must be a positive integer. Defaults to 300 seconds.
 
         Raises:
-            ValueError: If agents is empty, an agent has no name, or names are not unique.
+            ValueError: If agents is empty, an agent has no name, names are not unique, or
+                wait_timeout_seconds is not a positive integer.
         """
         super().__init__(source_id)
 
         self._agents = _validate_and_build_agent_dict(agents)
+        if (
+            isinstance(wait_timeout_seconds, bool)
+            or not isinstance(wait_timeout_seconds, int)
+            or wait_timeout_seconds <= 0
+        ):
+            raise ValueError("wait_timeout_seconds must be a positive integer.")
+        self._wait_timeout_seconds = wait_timeout_seconds
 
         # Build instructions with agent listing.
         base_instructions = instructions if instructions is not None else DEFAULT_BACKGROUND_AGENTS_INSTRUCTIONS
@@ -531,8 +543,11 @@ class BackgroundAgentsProvider(ContextProvider):
             # Wait for the first one to complete.
             done, _ = await asyncio.wait(
                 [t for _, t in waitable],
+                timeout=self._wait_timeout_seconds,
                 return_when=asyncio.FIRST_COMPLETED,
             )
+            if not done:
+                return f"No background task completed within {self._wait_timeout_seconds} seconds."
 
             # Find which ID completed.
             completed_id: int | None = None

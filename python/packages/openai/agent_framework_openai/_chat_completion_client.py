@@ -17,6 +17,7 @@ from collections.abc import (
 from datetime import datetime, timezone
 from itertools import chain
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal, TypeAlias, cast, overload
+from uuid import uuid4
 
 from agent_framework._clients import BaseChatClient
 from agent_framework._compaction import CompactionStrategy, TokenizerProtocol
@@ -619,6 +620,7 @@ class RawOpenAIChatCompletionClient(
 
             async def _stream() -> AsyncIterable[ChatResponseUpdate]:
                 client = self.client
+                tool_call_identities: dict[tuple[int, int], tuple[str, str]] = {}
                 if self._FEATURE_USAGE_INDEX is not None:
                     mark_feature_used(self._FEATURE_USAGE_INDEX)
                 request_options = dict(options_dict)
@@ -629,7 +631,25 @@ class RawOpenAIChatCompletionClient(
                     async for chunk in await client.chat.completions.create(stream=True, **request_options):
                         if len(chunk.choices) == 0 and chunk.usage is None:
                             continue
-                        yield self._parse_response_update_from_openai(chunk)
+                        update = self._parse_response_update_from_openai(chunk)
+                        for content in update.contents:
+                            if content.type != "function_call":
+                                continue
+                            choice_index = content.additional_properties.get("tool_call_choice_index")
+                            tool_index = content.additional_properties.get("tool_call_index")
+                            if not isinstance(choice_index, int) or not isinstance(tool_index, int):
+                                continue
+                            index_key = (choice_index, tool_index)
+                            identity = tool_call_identities.get(index_key)
+                            if identity is None:
+                                identity = (f"af-call-{uuid4().hex}", content.call_id or "")
+                            occurrence_id, provider_call_id = identity
+                            if content.call_id:
+                                provider_call_id = content.call_id
+                            tool_call_identities[index_key] = (occurrence_id, provider_call_id)
+                            content.id = occurrence_id
+                            content.call_id = provider_call_id
+                        yield update
                 except BadRequestError as ex:
                     if ex.code == "content_filter":
                         raise OpenAIContentFilterException(
@@ -995,6 +1015,9 @@ class RawOpenAIChatCompletionClient(
                     tool_index = getattr(tool, "index", None)
                     if tool_index is not None:
                         fcc.additional_properties["tool_call_index"] = tool_index
+                        choice_index = getattr(choice, "index", None)
+                        if choice_index is not None:
+                            fcc.additional_properties["tool_call_choice_index"] = choice_index
                     resp.append(fcc)
 
         # When you enable asynchronous content filtering in Azure OpenAI, you may receive empty deltas

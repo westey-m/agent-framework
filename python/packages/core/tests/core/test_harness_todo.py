@@ -396,6 +396,7 @@ def test_todo_file_store_derives_distinct_directories_for_colliding_owner_ids(tm
         paths[owner_id] = store._get_state_path(session, source_id="todo")  # pyright: ignore[reportPrivateUsage]
 
     assert len(set(paths.values())) == len(COLLIDING_IDENTIFIERS), paths
+    assert len({str(path).lower() for path in paths.values()}) == len(COLLIDING_IDENTIFIERS), paths
     for path in paths.values():
         assert path.is_relative_to(tmp_path.resolve())
 

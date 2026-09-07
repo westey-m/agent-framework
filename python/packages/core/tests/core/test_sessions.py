@@ -1298,6 +1298,7 @@ class TestFileSessionStore:
         paths = {session_id: provider._session_file_path(session_id) for session_id in COLLIDING_IDENTIFIERS}
 
         assert len(set(paths.values())) == len(COLLIDING_IDENTIFIERS), paths
+        assert len({str(path).lower() for path in paths.values()}) == len(COLLIDING_IDENTIFIERS), paths
         for path in paths.values():
             assert path.parent == tmp_path.resolve()
 

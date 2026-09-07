@@ -14,7 +14,7 @@ from typing import Any, ClassVar, cast
 from typing_extensions import NotRequired, TypedDict
 
 from .._feature_stage import ExperimentalFeature, experimental
-from .._filesystem import is_literal_storage_key_segment_safe, storage_key_segment
+from .._filesystem import _is_literal_storage_key_segment_safe, _storage_key_segment
 from .._serialization import SerializationMixin
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used
@@ -341,18 +341,19 @@ class TodoFileStore(TodoStore):
         """Return a filesystem-safe path segment for user-controlled state values.
 
         Delegates to the shared
-        :func:`~agent_framework._filesystem.storage_key_segment` derivation, so
-        two byte-distinct values never share a directory.
+        :func:`~agent_framework._filesystem._storage_key_segment` derivation, so
+        two byte-distinct values do not share a directory (values past a
+        length cap fall back to a collision-resistant digest).
         """
         raw_value = str(value)
         if reject_path_separators and ("/" in raw_value or "\\" in raw_value):
             raise ValueError(f"TodoFileStore {label} must not contain path separators: {raw_value!r}")
-        return storage_key_segment(raw_value, encoded_prefix=cls._ENCODED_SEGMENT_PREFIX)
+        return _storage_key_segment(raw_value, encoded_prefix=cls._ENCODED_SEGMENT_PREFIX)
 
     @classmethod
     def _is_literal_path_segment_safe(cls, value: str) -> bool:
         """Return whether a value can be used directly as one path segment."""
-        return is_literal_storage_key_segment_safe(value)
+        return _is_literal_storage_key_segment_safe(value)
 
     def _state_filename(self, source_id: str) -> str:
         """Return a source-specific JSON state filename."""

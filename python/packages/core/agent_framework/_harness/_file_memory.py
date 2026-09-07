@@ -20,11 +20,12 @@ folder (derived from the session id). Pass an explicit ``scope`` to group
 memories differently, for example by user id.
 
 A ``scope`` (and the session id it defaults to) is treated as an **opaque
-namespace key**, not as a path: it is mapped to exactly one storage folder by an
-injective derivation, so two byte-distinct values can never share a working
-folder. Applications that derive a scope from an externally supplied value
-should still canonicalize and authorize that value themselves; the injective
-mapping here is the storage-layer guarantee, not a substitute for that check.
+namespace key**, not as a path: it is mapped to exactly one storage folder by a
+derivation that is injective for all but pathologically long values, so two
+byte-distinct values cannot share a working folder. Applications that derive a
+scope from an externally supplied value should still canonicalize and authorize
+that value themselves; the mapping here is the storage-layer guarantee, not a
+substitute for that check.
 
 The provider exposes the following tools to the agent (registered on the
 per-invocation :class:`~agent_framework.SessionContext` in
@@ -47,7 +48,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
-from .._filesystem import storage_key_segment
+from .._filesystem import _storage_key_segment
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._tools import tool
 from .._types import Message
@@ -248,8 +249,9 @@ class FileMemoryProvider(ContextProvider):
     group memories differently (for example, per user id) across sessions.
 
     The scope (or session id) is an opaque namespace key, not a path. It is
-    mapped to a single folder by an injective derivation, so two byte-distinct
-    values never share a working folder.
+    mapped to a single folder by a derivation that is injective for all but
+    pathologically long values, so two byte-distinct values cannot share a
+    working folder.
     """
 
     def __init__(
@@ -272,7 +274,7 @@ class FileMemoryProvider(ContextProvider):
                 store. When ``None`` (the default), the active session's
                 ``session_id`` is used, isolating memories per session. The
                 value is treated as an opaque key rather than a path: it is
-                mapped injectively onto one folder, so a multi-segment value
+                mapped onto exactly one folder, so a multi-segment value
                 such as ``"tenants/alice"`` becomes a single encoded folder
                 instead of a nested directory.
             instructions: Optional instruction override. When ``None`` the
@@ -292,10 +294,12 @@ class FileMemoryProvider(ContextProvider):
 
         Uses the configured ``scope`` when set, otherwise the session id. The
         value is an opaque namespace key, not a path: it is mapped to exactly
-        one folder name by :func:`~agent_framework._filesystem.storage_key_segment`,
-        which is injective. Two byte-distinct scopes or session ids therefore
-        never resolve to the same working folder, so a caller authorized for one
-        of them cannot reach another's memories.
+        one folder name by :func:`~agent_framework._filesystem._storage_key_segment`.
+        That derivation is injective except for pathologically long values,
+        which fall back to a collision-resistant digest. Two byte-distinct
+        scopes or session ids therefore do not resolve to the same working
+        folder, so a caller authorized for one of them cannot reach another's
+        memories.
 
         Raises:
             ValueError: When neither ``scope`` nor the session id yields a
@@ -308,7 +312,7 @@ class FileMemoryProvider(ContextProvider):
                 "FileMemoryProvider requires a memory scope: pass an explicit 'scope' or run with a session "
                 "that has a 'session_id'. Without one, memories cannot be isolated from other scopes."
             )
-        return storage_key_segment(raw_scope, encoded_prefix=_ENCODED_SCOPE_PREFIX)
+        return _storage_key_segment(raw_scope, encoded_prefix=_ENCODED_SCOPE_PREFIX)
 
     async def _rebuild_index(self, working_folder: str) -> None:
         """Rebuild the ``memories.md`` index for ``working_folder``.

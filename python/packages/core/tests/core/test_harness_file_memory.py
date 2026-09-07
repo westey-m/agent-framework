@@ -501,6 +501,8 @@ async def test_colliding_session_ids_resolve_to_distinct_working_folders() -> No
         for session_id in COLLIDING_IDENTIFIERS
     }
     assert len(set(folders.values())) == len(COLLIDING_IDENTIFIERS), folders
+    # Case-insensitive too: NTFS and APFS fold names that differ only in case.
+    assert len({folder.lower() for folder in folders.values()}) == len(COLLIDING_IDENTIFIERS), folders
 
 
 async def test_colliding_scopes_resolve_to_distinct_working_folders() -> None:
@@ -512,6 +514,7 @@ async def test_colliding_scopes_resolve_to_distinct_working_folders() -> None:
         for scope in COLLIDING_IDENTIFIERS
     }
     assert len(set(folders.values())) == len(COLLIDING_IDENTIFIERS), folders
+    assert len({folder.lower() for folder in folders.values()}) == len(COLLIDING_IDENTIFIERS), folders
 
 
 async def test_safe_session_id_keeps_its_literal_working_folder() -> None:

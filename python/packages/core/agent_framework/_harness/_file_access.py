@@ -35,7 +35,7 @@ from typing import Annotated, Any, ClassVar, cast
 from pydantic import BaseModel, Field
 
 from .._feature_stage import ExperimentalFeature, experimental
-from .._filesystem import is_link_or_reparse_point
+from .._filesystem import _is_link_or_reparse_point
 from .._serialization import SerializationMixin
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used
@@ -140,7 +140,7 @@ def _normalize_relative_path(path: str, *, is_directory: bool = False) -> str:
     backslash-terminated spelling. Never use it to derive a storage namespace
     from an identifier that participates in an isolation boundary (a session ID,
     owner ID, or memory scope) — distinct identifiers would share one location.
-    Use :func:`~agent_framework._filesystem.storage_key_segment` for that
+    Use :func:`~agent_framework._filesystem._storage_key_segment` for that
     instead.
 
     Args:
@@ -882,7 +882,7 @@ class FileSystemAgentFileStore(AgentFileStore):
         for segment in relative_parts:
             current = current / segment
             try:
-                is_link = is_link_or_reparse_point(current)
+                is_link = _is_link_or_reparse_point(current)
             except FileNotFoundError:
                 break
             except OSError as exc:
@@ -996,7 +996,7 @@ class FileSystemAgentFileStore(AgentFileStore):
         files: list[FileStoreEntry] = []
         for entry in full_dir.iterdir():
             try:
-                is_link = is_link_or_reparse_point(entry)
+                is_link = _is_link_or_reparse_point(entry)
             except OSError:
                 # Fail closed when an entry cannot be inspected.
                 continue
@@ -1055,7 +1055,7 @@ class FileSystemAgentFileStore(AgentFileStore):
             current = directories.pop()
             for entry in current.iterdir():
                 try:
-                    is_link = is_link_or_reparse_point(entry)
+                    is_link = _is_link_or_reparse_point(entry)
                 except OSError:
                     # Fail closed when an entry cannot be inspected.
                     continue

@@ -28,7 +28,7 @@ from agent_framework import (
     Message,
     SupportsChatGetResponse,
 )
-from agent_framework._filesystem import is_link_or_reparse_point
+from agent_framework._filesystem import _is_link_or_reparse_point
 from agent_framework._harness import _file_access as _file_access_module
 from agent_framework._harness._file_access import (
     DEFAULT_FILE_ACCESS_INSTRUCTIONS,
@@ -834,7 +834,7 @@ def test_link_probe_detects_windows_reparse_attribute(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(Path, "lstat", fake_lstat)
 
-    assert is_link_or_reparse_point(path) is True
+    assert _is_link_or_reparse_point(path) is True
 
 
 def test_file_access_harness_classes_are_marked_experimental() -> None:

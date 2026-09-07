@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeVar, ca
 import msgspec
 
 from ._feature_stage import ExperimentalFeature, experimental
-from ._filesystem import is_literal_storage_key_segment_safe, storage_key_segment
+from ._filesystem import _is_literal_storage_key_segment_safe, _storage_key_segment
 from ._middleware import ChatContext, ChatMiddleware
 from ._telemetry import FeatureIndex, mark_feature_used
 from ._types import (
@@ -120,17 +120,17 @@ def _is_literal_session_file_stem_safe(session_id: str) -> bool:
     with separators and platform-reserved names such as ``CON``. Unsafe values
     are encoded by :func:`_session_file_stem` rather than rejected.
     """
-    return is_literal_storage_key_segment_safe(session_id)
+    return _is_literal_storage_key_segment_safe(session_id)
 
 
 def _session_file_stem(session_id: str, *, encoded_prefix: str) -> str:
     """Return a safe filename stem for an opaque session ID.
 
-    Delegates to the shared :func:`~agent_framework._filesystem.storage_key_segment`
+    Delegates to the shared :func:`~agent_framework._filesystem._storage_key_segment`
     derivation so every component that maps an identifier onto storage produces
     the same injective result.
     """
-    return storage_key_segment(session_id, encoded_prefix=encoded_prefix)
+    return _storage_key_segment(session_id, encoded_prefix=encoded_prefix)
 
 
 def _deduplicate_origin_session_ids(origin_session_ids: Iterable[str]) -> list[str]:

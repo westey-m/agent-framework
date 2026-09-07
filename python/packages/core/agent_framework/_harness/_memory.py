@@ -10,7 +10,7 @@ import re
 import threading
 import weakref
 from abc import ABC, abstractmethod
-from base64 import urlsafe_b64decode
+from base64 import b32decode
 from binascii import Error as BinasciiError
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
@@ -20,7 +20,7 @@ from typing import Any, ClassVar, Final, cast
 from .._clients import SupportsChatGetResponse
 from .._compaction import group_messages
 from .._feature_stage import ExperimentalFeature, experimental
-from .._filesystem import storage_key_segment
+from .._filesystem import _storage_key_segment
 from .._sessions import AgentSession, FileHistoryProvider, HistoryProvider, JsonDumps, JsonLoads, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used
 from .._tools import tool
@@ -740,10 +740,11 @@ class MemoryFileStore(MemoryStore):
         """Return a filesystem-safe path segment for an owner ID or source ID.
 
         Delegates to the shared
-        :func:`~agent_framework._filesystem.storage_key_segment` derivation, so
-        two byte-distinct values never share a directory.
+        :func:`~agent_framework._filesystem._storage_key_segment` derivation, so
+        two byte-distinct values do not share a directory (values past a
+        length cap fall back to a collision-resistant digest).
         """
-        return storage_key_segment(value, encoded_prefix=cls._ENCODED_SEGMENT_PREFIX)
+        return _storage_key_segment(value, encoded_prefix=cls._ENCODED_SEGMENT_PREFIX)
 
     def _get_memory_root(self, session: AgentSession, *, source_id: str) -> Path:
         owner_component = self._encode_path_component(f"{self.owner_prefix}{self._get_owner_id(session)}")
@@ -782,9 +783,9 @@ class MemoryFileStore(MemoryStore):
         if not file_stem.startswith(_FILE_HISTORY_ENCODED_SESSION_PREFIX):
             return file_stem
         encoded_value = file_stem[len(_FILE_HISTORY_ENCODED_SESSION_PREFIX) :]
-        padded_value = encoded_value + ("=" * (-len(encoded_value) % 4))
+        padded_value = encoded_value + ("=" * (-len(encoded_value) % 8))
         try:
-            return urlsafe_b64decode(padded_value.encode("ascii")).decode("utf-8")
+            return b32decode(padded_value.encode("ascii"), casefold=True).decode("utf-8")
         except (BinasciiError, UnicodeDecodeError, ValueError):
             # Very long session IDs are stored under an irreversible digest stem,
             # and unrelated files may share the prefix. Neither maps back to a

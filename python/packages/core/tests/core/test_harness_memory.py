@@ -904,6 +904,7 @@ def test_memory_file_store_derives_distinct_roots_for_colliding_owner_ids(tmp_pa
 
     assert rejected, "the traversal guard should still reject absolute and '..' owner IDs"
     assert len(set(roots.values())) == len(roots), roots
+    assert len({str(root).lower() for root in roots.values()}) == len(roots), roots
     assert len(roots) + len(rejected) == len(COLLIDING_IDENTIFIERS)
     for root in roots.values():
         assert root.is_relative_to(tmp_path.resolve())
@@ -924,7 +925,7 @@ def test_memory_file_store_encodes_non_ascii_owner_ids(tmp_path) -> None:
 
 
 def test_memory_file_store_uses_literal_folders_for_safe_identifiers(tmp_path) -> None:
-    """Safe identifiers are readable on disk rather than opaque base64."""
+    """Safe identifiers are readable on disk rather than opaque encoded segments."""
     store = MemoryFileStore(tmp_path, owner_prefix="user_", owner_state_key="owner_id")
     session = AgentSession(session_id="session-1")
     session.state["owner_id"] = "alice"

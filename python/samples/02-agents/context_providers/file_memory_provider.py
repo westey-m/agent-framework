@@ -38,6 +38,14 @@ Controlling scope:
     session for that user shares — which is what lets the second conversation
     below recall what the user said in the first.
 
+    A scope is an opaque namespace key, not a path. It is mapped to exactly one
+    folder by an injective derivation, so two byte-distinct scopes never share a
+    working folder, and a value containing separators becomes a single encoded
+    folder rather than a nested directory. Prefer a flat, canonical scope such
+    as ``f"user-{USER_ID}"``. If the scope comes from an external request, keep
+    authorizing it in your own application code — the injective mapping is a
+    storage-layer guarantee, not an authorization check.
+
 Prerequisites:
     - ``FOUNDRY_PROJECT_ENDPOINT``: Your Microsoft Foundry project endpoint.
     - ``FOUNDRY_MODEL``: Chat model deployment name.
@@ -71,7 +79,9 @@ async def main() -> None:
     #      conversation further down to recall what the user said in the first.
     #    - Omitting ``scope`` (the default) isolates memories to a single session
     #      (the working folder is derived from the session id).
-    file_memory_provider = FileMemoryProvider(store, scope=f"users/{USER_ID}")
+    #    Keep the scope a flat, canonical value: it is an opaque key mapped onto
+    #    exactly one folder, not a path that expands into subdirectories.
+    file_memory_provider = FileMemoryProvider(store, scope=f"user-{USER_ID}")
 
     # 3. Attach the provider to the agent so it gets the file_memory_* tools.
     agent = Agent(

@@ -10,7 +10,8 @@ import re
 import threading
 import weakref
 from abc import ABC, abstractmethod
-from base64 import urlsafe_b64decode, urlsafe_b64encode
+from base64 import urlsafe_b64decode
+from binascii import Error as BinasciiError
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import Any, ClassVar, Final, cast
 from .._clients import SupportsChatGetResponse
 from .._compaction import group_messages
 from .._feature_stage import ExperimentalFeature, experimental
+from .._filesystem import storage_key_segment
 from .._sessions import AgentSession, FileHistoryProvider, HistoryProvider, JsonDumps, JsonLoads, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used
 from .._tools import tool
@@ -731,10 +733,17 @@ class MemoryFileStore(MemoryStore):
             )
         session.state[self.owner_state_key] = owner_value
 
-    @staticmethod
-    def _encode_path_component(value: str) -> str:
-        encoded_value = urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
-        return encoded_value or "_"
+    _ENCODED_SEGMENT_PREFIX: ClassVar[str] = "~memory-"
+
+    @classmethod
+    def _encode_path_component(cls, value: str) -> str:
+        """Return a filesystem-safe path segment for an owner ID or source ID.
+
+        Delegates to the shared
+        :func:`~agent_framework._filesystem.storage_key_segment` derivation, so
+        two byte-distinct values never share a directory.
+        """
+        return storage_key_segment(value, encoded_prefix=cls._ENCODED_SEGMENT_PREFIX)
 
     def _get_memory_root(self, session: AgentSession, *, source_id: str) -> Path:
         owner_component = self._encode_path_component(f"{self.owner_prefix}{self._get_owner_id(session)}")
@@ -774,7 +783,14 @@ class MemoryFileStore(MemoryStore):
             return file_stem
         encoded_value = file_stem[len(_FILE_HISTORY_ENCODED_SESSION_PREFIX) :]
         padded_value = encoded_value + ("=" * (-len(encoded_value) % 4))
-        return urlsafe_b64decode(padded_value.encode("ascii")).decode("utf-8")
+        try:
+            return urlsafe_b64decode(padded_value.encode("ascii")).decode("utf-8")
+        except (BinasciiError, UnicodeDecodeError, ValueError):
+            # Very long session IDs are stored under an irreversible digest stem,
+            # and unrelated files may share the prefix. Neither maps back to a
+            # session ID, so treat the transcript as unattributed rather than
+            # failing the whole scan.
+            return None
 
     def list_topics(self, session: AgentSession, *, source_id: str) -> list[MemoryTopicRecord]:
         """Return all topic memory files visible from the current owner."""

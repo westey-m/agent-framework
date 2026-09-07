@@ -6,6 +6,7 @@ import asyncio
 import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -26,6 +27,8 @@ from agent_framework import (
     MemoryTopicRecord,
     Message,
 )
+
+from .test_filesystem import COLLIDING_IDENTIFIERS
 
 
 def _no_store_options() -> ChatOptions:
@@ -875,3 +878,61 @@ def test_extract_keywords_handles_non_english_text() -> None:
     assert cyrillic == {"привет", "мир", "друзья"}
     # English extraction is unchanged.
     assert english == {"hello", "world"}
+
+
+# region Storage-key parity: identifiers must map injectively onto directories
+
+
+def test_memory_file_store_derives_distinct_roots_for_colliding_owner_ids(tmp_path) -> None:
+    """Owner IDs that a path normalizer would fold together stay separate.
+
+    ``MemoryFileStore`` shares the storage-key derivation with the session
+    store, the todo store, and the file-memory provider, so it is held to the
+    same injectivity contract. Owner IDs that trip the independent traversal
+    guard are rejected outright rather than merged.
+    """
+    store = MemoryFileStore(tmp_path, owner_state_key="owner_id")
+    roots: dict[str, Path] = {}
+    rejected: set[str] = set()
+    for owner_id in COLLIDING_IDENTIFIERS:
+        session = AgentSession(session_id="session-1")
+        session.state["owner_id"] = owner_id
+        try:
+            roots[owner_id] = store._get_memory_root(session, source_id=DEFAULT_MEMORY_SOURCE_ID)
+        except ValueError:
+            rejected.add(owner_id)
+
+    assert rejected, "the traversal guard should still reject absolute and '..' owner IDs"
+    assert len(set(roots.values())) == len(roots), roots
+    assert len(roots) + len(rejected) == len(COLLIDING_IDENTIFIERS)
+    for root in roots.values():
+        assert root.is_relative_to(tmp_path.resolve())
+
+
+def test_memory_file_store_encodes_non_ascii_owner_ids(tmp_path) -> None:
+    """NFC and NFD spellings of one word must not share a directory."""
+    store = MemoryFileStore(tmp_path, owner_state_key="owner_id")
+    roots: list[Path] = []
+    for owner_id in ("caf\u00e9", "cafe\u0301"):
+        session = AgentSession(session_id="session-1")
+        session.state["owner_id"] = owner_id
+        root = store._get_memory_root(session, source_id=DEFAULT_MEMORY_SOURCE_ID)
+        assert all(part.isascii() for part in root.relative_to(tmp_path.resolve()).parts)
+        roots.append(root)
+
+    assert roots[0] != roots[1]
+
+
+def test_memory_file_store_uses_literal_folders_for_safe_identifiers(tmp_path) -> None:
+    """Safe identifiers are readable on disk rather than opaque base64."""
+    store = MemoryFileStore(tmp_path, owner_prefix="user_", owner_state_key="owner_id")
+    session = AgentSession(session_id="session-1")
+    session.state["owner_id"] = "alice"
+
+    root = store._get_memory_root(session, source_id="memory")
+    parts = root.relative_to(tmp_path.resolve()).parts
+    assert parts[0] == "memory"
+    assert parts[1] == "user_alice"
+
+
+# endregion

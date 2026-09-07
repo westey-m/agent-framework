@@ -135,6 +135,14 @@ def _normalize_relative_path(path: str, *, is_directory: bool = False) -> str:
     trailing separators are not accepted (so ``"foo/"`` does not silently
     become the file path ``"foo"``).
 
+    This is for *paths supplied as tool arguments*. It is deliberately lossy:
+    ``"a/"`` and ``"a//"`` both normalize to ``"a"``, as does the equivalent
+    backslash-terminated spelling. Never use it to derive a storage namespace
+    from an identifier that participates in an isolation boundary (a session ID,
+    owner ID, or memory scope) — distinct identifiers would share one location.
+    Use :func:`~agent_framework._filesystem.storage_key_segment` for that
+    instead.
+
     Args:
         path: The relative path to normalize.
 

@@ -14,7 +14,10 @@ from typing import Any, ClassVar, cast
 from typing_extensions import NotRequired, TypedDict
 
 from .._feature_stage import ExperimentalFeature, experimental
-from .._filesystem import _is_literal_storage_key_segment_safe, _storage_key_segment
+from .._filesystem import (
+    _is_literal_storage_key_segment_safe,  # pyright: ignore[reportPrivateUsage]
+    _storage_key_segment,  # pyright: ignore[reportPrivateUsage]
+)
 from .._serialization import SerializationMixin
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used

@@ -66,7 +66,7 @@ from pathlib import Path, PurePosixPath
 from typing import IO, TYPE_CHECKING, Any, ClassVar, Final, Protocol, TypeAlias, TypeVar, cast, runtime_checkable
 
 from ._feature_stage import ExperimentalFeature, experimental
-from ._filesystem import _is_link_or_reparse_point
+from ._filesystem import _is_link_or_reparse_point  # pyright: ignore[reportPrivateUsage]
 from ._sessions import ContextProvider
 from ._telemetry import FeatureIndex, mark_feature_used
 from ._tools import ApprovalMode, FunctionTool

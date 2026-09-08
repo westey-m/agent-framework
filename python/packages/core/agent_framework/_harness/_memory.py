@@ -20,7 +20,7 @@ from typing import Any, ClassVar, Final, cast
 from .._clients import SupportsChatGetResponse
 from .._compaction import group_messages
 from .._feature_stage import ExperimentalFeature, experimental
-from .._filesystem import _storage_key_segment
+from .._filesystem import _storage_key_segment  # pyright: ignore[reportPrivateUsage]
 from .._sessions import AgentSession, FileHistoryProvider, HistoryProvider, JsonDumps, JsonLoads, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used
 from .._tools import tool

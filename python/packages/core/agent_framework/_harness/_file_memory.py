@@ -48,7 +48,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
-from .._filesystem import _storage_key_segment
+from .._filesystem import _storage_key_segment  # pyright: ignore[reportPrivateUsage]
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._tools import tool
 from .._types import Message

@@ -38,7 +38,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeVar, ca
 import msgspec
 
 from ._feature_stage import ExperimentalFeature, experimental
-from ._filesystem import _is_literal_storage_key_segment_safe, _storage_key_segment
+from ._filesystem import (
+    _is_literal_storage_key_segment_safe,  # pyright: ignore[reportPrivateUsage]
+    _storage_key_segment,  # pyright: ignore[reportPrivateUsage]
+)
 from ._middleware import ChatContext, ChatMiddleware
 from ._telemetry import FeatureIndex, mark_feature_used
 from ._types import (

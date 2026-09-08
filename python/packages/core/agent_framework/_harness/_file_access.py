@@ -35,7 +35,7 @@ from typing import Annotated, Any, ClassVar, cast
 from pydantic import BaseModel, Field
 
 from .._feature_stage import ExperimentalFeature, experimental
-from .._filesystem import _is_link_or_reparse_point
+from .._filesystem import _is_link_or_reparse_point  # pyright: ignore[reportPrivateUsage]
 from .._serialization import SerializationMixin
 from .._sessions import AgentSession, ContextProvider, SessionContext
 from .._telemetry import FeatureIndex, mark_feature_used

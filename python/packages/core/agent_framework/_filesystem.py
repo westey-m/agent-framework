@@ -44,7 +44,7 @@ _MAX_ENCODED_STORAGE_KEY_SEGMENT_LENGTH = 180
 _DIGEST_SEGMENT_MARKER = "sha256-"
 
 
-def _is_link_or_reparse_point(path: Path) -> bool:
+def _is_link_or_reparse_point(path: Path) -> bool:  # pyright: ignore[reportUnusedFunction]
     """Return whether ``path`` is a symbolic link, junction, or other reparse point."""
     path_stat = path.lstat()
     if stat.S_ISLNK(path_stat.st_mode):
@@ -91,7 +91,7 @@ def _is_literal_storage_key_segment_safe(value: str) -> bool:
     )
 
 
-def _storage_key_segment(value: str, *, encoded_prefix: str) -> str:
+def _storage_key_segment(value: str, *, encoded_prefix: str) -> str:  # pyright: ignore[reportUnusedFunction]
     """Return a filesystem-safe path segment for an opaque identifier.
 
     This is the single derivation used everywhere an identifier that participates

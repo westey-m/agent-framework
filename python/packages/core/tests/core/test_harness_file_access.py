@@ -335,7 +335,12 @@ async def test_filesystem_search_does_not_read_through_a_symlink(
         "_enumerate_search_files",
         staticmethod(lambda full_dir, recursive: [("notes.txt", swapped)]),
     )
-    monkeypatch.setattr(_file_access_module, "is_link_or_reparse_point", lambda candidate: candidate == swapped)
+    monkeypatch.setattr(
+        _file_access_module,
+        "_is_link_or_reparse_point",
+        lambda candidate: candidate == swapped,
+        raising=True,
+    )
 
     store = FileSystemAgentFileStore(root)
     results = await store.search("", "needle", recursive=True)

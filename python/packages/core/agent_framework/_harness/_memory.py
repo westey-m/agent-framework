@@ -650,7 +650,13 @@ class MemoryStore(ABC):
         session_id: str | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Search the raw transcript archive for matching text snippets."""
+        """Search the raw transcript archive for matching text snippets.
+
+        When ``session_id`` is given, only transcripts belonging to that session are searched, and
+        every returned row reports that same ``session_id``. Otherwise all transcripts are searched
+        and each row reports the session the transcript could be attributed to, or ``None`` when the
+        implementation cannot determine it.
+        """
 
 
 @experimental(feature_id=ExperimentalFeature.HARNESS)
@@ -793,6 +799,17 @@ class MemoryFileStore(MemoryStore):
             # failing the whole scan.
             return None
 
+    @staticmethod
+    def _transcript_file_stem(session_id: str) -> str:
+        """Return the transcript file stem that ``FileHistoryProvider`` writes for ``session_id``.
+
+        This is the forward counterpart to :meth:`_decode_transcript_session_id`. Deriving the stem
+        works for every session ID, including the very long ones stored under an irreversible digest
+        stem that cannot be decoded back to a session ID.
+        """
+        raw_session_id = session_id or FileHistoryProvider.DEFAULT_SESSION_FILE_STEM
+        return _storage_key_segment(raw_session_id, encoded_prefix=_FILE_HISTORY_ENCODED_SESSION_PREFIX)
+
     def list_topics(self, session: AgentSession, *, source_id: str) -> list[MemoryTopicRecord]:
         """Return all topic memory files visible from the current owner."""
         topics: list[MemoryTopicRecord] = []
@@ -907,7 +924,13 @@ class MemoryFileStore(MemoryStore):
         session_id: str | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Search the raw transcript archive for matching text snippets."""
+        """Search the raw transcript archive for matching text snippets.
+
+        When ``session_id`` is given, transcripts are selected by deriving the file stem that
+        :class:`FileHistoryProvider` writes for that session ID and comparing it to each file's stem.
+        Matching forward this way keeps transcripts reachable even when their stem is an irreversible
+        digest, which reverse-decoding cannot recover.
+        """
         normalized_query = query.strip()
         if not normalized_query:
             raise ValueError("query must not be empty.")
@@ -915,12 +938,17 @@ class MemoryFileStore(MemoryStore):
         transcripts_directory = self.get_transcripts_directory(session, source_id=source_id)
         if not transcripts_directory.exists():
             return []
+        expected_stem = None if session_id is None else self._transcript_file_stem(session_id)
         transcript_files = sorted(transcripts_directory.glob("*.jsonl"))
         results: list[dict[str, Any]] = []
         for transcript_file in transcript_files:
-            decoded_session_id = self._decode_transcript_session_id(transcript_file)
-            if session_id is not None and decoded_session_id != session_id:
-                continue
+            if expected_stem is not None:
+                if transcript_file.stem != expected_stem:
+                    continue
+                # Report what the caller asked for: decoding a digest stem yields ``None``.
+                matched_session_id = session_id
+            else:
+                matched_session_id = self._decode_transcript_session_id(transcript_file)
             with transcript_file.open(encoding="utf-8") as file_handle:
                 for line_number, line in enumerate(file_handle, start=1):
                     serialized = line.strip()
@@ -934,7 +962,7 @@ class MemoryFileStore(MemoryStore):
                     if not text or query_casefold not in text.casefold():
                         continue
                     results.append({
-                        "session_id": decoded_session_id,
+                        "session_id": matched_session_id,
                         "line_number": line_number,
                         "role": message.role,
                         "text": text,

@@ -1168,7 +1168,7 @@ class FileSystemAgentFileStore(AgentFileStore):
             # normal and must stay cheap, but a dangling link still has to be rejected rather than
             # read as absent.
             if os.path.lexists(self._root_path):
-                if is_link_or_reparse_point(self._root_path):
+                if _is_link_or_reparse_point(self._root_path):
                     raise ValueError("Invalid path: the resolved path contains a symbolic link or reparse point.")
                 if self._root_path.resolve() != self._root_path:
                     raise ValueError("Invalid path: the resolved path escapes the root directory.")
@@ -1400,7 +1400,7 @@ class FileSystemAgentFileStore(AgentFileStore):
                 # Re-checked here, not only during enumeration: a candidate can be swapped for a
                 # link in between. O_NOFOLLOW makes the read itself atomic where the platform has
                 # it, and this narrows the window on Windows, where it does not exist.
-                if is_link_or_reparse_point(entry):
+                if _is_link_or_reparse_point(entry):
                     logger.warning("Skipping symlinked file during search: %s", entry)
                     skipped.append(relative_name)
                     continue

@@ -216,6 +216,75 @@ async def test_memory_file_store_writes_topics_index_state_and_transcripts(tmp_p
     ]
 
 
+async def _write_transcript(store: MemoryFileStore, session: AgentSession, session_id: str, text: str) -> None:
+    """Append a one-message transcript for ``session_id`` through the real write path."""
+    provider = FileHistoryProvider(store.get_transcripts_directory(session, source_id=DEFAULT_MEMORY_SOURCE_ID))
+    await provider.save_messages(session_id, [Message(role="user", contents=[text])])
+
+
+async def test_search_transcripts_finds_session_stored_under_digest_stem(tmp_path) -> None:
+    """A session ID too long to encode is stored under an irreversible digest stem but stays findable."""
+    session = AgentSession(session_id="session-1")
+    session.state["owner_id"] = "user-1"
+    store = MemoryFileStore(tmp_path, owner_state_key="owner_id")
+    long_session_id = "a/" + "a" * 108
+
+    await _write_transcript(store, session, "short-id", "Short session transcript.")
+    await _write_transcript(store, session, long_session_id, "Long session transcript.")
+
+    # The long ID must genuinely land on a digest stem, otherwise this test proves nothing.
+    stem = store._transcript_file_stem(long_session_id)
+    assert "sha256-" in stem
+    assert store._decode_transcript_session_id(Path(f"{stem}.jsonl")) is None
+
+    results = store.search_transcripts(
+        session, source_id=DEFAULT_MEMORY_SOURCE_ID, query="transcript", session_id=long_session_id
+    )
+    assert [(result["session_id"], result["text"]) for result in results] == [
+        (long_session_id, "Long session transcript.")
+    ]
+
+    results = store.search_transcripts(
+        session, source_id=DEFAULT_MEMORY_SOURCE_ID, query="transcript", session_id="short-id"
+    )
+    assert [(result["session_id"], result["text"]) for result in results] == [("short-id", "Short session transcript.")]
+
+    unfiltered = store.search_transcripts(session, source_id=DEFAULT_MEMORY_SOURCE_ID, query="transcript")
+    assert {result["text"] for result in unfiltered} == {"Short session transcript.", "Long session transcript."}
+
+
+async def test_search_transcripts_isolates_colliding_session_ids(tmp_path) -> None:
+    """Session IDs that normalize alike must each retrieve only their own transcript."""
+    session = AgentSession(session_id="session-1")
+    session.state["owner_id"] = "user-1"
+    store = MemoryFileStore(tmp_path, owner_state_key="owner_id")
+
+    for index, candidate in enumerate(COLLIDING_IDENTIFIERS):
+        await _write_transcript(store, session, candidate, f"Transcript {index}.")
+
+    for index, candidate in enumerate(COLLIDING_IDENTIFIERS):
+        results = store.search_transcripts(
+            session, source_id=DEFAULT_MEMORY_SOURCE_ID, query="Transcript", session_id=candidate
+        )
+        assert [result["text"] for result in results] == [f"Transcript {index}."]
+        assert all(result["session_id"] == candidate for result in results)
+
+
+async def test_search_transcripts_returns_nothing_for_unknown_session(tmp_path) -> None:
+    """Filtering by a session that never wrote a transcript should return no results."""
+    session = AgentSession(session_id="session-1")
+    session.state["owner_id"] = "user-1"
+    store = MemoryFileStore(tmp_path, owner_state_key="owner_id")
+    await _write_transcript(store, session, "known-id", "Known transcript.")
+
+    assert (
+        store.search_transcripts(
+            session, source_id=DEFAULT_MEMORY_SOURCE_ID, query="transcript", session_id="unknown-id"
+        )
+        == []
+    )
+
+
 def test_memory_file_store_rejects_owner_path_traversal(tmp_path) -> None:
     """Owner IDs with path traversal segments should not escape ``base_path``."""
     session = AgentSession(session_id="session-1")

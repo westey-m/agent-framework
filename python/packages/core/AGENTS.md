@@ -73,17 +73,50 @@ agent_framework/
 - **`@tool`** decorator - Converts functions to tools
 - **`use_function_invocation()`** - Decorator to add automatic function calling to chat clients
 
-### Vector stores (`_vectors.py`)
+### Vector stores
 
 The vector store API is experimental under the shared `VECTOR_STORES` feature ID.
 
 - **`@vectorstoremodel`** - Declares key, data, and vector fields on dataclasses, Pydantic models, and plain classes
 - **`register_vectorstoremodel`** - Registers one definition and msgspec-backed codec pair per model type
+- **`VectorStoreField`** - Frozen core key/data/vector metadata; common index and distance values remain open to
+  provider-defined strings, key fields can be store-generated, and copied `provider_annotations` remains mutable for
+  connector-specific configuration
+- **`Filter` / `FilterGroup`** - Mutable data-only filter inputs shared by local and remote vector stores; collection
+  operations bound structural traversal before copying and pass an independent snapshot to connectors. Parameter
+  detection includes collection members and mapping keys; string operators require string operands after resolution
+- **`Param`** - Native typed search-tool parameter reference embedded in filter values or paging options
+  - Defaults and supplied mutable values are copied per filter invocation, including for definition-less search tools
+  - Filter parameters may opt into null omission with a nullable type and explicit `default=None`, such as
+    `Param("text", str | None, default=None, omit_if_none=True)`; absent/null arguments remove that leaf, while
+    remaining AND/OR children still apply. Empty groups (including NOT with an omitted child) are removed
+    recursively; removing the whole tree means no filter. Paging parameters do not support null omission.
 - **`BaseVectorCollection`** - Base class for collection lifecycle and msgspec-backed record CRUD operations;
-  upserts generate embeddings by default and retrieval excludes vectors by default
+  upserts generate embeddings by default, retrieval excludes vectors by default, and filtered retrieval is an
+  alternate mode to key lookup
+- **Embedding generation selection** - `generate_vectors=True` regenerates every vector field, `False` preserves all
+  values, and a list or tuple of logical vector field names generates only those fields so connectors can combine
+  local, precomputed, and provider-side vectorization
+- **Vector payloads** - Shared dense query/generated vectors accept numeric sequences and binary bytes; connectors
+  declare supported element/representation types. Sparse vectors remain provider-native through codecs or
+  `search(values=...)`, not a core sparse type.
+- **Vector dimensions** - Final dense sequence lengths are checked after optional generation for the whole write
+  batch before connector conversion or writes, and for the selected query field before search dispatch. In-memory
+  queries also check their normalized numeric sequence, including array-like inputs and empty collections. These
+  are length checks, not element validation; null vectors, source text, binary payloads, and non-sequence
+  provider-native representations remain connector-owned.
 - **`BaseVectorStore`** - Base class for stores that create collection clients
-- **`BaseVectorSearch`** - Base class for vector and keyword-hybrid search
+- **`BaseVectorSearch`** - Base class for vector and keyword-hybrid search; core validates portable requests and
+  deserializes results without interpreting thresholds or re-filtering returned scores. Connectors own scoring,
+  filter execution, score thresholds (including provider-defined/default metrics), and paging. Use native backend
+  execution where available, otherwise an explicit connector-local fallback or reject unsupported options
 - **`create_vector_search_tool`** - Creates an agent tool from any `SupportsVectorSearch` implementation
+- **`InMemoryCollection` / `InMemoryStore`** - Dependency-free, process-local development and test implementation;
+  cosine scoring scales finite inputs, all metrics reject non-finite scores, and unsupported distance functions
+  fail before record scanning. Hamming scores/thresholds use the fraction of unequal dimensions, not a count.
+  Scoring, filtering, and thresholds run locally before paging; `DEFAULT` means cosine distance and uses a maximum
+  distance threshold.
+  Shared serialization normalizes stored data; codecs and connector overrides remain trusted Python code
 - **`SupportsVectorUpsert`** / **`SupportsVectorSearch`** - Structural protocols for vector store capabilities
 
 ### Middleware (`_middleware.py`)

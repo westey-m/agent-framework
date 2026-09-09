@@ -1119,7 +1119,7 @@ async def test_agui_request_state_cannot_choose_foundry_hosted_agent_sandbox() -
 
         return ResponseStream(_stream(), finalizer=AgentResponse.from_updates)
 
-    foundry_agent.run = fake_run  # type: ignore[method-assign]
+    foundry_agent.run = fake_run  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]
 
     runner = AgentFrameworkAgent(agent=foundry_agent)
     events = [
@@ -1184,7 +1184,7 @@ async def test_agui_request_state_cannot_overwrite_established_foundry_sandbox()
 
         return ResponseStream(_stream(), finalizer=AgentResponse.from_updates)
 
-    foundry_agent.run = fake_run  # type: ignore[method-assign]
+    foundry_agent.run = fake_run  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]
 
     runner = AgentFrameworkAgent(
         agent=foundry_agent,

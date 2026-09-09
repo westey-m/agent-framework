@@ -95,6 +95,13 @@ class FoundryAgentSettings(TypedDict, total=False):
 
 
 FOUNDRY_HOSTED_AGENT_SESSION_ID_KEY = "foundry_hosted_agent_session_id"
+"""``AgentSession.state`` key holding the Foundry hosted-agent session ID.
+
+This is the hosted agent's runtime session, a VM-isolated sandbox with a persistent filesystem, sent as
+``extra_body["agent_session_id"]``. It is distinct from ``AgentSession.service_session_id``, which continues the
+model-side response or conversation chain. The value is server-owned; see
+``RawFoundryAgent.service_session_state_keys``.
+"""
 
 
 class FoundryAgentOptions(OpenAIChatOptions, total=False):
@@ -660,6 +667,14 @@ class RawFoundryAgent(
     """
 
     service_session_state_keys: ClassVar[frozenset[str]] = frozenset({FOUNDRY_HOSTED_AGENT_SESSION_ID_KEY})
+    """Session-state keys this agent owns, which untrusted input must never supply.
+
+    Holds the Foundry hosted-agent session ID. Despite the attribute name, that value is not a conversation or
+    an ``AgentSession.service_session_id``: it identifies the hosted agent's *runtime session*, a VM-isolated
+    sandbox with a persistent filesystem. Hosts such as AG-UI read this to reject client-supplied values, since
+    honouring one would run the server's own credentialed call inside another session's sandbox. Hosts are
+    expected to reserve this key independently as well, because a wrapper agent may not forward this attribute.
+    """
 
     def __init__(
         self,

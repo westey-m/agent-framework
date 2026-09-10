@@ -41,6 +41,7 @@ from azure.core.credentials_async import AsyncTokenCredential
 
 from agent_framework_foundry._oauth_helpers import try_parse_oauth_consent_event
 
+from ._constants import FOUNDRY_HOSTED_AGENT_SESSION_ID_KEY
 from ._feature_usage import (
     FeatureIndex,
     create_feature_usage_policy,
@@ -92,16 +93,6 @@ class FoundryAgentSettings(TypedDict, total=False):
     project_endpoint: str | None
     agent_name: str | None
     agent_version: str | None
-
-
-FOUNDRY_HOSTED_AGENT_SESSION_ID_KEY = "foundry_hosted_agent_session_id"
-"""``AgentSession.state`` key holding the Foundry hosted-agent session ID.
-
-This is the hosted agent's runtime session, a VM-isolated sandbox with a persistent filesystem, sent as
-``extra_body["agent_session_id"]``. It is distinct from ``AgentSession.service_session_id``, which continues the
-model-side response or conversation chain. The value is server-owned; see
-``RawFoundryAgent.service_session_state_keys``.
-"""
 
 
 class FoundryAgentOptions(OpenAIChatOptions, total=False):

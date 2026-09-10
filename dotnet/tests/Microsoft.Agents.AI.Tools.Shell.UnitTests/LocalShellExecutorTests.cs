@@ -330,16 +330,18 @@ public sealed class LocalShellExecutorTests
         });
 
         // Act
-        var failing = await shell.RunAsync("cmd /c exit 3");
+        var firstFailure = await shell.RunAsync("cmd /c exit 3");
         var succeeding = await shell.RunAsync("Write-Output ok");
+        var repeatedFailure = await shell.RunAsync("cmd /c exit 3");
         var readback = await shell.RunAsync("Write-Output $LASTEXITCODE");
 
         // Assert
-        Assert.Equal(3, failing.ExitCode);
+        Assert.Equal(3, firstFailure.ExitCode);
         Assert.Equal(0, succeeding.ExitCode);
         Assert.Contains("ok", succeeding.Stdout, StringComparison.Ordinal);
+        Assert.Equal(3, repeatedFailure.ExitCode);
         Assert.Equal(0, readback.ExitCode);
-        Assert.Equal("3", readback.Stdout.Trim());
+        Assert.Empty(readback.Stdout.Trim());
     }
 
     [Fact]

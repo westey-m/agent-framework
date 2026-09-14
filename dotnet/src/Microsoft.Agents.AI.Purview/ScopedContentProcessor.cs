@@ -67,10 +67,17 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
     /// <summary>
     /// Whether a policy action means the content must not be released.
     /// </summary>
+    /// <remarks>
+    /// <see cref="DlpAction.RestrictAccess"/> is not blocking on its own: it carries a separate
+    /// <see cref="RestrictionAction"/> that selects the enforcement mode, which may be
+    /// <see cref="RestrictionAction.Audit"/>, <see cref="RestrictionAction.Warn"/> or
+    /// <see cref="RestrictionAction.Allow"/> as well as <see cref="RestrictionAction.Block"/>. Only an
+    /// explicit <see cref="RestrictionAction.Block"/> mode withholds the content.
+    /// </remarks>
     /// <param name="actionInfo">The policy action to inspect.</param>
     /// <returns><see langword="true"/> when the action blocks the content.</returns>
     private static bool IsBlockingAction(DlpActionInfo actionInfo)
-        => actionInfo.Action is DlpAction.BlockAccess or DlpAction.RestrictAccess
+        => actionInfo.Action == DlpAction.BlockAccess
             || actionInfo.RestrictionAction == RestrictionAction.Block;
 
     /// <summary>
@@ -91,6 +98,35 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
         }
 
         return blockingActions;
+    }
+
+    /// <summary>
+    /// Normalize a policy location value for comparison, according to its location type.
+    /// </summary>
+    /// <remarks>
+    /// Application ids (GUIDs) and domain names are case-insensitive, so those fold whole. URL values
+    /// are not: the scheme and host are case-insensitive but the path and query are case-sensitive, so
+    /// folding a URL whole would let a scope for <c>contoso.com/public</c> match a request for
+    /// <c>contoso.com/Public</c>. Location types that are not recognized fold whole, which matches more
+    /// scopes rather than fewer.
+    /// </remarks>
+    /// <param name="locationType">The location type segment, for example <c>policyLocationUrl</c>.</param>
+    /// <param name="value">The location value to normalize.</param>
+    /// <returns>The value in its comparable form.</returns>
+    private static string NormalizeLocationValue(string locationType, string value)
+    {
+        if (!locationType.EndsWith("url", StringComparison.OrdinalIgnoreCase))
+        {
+            return value.ToUpperInvariant();
+        }
+
+        int schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
+        int hostStart = schemeEnd >= 0 ? schemeEnd + 3 : 0;
+        int pathStart = value.IndexOf('/', hostStart);
+
+        return pathStart < 0
+            ? value.ToUpperInvariant()
+            : string.Concat(value.Substring(0, pathStart).ToUpperInvariant(), value.Substring(pathStart));
     }
 
     private static bool TryGetUserIdFromPayload(IEnumerable<ChatMessage> messages, out string? userId)
@@ -464,7 +500,8 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
 
             foreach (var location in scope.Locations ?? Array.Empty<PolicyLocation>())
             {
-                if (location.DataType.EndsWith(locationType, StringComparison.OrdinalIgnoreCase) && location.Value.Equals(locationValue, StringComparison.OrdinalIgnoreCase))
+                if (location.DataType.EndsWith(locationType, StringComparison.OrdinalIgnoreCase)
+                    && NormalizeLocationValue(locationType, location.Value).Equals(NormalizeLocationValue(locationType, locationValue), StringComparison.Ordinal))
                 {
                     locationMatch = true;
                     break;

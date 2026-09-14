@@ -58,7 +58,14 @@ def _is_valid_guid(value: str | None) -> bool:
         return False
 
 
-_DATA_URI_PATTERN = re.compile(r"^data:(?P<media_type>[^;,]+);base64,(?P<base64_data>.*)$", re.DOTALL)
+# RFC 2397: data:[<mediatype>][;base64],<data>, where <mediatype> may be followed by any number of
+# ";parameter=value" segments (for example "data:text/plain;charset=utf-8;base64,..."). The optional
+# parameters have to be matched explicitly, otherwise a parameterised media type fails to decode and
+# its payload would be submitted as a base64 string that no classifier can read.
+_DATA_URI_PATTERN = re.compile(
+    r"^data:(?P<media_type>[^;,]*)(?:;[^;,]+)*?;base64,(?P<base64_data>.*)$",
+    re.DOTALL | re.IGNORECASE,
+)
 
 # Content types that carry no user data and therefore have nothing for DLP to classify.
 # Every other content type must reach Purview; see _map_content.
@@ -130,16 +137,35 @@ def _map_message_contents(message: Message) -> list[ContentBase]:
 
 
 def _is_blocking_action(action_info: DlpActionInfo) -> bool:
-    """Whether a policy action means the content must not be released."""
-    return (
-        action_info.action in (DlpAction.BLOCK_ACCESS, DlpAction.RESTRICT_ACCESS)
-        or action_info.restriction_action == RestrictionAction.BLOCK
-    )
+    """Whether a policy action means the content must not be released.
+
+    ``restrictAccess`` is not blocking on its own: it carries a separate ``restrictionAction`` that
+    selects the enforcement mode, which may be audit, warn or allow as well as block. Only an explicit
+    block mode withholds the content.
+    """
+    return action_info.action == DlpAction.BLOCK_ACCESS or action_info.restriction_action == RestrictionAction.BLOCK
 
 
 def _blocking_actions(dlp_actions: list[DlpActionInfo]) -> list[DlpActionInfo | MutableMapping[str, Any]]:
     """Filter policy actions down to the ones that block."""
     return [action_info for action_info in dlp_actions if _is_blocking_action(action_info)]
+
+
+def _normalize_location_value(data_type: str, value: str) -> str:
+    """Normalize a policy location value for comparison, according to its location type.
+
+    Application ids (GUIDs) and domain names are case-insensitive, so those fold whole. URL values are
+    not: the scheme and host are case-insensitive but the path and query are case-sensitive, so folding
+    a URL whole would let a scope for ``contoso.com/public`` match a request for ``contoso.com/Public``.
+    Location types that are not recognised fold whole, which matches more scopes rather than fewer.
+    """
+    if data_type.split(".")[-1].casefold().endswith("url"):
+        scheme, separator, remainder = value.partition("://")
+        if not separator:
+            scheme, separator, remainder = "", "", value
+        host, slash, path = remainder.partition("/")
+        return f"{scheme.casefold()}{separator}{host.casefold()}{slash}{path}"
+    return value.casefold()
 
 
 class ScopedContentProcessor:
@@ -484,7 +510,8 @@ class ScopedContentProcessor:
                         and loc.data_type.lower().endswith(location.data_type.split(".")[-1].lower())
                         and isinstance(loc.value, str)
                         and isinstance(location.value, str)
-                        and loc.value.casefold() == location.value.casefold()
+                        and _normalize_location_value(location.data_type, loc.value)
+                        == _normalize_location_value(location.data_type, location.value)
                     ):
                         location_match = True
                         break

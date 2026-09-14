@@ -283,12 +283,12 @@ decides *which* policy is applied, and it is resolved in this order:
 
 1. The user id from the configured `TokenCredential`'s token, when the credential resolves to a user.
 2. The `userId` argument passed to the processor.
-3. `ChatMessage.AdditionalProperties["user_id"]`.
+3. `ChatMessage.AdditionalProperties["userId"]`.
 4. `ChatMessage.AuthorName`, when it is a GUID.
 
 Only source 1 is verified. Sources 2-4 are supplied by the hosting application, so **a host must not
 populate them from data that has crossed a trust boundary**. If an end user, an upstream service or a
-model response can influence `AdditionalProperties["user_id"]` or `AuthorName`, that party can select a
+model response can influence `AdditionalProperties["userId"]` or `AuthorName`, that party can select a
 different user's DLP policy - typically one with weaker rules - and evade enforcement. Where identity
 must come from a request, derive it from a validated token on the server, never from the request body.
 Prefer a user-delegated credential (source 1) whenever possible.

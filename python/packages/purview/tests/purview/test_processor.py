@@ -192,6 +192,31 @@ class TestScopedContentProcessor:
         assert all(entry.content is not None for entry in entries)
         assert not any(isinstance(entry.content, PurviewTextContent) and entry.content.data == "" for entry in entries)
 
+    async def test_map_messages_decodes_data_uri_with_media_type_parameters(
+        self, processor: ScopedContentProcessor
+    ) -> None:
+        """Test _map_messages decodes base64 data URIs whose media type carries parameters.
+
+        A data URI may carry any number of ";parameter=value" segments between the media type and
+        ";base64". Failing to decode one leaves the payload as a base64 string that no classifier
+        can read.
+        """
+        from agent_framework import Content
+
+        secret = b"credit card 4532667785213500"
+        content = Content.from_data(data=secret, media_type="text/plain;charset=utf-8")
+        assert content.uri is not None
+        assert content.uri.startswith("data:text/plain;charset=utf-8;base64,")
+
+        messages = [Message(role="user", contents=[content])]
+
+        requests, _ = await processor._map_messages(messages, Activity.UPLOAD_TEXT)
+
+        entries = requests[0].content_to_process.content_entries
+        assert len(entries) == 1
+        assert isinstance(entries[0].content, PurviewBinaryContent)
+        assert entries[0].content.data == secret
+
     async def test_map_messages_submits_additional_properties_on_structured_content(
         self, processor: ScopedContentProcessor
     ) -> None:
@@ -331,6 +356,72 @@ class TestScopedContentProcessor:
         assert should_process is True
         assert execution_mode == ExecutionMode.EVALUATE_INLINE
         assert dlp_actions
+
+    async def test_check_applicable_scopes_matches_url_location_host_case_insensitively(
+        self, process_content_request_factory
+    ) -> None:
+        """Test _check_applicable_scopes ignores host casing on URL locations.
+
+        The scheme and host of a URL are case-insensitive, so a casing difference there must not
+        hide an applicable scope.
+        """
+        from agent_framework_purview._models import ProtectionScopesResponse
+
+        pc_request = process_content_request_factory()
+        pc_request.content_to_process.protected_app_metadata.application_location = PolicyLocation(
+            data_type="microsoft.graph.policyLocationUrl",
+            value="HTTPS://Contoso.com/sites/marketing",
+        )
+        scope = PolicyScope(
+            activities=ProtectionScopeActivities.UPLOAD_TEXT,
+            execution_mode=ExecutionMode.EVALUATE_INLINE,
+            locations=[
+                PolicyLocation(
+                    data_type="#microsoft.graph.policyLocationUrl",
+                    value="https://contoso.com/sites/marketing",
+                )
+            ],
+            policy_actions=[DlpActionInfo(action=DlpAction.BLOCK_ACCESS)],
+        )
+        ps_response = ProtectionScopesResponse(scopes=[scope])
+
+        should_process, dlp_actions, _ = ScopedContentProcessor._check_applicable_scopes(pc_request, ps_response)
+
+        assert should_process is True
+        assert dlp_actions
+
+    async def test_check_applicable_scopes_treats_url_location_path_as_case_sensitive(
+        self, process_content_request_factory
+    ) -> None:
+        """Test _check_applicable_scopes keeps URL path casing significant.
+
+        URL paths are case-sensitive, so a scope scoped to one path must not match a different path
+        that differs only in casing.
+        """
+        from agent_framework_purview._models import ProtectionScopesResponse
+
+        pc_request = process_content_request_factory()
+        pc_request.content_to_process.protected_app_metadata.application_location = PolicyLocation(
+            data_type="microsoft.graph.policyLocationUrl",
+            value="https://contoso.com/sites/Marketing",
+        )
+        scope = PolicyScope(
+            activities=ProtectionScopeActivities.UPLOAD_TEXT,
+            execution_mode=ExecutionMode.EVALUATE_INLINE,
+            locations=[
+                PolicyLocation(
+                    data_type="#microsoft.graph.policyLocationUrl",
+                    value="https://contoso.com/sites/marketing",
+                )
+            ],
+            policy_actions=[DlpActionInfo(action=DlpAction.BLOCK_ACCESS)],
+        )
+        ps_response = ProtectionScopesResponse(scopes=[scope])
+
+        should_process, dlp_actions, _ = ScopedContentProcessor._check_applicable_scopes(pc_request, ps_response)
+
+        assert should_process is False
+        assert dlp_actions == []
 
     async def test_combine_policy_actions(self, processor: ScopedContentProcessor) -> None:
         """Test _combine_policy_actions merges action lists."""
@@ -478,10 +569,38 @@ class TestScopedContentProcessor:
         await asyncio.gather(*list(processor._background_tasks))
 
         assert response.policy_actions
-        assert any(
-            action.action == DlpAction.RESTRICT_ACCESS or action.restriction_action == RestrictionAction.BLOCK
+        assert all(
+            action.action == DlpAction.RESTRICT_ACCESS and action.restriction_action == RestrictionAction.BLOCK
             for action in response.policy_actions
         )
+
+    async def test_process_with_scopes_ignores_non_blocking_restriction_on_offline_scope(
+        self, processor: ScopedContentProcessor, mock_client: AsyncMock, process_content_request_factory
+    ) -> None:
+        """Test a restrictAccess scope whose restriction mode does not block is not reported as blocking.
+
+        restrictAccess carries a separate restriction mode which may be audit, warn or allow. Only an
+        explicit block mode withholds the content, so the other modes must not surface as a verdict.
+        """
+        from agent_framework_purview._models import ProtectionScopesResponse
+
+        pc_request = process_content_request_factory()
+        scope = PolicyScope(
+            activities=ProtectionScopeActivities.UPLOAD_TEXT,
+            execution_mode=ExecutionMode.EVALUATE_OFFLINE,
+            locations=[PolicyLocation(data_type="microsoft.graph.policyLocationApplication", value="app-id")],
+            policy_actions=[
+                DlpActionInfo(action=DlpAction.RESTRICT_ACCESS, restriction_action=RestrictionAction.OTHER)
+            ],
+        )
+        ps_response = ProtectionScopesResponse(scopes=[scope])
+        cast(Any, processor._cache).get = AsyncMock(side_effect=[None, ps_response])
+        mock_client.process_content.return_value = ProcessContentResponse(id="1")
+
+        response = await processor._process_with_scopes(pc_request)
+        await asyncio.gather(*list(processor._background_tasks))
+
+        assert not response.policy_actions
 
     async def test_process_with_scopes_preserves_restriction_only_policy_actions(
         self, processor: ScopedContentProcessor, mock_client: AsyncMock, process_content_request_factory

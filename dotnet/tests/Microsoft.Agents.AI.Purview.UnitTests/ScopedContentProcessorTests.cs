@@ -297,6 +297,91 @@ public sealed class ScopedContentProcessorTests
     }
 
     [Fact]
+    public void CheckApplicableScopes_MatchesUrlLocationHostCaseInsensitively()
+    {
+        // Arrange
+        ProcessContentRequest pcRequest = CreateProcessContentRequest();
+        pcRequest.ContentToProcess.ProtectedAppMetadata.ApplicationLocation =
+            new("microsoft.graph.policyLocationUrl", "HTTPS://Contoso.com/sites/marketing");
+        ProtectionScopesResponse psResponse = new()
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations = [new("#microsoft.graph.policyLocationUrl", "https://contoso.com/sites/marketing")],
+                    ExecutionMode = ExecutionMode.EvaluateInline
+                }
+            ]
+        };
+
+        // Act
+        (bool shouldProcess, _, _) = ScopedContentProcessor.CheckApplicableScopes(pcRequest, psResponse);
+
+        // Assert
+        Assert.True(shouldProcess);
+    }
+
+    [Fact]
+    public void CheckApplicableScopes_TreatsUrlLocationPathAsCaseSensitive()
+    {
+        // Arrange
+        ProcessContentRequest pcRequest = CreateProcessContentRequest();
+        pcRequest.ContentToProcess.ProtectedAppMetadata.ApplicationLocation =
+            new("microsoft.graph.policyLocationUrl", "https://contoso.com/sites/Marketing");
+        ProtectionScopesResponse psResponse = new()
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations = [new("#microsoft.graph.policyLocationUrl", "https://contoso.com/sites/marketing")],
+                    ExecutionMode = ExecutionMode.EvaluateInline
+                }
+            ]
+        };
+
+        // Act
+        (bool shouldProcess, List<DlpActionInfo> dlpActions, _) = ScopedContentProcessor.CheckApplicableScopes(pcRequest, psResponse);
+
+        // Assert
+        Assert.False(shouldProcess);
+        Assert.Empty(dlpActions);
+    }
+
+    [Fact]
+    public void CheckApplicableScopes_MatchesApplicationLocationCaseInsensitively()
+    {
+        // Arrange
+        ProcessContentRequest pcRequest = CreateProcessContentRequest();
+        pcRequest.ContentToProcess.ProtectedAppMetadata.ApplicationLocation =
+            new("microsoft.graph.policyLocationApplication", "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D");
+        ProtectionScopesResponse psResponse = new()
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations =
+                    [
+                        new("#microsoft.graph.policyLocationApplication", "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d")
+                    ],
+                    ExecutionMode = ExecutionMode.EvaluateInline
+                }
+            ]
+        };
+
+        // Act
+        (bool shouldProcess, _, _) = ScopedContentProcessor.CheckApplicableScopes(pcRequest, psResponse);
+
+        // Assert
+        Assert.True(shouldProcess);
+    }
+
+    [Fact]
     public async Task ProcessMessagesAsync_UsesCachedProtectionScopes_WhenAvailableAsync()
     {
         // Arrange
@@ -1096,6 +1181,61 @@ public sealed class ScopedContentProcessorTests
         Assert.True(result.shouldBlock);
 
         // The offline report is still queued; enforcement is additional, not a replacement.
+        this._mockChannelHandler.Verify(x => x.QueueJob(It.IsAny<ProcessContentJob>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies a <c>restrictAccess</c> scope whose restriction mode does not block is not enforced as
+    /// a block. The action carries a separate <see cref="RestrictionAction"/> that may be
+    /// <see cref="RestrictionAction.Audit"/>, <see cref="RestrictionAction.Warn"/> or
+    /// <see cref="RestrictionAction.Allow"/>, none of which withhold the content.
+    /// </summary>
+    [Fact]
+    public async Task ProcessMessagesAsync_WithOfflineScopeCarryingAuditRestriction_ReturnsShouldBlockFalseAsync()
+    {
+        // Arrange
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Test message")
+        };
+        var settings = CreateValidPurviewSettings();
+        var tokenInfo = new TokenInfo { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+
+        var psResponse = new ProtectionScopesResponse
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations =
+                    [
+                        new("microsoft.graph.policyLocationApplication", "app-123")
+                    ],
+                    ExecutionMode = ExecutionMode.EvaluateOffline,
+                    PolicyActions =
+                    [
+                        new() { Action = DlpAction.RestrictAccess, RestrictionAction = RestrictionAction.Audit }
+                    ]
+                }
+            ]
+        };
+
+        this._mockCacheProvider.Setup(x => x.GetAsync<ProtectionScopesCacheKey, ProtectionScopesResponse>(
+            It.IsAny<ProtectionScopesCacheKey>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(psResponse);
+
+        // Act
+        var result = await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        Assert.False(result.shouldBlock);
+
+        // The offline report is still queued so the audit action is recorded.
         this._mockChannelHandler.Verify(x => x.QueueJob(It.IsAny<ProcessContentJob>()), Times.Once);
     }
 

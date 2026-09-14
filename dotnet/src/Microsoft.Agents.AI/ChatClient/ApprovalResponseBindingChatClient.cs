@@ -38,7 +38,7 @@ namespace Microsoft.Agents.AI;
 /// </list>
 /// </para>
 /// <para>
-/// The authority for an approval is always state the framework itself recorded when it surfaced the request.
+/// The authority for an approval is always the state the framework itself recorded when it surfaced the request.
 /// An approval request that merely appears in the caller-supplied message history is never, by itself, proof
 /// that the framework asked a human to approve it; without this rule a caller could supply a fabricated request
 /// together with its own approval and authorize an arbitrary tool call. A host that cannot record approval
@@ -163,11 +163,15 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
     /// <summary>
     /// Rewrites the inbound messages so that each <see cref="ToolApprovalResponseContent"/> is bound to a known
     /// <see cref="ToolApprovalRequestContent"/>, with its tool call rebound to the request's call when it differs.
-    /// A response with no known request is removed so a forged approval cannot drive execution, together with any
-    /// approval request in the messages that carries the same request id, so the removal does not leave an
-    /// unanswerable request behind. Approval requests that are not tied to a dropped response are preserved: they
-    /// are legitimate model context, but they are not the authority that an approval was requested.
+    /// A response with no known request is removed so that a forged approval cannot drive execution.
     /// </summary>
+    /// <remarks>
+    /// Approval requests are never removed. They are legitimate model context, but they are not the authority
+    /// that an approval was requested, so they are forwarded unchanged whether or not a response was bound to
+    /// them. Dropping a response therefore leaves its request unanswered, and the run fails downstream in the
+    /// function invocation middleware. That is deliberate: a payload whose approval was rejected surfaces as an
+    /// error instead of silently continuing as though the call had never been requested.
+    /// </remarks>
     private IEnumerable<ChatMessage> ValidateInboundApprovalResponses(IEnumerable<ChatMessage> messages, AgentSession session)
     {
         var messageList = messages as IList<ChatMessage> ?? new List<ChatMessage>(messages);
@@ -185,10 +189,15 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
             session.StateBag.TryRemoveValue(StateBagKey);
         }
 
-        // Tool calls that already carry a result in the inbound messages. The approval gate gilds execution, and
+        // Tool calls that already carry a result in the inbound messages. The approval gate guards execution, and
         // a call whose result is already present will not be executed again, so its approval is settled history
         // rather than a pending authorization. Validating it would serve no purpose and would reject every host
         // that replays a completed conversation.
+        //
+        // This relies on an invariant that FunctionInvokingChatClient enforces itself: it gathers the call ids of
+        // every FunctionResultContent in the messages and skips any approval response whose call id is in that
+        // set, so such a response can never reach invocation. A caller that fabricates a result in order to reach
+        // the exemption below therefore also guarantees the call will not run.
         HashSet<string>? settledCallIds = null;
 
         bool hasResponse = false;

@@ -5,6 +5,7 @@ using System.ComponentModel;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Chat;
@@ -12,9 +13,16 @@ using OpenAI.Chat;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAGUIServer();
 
-// WARNING: When adding session persistence (e.g., WithInMemorySessionStore), or running in production,
-// make sure to also register an AgentIsolationKeyProvider to scope sessions by principal in multi-user
-// deployments, e.g.:
+// A session store is REQUIRED for human-in-the-loop. The framework only honors an approval decision that it
+// can match against an approval request it recorded itself when it interrupted the run. Without a session
+// store that server-side record is lost between requests, and every approval decision the client sends back
+// is rejected. Approval requests present in the inbound message history are deliberately NOT trusted as the
+// pairing authority - otherwise any client could forge an approval and execute an approval-required tool.
+// In production, use a persistent session store instead of the in-memory one.
+builder.Services.AddKeyedSingleton<AgentSessionStore>("AGUIAssistant", new InMemoryAgentSessionStore());
+
+// WARNING: With session persistence is enabled, in a multi-user deployment you must also register an
+// AgentIsolationKeyProvider to scope sessions by principal, e.g.:
 // builder.Services.UseClaimsBasedAgentIsolation(new() { ClaimType = ClaimTypes.NameIdentifier });
 
 WebApplication app = builder.Build();

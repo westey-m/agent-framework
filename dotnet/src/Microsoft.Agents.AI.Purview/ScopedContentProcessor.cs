@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Agents.AI.Purview.Models.Common;
@@ -52,12 +53,7 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
                 foreach (DlpActionInfo policyAction in processContentResponse.PolicyActions)
                 {
                     // We need to process all data before blocking, so set the flag and return it outside of this loop.
-                    if (policyAction.Action == DlpAction.BlockAccess)
-                    {
-                        shouldBlock = true;
-                    }
-
-                    if (policyAction.RestrictionAction == RestrictionAction.Block)
+                    if (IsBlockingAction(policyAction))
                     {
                         shouldBlock = true;
                     }
@@ -66,6 +62,35 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
         }
 
         return (shouldBlock, resolvedUserId);
+    }
+
+    /// <summary>
+    /// Whether a policy action means the content must not be released.
+    /// </summary>
+    /// <param name="actionInfo">The policy action to inspect.</param>
+    /// <returns><see langword="true"/> when the action blocks the content.</returns>
+    private static bool IsBlockingAction(DlpActionInfo actionInfo)
+        => actionInfo.Action is DlpAction.BlockAccess or DlpAction.RestrictAccess
+            || actionInfo.RestrictionAction == RestrictionAction.Block;
+
+    /// <summary>
+    /// Filter policy actions down to the ones that block.
+    /// </summary>
+    /// <param name="actionInfos">The policy actions to filter.</param>
+    /// <returns>The blocking subset of <paramref name="actionInfos"/>.</returns>
+    private static List<DlpActionInfo> GetBlockingActions(List<DlpActionInfo> actionInfos)
+    {
+        List<DlpActionInfo> blockingActions = [];
+
+        foreach (DlpActionInfo actionInfo in actionInfos)
+        {
+            if (IsBlockingAction(actionInfo))
+            {
+                blockingActions.Add(actionInfo);
+            }
+        }
+
+        return blockingActions;
     }
 
     private static bool TryGetUserIdFromPayload(IEnumerable<ChatMessage> messages, out string? userId)
@@ -115,12 +140,21 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
         foreach (ChatMessage message in messages)
         {
             string messageId = message.MessageId ?? Guid.NewGuid().ToString();
-            ContentBase content = new PurviewTextContent(message.Text);
             string correlationId = (sessionId ?? Guid.NewGuid().ToString()) + "@AF";
-            ProcessConversationMetadata conversationMetadata = new(content, messageId, false, $"Agent Framework Message {messageId}", correlationId)
+            long baseSequenceNumber = DateTime.UtcNow.Ticks;
+            List<ProcessContentMetadataBase> contentEntries = [];
+            int entryIndex = 0;
+
+            foreach (ContentBase content in MapMessageContents(message))
             {
-                SequenceNumber = DateTime.UtcNow.Ticks,
-            };
+                string identifier = entryIndex == 0 ? messageId : $"{messageId}-{entryIndex}";
+                contentEntries.Add(new ProcessConversationMetadata(content, identifier, false, $"Agent Framework Message {messageId}", correlationId)
+                {
+                    SequenceNumber = baseSequenceNumber + entryIndex,
+                });
+                entryIndex++;
+            }
+
             ActivityMetadata activityMetadata = new(activity);
             PolicyLocation policyLocation;
 
@@ -158,7 +192,7 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
                     OperatingSystemVersion = "Unknown"
                 }
             };
-            ContentToProcess contentToProcess = new([conversationMetadata], activityMetadata, deviceMetadata, integratedAppMetadata, protectedAppMetadata);
+            ContentToProcess contentToProcess = new(contentEntries, activityMetadata, deviceMetadata, integratedAppMetadata, protectedAppMetadata);
 
             if (string.IsNullOrEmpty(resolvedUserId))
             {
@@ -170,6 +204,103 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
         }
 
         return pcRequests;
+    }
+
+    /// <summary>
+    /// Map every content item of a message onto the Purview content type that fits it.
+    /// </summary>
+    /// <param name="message">The message whose contents should be evaluated.</param>
+    /// <returns>One content item per evaluable <see cref="AIContent"/>, never empty.</returns>
+    /// <remarks>
+    /// Only <see cref="UsageContent"/> is skipped, because it carries no user data. Everything
+    /// else is mapped to a real content item: submitting a message with part of its payload
+    /// unevaluated is a policy bypass.
+    /// </remarks>
+    private static List<ContentBase> MapMessageContents(ChatMessage message)
+    {
+        List<ContentBase> mapped = [];
+
+        foreach (AIContent content in message.Contents)
+        {
+            ContentBase? purviewContent = MapContent(content);
+            if (purviewContent != null)
+            {
+                mapped.Add(purviewContent);
+            }
+        }
+
+        if (mapped.Count == 0)
+        {
+            mapped.Add(new PurviewTextContent(string.Empty));
+        }
+
+        return mapped;
+    }
+
+    /// <summary>
+    /// Map a single <see cref="AIContent"/> onto a Purview content item.
+    /// </summary>
+    /// <param name="content">The content item to map.</param>
+    /// <returns>The Purview content item, or <see langword="null"/> when the content carries no user data.</returns>
+    private static ContentBase? MapContent(AIContent content)
+    {
+        switch (content)
+        {
+            case UsageContent:
+                // Telemetry only; there is nothing for DLP to classify.
+                return null;
+
+            case TextContent textContent:
+                return new PurviewTextContent(textContent.Text ?? string.Empty);
+
+            case TextReasoningContent reasoningContent:
+                return new PurviewTextContent(reasoningContent.Text ?? string.Empty);
+
+            case DataContent dataContent:
+                return new PurviewBinaryContent(dataContent.Data.ToArray());
+
+            case UriContent uriContent:
+                return new PurviewTextContent($"{uriContent.MediaType} {uriContent.Uri}");
+
+            case FunctionCallContent functionCallContent:
+                return new PurviewTextContent(SerializeForEvaluation(functionCallContent));
+
+            case FunctionResultContent functionResultContent:
+                return new PurviewTextContent(SerializeForEvaluation(functionResultContent));
+
+            case ErrorContent errorContent:
+                return new PurviewTextContent(errorContent.Message ?? string.Empty);
+
+            default:
+                // Catch-all for every remaining content type, including ones added after this code
+                // was written. Serializing is always safe; skipping would be a policy bypass.
+                return new PurviewTextContent(SerializeForEvaluation(content));
+        }
+    }
+
+    /// <summary>
+    /// Render a content item as text so Purview can classify everything it carries.
+    /// </summary>
+    /// <param name="content">The content item to render.</param>
+    /// <returns>The text representation of <paramref name="content"/>.</returns>
+    /// <exception cref="PurviewRequestException">The content could not be rendered for evaluation.</exception>
+    /// <remarks>
+    /// The type info is resolved from the concrete runtime type rather than <see cref="AIContent"/>.
+    /// Polymorphic serialization through the base type throws for any subclass the abstractions do not
+    /// declare, which would push third-party and future content types onto the failure path.
+    /// </remarks>
+    private static string SerializeForEvaluation(AIContent content)
+    {
+        try
+        {
+            return JsonSerializer.Serialize(content, AIJsonUtilities.DefaultOptions.GetTypeInfo(content.GetType()));
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or JsonException)
+        {
+            // Fail closed. Falling back to ToString() would submit a bare type name in place of the
+            // payload, so the content would clear policy without ever having been evaluated.
+            throw new PurviewRequestException($"Unable to serialize content of type '{content.GetType()}' for Purview policy evaluation. Content cannot be evaluated and will not be released.", ex);
+        }
     }
 
     /// <summary>
@@ -228,12 +359,18 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
 
         if (shouldProcess)
         {
-            pcRequest.ProcessInline = executionMode == ExecutionMode.EvaluateInline;
+            pcRequest.ProcessInline = executionMode != ExecutionMode.EvaluateOffline;
 
             if (executionMode == ExecutionMode.EvaluateOffline)
             {
                 this._channelHandler.QueueJob(new ProcessContentJob(pcRequest));
-                return new ProcessContentResponse();
+
+                // Offline evaluation is asynchronous, but an explicit block action already known
+                // from the cached scopes must still be enforced rather than discarded.
+                List<DlpActionInfo> blockingActions = GetBlockingActions(dlpActions);
+                return blockingActions.Count > 0
+                    ? new ProcessContentResponse { PolicyActions = blockingActions }
+                    : new ProcessContentResponse();
             }
 
             return await this.CallProcessContentAsync(pcRequest, cacheKey, dlpActions, cancellationToken).ConfigureAwait(false);
@@ -338,7 +475,9 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
             {
                 shouldProcess = true;
 
-                if (scope.ExecutionMode == ExecutionMode.EvaluateInline)
+                // Only an explicitly offline scope may skip inline evaluation. ExecutionMode is an
+                // evolvable enum, so any unrecognised value is upgraded to inline (fail closed).
+                if (scope.ExecutionMode != ExecutionMode.EvaluateOffline)
                 {
                     executionMode = ExecutionMode.EvaluateInline;
                 }

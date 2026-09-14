@@ -993,9 +993,203 @@ public sealed class ScopedContentProcessorTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// Verifies every content item is submitted for evaluation, not just <c>message.Text</c>.
+    /// Images, binary payloads and structured tool results are empty when flattened to text, which
+    /// would have them reach the model having only ever been classified as an empty string.
+    /// </summary>
+    [Fact]
+    public async Task ProcessMessagesAsync_WithNonTextContent_SubmitsItForEvaluationAsync()
+    {
+        // Arrange
+        byte[] secret = [0x01, 0x02, 0x03, 0x04];
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User,
+            [
+                new DataContent(secret, "application/octet-stream"),
+                new FunctionCallContent("call-1", "exfiltrate", new Dictionary<string, object?> { ["ssn"] = "123-45-6789" })
+            ])
+        };
+        var settings = CreateValidPurviewSettings();
+        var tokenInfo = new TokenInfo { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+        this._mockCacheProvider.Setup(x => x.GetAsync<ProtectionScopesCacheKey, ProtectionScopesResponse>(
+            It.IsAny<ProtectionScopesCacheKey>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateApplicableProtectionScopesResponse());
+
+        ProcessContentRequest? capturedRequest = null;
+        this._mockPurviewClient.Setup(x => x.ProcessContentAsync(
+            It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<ProcessContentRequest, CancellationToken>((request, _) => capturedRequest = request)
+            .ReturnsAsync(new ProcessContentResponse());
+
+        // Act
+        await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(capturedRequest);
+        List<ProcessContentMetadataBase> entries = capturedRequest.ContentToProcess.ContentEntries;
+        Assert.Equal(2, entries.Count);
+
+        PurviewBinaryContent binaryContent = Assert.IsType<PurviewBinaryContent>(entries[0].Content);
+        Assert.Equal(secret, binaryContent.Data);
+
+        PurviewTextContent functionCallContent = Assert.IsType<PurviewTextContent>(entries[1].Content);
+        Assert.Contains("123-45-6789", functionCallContent.Data, StringComparison.Ordinal);
+
+        // Content entries must be individually addressable, not collapsed onto one identifier.
+        Assert.NotEqual(entries[0].Identifier, entries[1].Identifier);
+    }
+
+    /// <summary>
+    /// Verifies a block verdict known from an offline cached scope is still enforced. The offline
+    /// branch reports asynchronously, but discarding the scope's own policy actions would let a
+    /// known <c>restrictAccess</c> verdict go unenforced.
+    /// </summary>
+    [Fact]
+    public async Task ProcessMessagesAsync_WithOfflineScopeCarryingBlockAction_ReturnsShouldBlockTrueAsync()
+    {
+        // Arrange
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Test message")
+        };
+        var settings = CreateValidPurviewSettings();
+        var tokenInfo = new TokenInfo { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+
+        var psResponse = new ProtectionScopesResponse
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations =
+                    [
+                        new("microsoft.graph.policyLocationApplication", "app-123")
+                    ],
+                    ExecutionMode = ExecutionMode.EvaluateOffline,
+                    PolicyActions =
+                    [
+                        new() { Action = DlpAction.RestrictAccess, RestrictionAction = RestrictionAction.Block }
+                    ]
+                }
+            ]
+        };
+
+        this._mockCacheProvider.Setup(x => x.GetAsync<ProtectionScopesCacheKey, ProtectionScopesResponse>(
+            It.IsAny<ProtectionScopesCacheKey>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(psResponse);
+
+        // Act
+        var result = await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        Assert.True(result.shouldBlock);
+
+        // The offline report is still queued; enforcement is additional, not a replacement.
+        this._mockChannelHandler.Verify(x => x.QueueJob(It.IsAny<ProcessContentJob>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies an unrecognised <see cref="ExecutionMode"/> is evaluated inline. The enum is
+    /// evolvable, so an unknown member must not be treated as permission to skip enforcement.
+    /// </summary>
+    [Fact]
+    public async Task ProcessMessagesAsync_WithUnknownExecutionMode_EvaluatesInlineAsync()
+    {
+        // Arrange
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Test message")
+        };
+        var settings = CreateValidPurviewSettings();
+        var tokenInfo = new TokenInfo { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+        this._mockCacheProvider.Setup(x => x.GetAsync<ProtectionScopesCacheKey, ProtectionScopesResponse>(
+            It.IsAny<ProtectionScopesCacheKey>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateApplicableProtectionScopesResponse((ExecutionMode)9999));
+
+        this._mockPurviewClient.Setup(x => x.ProcessContentAsync(
+            It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ProcessContentResponse
+            {
+                PolicyActions = [new() { Action = DlpAction.BlockAccess }]
+            });
+
+        // Act
+        var result = await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        Assert.True(result.shouldBlock);
+        this._mockPurviewClient.Verify(x => x.ProcessContentAsync(
+            It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies an <see cref="AIContent"/> subclass the abstractions do not declare still has its
+    /// payload evaluated. Serializing such a type through the polymorphic base type throws, and
+    /// substituting its type name would submit no payload at all for classification.
+    /// </summary>
+    [Fact]
+    public async Task ProcessMessagesAsync_WithUnknownContentSubclass_SubmitsPayloadForEvaluationAsync()
+    {
+        // Arrange
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, [new UnknownTestContent { Secret = "ssn 123-45-6789" }])
+        };
+        var settings = CreateValidPurviewSettings();
+        var tokenInfo = new TokenInfo { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+        this._mockCacheProvider.Setup(x => x.GetAsync<ProtectionScopesCacheKey, ProtectionScopesResponse>(
+            It.IsAny<ProtectionScopesCacheKey>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateApplicableProtectionScopesResponse());
+
+        ProcessContentRequest? capturedRequest = null;
+        this._mockPurviewClient.Setup(x => x.ProcessContentAsync(
+            It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<ProcessContentRequest, CancellationToken>((request, _) => capturedRequest = request)
+            .ReturnsAsync(new ProcessContentResponse());
+
+        // Act
+        await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(capturedRequest);
+        ProcessContentMetadataBase entry = Assert.Single(capturedRequest.ContentToProcess.ContentEntries);
+        PurviewTextContent content = Assert.IsType<PurviewTextContent>(entry.Content);
+
+        Assert.Contains("123-45-6789", content.Data, StringComparison.Ordinal);
+        Assert.NotEqual(nameof(UnknownTestContent), content.Data);
+    }
+
     #endregion
 
     #region Helper Methods
+
+    /// <summary>
+    /// Stands in for a third-party or future <see cref="AIContent"/> subclass that the abstractions do
+    /// not declare a polymorphic discriminator for.
+    /// </summary>
+    private sealed class UnknownTestContent : AIContent
+    {
+        public string Secret { get; set; } = string.Empty;
+    }
 
     private static ProtectionScopesRequest CreateProtectionScopesRequest()
     {

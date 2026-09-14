@@ -153,6 +153,7 @@ def serialize_flag(
 
 class DlpAction(str, Enum):
     BLOCK_ACCESS = "blockAccess"
+    RESTRICT_ACCESS = "restrictAccess"
     OTHER = "other"
 
 

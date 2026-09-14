@@ -1,13 +1,18 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 import asyncio
+import base64
+import binascii
+import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import Iterable, MutableMapping
+from copy import copy
 from typing import Any
 
-from agent_framework import Message
+from agent_framework import Content, Message
 
 from ._cache import CacheProvider, InMemoryCacheProvider, create_protection_scopes_cache_key
 from ._client import PurviewClient
@@ -16,6 +21,7 @@ from ._models import (
     Activity,
     ActivityMetadata,
     ContentActivitiesRequest,
+    ContentBase,
     ContentToProcess,
     DeviceMetadata,
     DlpAction,
@@ -31,6 +37,7 @@ from ._models import (
     ProtectionScopesRequest,
     ProtectionScopesResponse,
     ProtectionScopeState,
+    PurviewBinaryContent,
     PurviewTextContent,
     RestrictionAction,
     translate_activity,
@@ -49,6 +56,90 @@ def _is_valid_guid(value: str | None) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+_DATA_URI_PATTERN = re.compile(r"^data:(?P<media_type>[^;,]+);base64,(?P<base64_data>.*)$", re.DOTALL)
+
+# Content types that carry no user data and therefore have nothing for DLP to classify.
+# Every other content type must reach Purview; see _map_content.
+_NON_EVALUATED_CONTENT_TYPES = frozenset({"usage"})
+
+
+def _serialize_for_evaluation(value: Any) -> str:
+    """Render an arbitrary content value as text so Purview can classify it."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, default=str, sort_keys=True)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _decode_data_uri(uri: str | None) -> bytes | None:
+    """Return the raw bytes behind a base64 data URI, or None if it is not one."""
+    if not uri:
+        return None
+    match = _DATA_URI_PATTERN.match(uri)
+    if not match:
+        return None
+    try:
+        return base64.b64decode(match.group("base64_data"), validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _map_content(content: Content) -> ContentBase | None:
+    """Map a single message content item onto the Purview content type that fits it.
+
+    Returns None only for content that carries no user data at all. Anything else is
+    mapped to a real content entry: a message must never reach the model with part of
+    its payload unevaluated.
+    """
+    content_type = content.type
+
+    if content_type in _NON_EVALUATED_CONTENT_TYPES:
+        return None
+
+    if content_type in ("text", "text_reasoning"):
+        return PurviewTextContent(data=content.text or "")
+
+    if content_type == "data":
+        raw_data = _decode_data_uri(getattr(content, "uri", None))
+        if raw_data is not None:
+            return PurviewBinaryContent(data=raw_data)
+        # Not a base64 data URI after all: evaluate the serialized form rather than drop it.
+        return PurviewTextContent(data=_serialize_for_evaluation(content.to_dict()))
+
+    # Everything else - uri, function_call, function_result and any content type added after this
+    # code was written - is serialized whole. Serializing the entire item rather than picking out
+    # named fields keeps additional_properties, which is a data channel in its own right, under
+    # evaluation. Skipping a content type would be a policy bypass.
+    return PurviewTextContent(data=_serialize_for_evaluation(content.to_dict()))
+
+
+def _map_message_contents(message: Message) -> list[ContentBase]:
+    """Map every content item of a message to Purview content entries.
+
+    Always returns at least one entry so that a message can never pass through
+    without being submitted for evaluation.
+    """
+    mapped = [purview_content for content in message.contents if (purview_content := _map_content(content))]
+    return mapped or [PurviewTextContent(data="")]
+
+
+def _is_blocking_action(action_info: DlpActionInfo) -> bool:
+    """Whether a policy action means the content must not be released."""
+    return (
+        action_info.action in (DlpAction.BLOCK_ACCESS, DlpAction.RESTRICT_ACCESS)
+        or action_info.restriction_action == RestrictionAction.BLOCK
+    )
+
+
+def _blocking_actions(dlp_actions: list[DlpActionInfo]) -> list[DlpActionInfo | MutableMapping[str, Any]]:
+    """Filter policy actions down to the ones that block."""
+    return [action_info for action_info in dlp_actions if _is_blocking_action(action_info)]
 
 
 class ScopedContentProcessor:
@@ -91,7 +182,7 @@ class ScopedContentProcessor:
             resp = await self._process_with_scopes(req)
             if resp.policy_actions:
                 for act in resp.policy_actions:
-                    if act.action == DlpAction.BLOCK_ACCESS or act.restriction_action == RestrictionAction.BLOCK:
+                    if _is_blocking_action(act):
                         should_block = True
                         break
             if should_block:
@@ -141,23 +232,31 @@ class ScopedContentProcessor:
         if not resolved_user_id and resolved_author_name:
             resolved_user_id = resolved_author_name
 
-        # Return empty results if user_id is empty
+        # Fail closed: without a resolvable user identity no policy can be evaluated,
+        # so the content must not be allowed through unevaluated.
         if not resolved_user_id or not _is_valid_guid(resolved_user_id):
-            return results, None
+            raise ValueError(
+                "No user id provided or inferred for Purview request. Please provide an Entra user id in each "
+                "message, pass a user id to the processor, or configure the credential to authenticate to an "
+                "Entra user."
+            )
 
         for m in messages:
             message_id = m.message_id or str(uuid.uuid4())
-            content = PurviewTextContent(data=m.text or "")
             correlation_id = (session_id or str(uuid.uuid4())) + "@AF"
-            meta = ProcessConversationMetadata(
-                identifier=message_id,
-                content=content,
-                name=f"Agent Framework Message {message_id}",
-                is_truncated=False,
-                correlation_id=correlation_id,
-                # This would be c# ticks equivalent and needs to fit inside c# long
-                sequence_number=time.time_ns() // 100 + 621355968000000000,
-            )
+            # This would be c# ticks equivalent and needs to fit inside c# long
+            base_sequence_number = time.time_ns() // 100 + 621355968000000000
+            content_entries: list[ProcessConversationMetadata | MutableMapping[str, Any]] = [
+                ProcessConversationMetadata(
+                    identifier=message_id if index == 0 else f"{message_id}-{index}",
+                    content=purview_content,
+                    name=f"Agent Framework Message {message_id}",
+                    is_truncated=False,
+                    correlation_id=correlation_id,
+                    sequence_number=base_sequence_number + index,
+                )
+                for index, purview_content in enumerate(_map_message_contents(m))
+            ]
             activity_meta = ActivityMetadata(activity=activity)
 
             purview_app_location = self._settings.get("purview_app_location")
@@ -188,7 +287,7 @@ class ScopedContentProcessor:
             )
 
             ctp = ContentToProcess(
-                content_entries=[meta],
+                content_entries=content_entries,
                 activity_metadata=activity_meta,
                 device_metadata=device_meta,
                 integrated_app_metadata=integrated_app,
@@ -198,7 +297,7 @@ class ScopedContentProcessor:
                 content_to_process=ctp,
                 user_id=resolved_user_id,  # Use the resolved user_id for all messages
                 tenant_id=tenant_id,
-                correlation_id=meta.correlation_id,
+                correlation_id=correlation_id,
                 process_inline=None,  # Will be set based on execution mode
             )
             results.append(req)
@@ -231,7 +330,9 @@ class ScopedContentProcessor:
             return await self._process_with_cached_scopes(pc_request, cached_ps_resp, cache_key)
 
         pc_request.process_inline = True
-        task = asyncio.create_task(self._refresh_protection_scopes_background(ps_req, cache_key, pc_request))
+        # The background refresh gets its own copy: the foreground call mutates
+        # process_inline and scope_identifier on this request while that task runs.
+        task = asyncio.create_task(self._refresh_protection_scopes_background(ps_req, cache_key, copy(pc_request)))
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return await self._call_process_content(pc_request, cache_key, dlp_actions=[])
@@ -248,15 +349,23 @@ class ScopedContentProcessor:
         should_process, dlp_actions, execution_mode = self._check_applicable_scopes(pc_request, ps_resp)
 
         if should_process:
-            # Set process_inline based on execution mode
-            pc_request.process_inline = execution_mode == ExecutionMode.EVALUATE_INLINE
+            # Only an explicitly offline scope may skip inline evaluation. executionMode is an
+            # evolvable enum, so any unrecognised value must fail closed and be evaluated inline.
+            evaluate_offline = execution_mode == ExecutionMode.EVALUATE_OFFLINE
+            pc_request.process_inline = not evaluate_offline
 
             # If execution mode is offline, queue the PC request in background
-            if execution_mode != ExecutionMode.EVALUATE_INLINE:
+            if evaluate_offline:
                 task = asyncio.create_task(self._process_content_background(pc_request, cache_key))
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
-                return ProcessContentResponse(id="204", correlation_id=pc_request.correlation_id)
+                # Offline evaluation is asynchronous, but an explicit block action already known
+                # from the cached scopes must still be enforced rather than discarded.
+                return ProcessContentResponse(
+                    id="204",
+                    correlation_id=pc_request.correlation_id,
+                    policy_actions=_blocking_actions(dlp_actions) or None,
+                )
 
             return await self._call_process_content(pc_request, cache_key, dlp_actions=dlp_actions)
 
@@ -373,15 +482,18 @@ class ScopedContentProcessor:
                         loc.data_type
                         and location.data_type
                         and loc.data_type.lower().endswith(location.data_type.split(".")[-1].lower())
-                        and loc.value == location.value
+                        and isinstance(loc.value, str)
+                        and isinstance(location.value, str)
+                        and loc.value.casefold() == location.value.casefold()
                     ):
                         location_match = True
                         break
             if activity_match and location_match:
                 should_process = True
 
-                # If any scope has EvaluateInline, upgrade to inline mode
-                if scope.execution_mode == ExecutionMode.EVALUATE_INLINE:
+                # Only an explicitly offline scope may skip inline evaluation. execution_mode is an
+                # evolvable enum, so any unrecognised value is upgraded to inline (fail closed).
+                if scope.execution_mode != ExecutionMode.EVALUATE_OFFLINE:
                     execution_mode = ExecutionMode.EVALUATE_INLINE
 
                 if scope.policy_actions:

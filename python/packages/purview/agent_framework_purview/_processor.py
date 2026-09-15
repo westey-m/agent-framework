@@ -272,17 +272,7 @@ class ScopedContentProcessor:
             correlation_id = (session_id or str(uuid.uuid4())) + "@AF"
             # This would be c# ticks equivalent and needs to fit inside c# long
             base_sequence_number = time.time_ns() // 100 + 621355968000000000
-            content_entries: list[ProcessConversationMetadata | MutableMapping[str, Any]] = [
-                ProcessConversationMetadata(
-                    identifier=message_id if index == 0 else f"{message_id}-{index}",
-                    content=purview_content,
-                    name=f"Agent Framework Message {message_id}",
-                    is_truncated=False,
-                    correlation_id=correlation_id,
-                    sequence_number=base_sequence_number + index,
-                )
-                for index, purview_content in enumerate(_map_message_contents(m))
-            ]
+            mapped_contents = _map_message_contents(m)
             activity_meta = ActivityMetadata(activity=activity)
 
             purview_app_location = self._settings.get("purview_app_location")
@@ -312,21 +302,30 @@ class ScopedContentProcessor:
                 )
             )
 
-            ctp = ContentToProcess(
-                content_entries=content_entries,
-                activity_metadata=activity_meta,
-                device_metadata=device_meta,
-                integrated_app_metadata=integrated_app,
-                protected_app_metadata=protected_app,
-            )
-            req = ProcessContentRequest(
-                content_to_process=ctp,
-                user_id=resolved_user_id,  # Use the resolved user_id for all messages
-                tenant_id=tenant_id,
-                correlation_id=correlation_id,
-                process_inline=None,  # Will be set based on execution mode
-            )
-            results.append(req)
+            for index, purview_content in enumerate(mapped_contents):
+                content_entry = ProcessConversationMetadata(
+                    identifier=message_id if index == 0 else f"{message_id}-{index}",
+                    content=purview_content,
+                    name=f"Agent Framework Message {message_id}",
+                    is_truncated=False,
+                    correlation_id=correlation_id,
+                    sequence_number=base_sequence_number + index,
+                )
+                ctp = ContentToProcess(
+                    content_entry=content_entry,
+                    activity_metadata=activity_meta,
+                    device_metadata=device_meta,
+                    integrated_app_metadata=integrated_app,
+                    protected_app_metadata=protected_app,
+                )
+                req = ProcessContentRequest(
+                    content_to_process=ctp,
+                    user_id=resolved_user_id,  # Use the resolved user_id for all messages
+                    tenant_id=tenant_id,
+                    correlation_id=correlation_id,
+                    process_inline=None,  # Will be set based on execution mode
+                )
+                results.append(req)
         return results, resolved_user_id
 
     async def _process_with_scopes(self, pc_request: ProcessContentRequest) -> ProcessContentResponse:

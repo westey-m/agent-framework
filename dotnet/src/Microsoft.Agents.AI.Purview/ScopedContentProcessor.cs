@@ -178,19 +178,7 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
             string messageId = message.MessageId ?? Guid.NewGuid().ToString();
             string correlationId = (sessionId ?? Guid.NewGuid().ToString()) + "@AF";
             long baseSequenceNumber = DateTime.UtcNow.Ticks;
-            List<ProcessContentMetadataBase> contentEntries = [];
-            int entryIndex = 0;
-
-            foreach (ContentBase content in MapMessageContents(message))
-            {
-                string identifier = entryIndex == 0 ? messageId : $"{messageId}-{entryIndex}";
-                contentEntries.Add(new ProcessConversationMetadata(content, identifier, false, $"Agent Framework Message {messageId}", correlationId)
-                {
-                    SequenceNumber = baseSequenceNumber + entryIndex,
-                });
-                entryIndex++;
-            }
-
+            List<ContentBase> mappedContents = MapMessageContents(message);
             ActivityMetadata activityMetadata = new(activity);
             PolicyLocation policyLocation;
 
@@ -228,15 +216,23 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
                     OperatingSystemVersion = "Unknown"
                 }
             };
-            ContentToProcess contentToProcess = new(contentEntries, activityMetadata, deviceMetadata, integratedAppMetadata, protectedAppMetadata);
 
             if (string.IsNullOrEmpty(resolvedUserId))
             {
                 throw new PurviewRequestException("No user id provided or inferred for Purview request. Please provide an Entra user id in each message, pass a user id to the processor, or configure the TokenCredential to authenticate to an Entra user.");
             }
 
-            ProcessContentRequest pcRequest = new(contentToProcess, resolvedUserId, tenantId);
-            pcRequests.Add(pcRequest);
+            for (int entryIndex = 0; entryIndex < mappedContents.Count; entryIndex++)
+            {
+                string identifier = entryIndex == 0 ? messageId : $"{messageId}-{entryIndex}";
+                ProcessConversationMetadata contentEntry = new(mappedContents[entryIndex], identifier, false, $"Agent Framework Message {messageId}", correlationId)
+                {
+                    SequenceNumber = baseSequenceNumber + entryIndex,
+                };
+                ContentToProcess contentToProcess = new(contentEntry, activityMetadata, deviceMetadata, integratedAppMetadata, protectedAppMetadata);
+                ProcessContentRequest pcRequest = new(contentToProcess, resolvedUserId, tenantId);
+                pcRequests.Add(pcRequest);
+            }
         }
 
         return pcRequests;

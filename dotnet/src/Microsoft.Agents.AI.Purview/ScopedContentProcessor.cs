@@ -178,19 +178,7 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
             string messageId = message.MessageId ?? Guid.NewGuid().ToString();
             string correlationId = (sessionId ?? Guid.NewGuid().ToString()) + "@AF";
             long baseSequenceNumber = DateTime.UtcNow.Ticks;
-            List<ProcessContentMetadataBase> contentEntries = [];
-            int entryIndex = 0;
-
-            foreach (ContentBase content in MapMessageContents(message))
-            {
-                string identifier = entryIndex == 0 ? messageId : $"{messageId}-{entryIndex}";
-                contentEntries.Add(new ProcessConversationMetadata(content, identifier, false, $"Agent Framework Message {messageId}", correlationId)
-                {
-                    SequenceNumber = baseSequenceNumber + entryIndex,
-                });
-                entryIndex++;
-            }
-
+            List<ContentBase> mappedContents = MapMessageContents(message);
             ActivityMetadata activityMetadata = new(activity);
             PolicyLocation policyLocation;
 
@@ -228,15 +216,23 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
                     OperatingSystemVersion = "Unknown"
                 }
             };
-            ContentToProcess contentToProcess = new(contentEntries, activityMetadata, deviceMetadata, integratedAppMetadata, protectedAppMetadata);
 
             if (string.IsNullOrEmpty(resolvedUserId))
             {
                 throw new PurviewRequestException("No user id provided or inferred for Purview request. Please provide an Entra user id in each message, pass a user id to the processor, or configure the TokenCredential to authenticate to an Entra user.");
             }
 
-            ProcessContentRequest pcRequest = new(contentToProcess, resolvedUserId, tenantId);
-            pcRequests.Add(pcRequest);
+            for (int entryIndex = 0; entryIndex < mappedContents.Count; entryIndex++)
+            {
+                string identifier = entryIndex == 0 ? messageId : $"{messageId}-{entryIndex}";
+                ProcessConversationMetadata contentEntry = new(mappedContents[entryIndex], identifier, false, $"Agent Framework Message {messageId}", correlationId)
+                {
+                    SequenceNumber = baseSequenceNumber + entryIndex,
+                };
+                ContentToProcess contentToProcess = new(contentEntry, activityMetadata, deviceMetadata, integratedAppMetadata, protectedAppMetadata);
+                ProcessContentRequest pcRequest = new(contentToProcess, resolvedUserId, tenantId);
+                pcRequests.Add(pcRequest);
+            }
         }
 
         return pcRequests;
@@ -246,11 +242,11 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
     /// Map every content item of a message onto the Purview content type that fits it.
     /// </summary>
     /// <param name="message">The message whose contents should be evaluated.</param>
-    /// <returns>One content item per evaluable <see cref="AIContent"/>, never empty.</returns>
+    /// <returns>One content item per evaluable <see cref="AIContent"/>.</returns>
     /// <remarks>
-    /// Only <see cref="UsageContent"/> is skipped, because it carries no user data. Everything
-    /// else is mapped to a real content item: submitting a message with part of its payload
-    /// unevaluated is a policy bypass.
+    /// <see cref="UsageContent"/> and content with no data are skipped because they carry no user
+    /// data. Everything else is mapped to a real content item: submitting a message with part of
+    /// its payload unevaluated is a policy bypass.
     /// </remarks>
     private static List<ContentBase> MapMessageContents(ChatMessage message)
     {
@@ -263,11 +259,6 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
             {
                 mapped.Add(purviewContent);
             }
-        }
-
-        if (mapped.Count == 0)
-        {
-            mapped.Add(new PurviewTextContent(string.Empty));
         }
 
         return mapped;
@@ -286,11 +277,18 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
                 // Telemetry only; there is nothing for DLP to classify.
                 return null;
 
+            case TextContent { Text: null or "" }:
+            case TextReasoningContent { Text: null or "" }:
+            case DataContent { Data.IsEmpty: true }:
+                // Empty data is skipped because the Graph APIs do not support it. A request with
+                // empty data cannot violate content policies because it contains no content.
+                return null;
+
             case TextContent textContent:
-                return new PurviewTextContent(textContent.Text ?? string.Empty);
+                return new PurviewTextContent(textContent.Text);
 
             case TextReasoningContent reasoningContent:
-                return new PurviewTextContent(reasoningContent.Text ?? string.Empty);
+                return new PurviewTextContent(reasoningContent.Text);
 
             case DataContent dataContent:
                 return new PurviewBinaryContent(dataContent.Data.ToArray());

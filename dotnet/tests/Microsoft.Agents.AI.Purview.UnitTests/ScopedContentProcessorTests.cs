@@ -1079,12 +1079,12 @@ public sealed class ScopedContentProcessorTests
     }
 
     /// <summary>
-    /// Verifies every content item is submitted for evaluation, not just <c>message.Text</c>.
+    /// Verifies every content item is submitted for evaluation in a separate request, not just <c>message.Text</c>.
     /// Images, binary payloads and structured tool results are empty when flattened to text, which
     /// would have them reach the model having only ever been classified as an empty string.
     /// </summary>
     [Fact]
-    public async Task ProcessMessagesAsync_WithNonTextContent_SubmitsItForEvaluationAsync()
+    public async Task ProcessMessagesAsync_WithMultipleContentItems_SubmitsEachInSeparateRequestAsync()
     {
         // Arrange
         byte[] secret = [0x01, 0x02, 0x03, 0x04];
@@ -1105,10 +1105,10 @@ public sealed class ScopedContentProcessorTests
             It.IsAny<ProtectionScopesCacheKey>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(CreateApplicableProtectionScopesResponse());
 
-        ProcessContentRequest? capturedRequest = null;
+        List<ProcessContentRequest> capturedRequests = [];
         this._mockPurviewClient.Setup(x => x.ProcessContentAsync(
             It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<ProcessContentRequest, CancellationToken>((request, _) => capturedRequest = request)
+            .Callback<ProcessContentRequest, CancellationToken>((request, _) => capturedRequests.Add(request))
             .ReturnsAsync(new ProcessContentResponse());
 
         // Act
@@ -1116,18 +1116,46 @@ public sealed class ScopedContentProcessorTests
             messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
 
         // Assert
-        Assert.NotNull(capturedRequest);
-        List<ProcessContentMetadataBase> entries = capturedRequest.ContentToProcess.ContentEntries;
-        Assert.Equal(2, entries.Count);
+        Assert.Equal(2, capturedRequests.Count);
+        ProcessContentMetadataBase binaryEntry = Assert.Single(capturedRequests[0].ContentToProcess.ContentEntries);
+        ProcessContentMetadataBase functionCallEntry = Assert.Single(capturedRequests[1].ContentToProcess.ContentEntries);
 
-        PurviewBinaryContent binaryContent = Assert.IsType<PurviewBinaryContent>(entries[0].Content);
+        PurviewBinaryContent binaryContent = Assert.IsType<PurviewBinaryContent>(binaryEntry.Content);
         Assert.Equal(secret, binaryContent.Data);
 
-        PurviewTextContent functionCallContent = Assert.IsType<PurviewTextContent>(entries[1].Content);
+        PurviewTextContent functionCallContent = Assert.IsType<PurviewTextContent>(functionCallEntry.Content);
         Assert.Contains("123-45-6789", functionCallContent.Data, StringComparison.Ordinal);
 
         // Content entries must be individually addressable, not collapsed onto one identifier.
-        Assert.NotEqual(entries[0].Identifier, entries[1].Identifier);
+        Assert.NotEqual(binaryEntry.Identifier, functionCallEntry.Identifier);
+    }
+
+    [Fact]
+    public async Task ProcessMessagesAsync_WithEmptyTextAndData_SkipsEmptyContentAsync()
+    {
+        // Arrange
+        byte[] emptyData = [];
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.User,
+            [
+                new TextContent(string.Empty),
+                new DataContent(emptyData, "application/octet-stream")
+            ])
+        ];
+        PurviewSettings settings = CreateValidPurviewSettings();
+        TokenInfo tokenInfo = new() { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+
+        // Act
+        await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        this._mockPurviewClient.Verify(x => x.ProcessContentAsync(
+            It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     /// <summary>
@@ -1388,7 +1416,7 @@ public sealed class ScopedContentProcessorTests
             Version = "1.0"
         };
         ContentToProcess contentToProcess = new(
-            [metadata],
+            metadata,
             activityMetadata,
             deviceMetadata,
             integratedAppMetadata,

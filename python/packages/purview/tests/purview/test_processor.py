@@ -146,8 +146,10 @@ class TestScopedContentProcessor:
         assert requests[0].tenant_id == "12345678-1234-1234-1234-123456789012"
         assert user_id == "12345678-1234-1234-1234-123456789012"
 
-    async def test_map_messages_submits_every_content_item(self, processor: ScopedContentProcessor) -> None:
-        """Test _map_messages submits every content item, not just the text.
+    async def test_map_messages_submits_each_content_item_in_separate_request(
+        self, processor: ScopedContentProcessor
+    ) -> None:
+        """Test _map_messages submits every content item in a separate request.
 
         Non-text content flattened to Message.text is empty for binary, tool-call and
         tool-result content, which would have Purview classify an empty string.
@@ -173,10 +175,9 @@ class TestScopedContentProcessor:
 
         requests, _ = await processor._map_messages(messages, Activity.UPLOAD_TEXT)
 
-        assert len(requests) == 1
-        entries = requests[0].content_to_process.content_entries
-        assert len(entries) == 3
-
+        assert len(requests) == 3
+        entries = [request.content_to_process.content_entries[0] for request in requests]
+        assert all(len(request.content_to_process.content_entries) == 1 for request in requests)
         binary_entry, call_entry, result_entry = entries
         assert isinstance(binary_entry.content, PurviewBinaryContent)
         assert binary_entry.content.data == secret
@@ -191,6 +192,24 @@ class TestScopedContentProcessor:
         # Every entry must carry real content; an empty payload would not be evaluated.
         assert all(entry.content is not None for entry in entries)
         assert not any(isinstance(entry.content, PurviewTextContent) and entry.content.data == "" for entry in entries)
+
+    async def test_map_messages_skips_empty_text_and_data(self, processor: ScopedContentProcessor) -> None:
+        """Test _map_messages does not create requests for empty text or binary data."""
+        from agent_framework import Content
+
+        messages = [
+            Message(
+                role="user",
+                contents=[
+                    "",
+                    Content.from_data(data=b"", media_type="application/octet-stream"),
+                ],
+            )
+        ]
+
+        requests, _ = await processor._map_messages(messages, Activity.UPLOAD_TEXT)
+
+        assert requests == []
 
     async def test_map_messages_decodes_data_uri_with_media_type_parameters(
         self, processor: ScopedContentProcessor
@@ -236,7 +255,9 @@ class TestScopedContentProcessor:
 
         requests, _ = await processor._map_messages(messages, Activity.UPLOAD_TEXT)
 
-        call_entry, result_entry = requests[0].content_to_process.content_entries
+        assert len(requests) == 2
+        call_entry = requests[0].content_to_process.content_entries[0]
+        result_entry = requests[1].content_to_process.content_entries[0]
 
         assert isinstance(call_entry.content, PurviewTextContent)
         assert "120-98-1437" in call_entry.content.data

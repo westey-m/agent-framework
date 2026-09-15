@@ -1130,6 +1130,34 @@ public sealed class ScopedContentProcessorTests
         Assert.NotEqual(binaryEntry.Identifier, functionCallEntry.Identifier);
     }
 
+    [Fact]
+    public async Task ProcessMessagesAsync_WithEmptyTextAndData_SkipsEmptyContentAsync()
+    {
+        // Arrange
+        byte[] emptyData = [];
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.User,
+            [
+                new TextContent(string.Empty),
+                new DataContent(emptyData, "application/octet-stream")
+            ])
+        ];
+        PurviewSettings settings = CreateValidPurviewSettings();
+        TokenInfo tokenInfo = new() { TenantId = "tenant-123", UserId = "user-123", ClientId = "client-123" };
+
+        this._mockPurviewClient.Setup(x => x.GetUserInfoFromTokenAsync(It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(tokenInfo);
+
+        // Act
+        await this._processor.ProcessMessagesAsync(
+            messages, "session-123", Activity.UploadText, settings, "user-123", CancellationToken.None);
+
+        // Assert
+        this._mockPurviewClient.Verify(x => x.ProcessContentAsync(
+            It.IsAny<ProcessContentRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     /// <summary>
     /// Verifies a block verdict known from an offline cached scope is still enforced. The offline
     /// branch reports asynchronously, but discarding the scope's own policy actions would let a

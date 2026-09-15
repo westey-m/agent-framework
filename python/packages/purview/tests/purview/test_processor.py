@@ -193,6 +193,24 @@ class TestScopedContentProcessor:
         assert all(entry.content is not None for entry in entries)
         assert not any(isinstance(entry.content, PurviewTextContent) and entry.content.data == "" for entry in entries)
 
+    async def test_map_messages_skips_empty_text_and_data(self, processor: ScopedContentProcessor) -> None:
+        """Test _map_messages does not create requests for empty text or binary data."""
+        from agent_framework import Content
+
+        messages = [
+            Message(
+                role="user",
+                contents=[
+                    "",
+                    Content.from_data(data=b"", media_type="application/octet-stream"),
+                ],
+            )
+        ]
+
+        requests, _ = await processor._map_messages(messages, Activity.UPLOAD_TEXT)
+
+        assert requests == []
+
     async def test_map_messages_decodes_data_uri_with_media_type_parameters(
         self, processor: ScopedContentProcessor
     ) -> None:

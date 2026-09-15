@@ -109,12 +109,21 @@ def _map_content(content: Content) -> ContentBase | None:
     if content_type in _NON_EVALUATED_CONTENT_TYPES:
         return None
 
+    # Empty data is skipped because the Graph APIs do not support it. A request with
+    # empty data cannot violate content policies because it contains no content.
     if content_type in ("text", "text_reasoning"):
-        return PurviewTextContent(data=content.text or "")
+        if not content.text:
+            return None
+        return PurviewTextContent(data=content.text)
 
     if content_type == "data":
-        raw_data = _decode_data_uri(getattr(content, "uri", None))
+        uri = getattr(content, "uri", None)
+        if not uri:
+            return None
+        raw_data = _decode_data_uri(uri)
         if raw_data is not None:
+            if not raw_data:
+                return None
             return PurviewBinaryContent(data=raw_data)
         # Not a base64 data URI after all: evaluate the serialized form rather than drop it.
         return PurviewTextContent(data=_serialize_for_evaluation(content.to_dict()))
@@ -127,13 +136,8 @@ def _map_content(content: Content) -> ContentBase | None:
 
 
 def _map_message_contents(message: Message) -> list[ContentBase]:
-    """Map every content item of a message to Purview content entries.
-
-    Always returns at least one entry so that a message can never pass through
-    without being submitted for evaluation.
-    """
-    mapped = [purview_content for content in message.contents if (purview_content := _map_content(content))]
-    return mapped or [PurviewTextContent(data="")]
+    """Map every non-empty content item of a message to Purview content entries."""
+    return [purview_content for content in message.contents if (purview_content := _map_content(content))]
 
 
 def _is_blocking_action(action_info: DlpActionInfo) -> bool:

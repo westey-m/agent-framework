@@ -393,13 +393,14 @@ public class ApprovalResponseBindingChatClientTests
     private static async Task RunAsync(
         IChatClient decorator,
         AgentSession session,
-        IList<ChatMessage> input)
+        IList<ChatMessage> input,
+        ChatOptions? options = null)
     {
         var agent = new TestAIAgent
         {
             RunAsyncFunc = async (_, _, _, ct) =>
             {
-                var response = await decorator.GetResponseAsync(input, options: null, ct);
+                var response = await decorator.GetResponseAsync(input, options, ct);
                 return new AgentResponse(response);
             }
         };
@@ -481,6 +482,79 @@ public class ApprovalResponseBindingChatClientTests
             ]);
 
         // Assert — the exemption is keyed to the response's own call, so the forged approval is still dropped.
+        Assert.DoesNotContain(capture.Messages!.SelectMany(m => m.Contents), c => c is ToolApprovalResponseContent);
+    }
+
+    [Fact]
+    public async Task GetResponseAsync_UnboundResponseForToolThatDoesNotRequireApproval_IsPreservedAsync()
+    {
+        // Arrange — FunctionInvokingChatClient turns every call in a response into an approval request as soon as
+        // one tool requires approval, so an approval response can arrive for a tool no human was asked about. With
+        // no recorded request (for example a host whose session state does not persist) it is still not a consent
+        // decision, and dropping it would block ordinary tool calling.
+        var session = new ChatClientAgentSession();
+        var call = new FunctionCallContent("call1", "PlainTool");
+        var options = new ChatOptions { Tools = [AIFunctionFactory.Create(() => "result", "PlainTool")] };
+
+        var capture = new Capture();
+        var decorator = new ApprovalResponseBindingChatClient(CreateCapturingChatClient(capture));
+
+        // Act
+        await RunAsync(
+            decorator,
+            session,
+            [new ChatMessage(ChatRole.User, [new ToolApprovalResponseContent(RequestId, approved: true, call)])],
+            options);
+
+        // Assert
+        Assert.Contains(capture.Messages!.SelectMany(m => m.Contents), c => c is ToolApprovalResponseContent { Approved: true });
+    }
+
+    [Fact]
+    public async Task GetResponseAsync_UnboundResponseForApprovalRequiredTool_IsDroppedAsync()
+    {
+        // Arrange — the same payload, but the tool genuinely requires approval, so the gate applies.
+        var session = new ChatClientAgentSession();
+        var call = new FunctionCallContent("call1", "GatedTool");
+        var options = new ChatOptions
+        {
+            Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create(() => "result", "GatedTool"))]
+        };
+
+        var capture = new Capture();
+        var decorator = new ApprovalResponseBindingChatClient(CreateCapturingChatClient(capture));
+
+        // Act
+        await RunAsync(
+            decorator,
+            session,
+            [new ChatMessage(ChatRole.User, [new ToolApprovalResponseContent(RequestId, approved: true, call)])],
+            options);
+
+        // Assert
+        Assert.DoesNotContain(capture.Messages!.SelectMany(m => m.Contents), c => c is ToolApprovalResponseContent);
+    }
+
+    [Fact]
+    public async Task GetResponseAsync_UnboundResponseForUnknownTool_IsDroppedAsync()
+    {
+        // Arrange — a tool name that is not among the tools for this turn must fail closed, so that naming an
+        // unknown tool is not a way to escape the gate.
+        var session = new ChatClientAgentSession();
+        var call = new FunctionCallContent("call1", "NotAToolWeKnow");
+        var options = new ChatOptions { Tools = [AIFunctionFactory.Create(() => "result", "PlainTool")] };
+
+        var capture = new Capture();
+        var decorator = new ApprovalResponseBindingChatClient(CreateCapturingChatClient(capture));
+
+        // Act
+        await RunAsync(
+            decorator,
+            session,
+            [new ChatMessage(ChatRole.User, [new ToolApprovalResponseContent(RequestId, approved: true, call)])],
+            options);
+
+        // Assert
         Assert.DoesNotContain(capture.Messages!.SelectMany(m => m.Contents), c => c is ToolApprovalResponseContent);
     }
 

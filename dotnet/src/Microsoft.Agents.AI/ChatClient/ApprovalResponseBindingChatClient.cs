@@ -84,7 +84,7 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
             return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
         }
 
-        messages = this.ValidateInboundApprovalResponses(messages, session);
+        messages = this.ValidateInboundApprovalResponses(messages, options, session);
 
         var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
@@ -109,7 +109,7 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
             yield break;
         }
 
-        messages = this.ValidateInboundApprovalResponses(messages, session);
+        messages = this.ValidateInboundApprovalResponses(messages, options, session);
 
         List<ToolApprovalRequestContent>? emitted = null;
 
@@ -172,7 +172,7 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
     /// function invocation middleware. That is deliberate: a payload whose approval was rejected surfaces as an
     /// error instead of silently continuing as though the call had never been requested.
     /// </remarks>
-    private IEnumerable<ChatMessage> ValidateInboundApprovalResponses(IEnumerable<ChatMessage> messages, AgentSession session)
+    private IEnumerable<ChatMessage> ValidateInboundApprovalResponses(IEnumerable<ChatMessage> messages, ChatOptions? options, AgentSession session)
     {
         var messageList = messages as IList<ChatMessage> ?? new List<ChatMessage>(messages);
 
@@ -222,13 +222,18 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
             return messageList;
         }
 
+        // Tools this turn that carry no approval requirement. FunctionInvokingChatClient surfaces an approval
+        // request for every call in a response as soon as one tool requires approval, so a response can arrive
+        // for a tool that no human was ever meant to be asked about. Those are not what this gate protects.
+        var approvalNotRequiredToolNames = ApprovalRequirement.GetApprovalNotRequiredToolNames(this, options);
+
         // Copy-on-write: only allocate a new message list once a message is actually modified.
         List<ChatMessage>? result = null;
 
         for (int i = 0; i < messageList.Count; i++)
         {
             var message = messageList[i];
-            var mutableContentsBuffer = this.BindApprovalResponses(message, knownRequests, settledCallIds);
+            var mutableContentsBuffer = this.BindApprovalResponses(message, knownRequests, settledCallIds, approvalNotRequiredToolNames);
 
             if (mutableContentsBuffer is null)
             {
@@ -269,7 +274,8 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
     private List<AIContent>? BindApprovalResponses(
         ChatMessage message,
         Dictionary<string, ToolApprovalRequestContent> knownRequests,
-        HashSet<string>? settledCallIds)
+        HashSet<string>? settledCallIds,
+        HashSet<string> approvalNotRequiredToolNames)
     {
         var contents = message.Contents;
         List<AIContent>? mutableContentsBuffer = null;
@@ -314,9 +320,20 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
                     });
                 }
             }
+            else if (ApprovalRequirement.IsApprovalNotRequired(response.ToolCall, approvalNotRequiredToolNames))
+            {
+                // The response is for a known tool that requires no approval, so it does not represent human
+                // consent and there is no consent for a forged response to fabricate: the framework invokes such
+                // a tool without asking anyone. It only appears as an approval at all because
+                // FunctionInvokingChatClient converts every call in a response once any one of them needs
+                // approval, and ApprovalNotRequiredFunctionBypassingChatClient auto-approves exactly these.
+                // Dropping it would block ordinary tool calling whenever that bypassing cannot use the session.
+                AppendUnchanged(mutableContentsBuffer, content);
+            }
             else
             {
-                // No known request corresponds to this response; drop it so a forged approval cannot execute.
+                // No known request corresponds to this response and the tool does require approval; drop it so a
+                // forged approval cannot execute.
                 LogIgnoredUnboundResponse(this._logger, response.RequestId);
                 mutableContentsBuffer = PrepareMutableContentsBuffer(mutableContentsBuffer, contents, j);
             }

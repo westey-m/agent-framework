@@ -24,6 +24,11 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
     private readonly IChannelHandler _channelHandler;
 
     /// <summary>
+    /// The characters that terminate the authority of a URL, being the start of the path, query or fragment.
+    /// </summary>
+    private static readonly char[] s_authorityDelimiters = ['/', '?', '#'];
+
+    /// <summary>
     /// Create a new instance of <see cref="ScopedContentProcessor"/>.
     /// </summary>
     /// <param name="purviewClient">The purview client to use for purview requests.</param>
@@ -105,10 +110,10 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
     /// </summary>
     /// <remarks>
     /// Application ids (GUIDs) and domain names are case-insensitive, so those fold whole. URL values
-    /// are not: the scheme and host are case-insensitive but the path and query are case-sensitive, so
-    /// folding a URL whole would let a scope for <c>contoso.com/public</c> match a request for
-    /// <c>contoso.com/Public</c>. Location types that are not recognized fold whole, which matches more
-    /// scopes rather than fewer.
+    /// are not. Only the scheme and the host are case-insensitive; the userinfo, path, query and
+    /// fragment are all case-sensitive, so folding a URL whole would let a scope for
+    /// <c>contoso.com/public</c> match a request for <c>contoso.com/Public</c>. Location types that are
+    /// not recognized fold whole, which matches more scopes rather than fewer.
     /// </remarks>
     /// <param name="locationType">The location type segment, for example <c>policyLocationUrl</c>.</param>
     /// <param name="value">The location value to normalize.</param>
@@ -121,12 +126,26 @@ internal sealed class ScopedContentProcessor : IScopedContentProcessor
         }
 
         int schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
-        int hostStart = schemeEnd >= 0 ? schemeEnd + 3 : 0;
-        int pathStart = value.IndexOf('/', hostStart);
+        int authorityStart = schemeEnd >= 0 ? schemeEnd + 3 : 0;
 
-        return pathStart < 0
-            ? value.ToUpperInvariant()
-            : string.Concat(value.Substring(0, pathStart).ToUpperInvariant(), value.Substring(pathStart));
+        // The authority ends at the first path, query or fragment delimiter, whichever comes first.
+        int authorityEnd = value.IndexOfAny(s_authorityDelimiters, authorityStart);
+        if (authorityEnd < 0)
+        {
+            authorityEnd = value.Length;
+        }
+
+        // Credentials are case-sensitive, so only the host half of the authority folds.
+        string authority = value.Substring(authorityStart, authorityEnd - authorityStart);
+        int userInfoEnd = authority.LastIndexOf('@');
+        string userInfo = userInfoEnd >= 0 ? authority.Substring(0, userInfoEnd + 1) : string.Empty;
+        string host = userInfoEnd >= 0 ? authority.Substring(userInfoEnd + 1) : authority;
+
+        return string.Concat(
+            value.Substring(0, authorityStart).ToUpperInvariant(),
+            userInfo,
+            host.ToUpperInvariant(),
+            value.Substring(authorityEnd));
     }
 
     private static bool TryGetUserIdFromPayload(IEnumerable<ChatMessage> messages, out string? userId)

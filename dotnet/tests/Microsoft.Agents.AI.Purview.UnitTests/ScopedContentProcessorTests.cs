@@ -352,6 +352,90 @@ public sealed class ScopedContentProcessorTests
     }
 
     [Fact]
+    public void CheckApplicableScopes_TreatsUrlLocationQueryAsCaseSensitive()
+    {
+        // Arrange
+        ProcessContentRequest pcRequest = CreateProcessContentRequest();
+        pcRequest.ContentToProcess.ProtectedAppMetadata.ApplicationLocation =
+            new("microsoft.graph.policyLocationUrl", "https://contoso.com?label=Secret");
+        ProtectionScopesResponse psResponse = new()
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations = [new("#microsoft.graph.policyLocationUrl", "https://contoso.com?label=secret")],
+                    ExecutionMode = ExecutionMode.EvaluateInline
+                }
+            ]
+        };
+
+        // Act
+        (bool shouldProcess, List<DlpActionInfo> dlpActions, _) = ScopedContentProcessor.CheckApplicableScopes(pcRequest, psResponse);
+
+        // Assert
+        Assert.False(shouldProcess);
+        Assert.Empty(dlpActions);
+    }
+
+    [Fact]
+    public void CheckApplicableScopes_TreatsUrlLocationFragmentAsCaseSensitive()
+    {
+        // Arrange
+        ProcessContentRequest pcRequest = CreateProcessContentRequest();
+        pcRequest.ContentToProcess.ProtectedAppMetadata.ApplicationLocation =
+            new("microsoft.graph.policyLocationUrl", "https://contoso.com#Section");
+        ProtectionScopesResponse psResponse = new()
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations = [new("#microsoft.graph.policyLocationUrl", "https://contoso.com#section")],
+                    ExecutionMode = ExecutionMode.EvaluateInline
+                }
+            ]
+        };
+
+        // Act
+        (bool shouldProcess, List<DlpActionInfo> dlpActions, _) = ScopedContentProcessor.CheckApplicableScopes(pcRequest, psResponse);
+
+        // Assert
+        Assert.False(shouldProcess);
+        Assert.Empty(dlpActions);
+    }
+
+    [Fact]
+    public void CheckApplicableScopes_TreatsUrlLocationUserInfoAsCaseSensitive()
+    {
+        // Arrange
+        ProcessContentRequest pcRequest = CreateProcessContentRequest();
+        pcRequest.ContentToProcess.ProtectedAppMetadata.ApplicationLocation =
+            new("microsoft.graph.policyLocationUrl", "https://alice:SecretPass@contoso.com/docs");
+        ProtectionScopesResponse psResponse = new()
+        {
+            Scopes =
+            [
+                new()
+                {
+                    Activities = ProtectionScopeActivities.UploadText,
+                    Locations = [new("#microsoft.graph.policyLocationUrl", "https://alice:secretpass@contoso.com/docs")],
+                    ExecutionMode = ExecutionMode.EvaluateInline
+                }
+            ]
+        };
+
+        // Act
+        (bool shouldProcess, List<DlpActionInfo> dlpActions, _) = ScopedContentProcessor.CheckApplicableScopes(pcRequest, psResponse);
+
+        // Assert
+        Assert.False(shouldProcess);
+        Assert.Empty(dlpActions);
+    }
+
+    [Fact]
     public void CheckApplicableScopes_MatchesApplicationLocationCaseInsensitively()
     {
         // Arrange

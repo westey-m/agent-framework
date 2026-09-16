@@ -444,6 +444,105 @@ class TestScopedContentProcessor:
         assert should_process is False
         assert dlp_actions == []
 
+    async def test_check_applicable_scopes_treats_url_location_query_as_case_sensitive(
+        self, process_content_request_factory
+    ) -> None:
+        """Test _check_applicable_scopes keeps URL query casing significant.
+
+        A query value is case-sensitive, and it may follow the host directly with no path between
+        them, so the authority has to end at the query delimiter as well as the path delimiter.
+        """
+        from agent_framework_purview._models import ProtectionScopesResponse
+
+        pc_request = process_content_request_factory()
+        pc_request.content_to_process.protected_app_metadata.application_location = PolicyLocation(
+            data_type="microsoft.graph.policyLocationUrl",
+            value="https://contoso.com?label=Secret",
+        )
+        scope = PolicyScope(
+            activities=ProtectionScopeActivities.UPLOAD_TEXT,
+            execution_mode=ExecutionMode.EVALUATE_INLINE,
+            locations=[
+                PolicyLocation(
+                    data_type="#microsoft.graph.policyLocationUrl",
+                    value="https://contoso.com?label=secret",
+                )
+            ],
+            policy_actions=[DlpActionInfo(action=DlpAction.BLOCK_ACCESS)],
+        )
+        ps_response = ProtectionScopesResponse(scopes=[scope])
+
+        should_process, dlp_actions, _ = ScopedContentProcessor._check_applicable_scopes(pc_request, ps_response)
+
+        assert should_process is False
+        assert dlp_actions == []
+
+    async def test_check_applicable_scopes_treats_url_location_fragment_as_case_sensitive(
+        self, process_content_request_factory
+    ) -> None:
+        """Test _check_applicable_scopes keeps URL fragment casing significant.
+
+        A fragment may follow the host directly, so the authority has to end at the fragment
+        delimiter as well.
+        """
+        from agent_framework_purview._models import ProtectionScopesResponse
+
+        pc_request = process_content_request_factory()
+        pc_request.content_to_process.protected_app_metadata.application_location = PolicyLocation(
+            data_type="microsoft.graph.policyLocationUrl",
+            value="https://contoso.com#Section",
+        )
+        scope = PolicyScope(
+            activities=ProtectionScopeActivities.UPLOAD_TEXT,
+            execution_mode=ExecutionMode.EVALUATE_INLINE,
+            locations=[
+                PolicyLocation(
+                    data_type="#microsoft.graph.policyLocationUrl",
+                    value="https://contoso.com#section",
+                )
+            ],
+            policy_actions=[DlpActionInfo(action=DlpAction.BLOCK_ACCESS)],
+        )
+        ps_response = ProtectionScopesResponse(scopes=[scope])
+
+        should_process, dlp_actions, _ = ScopedContentProcessor._check_applicable_scopes(pc_request, ps_response)
+
+        assert should_process is False
+        assert dlp_actions == []
+
+    async def test_check_applicable_scopes_treats_url_location_userinfo_as_case_sensitive(
+        self, process_content_request_factory
+    ) -> None:
+        """Test _check_applicable_scopes keeps URL userinfo casing significant.
+
+        Credentials embedded in the authority are case-sensitive, so only the host half of the
+        authority may be folded.
+        """
+        from agent_framework_purview._models import ProtectionScopesResponse
+
+        pc_request = process_content_request_factory()
+        pc_request.content_to_process.protected_app_metadata.application_location = PolicyLocation(
+            data_type="microsoft.graph.policyLocationUrl",
+            value="https://alice:SecretPass@contoso.com/docs",
+        )
+        scope = PolicyScope(
+            activities=ProtectionScopeActivities.UPLOAD_TEXT,
+            execution_mode=ExecutionMode.EVALUATE_INLINE,
+            locations=[
+                PolicyLocation(
+                    data_type="#microsoft.graph.policyLocationUrl",
+                    value="https://alice:secretpass@contoso.com/docs",
+                )
+            ],
+            policy_actions=[DlpActionInfo(action=DlpAction.BLOCK_ACCESS)],
+        )
+        ps_response = ProtectionScopesResponse(scopes=[scope])
+
+        should_process, dlp_actions, _ = ScopedContentProcessor._check_applicable_scopes(pc_request, ps_response)
+
+        assert should_process is False
+        assert dlp_actions == []
+
     async def test_combine_policy_actions(self, processor: ScopedContentProcessor) -> None:
         """Test _combine_policy_actions merges action lists."""
         action1 = DlpActionInfo(action=DlpAction.BLOCK_ACCESS, restrictionAction=RestrictionAction.BLOCK)

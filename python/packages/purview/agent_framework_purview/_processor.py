@@ -159,16 +159,22 @@ def _normalize_location_value(data_type: str, value: str) -> str:
     """Normalize a policy location value for comparison, according to its location type.
 
     Application ids (GUIDs) and domain names are case-insensitive, so those fold whole. URL values are
-    not: the scheme and host are case-insensitive but the path and query are case-sensitive, so folding
-    a URL whole would let a scope for ``contoso.com/public`` match a request for ``contoso.com/Public``.
-    Location types that are not recognised fold whole, which matches more scopes rather than fewer.
+    not. Only the scheme and the host are case-insensitive; the userinfo, path, query and fragment are
+    all case-sensitive, so folding a URL whole would let a scope for ``contoso.com/public`` match a
+    request for ``contoso.com/Public``. Location types that are not recognised fold whole, which matches
+    more scopes rather than fewer.
     """
     if data_type.split(".")[-1].casefold().endswith("url"):
         scheme, separator, remainder = value.partition("://")
         if not separator:
             scheme, separator, remainder = "", "", value
-        host, slash, path = remainder.partition("/")
-        return f"{scheme.casefold()}{separator}{host.casefold()}{slash}{path}"
+        # The authority ends at the first path, query or fragment delimiter, whichever comes first.
+        delimiter = re.search(r"[/?#]", remainder)
+        authority_end = delimiter.start() if delimiter else len(remainder)
+        authority, tail = remainder[:authority_end], remainder[authority_end:]
+        # Credentials are case-sensitive, so only the host half of the authority folds.
+        userinfo, at_sign, host = authority.rpartition("@")
+        return f"{scheme.casefold()}{separator}{userinfo}{at_sign}{host.casefold()}{tail}"
     return value.casefold()
 
 

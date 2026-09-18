@@ -556,8 +556,20 @@ class TestBasicExecutorsCoverage:
         assert state.get("Local.a") is None
         assert state.get("Local.b") is None
 
-    async def test_send_activity_with_dict_activity(self, mock_context, mock_state):
-        """Test SendActivityExecutor with dict activity containing text field."""
+    @_requires_powerfx
+    @pytest.mark.parametrize(
+        "activity",
+        [
+            "Hello, {Local.name}!",
+            {"text": "Hello, {Local.name}!"},
+            '="Hello, " & Local.name & "!"',
+            {"text": '="Hello, " & Local.name & "!"'},
+        ],
+    )
+    async def test_send_activity_with_authored_greeting(
+        self, mock_context: MagicMock, mock_state: MagicMock, activity: str | dict[str, str]
+    ) -> None:
+        """Authored templates and explicit expressions support the same greeting."""
         from agent_framework_declarative._workflows._executors_basic import (
             SendActivityExecutor,
         )
@@ -568,12 +580,12 @@ class TestBasicExecutorsCoverage:
 
         action_def = {
             "kind": "SendActivity",
-            "activity": {"text": "Hello, {Local.name}!"},
+            "activity": activity,
         }
         executor = SendActivityExecutor(action_def)
         await executor.handle_action(ActionTrigger(), mock_context)
 
-        mock_context.yield_output.assert_called_once_with("Hello, Alice!")
+        mock_context.yield_output.assert_awaited_once_with("Hello, Alice!")
 
     async def test_send_activity_with_string_activity(self, mock_context, mock_state):
         """Test SendActivityExecutor with string activity."""
@@ -612,6 +624,27 @@ class TestBasicExecutorsCoverage:
         await executor.handle_action(ActionTrigger(), mock_context)
 
         mock_context.yield_output.assert_called_once_with("Dynamic message")
+
+    @_requires_powerfx
+    @pytest.mark.parametrize("activity", ["=Local.msg", {"text": "=Local.msg"}])
+    async def test_send_activity_preserves_expression_result(
+        self, mock_context: MagicMock, mock_state: MagicMock, activity: str | dict[str, str]
+    ) -> None:
+        """Expression results are output data, not authored templates."""
+        from agent_framework_declarative._workflows._executors_basic import (
+            SendActivityExecutor,
+        )
+
+        state = DeclarativeWorkflowState(mock_state)
+        state.initialize()
+        message = "Keep {Local.marker} as text."
+        state.set("Local.msg", message)
+        state.set("Local.marker", "fixture value")
+
+        executor = SendActivityExecutor({"kind": "SendActivity", "activity": activity})
+        await executor.handle_action(ActionTrigger(), mock_context)
+
+        mock_context.yield_output.assert_awaited_once_with(message)
 
 
 # ---------------------------------------------------------------------------

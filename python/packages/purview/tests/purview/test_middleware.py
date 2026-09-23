@@ -2,6 +2,7 @@
 
 """Tests for Purview middleware."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -220,6 +221,150 @@ class TestPurviewPolicyMiddleware:
         assert mock_proc.call_count == 2
         assert mock_proc.call_args_list[1].kwargs["user_id"] == "user-123"
         assert "".join(update.text for update in released) == "all clear"
+
+    async def test_middleware_streaming_releases_the_evaluated_content_not_the_buffered_updates(
+        self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock
+    ) -> None:
+        """The released updates come from the response that was evaluated, not from the buffer.
+
+        A finalizer is free to return something other than the assembly of its own updates. What
+        the caller receives has to be what policy actually saw.
+        """
+        context = AgentContext(agent=mock_agent, messages=[Message(role="user", contents=["Hello"])])
+        context.stream = True
+
+        async def updates() -> AsyncIterator[AgentResponseUpdate]:
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="confidential")])
+
+        def diverging_finalizer(_updates: Any) -> AgentResponse[Any]:
+            return AgentResponse(messages=[Message(role="assistant", contents=[Content.from_text(text="benign")])])
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                context.result = cast(Any, ResponseStream(updates(), finalizer=diverging_finalizer))
+
+            await middleware.process(context, mock_next)
+            released = [update async for update in cast(Any, context.result)]
+
+        released_text = "".join(update.text for update in released)
+        assert released_text == "benign"
+        assert "confidential" not in released_text
+
+    async def test_middleware_streaming_preserves_response_level_metadata(
+        self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock
+    ) -> None:
+        """Metadata carried by the response survives the buffered stream."""
+        context = AgentContext(agent=mock_agent, messages=[Message(role="user", contents=["Hello"])])
+        context.stream = True
+
+        async def updates() -> AsyncIterator[AgentResponseUpdate]:
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="all clear")])
+
+        def finalizer(_updates: Any) -> AgentResponse[Any]:
+            return AgentResponse(
+                messages=[Message(role="assistant", contents=[Content.from_text(text="all clear")])],
+                response_id="resp-1",
+                agent_id="agent-1",
+                continuation_token="token-1",
+                additional_properties={"custom": "value"},
+            )
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                context.result = cast(Any, ResponseStream(updates(), finalizer=finalizer))
+
+            await middleware.process(context, mock_next)
+            released = [update async for update in cast(Any, context.result)]
+
+        assert released[-1].response_id == "resp-1"
+        assert released[-1].agent_id == "agent-1"
+        assert released[-1].continuation_token == "token-1"
+        assert released[-1].additional_properties is not None
+        assert released[-1].additional_properties["custom"] == "value"
+
+    async def test_middleware_streaming_closes_the_inner_stream_when_never_pulled(
+        self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock
+    ) -> None:
+        """Abandoning the gated stream before the first pull still releases the inner stream."""
+        context = AgentContext(agent=mock_agent, messages=[Message(role="user", contents=["Hello"])])
+        context.stream = True
+        closed = False
+
+        async def updates() -> AsyncIterator[AgentResponseUpdate]:
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="all clear")])
+
+        def _mark_closed() -> None:
+            nonlocal closed
+            closed = True
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                inner = ResponseStream(updates(), finalizer=AgentResponse.from_updates)
+                inner.with_cleanup_hook(_mark_closed)
+                context.result = cast(Any, inner)
+
+            await middleware.process(context, mock_next)
+            await cast(Any, context.result).close()
+
+        assert closed is True
+
+    async def test_middleware_streaming_closes_the_inner_stream_when_the_drain_is_cancelled(
+        self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock
+    ) -> None:
+        """Cancelling part-way through the drain still releases the inner stream."""
+        context = AgentContext(agent=mock_agent, messages=[Message(role="user", contents=["Hello"])])
+        context.stream = True
+        closed = False
+        started = asyncio.Event()
+
+        async def updates() -> AsyncIterator[AgentResponseUpdate]:
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="partial")])
+            started.set()
+            await asyncio.Event().wait()
+
+        def _mark_closed() -> None:
+            nonlocal closed
+            closed = True
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                inner = ResponseStream(updates(), finalizer=AgentResponse.from_updates)
+                inner.with_cleanup_hook(_mark_closed)
+                context.result = cast(Any, inner)
+
+            await middleware.process(context, mock_next)
+
+            async def drain() -> None:
+                async for _ in cast(Any, context.result):
+                    pass
+
+            task = asyncio.create_task(drain())
+            await started.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        assert closed is True
 
     async def test_middleware_payment_required_in_pre_check_raises_by_default(
         self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock

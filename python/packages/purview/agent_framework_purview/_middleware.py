@@ -33,42 +33,6 @@ AzureTokenProvider = Callable[[], Union[str, Awaitable[str]]]
 logger = logging.getLogger("agent_framework.purview")
 
 
-def _agent_updates_from_response(response: AgentResponse[Any]) -> list[AgentResponseUpdate]:
-    """Rebuild stream updates from an assembled agent response."""
-    updates = [
-        AgentResponseUpdate(
-            contents=list(message.contents),
-            role=message.role,
-            author_name=message.author_name,
-            message_id=message.message_id,
-            response_id=response.response_id,
-        )
-        for message in response.messages
-    ]
-    if not updates:
-        updates = [AgentResponseUpdate(role="assistant", response_id=response.response_id)]
-    return updates
-
-
-def _chat_updates_from_response(response: ChatResponse[Any]) -> list[ChatResponseUpdate]:
-    """Rebuild stream updates from an assembled chat response."""
-    updates = [
-        ChatResponseUpdate(
-            contents=list(message.contents),
-            role=cast(Any, message.role),
-            author_name=message.author_name,
-            message_id=message.message_id,
-            response_id=response.response_id,
-            model=response.model,
-        )
-        for message in response.messages
-    ]
-    if not updates:
-        updates = [ChatResponseUpdate(role="assistant", response_id=response.response_id)]
-    updates[-1].finish_reason = response.finish_reason
-    return updates
-
-
 async def _should_block_response(
     processor: ScopedContentProcessor,
     settings: PurviewSettings,
@@ -236,12 +200,19 @@ class PurviewPolicyMiddleware(AgentMiddleware):
 
         The stream is drained in full, the assembled response is evaluated exactly as a
         non-streaming response is, and only then are updates released. A blocked response
-        is replaced, and the released updates are re-derived from the replacement so the
-        streamed content cannot diverge from the evaluated content.
+        is replaced. The released updates are always re-derived from the response that was
+        evaluated, so what the caller receives cannot diverge from what policy saw even when
+        the inner stream's finalizer returns something other than the assembly of its own
+        updates.
         """
 
         async def _consume() -> tuple[Sequence[AgentResponseUpdate], "AgentResponse[Any]"]:
-            final = await inner.get_final_response()
+            try:
+                final = await inner.get_final_response()
+            finally:
+                # Cancellation or failure part-way through the drain still has to release
+                # the inner stream, which the cleanup hook below would never reach.
+                await inner.close()
             return list(inner.updates), final
 
         async def _gate(
@@ -256,16 +227,22 @@ class PurviewPolicyMiddleware(AgentMiddleware):
             )
             if should_block_response:
                 return self._blocked_response(), True
-            return final, False
+            # Reported as transformed even when the content is allowed through unchanged, so
+            # the released updates are re-derived from the evaluated response rather than
+            # replayed from the buffer.
+            return final, True
 
-        return cast(
+        gated = cast(
             "ResponseStream[AgentResponseUpdate, AgentResponse[Any]]",
             cast(Any, ResponseStream).buffered_and_gated(
                 consume=_consume,
                 gate=_gate,
-                rederive=_agent_updates_from_response,
+                rederive=AgentResponse.to_updates,
             ),
         )
+        # Closing the gated stream before it is ever pulled never reaches ``_consume``, so
+        # the inner stream is released through a cleanup hook rather than from inside it.
+        return gated.with_cleanup_hook(inner.close)
 
 
 class PurviewChatPolicyMiddleware(ChatMiddleware):
@@ -378,12 +355,19 @@ class PurviewChatPolicyMiddleware(ChatMiddleware):
 
         The stream is drained in full, the assembled response is evaluated exactly as a
         non-streaming response is, and only then are updates released. A blocked response
-        is replaced, and the released updates are re-derived from the replacement so the
-        streamed content cannot diverge from the evaluated content.
+        is replaced. The released updates are always re-derived from the response that was
+        evaluated, so what the caller receives cannot diverge from what policy saw even when
+        the inner stream's finalizer returns something other than the assembly of its own
+        updates.
         """
 
         async def _consume() -> tuple[Sequence[ChatResponseUpdate], "ChatResponse[Any]"]:
-            final = await inner.get_final_response()
+            try:
+                final = await inner.get_final_response()
+            finally:
+                # Cancellation or failure part-way through the drain still has to release
+                # the inner stream, which the cleanup hook below would never reach.
+                await inner.close()
             return list(inner.updates), final
 
         async def _gate(
@@ -398,13 +382,19 @@ class PurviewChatPolicyMiddleware(ChatMiddleware):
             )
             if should_block_response:
                 return self._blocked_response(), True
-            return final, False
+            # Reported as transformed even when the content is allowed through unchanged, so
+            # the released updates are re-derived from the evaluated response rather than
+            # replayed from the buffer.
+            return final, True
 
-        return cast(
+        gated = cast(
             "ResponseStream[ChatResponseUpdate, ChatResponse[Any]]",
             cast(Any, ResponseStream).buffered_and_gated(
                 consume=_consume,
                 gate=_gate,
-                rederive=_chat_updates_from_response,
+                rederive=ChatResponse.to_updates,
             ),
         )
+        # Closing the gated stream before it is ever pulled never reaches ``_consume``, so
+        # the inner stream is released through a cleanup hook rather than from inside it.
+        return gated.with_cleanup_hook(inner.close)

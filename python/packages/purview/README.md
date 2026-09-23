@@ -376,12 +376,17 @@ sent as Purview binary content, and function calls, function results and other s
 serialized to text. Only `usage` content is skipped, because it carries token counts rather than user
 data.
 
-### References are not dereferenced
+### Remote references are not dereferenced
 
-Purview classifies the content it is handed; a reference to content is not the content. A URI, a hosted
-file reference, or a link nested inside a tool result is submitted as the reference itself, and the bytes
-it points at are never fetched or evaluated. A host that needs those bytes evaluated must resolve them
-and pass the resolved content through the middleware.
+Purview classifies the content it is handed; a reference to content is not the content.
+
+Content that carries its own bytes is evaluated as bytes: a `data:` URI is decoded and the decoded bytes
+are submitted as Purview binary content.
+
+A *remote* reference is not. A `uri` content pointing at a remote location, a hosted file reference, or a
+link nested inside a tool result is submitted as the reference itself, and the bytes it points at are
+never fetched or evaluated. A host that needs those bytes evaluated must resolve them and pass the
+resolved content through the middleware.
 
 ### Streaming responses
 

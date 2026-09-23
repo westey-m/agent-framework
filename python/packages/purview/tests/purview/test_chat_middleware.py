@@ -174,6 +174,124 @@ class TestPurviewChatPolicyMiddleware:
         assert mock_proc.call_args_list[1].kwargs["user_id"] == "user-123"
         assert "".join(update.text for update in released) == "all clear"
 
+    async def test_streaming_releases_the_evaluated_content_not_the_buffered_updates(
+        self, middleware: PurviewChatPolicyMiddleware
+    ) -> None:
+        """The released updates come from the response that was evaluated, not from the buffer."""
+        client = DummyChatClient()
+        chat_options = MagicMock()
+        chat_options.model = "test-model"
+        streaming_context = ChatContext(
+            client=cast(Any, client),
+            messages=[Message(role="user", contents=["Hello"])],
+            options=chat_options,
+            stream=True,
+        )
+
+        async def updates() -> AsyncIterator[ChatResponseUpdate]:
+            yield ChatResponseUpdate(role="assistant", contents=[Content.from_text(text="confidential")])
+
+        def diverging_finalizer(_updates: Any) -> ChatResponse[Any]:
+            return ChatResponse(messages=[Message(role="assistant", contents=[Content.from_text(text="benign")])])
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                streaming_context.result = cast(Any, ResponseStream(updates(), finalizer=diverging_finalizer))
+
+            await middleware.process(streaming_context, mock_next)
+            released = [update async for update in cast(Any, streaming_context.result)]
+
+        released_text = "".join(update.text for update in released)
+        assert released_text == "benign"
+        assert "confidential" not in released_text
+
+    async def test_streaming_preserves_response_level_metadata(self, middleware: PurviewChatPolicyMiddleware) -> None:
+        """Metadata carried by the response survives the buffered stream."""
+        client = DummyChatClient()
+        chat_options = MagicMock()
+        chat_options.model = "test-model"
+        streaming_context = ChatContext(
+            client=cast(Any, client),
+            messages=[Message(role="user", contents=["Hello"])],
+            options=chat_options,
+            stream=True,
+        )
+
+        async def updates() -> AsyncIterator[ChatResponseUpdate]:
+            yield ChatResponseUpdate(role="assistant", contents=[Content.from_text(text="all clear")])
+
+        def finalizer(_updates: Any) -> ChatResponse[Any]:
+            return ChatResponse(
+                messages=[Message(role="assistant", contents=[Content.from_text(text="all clear")])],
+                response_id="resp-1",
+                conversation_id="conv-1",
+                model="model-1",
+                continuation_token="token-1",
+                additional_properties={"custom": "value"},
+            )
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                streaming_context.result = cast(Any, ResponseStream(updates(), finalizer=finalizer))
+
+            await middleware.process(streaming_context, mock_next)
+            released = [update async for update in cast(Any, streaming_context.result)]
+
+        assert released[-1].response_id == "resp-1"
+        assert released[-1].conversation_id == "conv-1"
+        assert released[-1].model == "model-1"
+        assert released[-1].continuation_token == "token-1"
+        assert released[-1].additional_properties is not None
+        assert released[-1].additional_properties["custom"] == "value"
+
+    async def test_streaming_closes_the_inner_stream_when_never_pulled(
+        self, middleware: PurviewChatPolicyMiddleware
+    ) -> None:
+        """Abandoning the gated stream before the first pull still releases the inner stream."""
+        client = DummyChatClient()
+        chat_options = MagicMock()
+        chat_options.model = "test-model"
+        streaming_context = ChatContext(
+            client=cast(Any, client),
+            messages=[Message(role="user", contents=["Hello"])],
+            options=chat_options,
+            stream=True,
+        )
+        closed = False
+
+        async def updates() -> AsyncIterator[ChatResponseUpdate]:
+            yield ChatResponseUpdate(role="assistant", contents=[Content.from_text(text="all clear")])
+
+        def _mark_closed() -> None:
+            nonlocal closed
+            closed = True
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ):
+
+            async def mock_next() -> None:
+                inner = ResponseStream(updates(), finalizer=ChatResponse.from_updates)
+                inner.with_cleanup_hook(_mark_closed)
+                streaming_context.result = cast(Any, inner)
+
+            await middleware.process(streaming_context, mock_next)
+            await cast(Any, streaming_context.result).close()
+
+        assert closed is True
+
     async def test_chat_middleware_handles_post_check_exception(
         self, middleware: PurviewChatPolicyMiddleware, chat_context: ChatContext
     ) -> None:

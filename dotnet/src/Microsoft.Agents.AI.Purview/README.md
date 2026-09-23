@@ -355,9 +355,14 @@ as Purview binary content, and `FunctionCallContent`, `FunctionResultContent` an
 content are serialized to text. Only `UsageContent` is skipped, because it carries token counts rather
 than user data.
 
-### References are not dereferenced
+### Remote references are not dereferenced
 
-Purview classifies the content it is handed; a reference to content is not the content. A `UriContent`,
-a hosted file reference, or a link nested inside a `FunctionResultContent` is submitted as the reference
-itself, and the bytes it points at are never fetched or evaluated. A host that needs those bytes
-evaluated must resolve them and pass the resolved content through the middleware.
+Purview classifies the content it is handed; a reference to content is not the content.
+
+Content that carries its own bytes is evaluated as bytes: `DataContent` is submitted as Purview binary
+content.
+
+A *remote* reference is not. A `UriContent`, a hosted file reference, or a link nested inside a
+`FunctionResultContent` is submitted as the reference itself, and the bytes it points at are never
+fetched or evaluated. A host that needs those bytes evaluated must resolve them and pass the resolved
+content through the middleware.

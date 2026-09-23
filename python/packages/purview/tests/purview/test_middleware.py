@@ -270,7 +270,7 @@ class TestPurviewPolicyMiddleware:
                 messages=[Message(role="assistant", contents=[Content.from_text(text="all clear")])],
                 response_id="resp-1",
                 agent_id="agent-1",
-                continuation_token="token-1",
+                continuation_token=cast(Any, {"token": "token-1"}),
                 additional_properties={"custom": "value"},
             )
 
@@ -288,7 +288,7 @@ class TestPurviewPolicyMiddleware:
 
         assert released[-1].response_id == "resp-1"
         assert released[-1].agent_id == "agent-1"
-        assert released[-1].continuation_token == "token-1"
+        assert released[-1].continuation_token == {"token": "token-1"}
         assert released[-1].additional_properties is not None
         assert released[-1].additional_properties["custom"] == "value"
 

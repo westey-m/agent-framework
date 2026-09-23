@@ -231,7 +231,7 @@ class TestPurviewChatPolicyMiddleware:
                 response_id="resp-1",
                 conversation_id="conv-1",
                 model="model-1",
-                continuation_token="token-1",
+                continuation_token=cast(Any, {"token": "token-1"}),
                 additional_properties={"custom": "value"},
             )
 
@@ -250,7 +250,7 @@ class TestPurviewChatPolicyMiddleware:
         assert released[-1].response_id == "resp-1"
         assert released[-1].conversation_id == "conv-1"
         assert released[-1].model == "model-1"
-        assert released[-1].continuation_token == "token-1"
+        assert released[-1].continuation_token == {"token": "token-1"}
         assert released[-1].additional_properties is not None
         assert released[-1].additional_properties["custom"] == "value"
 

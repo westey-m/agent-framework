@@ -1507,7 +1507,7 @@ def test_chat_response_to_updates_carries_response_level_fields() -> None:
         model="model-1",
         created_at="2024-01-01T00:00:00Z",
         finish_reason="stop",
-        continuation_token="token-1",
+        continuation_token=cast(Any, {"token": "token-1"}),
         usage_details=UsageDetails(input_token_count=3, output_token_count=5),
         additional_properties={"custom": "value"},
     )
@@ -1519,7 +1519,7 @@ def test_chat_response_to_updates_carries_response_level_fields() -> None:
     assert round_tripped.model == "model-1"
     assert round_tripped.created_at == response.created_at
     assert round_tripped.finish_reason == "stop"
-    assert round_tripped.continuation_token == "token-1"
+    assert round_tripped.continuation_token == {"token": "token-1"}
     assert round_tripped.additional_properties["custom"] == "value"
     assert round_tripped.usage_details is not None
     assert round_tripped.usage_details["input_token_count"] == 3
@@ -1868,7 +1868,7 @@ def test_agent_run_response_to_updates_carries_response_level_fields() -> None:
         agent_id="agent-1",
         created_at="2024-01-01T00:00:00Z",
         finish_reason="stop",
-        continuation_token="token-1",
+        continuation_token=cast(Any, {"token": "token-1"}),
         usage_details=UsageDetails(input_token_count=3, output_token_count=5),
         additional_properties={"custom": "value"},
     )
@@ -1879,7 +1879,7 @@ def test_agent_run_response_to_updates_carries_response_level_fields() -> None:
     assert round_tripped.agent_id == "agent-1"
     assert round_tripped.created_at == response.created_at
     assert round_tripped.finish_reason == "stop"
-    assert round_tripped.continuation_token == "token-1"
+    assert round_tripped.continuation_token == {"token": "token-1"}
     assert round_tripped.additional_properties["custom"] == "value"
     assert round_tripped.usage_details is not None
     assert round_tripped.usage_details["input_token_count"] == 3

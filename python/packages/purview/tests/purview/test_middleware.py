@@ -2,11 +2,21 @@
 
 """Tests for Purview middleware."""
 
+from collections.abc import AsyncIterator
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from agent_framework import AgentContext, AgentResponse, AgentSession, Message, MiddlewareTermination
+from agent_framework import (
+    AgentContext,
+    AgentResponse,
+    AgentResponseUpdate,
+    AgentSession,
+    Content,
+    Message,
+    MiddlewareTermination,
+    ResponseStream,
+)
 from azure.core.credentials import AccessToken
 
 from agent_framework_purview import PurviewPolicyMiddleware, PurviewSettings
@@ -156,21 +166,60 @@ class TestPurviewPolicyMiddleware:
             # Second call (post-check) should be DOWNLOAD_TEXT for agent response
             assert mock_process.call_args_list[1][0][1] == Activity.DOWNLOAD_TEXT
 
-    async def test_middleware_streaming_skips_post_check(
+    async def test_middleware_streaming_response_is_evaluated_and_blocked(
         self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock
     ) -> None:
-        """Test that streaming results skip post-check evaluation."""
+        """Streamed content is evaluated in full and replaced when policy blocks it."""
         context = AgentContext(agent=mock_agent, messages=[Message(role="user", contents=["Hello"])])
         context.stream = True
 
-        with patch.object(middleware._processor, "process_messages", return_value=(False, "user-123")) as mock_proc:
+        async def updates() -> AsyncIterator[AgentResponseUpdate]:
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="confidential")])
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (True, "user-123")],
+        ) as mock_proc:
 
             async def mock_next() -> None:
-                context.result = AgentResponse(messages=[Message(role="assistant", contents=["streaming"])])
+                context.result = cast(Any, ResponseStream(updates(), finalizer=AgentResponse.from_updates))
 
             await middleware.process(context, mock_next)
+            released = [update async for update in cast(Any, context.result)]
 
-        assert mock_proc.call_count == 1
+        assert mock_proc.call_count == 2
+        assert mock_proc.call_args_list[1][0][1] == Activity.DOWNLOAD_TEXT
+        released_text = "".join(update.text for update in released)
+        assert "confidential" not in released_text
+        assert "blocked" in released_text.lower()
+
+    async def test_middleware_streaming_response_passes_when_allowed(
+        self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock
+    ) -> None:
+        """Allowed streamed content is released unchanged, reusing the prompt-phase identity."""
+        context = AgentContext(agent=mock_agent, messages=[Message(role="user", contents=["Hello"])])
+        context.stream = True
+
+        async def updates() -> AsyncIterator[AgentResponseUpdate]:
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="all ")])
+            yield AgentResponseUpdate(role="assistant", contents=[Content.from_text(text="clear")])
+
+        with patch.object(
+            middleware._processor,
+            "process_messages",
+            side_effect=[(False, "user-123"), (False, "user-123")],
+        ) as mock_proc:
+
+            async def mock_next() -> None:
+                context.result = cast(Any, ResponseStream(updates(), finalizer=AgentResponse.from_updates))
+
+            await middleware.process(context, mock_next)
+            released = [update async for update in cast(Any, context.result)]
+
+        assert mock_proc.call_count == 2
+        assert mock_proc.call_args_list[1].kwargs["user_id"] == "user-123"
+        assert "".join(update.text for update in released) == "all clear"
 
     async def test_middleware_payment_required_in_pre_check_raises_by_default(
         self, middleware: PurviewPolicyMiddleware, mock_agent: MagicMock

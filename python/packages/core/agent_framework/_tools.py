@@ -1795,6 +1795,20 @@ class FunctionInvocationConfiguration(TypedDict, total=False):
     - ``include_detailed_errors``: Whether to include exception details in the
       function result returned to the model. Exception text may contain sensitive
       information regardless of its source, so enable this only for a trusted channel.
+    - ``disable_approval_response_binding``: Whether to stop binding inbound local
+      tool-approval responses to the approval requests the framework recorded in the
+      :class:`~agent_framework.AgentSession`. Binding is enabled by default: a local
+      ``function_approval_response`` authorizes execution only when it matches a
+      pending request recorded by the framework in an authoritative session, so an
+      approval replayed or fabricated in caller-supplied message history cannot
+      authorize a tool on its own. Hosted (provider-issued) approvals are provider
+      protocol data and always pass through unchanged. Because the recorded request
+      is the authority, resuming a local approval requires the caller to pass the
+      same ``AgentSession`` back on the next run; a run with no session cannot resume
+      one. Replaying a transcript whose approval already has a terminal result is
+      unaffected: such an approval is settled history and can no longer execute
+      anything, so it is left in place. Set this to ``True`` only when equivalent
+      binding is enforced elsewhere.
 
     Note:
         ``max_iterations``, ``max_function_calls``, and ``max_duration_seconds``
@@ -1828,6 +1842,7 @@ class FunctionInvocationConfiguration(TypedDict, total=False):
     additional_tools: Sequence[FunctionTool]
     include_detailed_errors: bool
     allow_concurrent_invocation: bool
+    disable_approval_response_binding: bool
 
 
 def normalize_function_invocation_configuration(
@@ -1843,6 +1858,7 @@ def normalize_function_invocation_configuration(
         "additional_tools": [],
         "include_detailed_errors": False,
         "allow_concurrent_invocation": True,
+        "disable_approval_response_binding": False,
     }
     if config:
         normalized.update(config)
@@ -2955,6 +2971,52 @@ def _bind_approval_response_to_pending_request(
         pending.pop(request_key, None)
         _save_pending_approval_requests(invocation_session, pending)
     return rebound
+
+
+def _drop_unrecorded_local_approval_responses(messages: list[Message], live_response_ids: set[int]) -> bool:
+    """Remove local approval responses that no recorded pending request can authorize.
+
+    The authority for a local approval is the pending request the framework itself
+    recorded when it surfaced that request, which lives in an authoritative
+    ``AgentSession``. Without one there is nothing to bind against, and an approval
+    request that merely appears in caller-supplied history is not proof that the
+    framework ever asked a human to approve it: a caller could otherwise supply a
+    fabricated request together with its own approval and authorize an arbitrary tool
+    call. These responses are therefore dropped rather than honored.
+
+    Only responses in ``live_response_ids`` are dropped. Those are the responses that
+    could still authorize an execution on this turn. A response whose occurrence is
+    already settled by a terminal result is history rather than a pending
+    authorization: it cannot execute anything, so dropping it would serve no purpose
+    and would penalize every caller that replays a completed conversation. Settlement
+    is decided by the same occurrence-aware correlation used to execute approvals, so
+    fabricating a result to reach this exemption also guarantees the call will not run.
+
+    Hosted (provider-issued) approvals are left untouched because they are provider
+    protocol data that must be forwarded as-is.
+
+    Returns:
+        Whether any response was dropped.
+    """
+    dropped = False
+    filtered_messages: list[Message] = []
+    for message in messages:
+        filtered_contents: list[Content] = []
+        for content in message.contents:
+            if (
+                content.type == "function_approval_response"
+                and not _is_hosted_tool_approval(content)
+                and id(content) in live_response_ids
+            ):
+                dropped = True
+                continue
+            filtered_contents.append(content)
+        if filtered_contents:
+            message.contents = filtered_contents
+            filtered_messages.append(message)
+    if dropped:
+        messages[:] = filtered_messages
+    return dropped
 
 
 def _bind_approval_responses_to_pending_requests(
@@ -4462,6 +4524,7 @@ async def _resolve_approval_responses(
     execute_function_calls: _FunctionCallExecutor,
     invocation_session: AgentSession | None = None,
     approval_session_is_authoritative: bool = True,
+    disable_approval_response_binding: bool = False,
     middleware_pipeline: FunctionMiddlewarePipeline | None = None,
     settle_dangling_calls: Callable[[Sequence[Content]], Awaitable[None]] | None = None,
 ) -> _FunctionProcessingResult:
@@ -4489,6 +4552,24 @@ async def _resolve_approval_responses(
         if partial_mixed_batch:
             raise RuntimeError(
                 "A mixed function-call batch requires responses for every approval and Host-owned request."
+            )
+
+    if not disable_approval_response_binding and not _has_authoritative_approval_session(approval_session):
+        # Settled occurrences are excluded by the same correlation used below, so replaying a
+        # completed conversation is unaffected and only responses that could still authorize an
+        # execution are removed.
+        live_response_ids = {
+            id(response)
+            for response in _collect_approval_responses(
+                prepared_messages, non_approval_result_ids=host_result_ids
+            ).values()
+        }
+        if _drop_unrecorded_local_approval_responses(prepared_messages, live_response_ids):
+            logger.warning(
+                "Ignored one or more local tool-approval responses because this run has no authoritative "
+                "AgentSession holding the matching approval request. Pass the same AgentSession back on the run "
+                "that resumes an approval, or set the 'disable_approval_response_binding' function invocation "
+                "configuration option to restore the previous unbound behavior."
             )
 
     pending_responses_before_binding = list(
@@ -4971,6 +5052,9 @@ class FunctionInvocationLayer(Generic[OptionsCoT]):
             execute_function_calls=execute_function_calls,
             invocation_session=invocation_session,
             approval_session_is_authoritative=approval_session_is_authoritative,
+            disable_approval_response_binding=self.function_invocation_configuration.get(
+                "disable_approval_response_binding", False
+            ),
             middleware_pipeline=middleware_pipeline,
             settle_dangling_calls=settle_approval_replay_calls,
         )
@@ -5189,6 +5273,9 @@ class FunctionInvocationLayer(Generic[OptionsCoT]):
             execute_function_calls=execute_function_calls,
             invocation_session=invocation_session,
             approval_session_is_authoritative=approval_session_is_authoritative,
+            disable_approval_response_binding=self.function_invocation_configuration.get(
+                "disable_approval_response_binding", False
+            ),
             middleware_pipeline=middleware_pipeline,
             settle_dangling_calls=settle_approval_replay_calls,
         )

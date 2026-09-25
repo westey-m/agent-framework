@@ -91,9 +91,9 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
             return await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
         }
 
-        messages = InjectPendingBypassedCalls(messages, session);
+        var messagesToSend = this.PrepareBypassedCalls(messages, options, session);
 
-        var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        var response = await base.GetResponseAsync(messagesToSend, options, cancellationToken).ConfigureAwait(false);
 
         this.RemoveAndStoreBypassableInvocableCalls(response.Messages, options, session);
 
@@ -116,7 +116,7 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
             yield break;
         }
 
-        messages = InjectPendingBypassedCalls(messages, session);
+        messages = this.PrepareBypassedCalls(messages, options, session);
 
         // Stream updates live until a surfaced (non-informational) FunctionCallContent appears, then hold the
         // tail so the strip/store decision can observe every call in the same batch before re-emitting.
@@ -204,9 +204,11 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
     private static partial void LogBypassingSkipped(ILogger logger);
 
     /// <summary>
-    /// Checks the session for invocable function calls stored on a previous turn and injects them as
-    /// a user message containing pre-approved <see cref="ToolApprovalResponseContent"/> items appended to
-    /// the input messages, so that <see cref="FunctionInvokingChatClient"/> reconstructs and executes them.
+    /// Checks the session for invocable function calls stored on a previous turn and, for each one whose tool
+    /// still needs no approval, injects it as a pre-approved <see cref="ToolApprovalResponseContent"/> appended
+    /// to the input messages, so that <see cref="FunctionInvokingChatClient"/> reconstructs and executes it.
+    /// A stored call whose name now requires approval, or has left the tool set, is injected as rejected
+    /// instead, so that it is not executed.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -221,14 +223,16 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
     /// already run — and because a failure surfaces as an exception rather than a response, the results of
     /// those invocations are unrecoverable. Re-injecting the remainder would therefore still leave the batch
     /// incomplete while invoking already-executed functions a second time. Dropping the calls avoids the
-    /// duplicate invocation, and matches
-    /// <see cref="ApprovalNotRequiredFunctionBypassingChatClient"/>, which likewise never restores its entry.
+    /// duplicate invocation.
     /// </para>
     /// </remarks>
     /// <param name="messages">The outgoing messages.</param>
+    /// <param name="options">The options for the current request, used to re-check the stored calls.</param>
     /// <param name="session">The session holding any calls bypassed on a previous turn.</param>
-    private static IEnumerable<ChatMessage> InjectPendingBypassedCalls(
+    /// <returns>The messages to send to the inner client.</returns>
+    private IEnumerable<ChatMessage> PrepareBypassedCalls(
         IEnumerable<ChatMessage> messages,
+        ChatOptions? options,
         AgentSession session)
     {
         if (!session.StateBag.TryGetValue(
@@ -242,18 +246,36 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
 
         session.StateBag.TryRemoveValue(StateBagKey);
 
+        // A call was stored because it needed no approval at the time. Approval requirements can change between
+        // turns, so the stored decision is only reused while the tool that would run still needs no approval.
+        // Once it does, injecting an approval would run a tool no human was ever asked about, so the call is
+        // rejected instead. A tool being replaced by another of the same name is an ordinary part of developing
+        // an agent and is not by itself a reason to reject anything.
+        var autoApprovableNames = ApprovalRequirement.GetApprovalNotRequiredToolNames(this, options);
+
         List<AIContent> approvalResponses = [];
+
         foreach (var call in pendingCalls)
         {
-            // FunctionInvokingChatClient reconstructs and executes the call from the approval response
-            // itself; the request is synthetic and does not need to be present in the history.
             var request = new ToolApprovalRequestContent(ComposeApprovalRequestId(call.CallId), call);
-            approvalResponses.Add(request.CreateResponse(approved: true));
+
+            bool stillApprovalNotRequired = ApprovalRequirement.IsApprovalNotRequired(call, autoApprovableNames);
+
+            if (!stillApprovalNotRequired)
+            {
+                LogStaleBypassedCallRejected(this._logger, call.Name);
+            }
+
+            // FunctionInvokingChatClient reconstructs and executes an approved call from the approval response
+            // itself; the request is synthetic and does not need to be present in the history.
+            approvalResponses.Add(request.CreateResponse(approved: stillApprovalNotRequired));
         }
 
-        var userMessage = new ChatMessage(ChatRole.User, approvalResponses);
-        return messages.Concat([userMessage]);
+        return messages.Concat([new ChatMessage(ChatRole.User, approvalResponses)]);
     }
+
+    [LoggerMessage(LogLevel.Warning, "A call to '{ToolName}' was bypassed for execution on a previous turn, but the tool available under that name now requires approval or is no longer available. The call is rejected rather than executed.")]
+    private static partial void LogStaleBypassedCallRejected(ILogger logger, string toolName);
 
     /// <summary>
     /// Composes the approval-request id for a bypassed call. The prefix deliberately differs from the

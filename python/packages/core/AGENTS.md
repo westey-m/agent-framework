@@ -254,6 +254,9 @@ The vector store API is experimental under the shared `VECTOR_STORES` feature ID
   request that merely appears in the caller-supplied history is not proof the framework asked for approval. Hosted
   provider-issued approvals still pass through untouched, and a response already settled by a terminal result is
   replayed history rather than an authorization, so replaying a completed transcript keeps working without a session.
+  That settled exemption is an allow-list evaluated per response object, not per approval id, because several
+  responses can share one approval id and only the first is eligible to execute. Filtering runs before stateless
+  mixed-batch completeness is enforced, so a dropped response is never counted as an answer.
   Set the `disable_approval_response_binding` function invocation configuration option to restore the previous
   unbound behavior.
 - Approval resume keeps terminal `function_result` contents in tool-role messages and follow-up user-input requests

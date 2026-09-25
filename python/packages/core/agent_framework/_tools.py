@@ -2973,7 +2973,7 @@ def _bind_approval_response_to_pending_request(
     return rebound
 
 
-def _drop_unrecorded_local_approval_responses(messages: list[Message], live_response_ids: set[int]) -> bool:
+def _drop_unrecorded_local_approval_responses(messages: list[Message], settled_response_ids: set[int]) -> bool:
     """Remove local approval responses that no recorded pending request can authorize.
 
     The authority for a local approval is the pending request the framework itself
@@ -2984,13 +2984,18 @@ def _drop_unrecorded_local_approval_responses(messages: list[Message], live_resp
     fabricated request together with its own approval and authorize an arbitrary tool
     call. These responses are therefore dropped rather than honored.
 
-    Only responses in ``live_response_ids`` are dropped. Those are the responses that
-    could still authorize an execution on this turn. A response whose occurrence is
-    already settled by a terminal result is history rather than a pending
-    authorization: it cannot execute anything, so dropping it would serve no purpose
-    and would penalize every caller that replays a completed conversation. Settlement
-    is decided by the same occurrence-aware correlation used to execute approvals, so
-    fabricating a result to reach this exemption also guarantees the call will not run.
+    ``settled_response_ids`` is an allow-list: every response outside it is dropped. A
+    settled response is one the occurrence-aware correlation already superseded or
+    consumed with a terminal result, so it is history rather than a pending
+    authorization. It cannot execute anything, and dropping it would serve no purpose
+    while penalizing every caller that replays a completed conversation. Settlement is
+    decided by the same correlation used to execute approvals, so fabricating a result
+    to reach this exemption also guarantees the call will not run.
+
+    The allow-list must be keyed on individual response objects rather than approval
+    ids, because several responses can share one approval id and only the first is
+    eligible to execute. Dropping by an id-keyed set would leave the duplicates behind
+    for a later collection to promote and honor.
 
     Hosted (provider-issued) approvals are left untouched because they are provider
     protocol data that must be forwarded as-is.
@@ -3006,7 +3011,7 @@ def _drop_unrecorded_local_approval_responses(messages: list[Message], live_resp
             if (
                 content.type == "function_approval_response"
                 and not _is_hosted_tool_approval(content)
-                and id(content) in live_response_ids
+                and id(content) not in settled_response_ids
             ):
                 dropped = True
                 continue
@@ -3642,11 +3647,19 @@ def _collect_approval_responses(
     non_approval_result_ids: set[int] | None = None,
     protected_response_ids: set[int] | None = None,
     protected_result_ids_to_remove: set[int] | None = None,
+    settled_response_ids: set[int] | None = None,
 ) -> dict[str, Content]:
     """Collect approval responses (both approved and rejected) from messages.
 
     Hosted tool approvals (e.g. MCP) are excluded because they must be
     forwarded to the API as-is rather than processed locally.
+
+    When ``settled_response_ids`` is supplied it is populated with the object identity of
+    every approval response this correlation considered settled, meaning superseded by a
+    later request or consumed by a terminal result. Unlike the returned mapping, which
+    keeps one response per approval id, this set covers every individual response object,
+    so callers that need to reason about duplicate approval ids must use it rather than
+    the mapping values.
     """
     approval_responses: list[Content] = []
     pending_by_call_id: dict[str, deque[Content]] = {}
@@ -3751,6 +3764,8 @@ def _collect_approval_responses(
         if id(content) in resolved_response_ids or content.id is None:
             continue
         collected_responses.setdefault(content.id, content)
+    if settled_response_ids is not None:
+        settled_response_ids.update(resolved_response_ids)
     return collected_responses
 
 
@@ -4549,27 +4564,30 @@ async def _resolve_approval_responses(
             return _FunctionProcessingResult(errors_in_a_row=errors_in_a_row, action="return")
     else:
         partial_mixed_batch, host_result_ids = _stateless_mixed_pause_batch_status(prepared_messages)
+        if not disable_approval_response_binding:
+            # Runs before the partial-batch check below so untrusted inbound history is filtered
+            # rather than raising. Settled occurrences are identified by the same correlation used
+            # to execute approvals, so replaying a completed conversation is unaffected and only
+            # responses that could still authorize an execution are removed.
+            settled_response_ids: set[int] = set()
+            _collect_approval_responses(
+                prepared_messages,
+                non_approval_result_ids=host_result_ids,
+                settled_response_ids=settled_response_ids,
+            )
+            if _drop_unrecorded_local_approval_responses(prepared_messages, settled_response_ids):
+                logger.warning(
+                    "Ignored one or more local tool-approval responses because this run has no authoritative "
+                    "AgentSession holding the matching approval request. Pass the same AgentSession back on the "
+                    "run that resumes an approval, or set the 'disable_approval_response_binding' function "
+                    "invocation configuration option to restore the previous unbound behavior."
+                )
+                # Dropping responses changes which calls in the batch are still awaiting an answer,
+                # so the batch must be reclassified before deciding whether it is incomplete.
+                partial_mixed_batch, host_result_ids = _stateless_mixed_pause_batch_status(prepared_messages)
         if partial_mixed_batch:
             raise RuntimeError(
                 "A mixed function-call batch requires responses for every approval and Host-owned request."
-            )
-
-    if not disable_approval_response_binding and not _has_authoritative_approval_session(approval_session):
-        # Settled occurrences are excluded by the same correlation used below, so replaying a
-        # completed conversation is unaffected and only responses that could still authorize an
-        # execution are removed.
-        live_response_ids = {
-            id(response)
-            for response in _collect_approval_responses(
-                prepared_messages, non_approval_result_ids=host_result_ids
-            ).values()
-        }
-        if _drop_unrecorded_local_approval_responses(prepared_messages, live_response_ids):
-            logger.warning(
-                "Ignored one or more local tool-approval responses because this run has no authoritative "
-                "AgentSession holding the matching approval request. Pass the same AgentSession back on the run "
-                "that resumes an approval, or set the 'disable_approval_response_binding' function invocation "
-                "configuration option to restore the previous unbound behavior."
             )
 
     pending_responses_before_binding = list(

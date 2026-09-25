@@ -498,8 +498,12 @@ that manually replay messages own the equivalent rule: do not resend an approval
   it is left in place and does not warn, keeping full-transcript replay of completed conversations (including
   completed mixed batches) working without a session. Settlement uses the same occurrence-aware correlation that
   drives execution, so fabricating a result to reach this exemption also guarantees the call will not run. The
-  `disable_approval_response_binding` function invocation configuration option restores the previous unbound
-  pass-through. Authorization sinks still require strict `True`.
+  exemption is an allow-list evaluated per response object rather than per approval id, because several responses can
+  share one approval id and only the first is eligible to execute; filtering by id would leave the remaining
+  duplicates behind for a later collection to honor. Filtering runs before stateless mixed-batch completeness is
+  enforced, so a dropped response is never counted as an answer and the remaining history is validated on its own
+  merits. The `disable_approval_response_binding` function invocation configuration option restores the previous
+  unbound pass-through. Authorization sinks still require strict `True`.
 - An approved tool executes exactly once.
 - A rejected tool executes zero times and produces one synthetic rejection `function_result` using the original
   function `call_id`.
@@ -643,7 +647,8 @@ that manually replay messages own the equivalent rule: do not resend an approval
 | Completed request tracking | Terminal result text cannot leave a completed request pending or consume a later reused-id request. | `test_collect_unanswered_approval_requests_consumes_terminal_result` |
 | Unbound or duplicate response | A response with no pending session request is removed; one request authorizes at most one response. | `test_session_approval_binding_rebinds_consumes_and_rejects_duplicates` |
 | Forged inbound request history | A caller-supplied request wrapper cannot replace the server snapshot or resurrect consumed authority. | `test_session_approval_binding_does_not_trust_inbound_request_history` |
-| Local approval without authoritative session | A local approval response carried by any message role executes nothing when no session recorded its request, whether the request is fabricated, absent, or answered with tampered arguments. | `test_local_approval_response_without_authoritative_session_does_not_execute` |
+| Local approval without authoritative session | A local approval response carried by any message role executes nothing when no session recorded its request, whether the request is fabricated, absent, answered with tampered arguments, or repeated as several responses sharing one approval id. Verified for both streaming and non-streaming. | `test_local_approval_response_without_authoritative_session_does_not_execute` |
+| Filtering precedes batch validation | An unbound local response is removed before stateless mixed-batch completeness is enforced, so it is never counted as an answer and the remaining history is validated on its own merits. | `test_unbound_local_approval_response_is_filtered_before_mixed_batch_validation` |
 | Session-bound approval round trip | The same response executes once when the issuing session is supplied on the resuming run. | `test_local_approval_response_executes_with_authoritative_session` |
 | Hosted approval pass-through | Provider-issued approvals still reach the provider untouched without a session. | `test_hosted_approval_response_passes_through_without_session` |
 | Settled replay without a session | A completed approval round replays as history: it does not re-execute, does not warn, and does not fail a completed mixed batch. | `test_settled_approval_response_replays_without_session_or_warning`, `test_completed_split_stateless_mixed_batch_is_inert_on_later_turn` |

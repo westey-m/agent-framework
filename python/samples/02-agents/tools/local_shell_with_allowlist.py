@@ -48,7 +48,7 @@ async def main() -> None:
 
     agent = Agent(
         client=client,
-        instructions=("Use only these read-only shell commands: ls, pwd, cat, git status/log/diff, python --version."),
+        instructions=("Use only these shell commands: ls, pwd, cat, git status/log/diff, python --version."),
         tools=[client.get_shell_tool(func=shell.as_function())],
     )
 

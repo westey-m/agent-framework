@@ -31,7 +31,11 @@ internal static class ApprovalRequirement
     /// </summary>
     /// <param name="client">The decorator requesting the set, used to locate the <see cref="FunctionInvokingChatClient"/> below it in the pipeline.</param>
     /// <param name="options">The options for the current request, if any.</param>
-    /// <exception cref="InvalidOperationException">Two different tools available to the request share a name.</exception>
+    /// <remarks>
+    /// Only executable functions are checked for duplicate names. A declaration may share a name with its
+    /// implementation, and service-hosted tools are handled by the provider.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Two different executable functions available to the request share a name.</exception>
     public static HashSet<string> GetApprovalNotRequiredToolNames(IChatClient client, ChatOptions? options)
     {
         var ficc = client.GetService<FunctionInvokingChatClient>();
@@ -39,31 +43,31 @@ internal static class ApprovalRequirement
         var allTools = (options?.Tools ?? Enumerable.Empty<AITool>())
             .Concat(ficc?.AdditionalTools ?? Enumerable.Empty<AITool>());
 
-        Dictionary<string, AITool> seenByName = new(StringComparer.Ordinal);
+        Dictionary<string, AIFunction> seenByName = new(StringComparer.Ordinal);
         HashSet<string> approvalNotRequired = new(StringComparer.Ordinal);
 
         foreach (var tool in allTools)
         {
-            if (tool is null || string.IsNullOrEmpty(tool.Name))
+            if (tool is not AIFunction function || string.IsNullOrEmpty(function.Name))
             {
                 continue;
             }
 
-            if (seenByName.TryGetValue(tool.Name, out var existing))
+            if (seenByName.TryGetValue(function.Name, out var existing))
             {
                 // The same instance offered twice is not ambiguous, so it is allowed.
-                if (!ReferenceEquals(existing, tool))
+                if (!ReferenceEquals(existing, function))
                 {
                     throw new InvalidOperationException(
-                        $"Duplicate tool name '{tool.Name}'. Tool names must be unique.");
+                        $"Duplicate tool name '{function.Name}'. Tool names must be unique.");
                 }
 
                 continue;
             }
 
-            seenByName[tool.Name] = tool;
+            seenByName[function.Name] = function;
 
-            if (tool is AIFunction function && function.GetService<ApprovalRequiredAIFunction>() is null)
+            if (function.GetService<ApprovalRequiredAIFunction>() is null)
             {
                 approvalNotRequired.Add(function.Name);
             }

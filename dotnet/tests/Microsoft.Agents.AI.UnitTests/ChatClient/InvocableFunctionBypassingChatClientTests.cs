@@ -562,6 +562,71 @@ public class InvocableFunctionBypassingChatClientTests
             InvocableFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetResponseAsync_DuplicateToolNames_PreservesPendingCallsForRetryAsync(bool streaming)
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        session.StateBag.SetValue(
+            InvocableFunctionBypassingChatClient.StateBagKey,
+            new List<FunctionCallContent> { new("call1", BackendToolName) },
+            AgentJsonUtilities.DefaultOptions);
+
+        List<ToolApprovalResponseContent> receivedResponses = [];
+        int innerCalls = 0;
+        void CaptureMessages(IEnumerable<ChatMessage> messages)
+        {
+            innerCalls++;
+            receivedResponses.AddRange(messages.SelectMany(m => m.Contents).OfType<ToolApprovalResponseContent>());
+        }
+
+        var innerClient = streaming
+            ? CreateMockStreamingChatClient((messages, _, _) =>
+            {
+                CaptureMessages(messages);
+                return ToAsyncEnumerableAsync(new ChatResponseUpdate(ChatRole.Assistant, "Done"));
+            })
+            : CreateMockChatClient((messages, _, _) =>
+            {
+                CaptureMessages(messages);
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Done")));
+            });
+        var decorator = new InvocableFunctionBypassingChatClient(innerClient);
+        var duplicateOptions = new ChatOptions { Tools = [CreateBackendTool(), CreateBackendTool()] };
+
+        async Task RunAsync(ChatOptions options)
+        {
+            if (streaming)
+            {
+                await RunStreamingWithAgentContextAsync(decorator, session, [], options);
+            }
+            else
+            {
+                await RunWithAgentContextAsync(decorator, session, options);
+            }
+        }
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(duplicateOptions));
+        Assert.Equal(0, innerCalls);
+        Assert.True(session.StateBag.TryGetValue<List<FunctionCallContent>>(
+            InvocableFunctionBypassingChatClient.StateBagKey, out var pending, AgentJsonUtilities.DefaultOptions));
+        Assert.Equal("call1", Assert.Single(pending!).CallId);
+
+        // Act
+        await RunAsync(CreateMixedToolOptions());
+        await RunAsync(CreateMixedToolOptions());
+
+        // Assert
+        var response = Assert.Single(receivedResponses);
+        Assert.True(response.Approved);
+        Assert.Equal("call1", Assert.IsType<FunctionCallContent>(response.ToolCall).CallId);
+        Assert.False(session.StateBag.TryGetValue<List<FunctionCallContent>>(
+            InvocableFunctionBypassingChatClient.StateBagKey, out _, AgentJsonUtilities.DefaultOptions));
+    }
+
     [Fact]
     public async Task GetStreamingResponseAsync_EnumerationAbandonedEarly_DoesNotRestorePendingCallsAsync()
     {

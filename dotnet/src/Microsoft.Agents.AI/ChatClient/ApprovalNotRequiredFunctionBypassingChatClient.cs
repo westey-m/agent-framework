@@ -227,7 +227,7 @@ internal sealed partial class ApprovalNotRequiredFunctionBypassingChatClient : D
         }
 
         // We have some requests that didn't require approval on the last run.
-        // Let's check each one to make sure they didn't become approval required in the mean time.
+        // Let's check each one to make sure they didn't become approval required in the meantime.
         List<AIContent> approvalResponses = [];
 
         foreach (var request in pendingRequests)

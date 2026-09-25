@@ -212,8 +212,8 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Pending calls are consumed exactly once: the session entry is removed here and is never put back, so a
-    /// turn that fails or whose stream is abandoned drops them.
+    /// Pending calls are kept if validation or response preparation fails. Once preparation succeeds, the session
+    /// entry is removed and is never put back, so a failure in the inner client or an abandoned stream drops them.
     /// </para>
     /// <para>
     /// That is deliberate. The calls are injected as one batch and the service expects a
@@ -244,13 +244,7 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
             return messages;
         }
 
-        session.StateBag.TryRemoveValue(StateBagKey);
-
-        // A call was stored because it needed no approval at the time. Approval requirements can change between
-        // turns, so the stored decision is only reused while the tool that would run still needs no approval.
-        // Once it does, injecting an approval would run a tool no human was ever asked about, so the call is
-        // rejected instead. A tool being replaced by another of the same name is an ordinary part of developing
-        // an agent and is not by itself a reason to reject anything.
+        // Stored calls are restarted using approval responses, so check current approval requirements first.
         var autoApprovableNames = ApprovalRequirement.GetApprovalNotRequiredToolNames(this, options);
 
         List<AIContent> approvalResponses = [];
@@ -271,7 +265,9 @@ internal sealed partial class InvocableFunctionBypassingChatClient : DelegatingC
             approvalResponses.Add(request.CreateResponse(approved: stillApprovalNotRequired));
         }
 
-        return messages.Concat([new ChatMessage(ChatRole.User, approvalResponses)]);
+        var messagesToSend = messages.Concat([new ChatMessage(ChatRole.User, approvalResponses)]);
+        session.StateBag.TryRemoveValue(StateBagKey);
+        return messagesToSend;
     }
 
     [LoggerMessage(LogLevel.Warning, "A call to '{ToolName}' was bypassed for execution on a previous turn, but the tool available under that name now requires approval or is no longer available. The call is rejected rather than executed.")]

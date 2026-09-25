@@ -149,6 +149,71 @@ public class ApprovalRequirementTests
         Assert.Empty(names);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void GetApprovalNotRequiredToolNames_DeclarationAndImplementation_UsesImplementation(bool requiresApproval, bool declarationFirst)
+    {
+        // Arrange
+        AIFunction function = AIFunctionFactory.Create(() => "result", "lookup");
+        var declaration = function.AsDeclarationOnly();
+        if (requiresApproval)
+        {
+            function = new ApprovalRequiredAIFunction(function);
+        }
+
+        var options = new ChatOptions
+        {
+            Tools = declarationFirst ? [declaration, function] : [function, declaration]
+        };
+
+        // Act
+        var names = ApprovalRequirement.GetApprovalNotRequiredToolNames(CreateClient(), options);
+
+        // Assert
+        Assert.Equal(!requiresApproval, names.Contains("lookup"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetApprovalNotRequiredToolNames_DeclarationWithAdditionalImplementation_UsesImplementation(bool requiresApproval)
+    {
+        // Arrange
+        AIFunction function = AIFunctionFactory.Create(() => "result", "lookup");
+        var options = new ChatOptions { Tools = [function.AsDeclarationOnly()] };
+        if (requiresApproval)
+        {
+            function = new ApprovalRequiredAIFunction(function);
+        }
+
+        var client = CreateClientWithAdditionalTools(function);
+
+        // Act
+        var names = ApprovalRequirement.GetApprovalNotRequiredToolNames(client, options);
+
+        // Assert
+        Assert.Equal(!requiresApproval, names.Contains("lookup"));
+    }
+
+    [Fact]
+    public void GetApprovalNotRequiredToolNames_DeclarationOnly_IsExcluded()
+    {
+        // Arrange
+        var options = new ChatOptions
+        {
+            Tools = [AIFunctionFactory.Create(() => "result", "lookup").AsDeclarationOnly()]
+        };
+
+        // Act
+        var names = ApprovalRequirement.GetApprovalNotRequiredToolNames(CreateClient(), options);
+
+        // Assert
+        Assert.Empty(names);
+    }
+
     [Fact]
     public void IsApprovalNotRequired_UnknownTool_RequiresApproval()
     {

@@ -850,7 +850,8 @@ class RawAnthropicClient(
                 schema = response_format
 
             if isinstance(schema, dict):
-                schema["additionalProperties"] = False
+                # Copy, so the caller's response_format is not changed for later requests.
+                schema = {**schema, "additionalProperties": False}
 
             return {
                 "type": "json_schema",

@@ -1348,6 +1348,26 @@ class BaseMiddlewarePipeline(ABC):
             )
 
 
+def _warn_unbuffered_result_gates(stream: ResponseStream[Any, Any]) -> None:
+    """Warn when result gates are registered on a stream that releases updates unbuffered.
+
+    A result gate runs at finalization, so on an unbuffered stream the consumer has already
+    received every update by the time the gate raises: the gate fails open. Buffering holds
+    the updates until the gates pass. The check reads the final stream state, so gates and
+    buffering a middleware configured directly on the stream are reflected too.
+    """
+    if not stream._stream_updates:  # pyright: ignore[reportPrivateUsage]
+        return
+    if not (stream._result_gates_before or stream._result_gates_after):  # pyright: ignore[reportPrivateUsage]
+        return
+    logger.warning(
+        "Result gates are registered on a streamed run that releases updates unbuffered; "
+        "updates reach the consumer before the gates run, so a gate that raises cannot hold "
+        "the answer back. Enable buffering (stream_buffer_updates=True or buffer_updates()) "
+        "to make the gates blocking."
+    )
+
+
 class AgentMiddlewarePipeline(BaseMiddlewarePipeline):
     """Executes agent middleware in a chain.
 
@@ -1458,6 +1478,7 @@ class AgentMiddlewarePipeline(BaseMiddlewarePipeline):
                 context.result._with_release_error_hook(hook)  # pyright: ignore[reportPrivateUsage]
             for cleanup_hook in context.stream_cleanup_hooks:
                 context.result.with_cleanup_hook(cleanup_hook)
+            _warn_unbuffered_result_gates(context.result)
         return context.result
 
 
@@ -1668,6 +1689,7 @@ class ChatMiddlewarePipeline(BaseMiddlewarePipeline):
                 context.result._with_release_error_hook(hook)  # pyright: ignore[reportPrivateUsage]
             for cleanup_hook in context.stream_cleanup_hooks:
                 context.result.with_cleanup_hook(cleanup_hook)
+            _warn_unbuffered_result_gates(context.result)
         return context.result
 
 

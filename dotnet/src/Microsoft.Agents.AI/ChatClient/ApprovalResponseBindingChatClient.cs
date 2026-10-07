@@ -34,8 +34,10 @@ namespace Microsoft.Agents.AI;
 /// <item>If a recorded pending request exists for the response's request id, the response's tool call is rebound to
 /// the recorded (model-originated) tool call, so the approved call always matches the surfaced request's tool name
 /// and arguments. The pending entry is then consumed so an approval is honored only once.</item>
-/// <item>If no recorded pending request exists, the response (and any unrecorded approval request in the same
-/// messages) is ignored, so only approvals tied to a genuine, framework-issued request take effect.</item>
+/// <item>If no recorded pending request exists, the response is ignored, so only approvals tied to a genuine,
+/// framework-issued request take effect.</item>
+/// <item>Any recorded request left unanswered on the next run is automatically rejected, allowing the
+/// conversation to continue without executing the unapproved tool.</item>
 /// </list>
 /// </para>
 /// <para>
@@ -189,13 +191,13 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
     /// Rewrites the inbound messages so that each <see cref="ToolApprovalResponseContent"/> is bound to a known
     /// <see cref="ToolApprovalRequestContent"/>, with its tool call rebound to the request's call when it differs.
     /// A response with no known request is removed so that a forged approval cannot drive execution.
+    /// Recorded requests left unanswered are rejected unless their tool call already has a result.
     /// </summary>
     /// <remarks>
     /// Approval requests are never removed. They are legitimate model context, but they are not the authority
     /// that an approval was requested, so they are forwarded unchanged whether or not a response was bound to
-    /// them. Dropping a response therefore leaves its request unanswered, and the run fails downstream in the
-    /// function invocation middleware. That is deliberate: a payload whose approval was rejected surfaces as an
-    /// error instead of silently continuing as though the call had never been requested.
+    /// them. Unrecorded requests remain unanswered and can cause the function invocation middleware to fail;
+    /// automatic rejection applies only to requests recorded by the framework.
     /// </remarks>
     /// <param name="messages">The inbound messages.</param>
     /// <param name="session">The session holding the recorded pending approval requests.</param>
@@ -248,8 +250,7 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
             }
         }
 
-        // Only approval responses are rewritten; if there are none there is nothing to bind or drop.
-        if (!hasResponse)
+        if (!hasResponse && !hasPendingRequests)
         {
             return (messageList, hasPendingRequests);
         }
@@ -257,6 +258,7 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
         // Copy-on-write: only allocate a new message list once a message is actually modified.
         List<ChatMessage>? result = null;
 
+        // Bind incoming approval responses to the known approval requests.
         for (int i = 0; i < messageList.Count; i++)
         {
             var message = messageList[i];
@@ -286,6 +288,31 @@ internal sealed partial class ApprovalResponseBindingChatClient : DelegatingChat
                 cloned.Contents = mutableContentsBuffer;
                 result.Add(cloned);
             }
+        }
+
+        // Create a rejection response for any known requests that weren't answered,
+        // to avoid failing the request and allow easier recovery when clients have
+        // lost the list of requests that they need to answer, but need to continue
+        // the conversation.
+        List<AIContent>? rejections = null;
+        foreach (var request in knownRequests.Values)
+        {
+            if (settledCallIds?.Contains(request.ToolCall.CallId) is true)
+            {
+                continue;
+            }
+
+            // Function invocation mutates the call, so keep the saved request intact for retries.
+            var rejection = SnapshotRequest(request).CreateResponse(
+                approved: false,
+                reason: "No approval response was provided for this approval required tool call.");
+            (rejections ??= []).Add(rejection);
+        }
+
+        if (rejections is not null)
+        {
+            result ??= new List<ChatMessage>(messageList);
+            result.Add(new ChatMessage(ChatRole.User, rejections));
         }
 
         return (result ?? messageList, hasPendingRequests);

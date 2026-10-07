@@ -397,7 +397,8 @@ public class ApprovalResponseBindingChatClientTests
             new ToolApprovalRequestContent("req2", secondCall)]);
 
         var response = new ToolApprovalResponseContent(RequestId, approved: true, firstCall);
-        var decorator = new ApprovalResponseBindingChatClient(CreateCapturingChatClient(new Capture()));
+        var capture = new Capture();
+        var decorator = new ApprovalResponseBindingChatClient(CreateCapturingChatClient(capture));
 
         // Act
         await RunAsync(decorator, session, [new ChatMessage(ChatRole.User, [response])]);
@@ -405,6 +406,88 @@ public class ApprovalResponseBindingChatClientTests
         // Assert — neither record survives the turn.
         Assert.False(HasPendingRequest(session, RequestId));
         Assert.False(HasPendingRequest(session, "req2"));
+        var responses = capture.Messages!.SelectMany(m => m.Contents).OfType<ToolApprovalResponseContent>().ToList();
+        Assert.Equal(2, responses.Count);
+        Assert.Same(response, responses[0]);
+        Assert.Equal("req2", responses[1].RequestId);
+        Assert.False(responses[1].Approved);
+        Assert.Equal("call2", responses[1].ToolCall.CallId);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task GetResponseAsync_UnansweredRequests_AreRejectedWithoutChangingInputAsync(bool streaming, bool emptyInput)
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        await RecordRequestsAsync(session,
+        [
+            new ToolApprovalRequestContent(RequestId, new FunctionCallContent("call1", "toolA")),
+            new ToolApprovalRequestContent("req2", new FunctionCallContent("call2", "toolB"))
+        ]);
+        var capture = new Capture();
+        var inner = streaming
+            ? CreateMockStreamingChatClient((messages, _, _) =>
+            {
+                capture.Messages = messages.ToList();
+                return UpdatesAsync(new ChatResponseUpdate(ChatRole.Assistant, "Done."));
+            })
+            : CreateCapturingChatClient(capture);
+        var decorator = new ApprovalResponseBindingChatClient(inner);
+        var message = new ChatMessage(ChatRole.User, "New question.");
+        List<ChatMessage> input = emptyInput ? [] : [message];
+
+        // Act
+        if (streaming)
+        {
+            await RunStreamingAsync(decorator, session, input);
+        }
+        else
+        {
+            await RunAsync(decorator, session, input);
+        }
+
+        // Assert
+        Assert.Equal(emptyInput ? 0 : 1, input.Count);
+        Assert.IsType<TextContent>(Assert.Single(message.Contents));
+        if (!emptyInput)
+        {
+            Assert.Same(message, capture.Messages![0]);
+        }
+
+        var responses = capture.Messages!.SelectMany(m => m.Contents).OfType<ToolApprovalResponseContent>().ToList();
+        Assert.Equal(2, responses.Count);
+        Assert.Contains(responses, r => r.RequestId == RequestId);
+        Assert.Contains(responses, r => r.RequestId == "req2");
+        Assert.All(responses, r =>
+        {
+            Assert.False(r.Approved);
+            Assert.Equal("No approval response was provided for this approval required tool call.", r.Reason);
+        });
+        Assert.False(HasPendingRequest(session, RequestId));
+        Assert.False(HasPendingRequest(session, "req2"));
+    }
+
+    [Fact]
+    public async Task GetResponseAsync_UnansweredRequestWithResult_IsNotRejectedAgainAsync()
+    {
+        // Arrange
+        var session = new ChatClientAgentSession();
+        var call = new FunctionCallContent("call1", "toolA");
+        await RecordRequestAsync(session, new ToolApprovalRequestContent(RequestId, call));
+        var capture = new Capture();
+        var decorator = new ApprovalResponseBindingChatClient(CreateCapturingChatClient(capture));
+        var result = new FunctionResultContent("call1", "Already completed.");
+
+        // Act
+        await RunAsync(decorator, session, [new ChatMessage(ChatRole.Tool, [result])]);
+
+        // Assert
+        Assert.Same(result, Assert.Single(Assert.Single(capture.Messages!).Contents));
+        Assert.False(HasPendingRequest(session, RequestId));
     }
 
     [Fact]
@@ -834,7 +917,7 @@ public class ApprovalResponseBindingChatClientTests
 
     private sealed class Capture
     {
-        public IList<ChatMessage>? Messages { get; set; }
+        public List<ChatMessage>? Messages { get; set; }
     }
 
     private static IChatClient CreateCapturingChatClient(Capture capture, string reply = "done")

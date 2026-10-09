@@ -44,9 +44,11 @@ from agent_framework._types import (
     _append_instructions,
     _get_data_bytes,
     _get_data_bytes_as_str,
+    _get_operation_state,
     _parse_content_list,
     _parse_structured_response_value,
     _process_update,
+    _set_operation_state,
     _validate_uri,
     add_usage_details,
     map_chat_to_agent_update,
@@ -6443,6 +6445,260 @@ def test_agent_response_update_serialization_includes_finish_reason() -> None:
     data = update.to_dict()
     assert "finish_reason" in data
     assert data["finish_reason"] == "tool_calls"
+
+
+def test_chat_response_preserves_continuation_token_for_explicitly_in_progress_updates() -> None:
+    """Chat response aggregation should preserve an in-progress continuation token."""
+    token_update = ChatResponseUpdate(
+        contents=[Content.from_text(text="working")],
+        response_id="resp_1",
+        model="gpt-5",
+        continuation_token=cast(Any, {"response_id": "resp_1"}),
+    )
+    tokenless_update = ChatResponseUpdate(contents=[Content.from_text(text="...still working")])
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(tokenless_update, "in_progress")
+
+    aggregated = ChatResponse.from_updates([token_update, tokenless_update])
+
+    assert aggregated.continuation_token == {"response_id": "resp_1"}
+
+
+def test_chat_response_update_serialization_preserves_in_progress_continuation_token() -> None:
+    """Serialized in-progress chat updates should retain an active continuation token."""
+    token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    tokenless_update = ChatResponseUpdate(contents=[Content.from_text(text="...still working")])
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(tokenless_update, "in_progress")
+
+    serialized_updates = json.dumps([token_update.to_dict(), tokenless_update.to_dict()])
+    restored_updates = [ChatResponseUpdate.from_dict(update_data) for update_data in json.loads(serialized_updates)]
+
+    assert ChatResponse.from_updates(restored_updates).continuation_token == {"response_id": "resp_1"}
+
+
+def test_chat_response_update_serialization_preserves_terminal_state() -> None:
+    """Serialized terminal chat updates should retain terminal operation state."""
+    token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = ChatResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+
+    serialized_updates = json.dumps([token_update.to_dict(), terminal_update.to_dict()])
+    restored_updates = [ChatResponseUpdate.from_dict(update_data) for update_data in json.loads(serialized_updates)]
+
+    assert _get_operation_state(restored_updates[0]) == "in_progress"
+    assert _get_operation_state(restored_updates[1]) == "terminal"
+    assert ChatResponse.from_updates(restored_updates).continuation_token is None
+
+
+def test_chat_response_terminal_update_clears_continuation_token() -> None:
+    """An explicitly terminal chat response should clear its continuation token."""
+    token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = ChatResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+
+    aggregated = ChatResponse.from_updates([token_update, terminal_update])
+
+    assert aggregated.continuation_token is None
+
+
+def test_chat_response_legacy_tokenless_update_clears_continuation_token() -> None:
+    """Providers without explicit operation state should retain legacy token overwrite behavior."""
+    events = [
+        ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"})),
+        ChatResponseUpdate(finish_reason="stop"),
+    ]
+
+    aggregated = ChatResponse.from_updates(events)
+
+    assert aggregated.continuation_token is None
+    assert aggregated.finish_reason == "stop"
+
+
+def test_agent_response_legacy_tokenless_update_clears_continuation_token() -> None:
+    """Legacy agent providers should retain token overwrite behavior."""
+    aggregated = AgentResponse.from_updates([
+        AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"})),
+        AgentResponseUpdate(finish_reason="stop"),
+    ])
+
+    assert aggregated.continuation_token is None
+    assert aggregated.finish_reason == "stop"
+
+
+def test_agent_response_update_preserves_continuation_token() -> None:
+    """Agent response aggregation should preserve an in-progress continuation token."""
+    token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    tokenless_update = AgentResponseUpdate(contents=[Content.from_text(text="...still working")])
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(tokenless_update, "in_progress")
+
+    aggregated = AgentResponse.from_updates([token_update, tokenless_update])
+
+    assert aggregated.continuation_token == {"response_id": "resp_1"}
+
+
+def test_agent_response_update_serialization_preserves_in_progress_continuation_token() -> None:
+    """Serialized in-progress agent updates should retain an active continuation token."""
+    token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    tokenless_update = AgentResponseUpdate(contents=[Content.from_text(text="...still working")])
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(tokenless_update, "in_progress")
+
+    serialized_updates = json.dumps([token_update.to_dict(), tokenless_update.to_dict()])
+    restored_updates = [AgentResponseUpdate.from_dict(update_data) for update_data in json.loads(serialized_updates)]
+
+    assert AgentResponse.from_updates(restored_updates).continuation_token == {"response_id": "resp_1"}
+
+
+def test_agent_response_update_serialization_preserves_terminal_state() -> None:
+    """Serialized terminal agent updates should retain terminal operation state."""
+    token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = AgentResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+
+    serialized_updates = json.dumps([token_update.to_dict(), terminal_update.to_dict()])
+    restored_updates = [AgentResponseUpdate.from_dict(update_data) for update_data in json.loads(serialized_updates)]
+
+    assert _get_operation_state(restored_updates[0]) == "in_progress"
+    assert _get_operation_state(restored_updates[1]) == "terminal"
+    assert AgentResponse.from_updates(restored_updates).continuation_token is None
+
+
+def test_agent_response_terminal_update_clears_continuation_token() -> None:
+    """An explicitly terminal agent response should clear its continuation token."""
+    token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = AgentResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+
+    aggregated = AgentResponse.from_updates([token_update, terminal_update])
+
+    assert aggregated.continuation_token is None
+
+
+def test_map_chat_to_agent_update_preserves_terminal_signal() -> None:
+    """Chat-to-agent update conversion should preserve terminality."""
+    chat_update = ChatResponseUpdate()
+    _set_operation_state(chat_update, "terminal")
+    update = map_chat_to_agent_update(chat_update, agent_name=None)
+
+    assert (
+        AgentResponse.from_updates([
+            AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"})),
+            update,
+        ]).continuation_token
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ChatResponse(),
+        AgentResponse(),
+    ],
+)
+def test_response_serialization_omits_private_operation_state(
+    value: ChatResponse | AgentResponse,
+) -> None:
+    """Internal operation state should not change the public serialized shape."""
+    _set_operation_state(value, "terminal")
+
+    assert "_operation_state" not in value.to_dict()
+
+
+@pytest.mark.parametrize("value", [ChatResponseUpdate(), AgentResponseUpdate()])
+def test_update_serialization_includes_explicit_operation_state(
+    value: ChatResponseUpdate | AgentResponseUpdate,
+) -> None:
+    """Update serialization should preserve explicitly set internal operation state."""
+    _set_operation_state(value, "terminal")
+
+    assert value.to_dict()["_operation_state"] == "terminal"
+
+
+def test_chat_response_round_trip_preserves_terminal_operation_state() -> None:
+    """Chat response buffering should preserve terminality."""
+    token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = ChatResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+    response = ChatResponse.from_updates([token_update, terminal_update])
+
+    round_tripped_updates = response.to_updates()
+    legacy_token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "stale"}))
+    round_tripped = ChatResponse.from_updates([legacy_token_update, *round_tripped_updates])
+
+    assert round_tripped.continuation_token is None
+
+
+def test_agent_response_round_trip_preserves_terminal_operation_state() -> None:
+    """Agent response buffering should preserve terminality."""
+    token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = AgentResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+    response = AgentResponse.from_updates([token_update, terminal_update])
+
+    round_tripped_updates = response.to_updates()
+    legacy_token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "stale"}))
+    round_tripped = AgentResponse.from_updates([legacy_token_update, *round_tripped_updates])
+
+    assert round_tripped.continuation_token is None
+
+
+async def test_buffered_chat_response_replacement_preserves_terminal_operation_state() -> None:
+    """Buffered chat conversion should retain terminality on rebuilt updates."""
+    token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = ChatResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+
+    async def updates() -> AsyncIterable[ChatResponseUpdate]:
+        yield token_update
+        yield terminal_update
+
+    stream = ResponseStream(
+        updates(),
+        finalizer=ChatResponse.from_updates,
+        result_transforms=[lambda response: response],
+        stream_updates=False,
+        result_to_updates=ChatResponse.to_updates,
+    )
+
+    released = [update async for update in stream]
+    stale_token_update = ChatResponseUpdate(continuation_token=cast(Any, {"response_id": "stale"}))
+
+    assert ChatResponse.from_updates([stale_token_update, *released]).continuation_token is None
+
+
+async def test_buffered_agent_response_replacement_preserves_terminal_operation_state() -> None:
+    """Buffered agent conversion should retain terminality on rebuilt updates."""
+    token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "resp_1"}))
+    terminal_update = AgentResponseUpdate()
+    _set_operation_state(token_update, "in_progress")
+    _set_operation_state(terminal_update, "terminal")
+
+    async def updates() -> AsyncIterable[AgentResponseUpdate]:
+        yield token_update
+        yield terminal_update
+
+    stream = ResponseStream(
+        updates(),
+        finalizer=AgentResponse.from_updates,
+        result_transforms=[lambda response: response],
+        stream_updates=False,
+        result_to_updates=AgentResponse.to_updates,
+    )
+
+    released = [update async for update in stream]
+    stale_token_update = AgentResponseUpdate(continuation_token=cast(Any, {"response_id": "stale"}))
+
+    assert AgentResponse.from_updates([stale_token_update, *released]).continuation_token is None
 
 
 # endregion

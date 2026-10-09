@@ -49,6 +49,43 @@ existing protection against fabricated and duplicate approvals, and the
 existing removal of pending state only after the inner call succeeds. A failed
 attempt therefore leaves requests available for retry.
 
+Copy both incoming approval calls and the saved calls used to make decisions:
+the function-invocation code changes those call objects while handling them.
+A failed attempt must not change the original request or prevent a later explicit
+approval from executing the tool.
+
+Group supplied, automatic, and missing-answer decisions after any replayed
+requests and before new caller content. This keeps the resulting tool results
+before the new question, including when the inference service owns the history.
+
+Return the generated rejection responses before the tool-call/result messages,
+so callers can see the decisions and end-of-run history saving can store them.
+Do not return supplied answers again: they are already part of the input.
+Keep the returned function-call objects separate from the ones processed by
+the function-invocation code, so their flags are not changed during processing.
+Service-side and per-service-call history saving still happens below that code
+and receives only the processed function calls/results, not approval content.
+Streaming emits the generated decisions before the tool results; a later failure
+or early stop still leaves the saved approval requests available for retry.
+Receiving a streamed decision is not proof that the whole run succeeded.
+
+When incoming history already contains a result for a call, preserve its approval
+response without requiring a pending session record and do not generate another
+rejection. The function-invocation code uses that result to avoid processing the
+call again. History containing an approval request and a result but no matching
+approval response is not repaired by this component; the request still needs
+an answer. Returning generated responses ensures newly saved conversations
+include that answer without changing the original request's flags.
+No additional history read is required.
+
+Workflow hosts also forward externally supplied approval answers before the
+agent's tool results, even when ordinary incoming messages are not forwarded.
+Other agents may already have received the approval request as part of the
+shared conversation; forwarding only its result would leave that request
+unanswered in their histories. This forwarding applies only to answers handled
+by the workflow's approval-response handler, not decisions received from other
+agents.
+
 This is the default where approval-response binding is enabled. Disabling that
 component also disables automatic rejection; no separate setting is added.
 Tools that do not require approval keep their existing automatic handling.
@@ -61,3 +98,11 @@ old call. The model can still request a new call and ask for approval again.
 This decision does not make tool execution and history storage a single atomic
 operation or remove the existing possibility of repeated execution after a
 failed run.
+
+In particular, a service may accept a tool result during one call before a later
+call in the same run fails. The outer approval checker cannot observe that
+intermediate success, and service-owned history may not be readable. Retrying
+can therefore send another result, either by repeating an explicit approval or
+by rejecting an unanswered request. Avoiding this requires separate handling of
+partial service success; this decision does not add approval-specific tracking
+to the history-persistence component.

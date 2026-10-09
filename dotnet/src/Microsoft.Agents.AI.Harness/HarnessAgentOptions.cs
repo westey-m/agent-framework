@@ -231,6 +231,8 @@ public sealed class HarnessAgentOptions
     /// Any recorded request left unanswered when the underlying agent next runs is automatically rejected without
     /// executing the tool. This also applies to partially answered batches and runs without messages.
     /// Disabling binding also disables automatic rejection.
+    /// Generated rejection responses are included in the underlying agent's returned messages before tool results,
+    /// allowing end-of-run history saving to record them.
     /// </remarks>
     public bool DisableApprovalResponseBinding { get; set; }
 

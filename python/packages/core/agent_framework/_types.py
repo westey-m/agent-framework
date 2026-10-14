@@ -135,7 +135,7 @@ def detect_media_type_from_base64(
     Args:
         data_bytes: Raw binary data.
         data_str: Base64-encoded data (without data URI prefix).
-        data_uri: Full data URI string (e.g., "data:image/png;base64,iVBORw0KGgo...").
+        data_uri: Full data URI string (e.g., "data:image/png;base64,iVBORw0KGgo=").
             This will look at the actual data to determine the media_type and not at the URI prefix.
             Will also not compare those two values.
 
@@ -151,13 +151,13 @@ def detect_media_type_from_base64(
 
             from agent_framework import detect_media_type_from_base64
 
-            # Detect from base64 string
-            base64_data = "iVBORw0KGgo..."
+            # Detect from the base64-encoded PNG signature
+            base64_data = "iVBORw0KGgo="
             media_type = detect_media_type_from_base64(data_str=base64_data)
             # Returns: "image/png"
 
             # Works with data URIs too
-            data_uri = "data:image/png;base64,iVBORw0KGgo..."
+            data_uri = "data:image/png;base64,iVBORw0KGgo="
             media_type = detect_media_type_from_base64(data_uri=data_uri)
             # Returns: "image/png"
     """

@@ -1371,6 +1371,25 @@ def test_chat_message_text():
     assert isinstance(message.contents[0], Content)
 
 
+@pytest.mark.parametrize(
+    "message",
+    [Message("user", "Hello, how are you?"), Message(role="user", contents="Hello, how are you?")],
+    ids=["positional", "keyword"],
+)
+def test_chat_message_with_single_string_contents(message: Message) -> None:
+    """A bare string is one text content, not a sequence of single-character contents."""
+    assert len(message.contents) == 1
+    assert message.contents[0].type == "text"
+    assert message.text == "Hello, how are you?"
+
+
+def test_chat_message_with_empty_string_contents() -> None:
+    message = Message("user", "")
+
+    assert len(message.contents) == 1
+    assert message.text == ""
+
+
 def test_chat_message_contents():
     """Test the Message class to ensure it initializes correctly with contents."""
     # Create a Message with a role and multiple contents
@@ -4975,6 +4994,15 @@ def test_parse_content_list_with_content_objects():
 def test_parse_content_list_with_dicts():
     """Test _parse_content_list converts dicts to Content."""
     result = _parse_content_list([{"type": "text", "text": "hello"}])
+
+    assert len(result) == 1
+    assert result[0].type == "text"
+    assert result[0].text == "hello"
+
+
+def test_parse_content_list_with_single_string():
+    """Test _parse_content_list treats a bare string as one text item, not one per character."""
+    result = _parse_content_list("hello")
 
     assert len(result) == 1
     assert result[0].type == "text"

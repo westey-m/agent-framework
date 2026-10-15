@@ -56,11 +56,16 @@ def _parse_content_list(contents_data: Sequence[Any]) -> list[Content]:
     """Parse a list of content data into appropriate Content objects.
 
     Args:
-        contents_data: List of content data (strings, dicts, or already constructed objects)
+        contents_data: List of content data (strings, dicts, or already constructed objects).
+            A single string is treated as one text item.
 
     Returns:
         List of Content objects with unknown types logged and ignored
     """
+    if isinstance(contents_data, str):
+        # A string is itself a sequence of strings, so iterating it would create one text
+        # content per character.
+        contents_data = [contents_data]
     contents: list[Content] = []
     for content_data in contents_data:
         if content_data is None:
@@ -2306,7 +2311,8 @@ class Message(SerializationMixin):
         Args:
             role: The role of the author of the message (e.g., "user", "assistant", "system", "tool").
             contents: A sequence of content items. Can be Content objects, strings (auto-converted
-                to TextContent), or dicts (parsed via Content.from_dict). Defaults to empty list.
+                to TextContent), or dicts (parsed via Content.from_dict). A single string is
+                treated as one text item. Defaults to empty list.
 
         Keyword Args:
             author_name: Optional name of the author of the message.

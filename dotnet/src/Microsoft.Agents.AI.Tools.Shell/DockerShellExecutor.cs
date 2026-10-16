@@ -575,15 +575,14 @@ public sealed class DockerShellExecutor : ShellExecutor
             this._memoryBytes, this._pidsLimit, this._containerWorkdir, this._hostWorkdir,
             this._mountReadonly, this._readOnlyRoot, this._env, this._unsafeExtraRunArgs);
 
-    private static void ValidateUnsafeExtraRunArgs(IReadOnlyList<string> args)
+    private static void ValidateUnsafeExtraRunArgs(string[] args)
     {
-        for (var index = 0; index < args.Count; index++)
+        for (var index = 0; index < args.Length; index++)
         {
             if (args[index] is null)
             {
                 throw new ArgumentException(
-                    $"{nameof(DockerShellExecutorOptions.UnsafeExtraRunArgs)} contains a null token at index {index}.",
-                    nameof(DockerShellExecutorOptions.UnsafeExtraRunArgs));
+                    $"{nameof(DockerShellExecutorOptions.UnsafeExtraRunArgs)} contains a null token at index {index}.");
             }
         }
     }

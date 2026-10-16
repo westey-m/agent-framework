@@ -134,7 +134,7 @@ public sealed class DockerShellExecutorTests
         var exception = Assert.Throws<ArgumentException>(() => new DockerShellExecutor(options));
 
         // Assert
-        Assert.Equal("UnsafeExtraRunArgs", exception.ParamName);
+        Assert.Contains("UnsafeExtraRunArgs", exception.Message, StringComparison.Ordinal);
         Assert.Contains("null token", exception.Message, StringComparison.Ordinal);
     }
 

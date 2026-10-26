@@ -953,13 +953,15 @@ async def test_filesystem_store_does_not_create_root_until_write(tmp_path: Path)
     assert await store.read("a.txt") == "alpha"
 
 
+@pytest.mark.parametrize("tool_name_prefix", [None, "", "spec_files"])
 async def test_file_access_provider_registers_tools_and_instructions(
     chat_client_base: SupportsChatGetResponse,
+    tool_name_prefix: str | None,
 ) -> None:
-    """``FileAccessProvider.before_run`` should add the canonical instructions and all tools."""
+    """Register all tools with the configured prefix while preserving default names."""
     session = AgentSession(session_id="session-1")
     store = InMemoryAgentFileStore()
-    provider = FileAccessProvider(store=store)
+    provider = FileAccessProvider(store=store, tool_name_prefix=tool_name_prefix)
     agent = Agent(client=chat_client_base, context_providers=[provider])
 
     _, options = await agent._prepare_session_and_messages(  # pyright: ignore[reportPrivateUsage]
@@ -979,13 +981,94 @@ async def test_file_access_provider_registers_tools_and_instructions(
         "file_access_replace",
         "file_access_replace_lines",
     }
-    assert {getattr(tool, "name", None) for tool in tools} >= expected_names
+    if tool_name_prefix:
+        expected_names = {f"{tool_name_prefix}_{name}" for name in expected_names}
+    assert {getattr(tool, "name", None) for tool in tools} == expected_names
 
+    expected_instructions = (
+        DEFAULT_FILE_ACCESS_INSTRUCTIONS.replace("file_access_", f"{tool_name_prefix}_file_access_")
+        if tool_name_prefix
+        else DEFAULT_FILE_ACCESS_INSTRUCTIONS
+    )
     instructions = options.get("instructions")
     if isinstance(instructions, str):
-        assert DEFAULT_FILE_ACCESS_INSTRUCTIONS in instructions
+        assert expected_instructions in instructions
     else:
-        assert any(DEFAULT_FILE_ACCESS_INSTRUCTIONS in chunk for chunk in (instructions or []))
+        assert any(expected_instructions in chunk for chunk in (instructions or []))
+
+
+@pytest.mark.parametrize(
+    ("spec_prefix", "sdk_prefix"),
+    [(None, None), ("spec_files", "sdk_files"), ("spec_files", None)],
+    ids=["duplicate-names", "distinct-prefixes", "prefixed-and-default"],
+)
+async def test_file_access_providers_with_multiple_stores(
+    chat_client_base: SupportsChatGetResponse,
+    spec_prefix: str | None,
+    sdk_prefix: str | None,
+) -> None:
+    """Reproduce #9646 and allow an agent run when the stores have distinct tool names."""
+    agent = Agent(
+        client=chat_client_base,
+        context_providers=[
+            FileAccessProvider(
+                InMemoryAgentFileStore(),
+                source_id="spec_files",
+                tool_name_prefix=spec_prefix,
+                disable_readonly_tool_approval=True,
+                disable_write_tool_approval=True,
+            ),
+            FileAccessProvider(
+                InMemoryAgentFileStore(),
+                source_id="sdk_files",
+                tool_name_prefix=sdk_prefix,
+                disable_readonly_tool_approval=True,
+                disable_write_tool_approval=True,
+            ),
+        ],
+    )
+
+    if spec_prefix is None and sdk_prefix is None:
+        with pytest.raises(ValueError, match="Duplicate tool name 'file_access_read'"):
+            await agent.run("test")
+    else:
+        response = await agent.run("test")
+        assert response.text == "test response - test"
+
+
+async def test_file_access_provider_prefixed_tools_route_to_their_own_store(
+    chat_client_base: SupportsChatGetResponse,
+) -> None:
+    """Prefixed tools must keep same-named files in different stores independent."""
+    spec_store = InMemoryAgentFileStore()
+    sdk_store = InMemoryAgentFileStore()
+    agent = Agent(
+        client=chat_client_base,
+        context_providers=[
+            FileAccessProvider(spec_store, source_id="spec_files", tool_name_prefix="spec"),
+            FileAccessProvider(sdk_store, source_id="sdk_files", tool_name_prefix="sdk"),
+        ],
+    )
+    _, options = await agent._prepare_session_and_messages(  # pyright: ignore[reportPrivateUsage]
+        session=AgentSession(session_id="session-1"),
+        input_messages=[Message(role="user", contents=["work with files"])],
+    )
+    tools = options["tools"]
+    assert isinstance(tools, list)
+    assert len(tools) == 16
+
+    for prefix, content in (("spec", "specification"), ("sdk", "implementation")):
+        write = _tool_by_name(tools, f"{prefix}_file_access_write")
+        result = await write.invoke(arguments={"file_name": "shared.txt", "content": content})
+        assert "written" in _text(result[0])
+
+    for prefix, content in (("spec", "specification"), ("sdk", "implementation")):
+        read = _tool_by_name(tools, f"{prefix}_file_access_read")
+        result = await read.invoke(arguments={"file_name": "shared.txt"})
+        assert _text(result[0]) == content
+
+    assert await spec_store.read("shared.txt") == "specification"
+    assert await sdk_store.read("shared.txt") == "implementation"
 
 
 async def test_file_access_provider_all_tools_require_approval(
@@ -1088,6 +1171,28 @@ def test_read_only_tools_auto_approval_rule() -> None:
         assert FileAccessProvider.read_only_tools_auto_approval_rule(hosted) is False
 
 
+def test_prefixed_provider_read_only_auto_approval_rule() -> None:
+    """A provider-bound rule should approve only that provider's prefixed read-only tools."""
+    provider = FileAccessProvider(InMemoryAgentFileStore(), tool_name_prefix="spec")
+    rule = provider.get_read_only_tools_auto_approval_rule()
+
+    prefixed_read = Content("function_call", call_id="c1", name="spec_file_access_read", arguments="{}")
+    unprefixed_read = Content("function_call", call_id="c2", name="file_access_read", arguments="{}")
+    prefixed_write = Content("function_call", call_id="c3", name="spec_file_access_write", arguments="{}")
+    hosted_read = Content(
+        "function_call",
+        call_id="c4",
+        name="spec_file_access_read",
+        arguments="{}",
+        hosted=True,
+    )
+
+    assert rule(prefixed_read) is True
+    assert rule(unprefixed_read) is False
+    assert rule(prefixed_write) is False
+    assert rule(hosted_read) is False
+
+
 def test_all_tools_auto_approval_rule() -> None:
     """The all-tools rule approves every file-access tool but nothing else."""
     for name in (
@@ -1114,6 +1219,31 @@ def test_all_tools_auto_approval_rule() -> None:
 
     unrelated = Content("function_call", call_id="c1", name="some_other_tool", arguments="{}")
     assert FileAccessProvider.all_tools_auto_approval_rule(unrelated) is False
+
+
+def test_prefixed_provider_all_tools_auto_approval_rule() -> None:
+    """A provider-bound rule should approve only that provider's prefixed file-access tools."""
+    provider = FileAccessProvider(InMemoryAgentFileStore(), tool_name_prefix="spec")
+    rule = provider.get_all_tools_auto_approval_rule()
+    tool_names = (
+        FileAccessProvider.WRITE_TOOL_NAME,
+        FileAccessProvider.READ_TOOL_NAME,
+        FileAccessProvider.READ_LINES_TOOL_NAME,
+        FileAccessProvider.DELETE_TOOL_NAME,
+        FileAccessProvider.LS_TOOL_NAME,
+        FileAccessProvider.GREP_TOOL_NAME,
+        FileAccessProvider.REPLACE_TOOL_NAME,
+        FileAccessProvider.REPLACE_LINES_TOOL_NAME,
+    )
+
+    for name in tool_names:
+        prefixed = Content("function_call", call_id="c1", name=f"spec_{name}", arguments="{}")
+        unprefixed = Content("function_call", call_id="c2", name=name, arguments="{}")
+        hosted = Content("function_call", call_id="c3", name=f"spec_{name}", arguments="{}", hosted=True)
+
+        assert rule(prefixed) is True
+        assert rule(unprefixed) is False
+        assert rule(hosted) is False
 
 
 async def test_file_access_provider_tools_round_trip_files(

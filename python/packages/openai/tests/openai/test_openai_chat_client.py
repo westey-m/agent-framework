@@ -1,5 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+from __future__ import annotations
+
 import asyncio
 import base64
 import copy
@@ -84,7 +86,13 @@ from openai.types.responses.response_text_done_event import ResponseTextDoneEven
 from pydantic import BaseModel
 from pytest import param
 
-from agent_framework_openai import OpenAIChatClient, OpenAIChatOptions, RawOpenAIChatClient
+from agent_framework_openai import (
+    OpenAIChatClient,
+    OpenAIChatCompletionClient,
+    OpenAIChatOptions,
+    RawOpenAIChatClient,
+    RawOpenAIChatCompletionClient,
+)
 from agent_framework_openai._chat_client import OPENAI_LOCAL_SHELL_CALL_ITEM_ID_KEY
 from agent_framework_openai._exceptions import OpenAIContentFilterException
 
@@ -103,13 +111,45 @@ class OutputStruct(BaseModel):
     weather: str | None = None
 
 
+@pytest.mark.parametrize(
+    "client_type", [RawOpenAIChatClient, OpenAIChatClient, RawOpenAIChatCompletionClient, OpenAIChatCompletionClient]
+)
+@pytest.mark.parametrize("azure", [False, True])
+@pytest.mark.parametrize("injected", [False, True])
+async def test_openai_chat_client_context_ownership(client_type, azure: bool, injected: bool) -> None:
+    from azure.core.credentials_async import AsyncTokenCredential
+
+    sdk_client = AsyncOpenAI(api_key="test-key") if injected else None
+    credential = MagicMock(spec=AsyncTokenCredential)
+    credential.close = AsyncMock()
+    kwargs: dict[str, Any] = {"async_client": sdk_client} if injected else {}
+    if azure:
+        kwargs.update(azure_endpoint="https://test.openai.azure.com", credential=credential)
+    else:
+        kwargs["api_key"] = "test-key"
+
+    client = client_type(model="test-model", **kwargs)
+    with patch.object(client.client, "close", wraps=client.client.close) as close:
+        async with client as entered:
+            assert entered is client
+            close.assert_not_awaited()
+        await client.close()
+        assert close.await_count == (0 if injected else 1)
+    assert client.client.is_closed() is not injected
+    credential.close.assert_not_awaited()
+    assert "_owns_client" not in client.to_dict()
+    assert "_client_closed" not in client.to_dict()
+    if sdk_client is not None:
+        await sdk_client.close()
+
+
 class _FakeAsyncEventStream:
     def __init__(self, events: Sequence[object], headers: dict[str, str] | None = None) -> None:
         self._events = events
         self._iterator: Iterator[object] = iter(())
         self._headers = headers or {}
 
-    def __aiter__(self) -> "_FakeAsyncEventStream":
+    def __aiter__(self) -> _FakeAsyncEventStream:
         self._iterator = iter(self._events)
         return self
 
@@ -124,14 +164,14 @@ class _FakeAsyncEventStream:
     # ``.headers``. The chat client then ``async with``-s the parsed stream so the
     # underlying socket is closed deterministically. Mimic both interfaces here so
     # test mocks remain a single object.
-    def parse(self) -> "_FakeAsyncEventStream":
+    def parse(self) -> _FakeAsyncEventStream:
         return self
 
     @property
     def headers(self) -> dict[str, str]:
         return self._headers
 
-    async def __aenter__(self) -> "_FakeAsyncEventStream":
+    async def __aenter__(self) -> _FakeAsyncEventStream:
         return self
 
     async def __aexit__(
@@ -170,7 +210,7 @@ def _as_raw(mock_response: MagicMock, *, headers: dict[str, str] | None = None) 
 
 
 class _FakeAsyncEventStreamContext(_FakeAsyncEventStream):
-    async def __aenter__(self) -> "_FakeAsyncEventStreamContext":
+    async def __aenter__(self) -> _FakeAsyncEventStreamContext:
         return self
 
     async def __aexit__(
@@ -853,7 +893,7 @@ class _BareEventStream:
         self._items = list(items)
         self._iterator: Iterator[object] = iter(())
 
-    def __aiter__(self) -> "_BareEventStream":
+    def __aiter__(self) -> _BareEventStream:
         self._iterator = iter(self._items)
         return self
 
@@ -884,7 +924,7 @@ class _FakeTelemetryStreamWrapper:
     def __init__(self, stream_async_iter: Any) -> None:
         self.stream_async_iter: Any = stream_async_iter
 
-    def __aiter__(self) -> "_FakeTelemetryStreamWrapper":
+    def __aiter__(self) -> _FakeTelemetryStreamWrapper:
         self.stream_async_iter = self.stream_async_iter.__aiter__()
         return self
 
@@ -7844,7 +7884,7 @@ async def test_streaming_azure_ai_search_output_enriches_mapped_agent_response()
         ),
     ]
 
-    async def _stream() -> AsyncGenerator[ChatResponseUpdate, None]:
+    async def _stream() -> AsyncGenerator[ChatResponseUpdate]:
         for update in updates:
             yield update
 

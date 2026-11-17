@@ -793,6 +793,99 @@ def test_cors_default_does_not_allow_arbitrary_origin_even_on_localhost():
         )
 
 
+def _assert_anti_framing_headers(response: Any) -> None:
+    assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
+    assert response.headers.get("x-frame-options") == "DENY"
+
+
+def test_responses_forbid_framing_with_auth():
+    """Every DevUI response must stop other sites from embedding DevUI in an iframe (clickjacking).
+
+    This includes the UI shell, assets, and responses rejected by auth or Host validation.
+    """
+    server = _server_with_mock_agent(host="127.0.0.1", auth_token="s3cret")
+    app = server.get_app()
+
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        shell = client.get("/")
+        assert shell.status_code == 200
+        _assert_anti_framing_headers(shell)
+
+        asset = client.get("/assets/index.js")
+        assert asset.status_code == 200
+        _assert_anti_framing_headers(asset)
+
+        missing_asset = client.get("/assets/does-not-exist.js")
+        assert missing_asset.status_code == 404
+        _assert_anti_framing_headers(missing_asset)
+
+        health = client.get("/health")
+        assert health.status_code == 200
+        _assert_anti_framing_headers(health)
+
+        unauthenticated = client.get("/v1/entities")
+        assert unauthenticated.status_code == 401
+        _assert_anti_framing_headers(unauthenticated)
+
+        authenticated = client.get("/v1/entities", headers={"Authorization": "Bearer s3cret"})
+        assert authenticated.status_code == 200
+        _assert_anti_framing_headers(authenticated)
+
+        bad_host = client.get("/", headers={"Host": "attacker.example"})
+        assert bad_host.status_code == 400
+        _assert_anti_framing_headers(bad_host)
+
+
+def test_responses_forbid_framing_without_auth(monkeypatch):
+    """Anti-framing headers are applied even when auth is disabled."""
+    monkeypatch.delenv("DEVUI_AUTH_TOKEN", raising=False)
+    server = _server_with_mock_agent(host="127.0.0.1", auth_enabled=False)
+    app = server.get_app()
+
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        shell = client.get("/")
+        assert shell.status_code == 200
+        _assert_anti_framing_headers(shell)
+
+        entities = client.get("/v1/entities")
+        assert entities.status_code == 200
+        _assert_anti_framing_headers(entities)
+
+
+def test_anti_framing_keeps_existing_content_security_policy(monkeypatch):
+    """A CSP set by a route is kept, and the anti-framing policy is added once next to it."""
+    monkeypatch.delenv("DEVUI_AUTH_TOKEN", raising=False)
+    server = _server_with_mock_agent(host="127.0.0.1", auth_enabled=False)
+    app = server.get_app()
+
+    from fastapi.responses import PlainTextResponse
+    from starlette.routing import Route
+
+    def own_policy(request: Any) -> PlainTextResponse:
+        return PlainTextResponse("ok", headers={"Content-Security-Policy": "default-src 'self'"})
+
+    def same_policy(request: Any) -> PlainTextResponse:
+        return PlainTextResponse("ok", headers={"Content-Security-Policy": "frame-ancestors 'none'"})
+
+    # Insert ahead of the UI mount at "/", which would otherwise match first.
+    app.router.routes.insert(0, Route("/custom-policy", own_policy))
+    app.router.routes.insert(0, Route("/same-policy", same_policy))
+
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        custom = client.get("/custom-policy")
+        assert custom.status_code == 200
+        assert custom.headers.get_list("content-security-policy") == [
+            "default-src 'self'",
+            "frame-ancestors 'none'",
+        ]
+        assert custom.headers.get("x-frame-options") == "DENY"
+
+        same = client.get("/same-policy")
+        assert same.status_code == 200
+        assert same.headers.get_list("content-security-policy") == ["frame-ancestors 'none'"]
+        assert same.headers.get("x-frame-options") == "DENY"
+
+
 def test_devserver_requires_auth_by_default(monkeypatch):
     """A bare DevServer() must reject unauthenticated /v1/* requests.
 

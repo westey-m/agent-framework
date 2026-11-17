@@ -1,12 +1,17 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using Microsoft.Net.Http.Headers;
+
 namespace Microsoft.Agents.AI.DevUI;
 
 /// <summary>
-/// Applies DevUI access validation to the standard OpenAI Responses and Conversations routes.
+/// Applies DevUI access validation to the standard OpenAI Responses and Conversations routes,
+/// and anti-framing headers to those routes and to DevUI endpoints.
 /// </summary>
 internal sealed class DevUIAccessControlMiddleware
 {
+    private const string FrameAncestorsNonePolicy = "frame-ancestors 'none'";
+
     private static readonly PathString s_responsesPath = new("/v1/responses");
     private static readonly PathString s_conversationsPath = new("/v1/conversations");
 
@@ -31,7 +36,22 @@ internal sealed class DevUIAccessControlMiddleware
     public async Task InvokeAsync(HttpContext context, DevUIRequestValidator validator)
     {
         var requestPath = context.Request.PathBase.Add(context.Request.Path);
-        if (IsProtectedPath(requestPath))
+        var isProtectedPath = IsProtectedPath(requestPath);
+
+        // Registered before any validation so rejected responses are covered too.
+        // The endpoint is only known after routing, so the check runs when the response starts.
+        context.Response.OnStarting(static state =>
+        {
+            var (httpContext, isProtectedPath) = ((HttpContext, bool))state;
+            if (isProtectedPath || httpContext.GetEndpoint()?.Metadata.GetMetadata<DevUIEndpointMetadata>() is not null)
+            {
+                AddAntiFramingHeaders(httpContext.Response.Headers);
+            }
+
+            return Task.CompletedTask;
+        }, (context, isProtectedPath));
+
+        if (isProtectedPath)
         {
             var failure = validator.ValidateLocalRequest(context);
             if (failure is not null)
@@ -42,6 +62,23 @@ internal sealed class DevUIAccessControlMiddleware
         }
 
         await this._next(context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Prevents other sites from embedding DevUI in a frame (clickjacking).
+    /// </summary>
+    /// <remarks>
+    /// The policy is appended rather than replacing any host policy: browsers enforce every
+    /// Content-Security-Policy header, so an existing host policy keeps applying.
+    /// </remarks>
+    private static void AddAntiFramingHeaders(IHeaderDictionary headers)
+    {
+        if (!headers.ContentSecurityPolicy.Contains(FrameAncestorsNonePolicy))
+        {
+            headers.Append(HeaderNames.ContentSecurityPolicy, FrameAncestorsNonePolicy);
+        }
+
+        headers.XFrameOptions = "DENY";
     }
 
     private static bool IsProtectedPath(PathString path)

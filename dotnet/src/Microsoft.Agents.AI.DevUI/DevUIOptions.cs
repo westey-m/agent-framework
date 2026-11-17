@@ -19,6 +19,11 @@ namespace Microsoft.Agents.AI.DevUI;
 /// exposure requires host-owned authentication and network policy, normally
 /// together with <see cref="AllowRemoteAccess"/> set to <see langword="true"/>.
 /// </para>
+/// <para>
+/// DevUI responses always forbid framing by other sites
+/// (<c>Content-Security-Policy: frame-ancestors 'none'</c> and
+/// <c>X-Frame-Options: DENY</c>) to prevent clickjacking. This is not configurable.
+/// </para>
 /// </remarks>
 public sealed class DevUIOptions
 {

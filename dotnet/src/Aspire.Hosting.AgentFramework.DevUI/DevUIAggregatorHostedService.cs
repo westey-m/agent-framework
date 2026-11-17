@@ -34,6 +34,7 @@ internal sealed class DevUIAggregatorHostedService : IAsyncDisposable
 {
     private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
     private static readonly string[] s_preferredBackendEndpointNames = ["https", "http"];
+    private const string FrameAncestorsNonePolicy = "frame-ancestors 'none'";
 
     private WebApplication? _app;
     private readonly DevUIResource _resource;
@@ -134,6 +135,13 @@ internal sealed class DevUIAggregatorHostedService : IAsyncDisposable
 
     private static async Task ValidateLocalRequestAsync(HttpContext context, RequestDelegate next)
     {
+        // Registered first so rejected and proxied responses are covered too.
+        context.Response.OnStarting(static state =>
+        {
+            AddAntiFramingHeaders(((HttpResponse)state).Headers);
+            return Task.CompletedTask;
+        }, context.Response);
+
         if (!IsLoopbackHost(context.Request.Host.Host) ||
             !IsAllowedBrowserRequest(context.Request))
         {
@@ -142,6 +150,20 @@ internal sealed class DevUIAggregatorHostedService : IAsyncDisposable
         }
 
         await next(context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Prevents other sites from embedding DevUI in a frame (clickjacking).
+    /// </summary>
+    private static void AddAntiFramingHeaders(IHeaderDictionary headers)
+    {
+        // Proxied backend responses may already carry the same policy.
+        if (!headers.ContentSecurityPolicy.Contains(FrameAncestorsNonePolicy))
+        {
+            headers.Append("Content-Security-Policy", FrameAncestorsNonePolicy);
+        }
+
+        headers.XFrameOptions = "DENY";
     }
 
     private static bool IsLoopbackHost(string host)

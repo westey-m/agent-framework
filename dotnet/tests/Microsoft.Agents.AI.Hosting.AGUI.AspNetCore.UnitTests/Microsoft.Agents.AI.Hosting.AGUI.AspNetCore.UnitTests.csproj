@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(TargetFrameworksCore)</TargetFrameworks>
+    <!-- net8.0 keeps the pre-net10 AGUIServerSentEventsResult fallback and its tests compiled; net10+ uses TypedResults.ServerSentEvents instead. -->
+    <TargetFrameworks>$(TestTargetFrameworksCore);net8.0</TargetFrameworks>
   </PropertyGroup>
 
   <ItemGroup>

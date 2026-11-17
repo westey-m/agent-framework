@@ -550,6 +550,120 @@ public class DevUIAccessControlTests
         Assert.Single(startupFilters, filter => filter is DevUIAccessControlStartupFilter);
     }
 
+    [Theory]
+    [InlineData("/devui/")]
+    [InlineData("/meta")]
+    [InlineData("/v1/entities")]
+    public async Task DevUIRoute_ForbidsFramingAsync(string path)
+    {
+        // Arrange
+        var builder = NewBuilder(IPAddress.Loopback);
+        builder.Services.AddDevUI();
+        using var app = builder.Build();
+        app.MapDevUI();
+        await app.StartAsync();
+
+        // Act
+        var response = await app.GetTestClient().GetAsync(new Uri(path, UriKind.Relative));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertForbidsFraming(response);
+    }
+
+    [Fact]
+    public async Task DevUIRoute_RejectedForMissingToken_ForbidsFramingAsync()
+    {
+        // Arrange
+        var builder = NewBuilder(IPAddress.Loopback);
+        builder.Services.AddDevUI(options => options.AuthToken = "secret-token");
+        using var app = builder.Build();
+        app.MapDevUI();
+        await app.StartAsync();
+
+        // Act
+        var response = await app.GetTestClient().GetAsync(new Uri("/devui/", UriKind.Relative));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertForbidsFraming(response);
+    }
+
+    [Theory]
+    [InlineData("GET", "/v1/entities")]
+    [InlineData("POST", "/v1/responses")]
+    public async Task DevUIRoute_RejectedForForeignHost_ForbidsFramingAsync(string method, string path)
+    {
+        // Arrange
+        var builder = NewBuilder(IPAddress.Loopback);
+        builder.Services.AddDevUI();
+        using var app = builder.Build();
+        app.MapDevUI();
+        app.MapPost("/v1/responses", () => Results.Ok());
+        await app.StartAsync();
+        using var request = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative));
+        request.Headers.Host = "attacker.example";
+
+        // Act
+        var response = await app.GetTestClient().SendAsync(request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertForbidsFraming(response);
+    }
+
+    [Fact]
+    public async Task HostEndpoint_OutsideDevUI_DoesNotGetAntiFramingHeadersAsync()
+    {
+        // Arrange
+        var builder = NewBuilder(IPAddress.Loopback);
+        builder.Services.AddDevUI();
+        using var app = builder.Build();
+        app.MapDevUI();
+        app.MapGet("/other", () => Results.Ok());
+        await app.StartAsync();
+
+        // Act
+        var response = await app.GetTestClient().GetAsync(new Uri("/other", UriKind.Relative));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.False(response.Headers.Contains("Content-Security-Policy"));
+        Assert.False(response.Headers.Contains("X-Frame-Options"));
+    }
+
+    [Fact]
+    public async Task DevUIRoute_KeepsHostContentSecurityPolicyAsync()
+    {
+        // Arrange
+        var builder = NewBuilder(IPAddress.Loopback);
+        builder.Services.AddDevUI();
+        using var app = builder.Build();
+        app.Use(async (HttpContext context, RequestDelegate next) =>
+        {
+            context.Response.Headers.ContentSecurityPolicy = "default-src 'self'";
+            await next(context);
+        });
+        app.MapDevUI();
+        await app.StartAsync();
+
+        // Act
+        var response = await app.GetTestClient().GetAsync(new Uri("/meta", UriKind.Relative));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            ["default-src 'self'", "frame-ancestors 'none'"],
+            response.Headers.GetValues("Content-Security-Policy"));
+        Assert.Equal("DENY", Assert.Single(response.Headers.GetValues("X-Frame-Options")));
+    }
+
+    private static void AssertForbidsFraming(HttpResponseMessage response)
+    {
+        Assert.Equal("frame-ancestors 'none'", Assert.Single(response.Headers.GetValues("Content-Security-Policy")));
+        Assert.Equal("DENY", Assert.Single(response.Headers.GetValues("X-Frame-Options")));
+    }
+
     private sealed class RemoteIpStartupFilter(IPAddress remoteIp) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)

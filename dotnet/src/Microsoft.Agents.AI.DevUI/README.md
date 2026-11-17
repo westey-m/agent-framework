@@ -103,6 +103,8 @@ In the default local mode, DevUI:
 
 Local-access and browser-request failures return HTTP 403. Missing or invalid configured tokens return HTTP 401 with `WWW-Authenticate: Bearer`. The `/meta` endpoint remains unauthenticated so the frontend can discover whether a token is required.
 
+Responses from the endpoints mapped by `MapDevUI()` and from the standard `/v1/responses` and `/v1/conversations` paths, including rejected responses, always include `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` so other sites cannot embed DevUI in a frame (clickjacking). This applies even when `AllowRemoteAccess` is enabled. The policy is added alongside any `Content-Security-Policy` the host already sets, and other host endpoints are not affected.
+
 Configure via `DevUIOptions`:
 
 ```csharp

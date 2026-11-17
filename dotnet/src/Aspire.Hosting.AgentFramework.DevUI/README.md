@@ -8,6 +8,8 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 The aggregator binds only to loopback and includes limited browser-request protections: every request must use
 `localhost` or a loopback IP address in its `Host` header, and state-changing requests with a mismatched or invalid
 `Origin` or `Sec-Fetch-Site: cross-site` are rejected. Non-browser clients that send neither header continue to work.
+Every aggregator response includes `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` so
+other sites cannot embed DevUI in a frame (clickjacking).
 These checks reduce local DNS-rebinding and cross-site request risks, but they do not provide authentication,
 authorization, multi-user isolation, or protection for the backend services. Use the aggregator only for local,
 trusted development. After validating the incoming browser request, the aggregator does not forward browser

@@ -595,6 +595,57 @@ public class DevUIAggregatorHostedServiceTests
         Assert.Equal(HttpMethod.Post.Method, forwarded.Method);
     }
 
+    [Theory]
+    [InlineData("/devui/index.html")]
+    [InlineData("/v1/conversations")]
+    [InlineData("/health")]
+    public async Task Response_ForbidsFramingAsync(string path)
+    {
+        // Arrange
+        await using var proxy = await ProxyTestContext.StartAsync();
+
+        // Act
+        var response = await proxy.SendAsync(path);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertForbidsFraming(response);
+    }
+
+    [Fact]
+    public async Task RejectedResponse_ForbidsFramingAsync()
+    {
+        // Arrange
+        await using var proxy = await ProxyTestContext.StartAsync();
+
+        // Act
+        var response = await proxy.SendAsync("/devui/index.html", host: "attacker.example");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertForbidsFraming(response);
+    }
+
+    [Fact]
+    public async Task ProxiedResponse_FromDevUIBackend_DoesNotDuplicateAntiFramingPolicyAsync()
+    {
+        // Arrange
+        await using var proxy = await ProxyTestContext.StartAsync(useDevUIRequestValidation: true);
+
+        // Act
+        var response = await proxy.SendAsync("/v1/conversations", HttpMethod.Post);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertForbidsFraming(response);
+    }
+
+    private static void AssertForbidsFraming(HttpResponseMessage response)
+    {
+        Assert.Equal("frame-ancestors 'none'", Assert.Single(response.Headers.GetValues("Content-Security-Policy")));
+        Assert.Equal("DENY", Assert.Single(response.Headers.GetValues("X-Frame-Options")));
+    }
+
     #region Proxy Test Helpers
 
     /// <summary>

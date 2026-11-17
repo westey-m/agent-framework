@@ -48,12 +48,16 @@ public static class DevUIExtensions
 
         // /meta must remain reachable without authentication so the frontend can
         // discover whether a bearer token is required before prompting for one.
-        endpoints.MapMeta(authRequired: authFilter.TokenRequired);
+        // DevUIEndpointMetadata lets DevUIAccessControlMiddleware add anti-framing
+        // headers to DevUI responses without affecting the host's other endpoints.
+        endpoints.MapMeta(authRequired: authFilter.TokenRequired)
+            .WithMetadata(DevUIEndpointMetadata.Instance);
 
         var protectedGroup = endpoints.MapGroup("");
 
         // Conventions must be applied before endpoints are added to the group so
         // they reliably attach to every protected DevUI endpoint.
+        protectedGroup.WithMetadata(DevUIEndpointMetadata.Instance);
         options.ConfigureEndpoints?.Invoke(protectedGroup);
         protectedGroup.AddEndpointFilter(authFilter);
 

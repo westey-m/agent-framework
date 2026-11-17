@@ -372,6 +372,8 @@ Use it only in an isolated loopback development environment.
 - Only loads entities from local directories or in-memory registration
 - No remote code execution capabilities
 - Binds to localhost (127.0.0.1) by default
+- Responses include `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`, so other sites
+  cannot embed DevUI in a frame (clickjacking protection)
 
 **Best practices:**
 

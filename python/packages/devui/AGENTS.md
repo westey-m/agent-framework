@@ -46,6 +46,8 @@ Unauthenticated mode is allowed only on `localhost` / `127.0.0.1`; `0.0.0.0`, LA
 `DEVUI_AUTH_TOKEN` or `--auth-token`.
 Even on loopback, `--no-auth` removes protection against HTTP requests sent by hostile websites to local DevUI.
 Use it only in an isolated loopback development environment.
+Every response forbids framing (`Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY`) so other
+sites cannot embed DevUI for clickjacking.
 
 ## Import Path
 

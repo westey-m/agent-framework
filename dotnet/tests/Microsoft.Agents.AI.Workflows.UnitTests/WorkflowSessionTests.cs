@@ -2,6 +2,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Agents.AI.Workflows.Checkpointing;
 using Microsoft.Extensions.AI;
 
@@ -14,6 +18,46 @@ namespace Microsoft.Agents.AI.Workflows.UnitTests;
 /// </summary>
 public class WorkflowSessionTests
 {
+    private sealed class ApprovalStartExecutor() : ChatProtocolExecutor("start", new() { AutoSendTurnToken = false })
+    {
+        protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
+            base.ConfigureProtocol(protocolBuilder).SendsMessage<ToolApprovalRequestContent>();
+
+        protected override async ValueTask TakeTurnAsync(
+            List<ChatMessage> messages,
+            IWorkflowContext context,
+            bool? emitEvents,
+            CancellationToken cancellationToken = default)
+        {
+            if (messages.Count > 0)
+            {
+                ToolApprovalRequestContent request = new("approval", new FunctionCallContent("call", "test_tool"));
+                await context.SendMessageAsync(request, cancellationToken: cancellationToken);
+            }
+        }
+    }
+
+    private sealed class ApprovalResponseExecutor<T>(string id, Action onInvocation) : Executor<T, string>(id)
+    {
+        public override ValueTask<string> HandleAsync(
+            T message,
+            IWorkflowContext context,
+            CancellationToken cancellationToken = default)
+        {
+            onInvocation();
+            return new("completed");
+        }
+    }
+
+    private sealed class DownstreamFailureExecutor() : Executor<string>("failure")
+    {
+        public override ValueTask HandleAsync(
+            string message,
+            IWorkflowContext context,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("downstream failure");
+    }
+
     private sealed class TestEnvelope : IExternalRequestEnvelope
     {
         AIContent? IExternalRequestEnvelope.GetInnerRequestContent() => null;
@@ -117,5 +161,48 @@ public class WorkflowSessionTests
 
         Assert.False(WorkflowSession.TryGetRequestEnvelope(request, ports, out IExternalRequestEnvelope? envelope));
         Assert.Null(envelope);
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+    public async Task CompletedResponseHandlerIsNotRepeatedAfterDownstreamFailureAsync(bool wrappedResponse, int consumerCount)
+    {
+        // Arrange
+        ApprovalStartExecutor start = new();
+        RequestPort port = RequestPort.Create<ToolApprovalRequestContent, ToolApprovalResponseContent>("approval");
+        int responseInvocations = 0;
+        void onInvocation() => Interlocked.Increment(ref responseInvocations);
+        DownstreamFailureExecutor failure = new();
+        WorkflowBuilder builder = new WorkflowBuilder(start).AddEdge(start, port);
+        for (int i = 0; i < consumerCount; i++)
+        {
+            Executor responseHandler = wrappedResponse
+                ? new ApprovalResponseExecutor<ExternalResponse>($"response-{i}", onInvocation)
+                : new ApprovalResponseExecutor<ToolApprovalResponseContent>($"response-{i}", onInvocation);
+            builder.AddEdge(port, responseHandler).AddEdge(responseHandler, failure);
+        }
+
+        Workflow workflow = builder.Build();
+        AIAgent agent = workflow.AsAIAgent(includeExceptionDetails: true);
+        AgentSession session = await agent.CreateSessionAsync();
+        List<AgentResponseUpdate> initialUpdates = await agent.RunStreamingAsync("start", session).ToListAsync();
+        ToolApprovalRequestContent approval = Assert.Single(
+            initialUpdates.SelectMany(update => update.Contents).OfType<ToolApprovalRequestContent>());
+        ChatMessage response = new(ChatRole.User, [approval.CreateResponse(approved: true)]);
+
+        // Act
+        List<AgentResponseUpdate> failedUpdates = await agent.RunStreamingAsync(response, session).ToListAsync();
+        JsonElement serializedSession = await agent.SerializeSessionAsync(session);
+        AgentSession recoveredSession = await agent.DeserializeSessionAsync(serializedSession);
+        List<AgentResponseUpdate> resumedUpdates = await agent.RunStreamingAsync(response, recoveredSession).ToListAsync();
+
+        // Assert
+        Assert.Contains(failedUpdates.SelectMany(update => update.Contents).OfType<ErrorContent>(),
+            error => error.Message.Contains("downstream failure", StringComparison.Ordinal));
+        Assert.Contains(resumedUpdates.SelectMany(update => update.Contents).OfType<ErrorContent>(),
+            error => error.Message.Contains("downstream failure", StringComparison.Ordinal));
+        Assert.Equal(consumerCount, responseInvocations);
     }
 }

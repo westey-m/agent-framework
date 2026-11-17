@@ -32,6 +32,8 @@ from .models._discovery_models import Deployment, DeploymentConfig, DiscoveryRes
 
 logger = logging.getLogger(__name__)
 
+_FRAME_ANCESTORS_NONE_POLICY = "frame-ancestors 'none'"
+
 
 def _extract_error_details(body: object) -> tuple[str | None, str | None, str | None]:
     """Extract typed OpenAI-style error payload fields."""
@@ -422,7 +424,9 @@ class DevServer:
         # Middleware registration order matters: Starlette wraps later-added
         # middleware around earlier-added ones, so the LAST registered runs
         # outermost (sees the request first). We want Host-header enforcement
-        # to run before CORS/auth, so it is registered last below.
+        # to run before CORS/auth, so it is registered after them below; the
+        # anti-framing middleware is registered after that so it also covers
+        # Host-header rejections.
 
         # Add CORS middleware
         # Note: allow_credentials cannot be True when allow_origins is ["*"]
@@ -489,8 +493,8 @@ class DevServer:
             _ = auth_middleware
 
         # Host-header allowlist for loopback binds: on a loopback interface, only
-        # accept requests whose Host header names a loopback address. Registered LAST
-        # so it runs outermost, rejecting non-loopback Host values before CORS/auth
+        # accept requests whose Host header names a loopback address. Registered after
+        # CORS/auth so it runs before them, rejecting non-loopback Host values first
         # (and before CORS can short-circuit a preflight on a rebound request).
         allowed_hosts = self._loopback_allowed_hosts()
         if allowed_hosts is not None:
@@ -517,6 +521,21 @@ class DevServer:
                 return await call_next(request)
 
             _ = host_header_middleware
+
+        # Anti-framing headers stop other sites from embedding DevUI in an iframe
+        # (clickjacking). Registered LAST so it runs outermost and also covers
+        # responses rejected by the Host, auth, and CORS middleware.
+        @app.middleware("http")
+        async def anti_framing_middleware(request: Request, call_next: Callable[[Request], Awaitable[Any]]) -> Any:
+            response = await call_next(request)
+            # Append rather than overwrite so any CSP set by a route stays enforced;
+            # browsers apply every Content-Security-Policy header.
+            if _FRAME_ANCESTORS_NONE_POLICY not in response.headers.getlist("Content-Security-Policy"):
+                response.headers.append("Content-Security-Policy", _FRAME_ANCESTORS_NONE_POLICY)
+            response.headers["X-Frame-Options"] = "DENY"
+            return response
+
+        _ = anti_framing_middleware
 
         self._register_routes(app)
         self._mount_ui(app)

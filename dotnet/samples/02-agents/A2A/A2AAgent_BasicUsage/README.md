@@ -2,7 +2,7 @@
 
 This sample shows how to send a single message to an existing A2A agent and receive its response using default settings.
 It discovers the remote agent's card using `A2ACardResolver`, creates an `A2AAgent` through
-`GetAIAgentAsync()`, and uses the standard `AIAgent.RunAsync()` method to send a prompt and print the response.
+`GetAIAgentAsync()` (passing the agent host as the only allowed host), and uses the standard `AIAgent.RunAsync()` method to send a prompt and print the response.
 
 ## Prerequisites
 

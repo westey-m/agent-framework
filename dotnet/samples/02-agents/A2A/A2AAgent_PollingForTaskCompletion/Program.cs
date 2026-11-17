@@ -14,7 +14,8 @@ A2ACardResolver agentCardResolver = new(new Uri(a2aAgentHost));
 AgentCard agentCard = await agentCardResolver.GetAgentCardAsync();
 
 // Create an instance of the AIAgent for an existing A2A agent specified by the agent card.
-AIAgent agent = agentCard.AsAIAgent();
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent agent = agentCard.AsAIAgent([new Uri(a2aAgentHost).Host]);
 
 AgentSession session = await agent.CreateSessionAsync();
 

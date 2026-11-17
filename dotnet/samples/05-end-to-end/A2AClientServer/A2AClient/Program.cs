@@ -15,7 +15,8 @@ var agentCardResolver = new A2ACardResolver(new Uri(agentUrl));
 A2AAgentOptions agentOptions = new() { AllowAgentCardHostsInsecureHttp = agentUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) };
 
 // Create an AIAgent from the A2A agent card.
-AIAgent policyAgent = await agentCardResolver.GetAIAgentAsync(agentOptions);
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent policyAgent = await agentCardResolver.GetAIAgentAsync([new Uri(agentUrl).Host], agentOptions);
 
 // Create a session so requests share the same A2A protocol context.
 AgentSession session = await policyAgent.CreateSessionAsync();

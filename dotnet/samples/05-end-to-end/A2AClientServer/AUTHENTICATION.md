@@ -158,7 +158,7 @@ foreach (var service in card.SupportedInterfaces)
     }
 }
 
-AIAgent policyAgent = card.AsAIAgent(httpClient);
+AIAgent policyAgent = card.AsAIAgent([trustedOrigin.Host], httpClient);
 ```
 
 The configured discovery origin must be trusted before sending it a token.

@@ -11,7 +11,8 @@ var a2aAgentHost = Environment.GetEnvironmentVariable("A2A_AGENT_HOST") ?? throw
 A2ACardResolver agentCardResolver = new(new Uri(a2aAgentHost));
 
 // Create an instance of the AIAgent for an existing A2A agent specified by the agent card.
-AIAgent agent = await agentCardResolver.GetAIAgentAsync();
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent agent = await agentCardResolver.GetAIAgentAsync([new Uri(a2aAgentHost).Host]);
 
 // Invoke the agent and output the text result.
 AgentResponse response = await agent.RunAsync("Tell me a joke about a pirate.");

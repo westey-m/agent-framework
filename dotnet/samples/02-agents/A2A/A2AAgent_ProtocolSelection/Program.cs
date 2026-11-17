@@ -36,7 +36,8 @@ A2AClientOptions options = new()
 };
 
 // Create an instance of the AIAgent for an existing A2A agent, using the specified protocol binding.
-AIAgent agent = agentCard.AsAIAgent(options: options);
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent agent = agentCard.AsAIAgent([new Uri(a2aAgentHost).Host], options: options);
 
 // A gRPC client owns a channel; release it after the agent's final operation.
 using var clientLifetime = agent.GetService<IA2AClient>() as IDisposable;

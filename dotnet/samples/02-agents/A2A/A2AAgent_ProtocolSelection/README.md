@@ -1,4 +1,4 @@
-# A2A Agent Protocol Selection
+﻿# A2A Agent Protocol Selection
 
 This sample demonstrates how to select the A2A protocol binding when creating an `AIAgent` from an A2A agent card.
 
@@ -62,7 +62,9 @@ A2AGrpcClientRegistration.Register();
 
 var resolver = new A2ACardResolver(new Uri("https://agent.example.com/"));
 
+// Only allow the agent card to point to the same host we fetched it from.
 AIAgent agent = await resolver.GetAIAgentAsync(
+    allowedHosts: ["agent.example.com"],
     options: new A2AClientOptions
     {
         PreferredBindings = [ProtocolBindingNames.Grpc]

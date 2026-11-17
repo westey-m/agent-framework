@@ -16,7 +16,9 @@ var a2aAgentHost = Environment.GetEnvironmentVariable("A2A_AGENT_HOST") ?? throw
 // Resolve the remote A2A agent and its advertised skills.
 A2ACardResolver agentCardResolver = new(new Uri(a2aAgentHost));
 AgentCard agentCard = await agentCardResolver.GetAgentCardAsync();
-AIAgent a2aAgent = agentCard.AsAIAgent();
+
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent a2aAgent = agentCard.AsAIAgent([new Uri(a2aAgentHost).Host]);
 
 // Create the main agent, and provide each A2A skill as a separate function tool.
 // WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.

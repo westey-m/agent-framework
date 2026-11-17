@@ -41,7 +41,7 @@ public sealed class A2ACardResolverExtensionsTests : IDisposable
         });
 
         // Act
-        Task<A2AAgent> agentTask = this._resolver.GetAIAgentAsync();
+        Task<A2AAgent> agentTask = this._resolver.GetAIAgentAsync(allowedHosts: null);
         A2AAgent agent = await agentTask;
 
         // Assert
@@ -69,7 +69,7 @@ public sealed class A2ACardResolverExtensionsTests : IDisposable
             Parts = [Part.FromText("Response")],
         });
 
-        var agent = await this._resolver.GetAIAgentAsync(httpClient: this._httpClient);
+        var agent = await this._resolver.GetAIAgentAsync(allowedHosts: null, httpClient: this._httpClient);
 
         // Act
         await agent.RunAsync("Test input");
@@ -104,7 +104,7 @@ public sealed class A2ACardResolverExtensionsTests : IDisposable
             PreferredBindings = [ProtocolBindingNames.JsonRpc]
         };
 
-        var agent = await this._resolver.GetAIAgentAsync(httpClient: this._httpClient, options: options);
+        var agent = await this._resolver.GetAIAgentAsync(allowedHosts: null, httpClient: this._httpClient, options: options);
 
         // Act
         await agent.RunAsync("Test input");
@@ -133,7 +133,7 @@ public sealed class A2ACardResolverExtensionsTests : IDisposable
         };
 
         // Act
-        Task<A2AAgent> agentTask = this._resolver.GetAIAgentAsync(agentOptions, httpClient: this._httpClient);
+        Task<A2AAgent> agentTask = this._resolver.GetAIAgentAsync(allowedHosts: null, agentOptions, httpClient: this._httpClient);
         A2AAgent agent = await agentTask;
 
         // Assert
@@ -161,13 +161,27 @@ public sealed class A2ACardResolverExtensionsTests : IDisposable
         };
 
         // Act
-        var agent = await this._resolver.GetAIAgentAsync(agentOptions, httpClient: this._httpClient);
+        var agent = await this._resolver.GetAIAgentAsync(allowedHosts: null, agentOptions, httpClient: this._httpClient);
 
         // Assert
         Assert.NotNull(agent);
         Assert.Equal("custom-id", agent.Id);
         Assert.Equal("Card Agent", agent.Name);
         Assert.Equal("Card description", agent.Description);
+    }
+
+    [Fact]
+    public async Task GetAIAgentAsync_WithHostNotInAllowedHosts_ThrowsInvalidOperationExceptionAsync()
+    {
+        // Arrange
+        this._handler.ResponsesToReturn.Enqueue(new AgentCard
+        {
+            Name = "Test Agent",
+            SupportedInterfaces = [new AgentInterface { Url = "https://other-host/agent" }]
+        });
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => this._resolver.GetAIAgentAsync(["test-host"], httpClient: this._httpClient));
     }
 
     public void Dispose()

@@ -19,11 +19,13 @@ namespace A2A;
 /// The addresses listed in the card decide where requests are sent, including any credentials attached to the
 /// supplied <see cref="HttpClient"/>. By default only absolute <c>https</c> addresses are used; other addresses are
 /// ignored, and an <see cref="InvalidOperationException"/> is thrown when none remain. Use
-/// <see cref="A2AAgentOptions.AllowAgentCardHostsInsecureHttp"/> to accept <c>http</c> addresses and
-/// <see cref="A2AAgentOptions.AgentCardAllowedHosts"/> to restrict the hosts a card may point to. Setting
-/// <see cref="A2AAgentOptions.AgentCardAllowedHosts"/> is recommended whenever the card may come from an untrusted source.
-/// Only the card's addresses are checked; redirects are handled by the <see cref="HttpClient"/>, so turn off automatic
-/// redirects on it if every request must stay on an allowed host.
+/// <see cref="A2AAgentOptions.AllowAgentCardHostsInsecureHttp"/> to accept <c>http</c> addresses.
+/// </para>
+/// <para>
+/// Every method takes a required <c>allowedHosts</c> parameter that limits the hosts a card may point to. Passing a
+/// list is recommended whenever the card may come from an untrusted source; pass <see langword="null"/> to allow any
+/// host. Only the card's addresses are checked; redirects are handled by the <see cref="HttpClient"/>, so turn off
+/// automatic redirects on it if every request must stay on an allowed host.
 /// </para>
 /// <para>
 /// To select gRPC, also reference the SDK's <c>A2A.Grpc</c> package,
@@ -46,12 +48,27 @@ public static class AgentCardExtensions
     /// This method can be used to access A2A agents that support the
     /// <see href="https://github.com/a2aproject/A2A/blob/main/docs/topics/agent-discovery.md#2-curated-registries-catalog-based-discovery">Curated Registries (Catalog-Based Discovery)</see>
     /// discovery mechanism.
-    /// <para>
-    /// This overload accepts any host listed in the card. If the card may come from an untrusted source, use the
-    /// overload that takes <see cref="A2AAgentOptions"/> and set <see cref="A2AAgentOptions.AgentCardAllowedHosts"/>.
-    /// </para>
     /// </remarks>
     /// <param name="card">The <see cref="AgentCard" /> to use for the agent creation.</param>
+    /// <param name="allowedHosts">
+    /// The hosts that the agent card is allowed to direct requests to. The addresses listed in a card decide where
+    /// requests are sent, including any credentials attached to the supplied <see cref="HttpClient"/>, so passing a
+    /// list is recommended whenever the card may come from an untrusted source. Pass <see langword="null"/> to allow
+    /// any host. An empty list allows no hosts, so every card is rejected.
+    /// <para>
+    /// Each entry is a host name or IP address, with an optional port (for example <c>contoso.com</c>,
+    /// <c>contoso.com:8443</c> or <c>[::1]:8443</c>). An entry without a port allows any port on that host; an entry
+    /// with a port allows only that port. Host names are compared ignoring case. Schemes, paths and wildcards are not
+    /// supported, and an entry that is not valid causes an <see cref="ArgumentException"/>.
+    /// </para>
+    /// <para>
+    /// Only the addresses listed in the agent card are checked. If the <see cref="HttpClient"/> follows redirects,
+    /// requests may be redirected to a host that is not in this list. To make sure every request stays on an allowed
+    /// host, supply an <see cref="HttpClient"/> with automatic redirects turned off, for example one created with
+    /// <c>new HttpClientHandler { AllowAutoRedirect = false }</c>. The default client used when none is supplied
+    /// follows redirects.
+    /// </para>
+    /// </param>
     /// <param name="httpClient">The <see cref="HttpClient"/> to use for HTTP requests.</param>
     /// <param name="options">
     /// Optional <see cref="A2AClientOptions"/> controlling protocol binding preference.
@@ -59,8 +76,8 @@ public static class AgentCardExtensions
     /// </param>
     /// <param name="loggerFactory">The logger factory for enabling logging within the agent.</param>
     /// <returns>An <see cref="A2AAgent"/> instance backed by the A2A agent.</returns>
-    public static A2AAgent AsAIAgent(this AgentCard card, HttpClient? httpClient = null, A2AClientOptions? options = null, ILoggerFactory? loggerFactory = null)
-        => card.AsAIAgent(new A2AAgentOptions(), httpClient, options, loggerFactory);
+    public static A2AAgent AsAIAgent(this AgentCard card, IEnumerable<string>? allowedHosts, HttpClient? httpClient = null, A2AClientOptions? options = null, ILoggerFactory? loggerFactory = null)
+        => card.AsAIAgent(allowedHosts, new A2AAgentOptions(), httpClient, options, loggerFactory);
 
     /// <summary>
     /// Retrieves an instance of <see cref="A2AAgent"/> for an existing A2A agent.
@@ -72,10 +89,10 @@ public static class AgentCardExtensions
     /// the corresponding values from the <see cref="AgentCard"/>.
     /// </remarks>
     /// <param name="card">The <see cref="AgentCard" /> to use for the agent creation.</param>
+    /// <param name="allowedHosts"><inheritdoc cref="AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='allowedHosts']/node()"/></param>
     /// <param name="agentOptions">
-    /// Configuration options that control the agent's identity and which card addresses may be used. When provided,
-    /// non-null values override the corresponding values from the agent card. If the card may come from an untrusted
-    /// source, setting <see cref="A2AAgentOptions.AgentCardAllowedHosts"/> is recommended.
+    /// Configuration options that control the agent's identity and whether <c>http</c> card addresses may be used.
+    /// When provided, non-null values override the corresponding values from the agent card.
     /// </param>
     /// <param name="httpClient">The <see cref="HttpClient"/> to use for HTTP requests.</param>
     /// <param name="clientOptions">
@@ -84,12 +101,12 @@ public static class AgentCardExtensions
     /// </param>
     /// <param name="loggerFactory">The logger factory for enabling logging within the agent.</param>
     /// <returns>An <see cref="A2AAgent"/> instance backed by the A2A agent.</returns>
-    public static A2AAgent AsAIAgent(this AgentCard card, A2AAgentOptions agentOptions, HttpClient? httpClient = null, A2AClientOptions? clientOptions = null, ILoggerFactory? loggerFactory = null)
+    public static A2AAgent AsAIAgent(this AgentCard card, IEnumerable<string>? allowedHosts, A2AAgentOptions agentOptions, HttpClient? httpClient = null, A2AClientOptions? clientOptions = null, ILoggerFactory? loggerFactory = null)
     {
         _ = Throw.IfNull(card);
         _ = Throw.IfNull(agentOptions);
 
-        var a2aClient = A2AClientFactory.Create(WithAllowedInterfacesOnly(card, agentOptions), httpClient, clientOptions);
+        var a2aClient = A2AClientFactory.Create(WithAllowedInterfacesOnly(card, allowedHosts, agentOptions), httpClient, clientOptions);
 
         var mergedOptions = agentOptions.Clone();
         mergedOptions.Name ??= card.Name;
@@ -99,14 +116,14 @@ public static class AgentCardExtensions
     }
 
     /// <summary>
-    /// Returns a card that lists only the interfaces whose address passes the checks configured in
+    /// Returns a card that lists only the interfaces whose address passes the host list and the checks configured in
     /// <paramref name="agentOptions"/>. The supplied card is never modified.
     /// </summary>
-    private static AgentCard WithAllowedInterfacesOnly(AgentCard card, A2AAgentOptions agentOptions)
+    private static AgentCard WithAllowedInterfacesOnly(AgentCard card, IEnumerable<string>? allowedHostList, A2AAgentOptions agentOptions)
     {
-        // An unset list allows any host; an empty list allows none. Bad entries throw here.
-        AllowedHttpHosts? allowedHosts = agentOptions.AgentCardAllowedHosts is { } hosts
-            ? new AllowedHttpHosts(hosts, allowAnyPortWhenUnspecified: true)
+        // A null list allows any host; an empty list allows none. Bad entries throw here.
+        AllowedHttpHosts? allowedHosts = allowedHostList is not null
+            ? new AllowedHttpHosts(allowedHostList, allowAnyPortWhenUnspecified: true)
             : null;
 
         // A card without interfaces is left for the client factory to reject.
@@ -134,7 +151,7 @@ public static class AgentCardExtensions
             throw new InvalidOperationException(
                 "None of the addresses listed in the agent card are allowed. Addresses must be absolute and use https. " +
                 $"Use {nameof(A2AAgentOptions)}.{nameof(A2AAgentOptions.AllowAgentCardHostsInsecureHttp)} to accept http addresses, " +
-                $"and check {nameof(A2AAgentOptions)}.{nameof(A2AAgentOptions.AgentCardAllowedHosts)} if it is set.");
+                "and check the allowed hosts list if one was supplied.");
         }
 
         return new AgentCard

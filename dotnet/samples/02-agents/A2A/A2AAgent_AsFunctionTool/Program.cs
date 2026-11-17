@@ -18,7 +18,8 @@ A2ACardResolver agentCardResolver = new(new Uri(a2aAgentHost));
 AgentCard agentCard = await agentCardResolver.GetAgentCardAsync();
 
 // Create an instance of the AIAgent for an existing A2A agent specified by the agent card.
-AIAgent a2aAgent = agentCard.AsAIAgent();
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent a2aAgent = agentCard.AsAIAgent([new Uri(a2aAgentHost).Host]);
 
 // Create the main agent, and provide the A2A agent as a function tool.
 // WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.

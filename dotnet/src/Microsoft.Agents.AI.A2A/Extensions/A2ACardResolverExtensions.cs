@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,9 +32,9 @@ namespace A2A;
 /// <para>
 /// The addresses listed in the resolved card are checked as described in <see cref="AgentCardExtensions"/>:
 /// only <c>https</c> addresses are used unless <see cref="A2AAgentOptions.AllowAgentCardHostsInsecureHttp"/> is set. The card may
-/// point to a different host than the one it was fetched from, so set <see cref="A2AAgentOptions.AgentCardAllowedHosts"/>
-/// when the supplied <see cref="HttpClient"/> carries credentials or the card source is untrusted. Setting it is
-/// recommended for any card fetched from an address you do not fully control. Only the card's addresses are checked;
+/// point to a different host than the one it was fetched from, so pass an <c>allowedHosts</c> list when the supplied
+/// <see cref="HttpClient"/> carries credentials or the card source is untrusted. Passing a list is recommended for any
+/// card fetched from an address you do not fully control. Only the card's addresses are checked;
 /// turn off automatic redirects on the <see cref="HttpClient"/> if every request must stay on an allowed host.
 /// </para>
 /// </remarks>
@@ -46,13 +47,9 @@ public static class A2ACardResolverExtensions
     /// This method can be used to access A2A agents that support the
     /// <see href="https://github.com/a2aproject/A2A/blob/main/docs/topics/agent-discovery.md#1-well-known-uri">Well-Known URI</see>
     /// discovery mechanism.
-    /// <para>
-    /// This overload accepts any host listed in the resolved card. If the card may come from an untrusted source,
-    /// use the overload that takes <see cref="A2AAgentOptions"/> and set
-    /// <see cref="A2AAgentOptions.AgentCardAllowedHosts"/>.
-    /// </para>
     /// </remarks>
     /// <param name="resolver">The <see cref="A2ACardResolver" /> to use for the agent creation.</param>
+    /// <param name="allowedHosts"><inheritdoc cref="AgentCardExtensions.AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='allowedHosts']/node()"/></param>
     /// <param name="httpClient">The <see cref="HttpClient"/> to use for HTTP requests.</param>
     /// <param name="options">
     /// Optional <see cref="A2AClientOptions"/> controlling protocol binding preference.
@@ -61,12 +58,12 @@ public static class A2ACardResolverExtensions
     /// <param name="loggerFactory">The logger factory for enabling logging within the agent.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>An <see cref="A2AAgent"/> instance backed by the A2A agent.</returns>
-    public static async Task<A2AAgent> GetAIAgentAsync(this A2ACardResolver resolver, HttpClient? httpClient = null, A2AClientOptions? options = null, ILoggerFactory? loggerFactory = null, CancellationToken cancellationToken = default)
+    public static async Task<A2AAgent> GetAIAgentAsync(this A2ACardResolver resolver, IEnumerable<string>? allowedHosts, HttpClient? httpClient = null, A2AClientOptions? options = null, ILoggerFactory? loggerFactory = null, CancellationToken cancellationToken = default)
     {
         // Obtain the agent card from the resolver.
         var agentCard = await resolver.GetAgentCardAsync(cancellationToken).ConfigureAwait(false);
 
-        return agentCard.AsAIAgent(httpClient, options, loggerFactory);
+        return agentCard.AsAIAgent(allowedHosts, httpClient, options, loggerFactory);
     }
 
     /// <summary>
@@ -79,10 +76,10 @@ public static class A2ACardResolverExtensions
     /// the corresponding values from the resolved <see cref="AgentCard"/>.
     /// </remarks>
     /// <param name="resolver">The <see cref="A2ACardResolver" /> to use for the agent creation.</param>
+    /// <param name="allowedHosts"><inheritdoc cref="AgentCardExtensions.AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='allowedHosts']/node()"/></param>
     /// <param name="agentOptions">
-    /// Configuration options that control the agent's identity and which card addresses may be used. When provided,
-    /// non-null values override the corresponding values from the resolved agent card. If the card may come from an
-    /// untrusted source, setting <see cref="A2AAgentOptions.AgentCardAllowedHosts"/> is recommended.
+    /// Configuration options that control the agent's identity and whether <c>http</c> card addresses may be used.
+    /// When provided, non-null values override the corresponding values from the resolved agent card.
     /// </param>
     /// <param name="httpClient">
     /// The <see cref="HttpClient"/> to use for HTTP requests made by the created A2A client.
@@ -95,13 +92,13 @@ public static class A2ACardResolverExtensions
     /// <param name="loggerFactory">The logger factory for enabling logging within the agent.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests. The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>An <see cref="A2AAgent"/> instance backed by the A2A agent.</returns>
-    public static async Task<A2AAgent> GetAIAgentAsync(this A2ACardResolver resolver, A2AAgentOptions agentOptions, HttpClient? httpClient = null, A2AClientOptions? clientOptions = null, ILoggerFactory? loggerFactory = null, CancellationToken cancellationToken = default)
+    public static async Task<A2AAgent> GetAIAgentAsync(this A2ACardResolver resolver, IEnumerable<string>? allowedHosts, A2AAgentOptions agentOptions, HttpClient? httpClient = null, A2AClientOptions? clientOptions = null, ILoggerFactory? loggerFactory = null, CancellationToken cancellationToken = default)
     {
         _ = Throw.IfNull(agentOptions);
 
         // Obtain the agent card from the resolver.
         var agentCard = await resolver.GetAgentCardAsync(cancellationToken).ConfigureAwait(false);
 
-        return agentCard.AsAIAgent(agentOptions, httpClient, clientOptions, loggerFactory);
+        return agentCard.AsAIAgent(allowedHosts, agentOptions, httpClient, clientOptions, loggerFactory);
     }
 }

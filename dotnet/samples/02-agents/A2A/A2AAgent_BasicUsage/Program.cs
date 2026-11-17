@@ -8,7 +8,9 @@ using Microsoft.Agents.AI;
 var a2aAgentHost = Environment.GetEnvironmentVariable("A2A_AGENT_HOST") ?? throw new InvalidOperationException("A2A_AGENT_HOST is not set.");
 
 A2ACardResolver agentCardResolver = new(new Uri(a2aAgentHost));
-AIAgent agent = await agentCardResolver.GetAIAgentAsync();
+
+// Only allow the agent card to point to the same host we fetched it from.
+AIAgent agent = await agentCardResolver.GetAIAgentAsync([new Uri(a2aAgentHost).Host]);
 
 AgentResponse response = await agent.RunAsync("Tell me a joke about a pirate.");
 Console.WriteLine(response);

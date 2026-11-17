@@ -34,7 +34,7 @@ public sealed class AgentCardExtensionsTests
     public void AsAIAgent_ReturnsA2AAgent()
     {
         // Act
-        A2AAgent agent = this._agentCard.AsAIAgent();
+        A2AAgent agent = this._agentCard.AsAIAgent(allowedHosts: null);
 
         // Assert
         Assert.NotNull(agent);
@@ -56,7 +56,7 @@ public sealed class AgentCardExtensionsTests
             Parts = [Part.FromText("Response")],
         });
 
-        var agent = this._agentCard.AsAIAgent(httpClient: httpClient);
+        var agent = this._agentCard.AsAIAgent(allowedHosts: null, httpClient: httpClient);
 
         // Act
         await agent.RunAsync("Test input");
@@ -95,7 +95,7 @@ public sealed class AgentCardExtensionsTests
             PreferredBindings = [ProtocolBindingNames.JsonRpc]
         };
 
-        var agent = card.AsAIAgent(httpClient, options: options);
+        var agent = card.AsAIAgent(allowedHosts: null, httpClient, options: options);
 
         // Act
         await agent.RunAsync("Test input");
@@ -120,7 +120,7 @@ public sealed class AgentCardExtensionsTests
         };
 
         // Act - null options should use defaults (HTTP+JSON first, JSON-RPC as fallback)
-        var agent = card.AsAIAgent(options: null);
+        var agent = card.AsAIAgent(allowedHosts: null, options: null);
 
         // Assert
         Assert.NotNull(agent);
@@ -148,7 +148,7 @@ public sealed class AgentCardExtensionsTests
         };
 
         // Act & Assert - factory should throw when no matching binding exists
-        Assert.ThrowsAny<Exception>(() => card.AsAIAgent(options: options));
+        Assert.ThrowsAny<Exception>(() => card.AsAIAgent(allowedHosts: null, options: options));
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class AgentCardExtensionsTests
         };
 
         // Act & Assert
-        Assert.ThrowsAny<Exception>(() => card.AsAIAgent());
+        Assert.ThrowsAny<Exception>(() => card.AsAIAgent(allowedHosts: null));
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public sealed class AgentCardExtensionsTests
         };
 
         // Act
-        A2AAgent agent = card.AsAIAgent(agentOptions);
+        A2AAgent agent = card.AsAIAgent(allowedHosts: null, agentOptions);
 
         // Assert
         Assert.NotNull(agent);
@@ -211,7 +211,7 @@ public sealed class AgentCardExtensionsTests
         };
 
         // Act
-        var agent = card.AsAIAgent(agentOptions);
+        var agent = card.AsAIAgent(allowedHosts: null, agentOptions);
 
         // Assert
         Assert.NotNull(agent);
@@ -232,7 +232,7 @@ public sealed class AgentCardExtensionsTests
         };
 
         // Act
-        var agent = card.AsAIAgent(new A2AAgentOptions());
+        var agent = card.AsAIAgent(allowedHosts: null, new A2AAgentOptions());
 
         // Assert
         Assert.NotNull(agent);
@@ -258,22 +258,18 @@ public sealed class AgentCardExtensionsTests
 
         var agentOptions = new A2AAgentOptions
         {
-            AllowAgentCardHostsInsecureHttp = allowInsecureHttp,
-            AgentCardAllowedHosts = allowedHost is null ? null : [allowedHost]
+            AllowAgentCardHostsInsecureHttp = allowInsecureHttp
         };
 
         // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => card.AsAIAgent(agentOptions));
+        Assert.Throws<InvalidOperationException>(() => card.AsAIAgent(allowedHost is null ? null : [allowedHost], agentOptions));
     }
 
     [Fact]
-    public void AsAIAgent_WithEmptyAgentCardAllowedHosts_ThrowsInvalidOperationException()
+    public void AsAIAgent_WithEmptyAllowedHosts_ThrowsInvalidOperationException()
     {
-        // Arrange
-        var agentOptions = new A2AAgentOptions { AgentCardAllowedHosts = [] };
-
         // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => this._agentCard.AsAIAgent(agentOptions));
+        Assert.Throws<InvalidOperationException>(() => this._agentCard.AsAIAgent(allowedHosts: []));
     }
 
     [Theory]
@@ -281,13 +277,10 @@ public sealed class AgentCardExtensionsTests
     [InlineData("*.test-endpoint")]
     [InlineData("test-endpoint:99999")]
     [InlineData("test-endpoint/agent")]
-    public void AsAIAgent_WithInvalidAgentCardAllowedHostsEntry_ThrowsArgumentException(string allowedHost)
+    public void AsAIAgent_WithInvalidAllowedHostsEntry_ThrowsArgumentException(string allowedHost)
     {
-        // Arrange
-        var agentOptions = new A2AAgentOptions { AgentCardAllowedHosts = [allowedHost] };
-
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => this._agentCard.AsAIAgent(agentOptions));
+        Assert.Throws<ArgumentException>(() => this._agentCard.AsAIAgent(allowedHosts: [allowedHost]));
     }
 
     [Theory]
@@ -313,13 +306,9 @@ public sealed class AgentCardExtensionsTests
             SupportedInterfaces = [new AgentInterface { Url = url }]
         };
 
-        var agentOptions = new A2AAgentOptions
-        {
-            AgentCardAllowedHosts = [allowedHost],
-            AllowAgentCardHostsInsecureHttp = allowInsecureHttp
-        };
+        var agentOptions = new A2AAgentOptions { AllowAgentCardHostsInsecureHttp = allowInsecureHttp };
 
-        var agent = card.AsAIAgent(agentOptions, httpClient);
+        var agent = card.AsAIAgent([allowedHost], agentOptions, httpClient);
 
         // Act
         await agent.RunAsync("Test input");
@@ -347,7 +336,7 @@ public sealed class AgentCardExtensionsTests
             SupportedInterfaces = [new AgentInterface { Url = "http://test-endpoint/agent" }]
         };
 
-        var agent = card.AsAIAgent(new A2AAgentOptions { AllowAgentCardHostsInsecureHttp = true }, httpClient);
+        var agent = card.AsAIAgent(allowedHosts: null, new A2AAgentOptions { AllowAgentCardHostsInsecureHttp = true }, httpClient);
 
         // Act
         await agent.RunAsync("Test input");
@@ -380,7 +369,7 @@ public sealed class AgentCardExtensionsTests
             ]
         };
 
-        var agent = card.AsAIAgent(new A2AAgentOptions { AgentCardAllowedHosts = ["trusted-host"] }, httpClient);
+        var agent = card.AsAIAgent(["trusted-host"], httpClient: httpClient);
 
         // Act
         await agent.RunAsync("Test input");

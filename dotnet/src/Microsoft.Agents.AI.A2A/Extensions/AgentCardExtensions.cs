@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.A2A;
 using Microsoft.Extensions.Logging;
@@ -24,8 +25,13 @@ namespace A2A;
 /// <para>
 /// Every method takes a required <c>allowedHosts</c> parameter that limits the hosts a card may point to. Passing a
 /// list is recommended whenever the card may come from an untrusted source; pass <see langword="null"/> to allow any
-/// host. Only the card's addresses are checked; redirects are handled by the <see cref="HttpClient"/>, so turn off
-/// automatic redirects on it if every request must stay on an allowed host.
+/// host. Only the card's addresses are checked; redirects are handled by the <see cref="HttpClient"/>.
+/// </para>
+/// <para>
+/// When no <see cref="HttpClient"/> is supplied, a shared client is used that does not follow redirects, does not
+/// store cookies, and checks whether server certificates have been revoked. If you supply your own client, creating it
+/// with the same settings is recommended, for example with
+/// <c>new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false, CheckCertificateRevocationList = true }</c>.
 /// </para>
 /// <para>
 /// To select gRPC, also reference the SDK's <c>A2A.Grpc</c> package,
@@ -41,6 +47,12 @@ namespace A2A;
 /// </remarks>
 public static class AgentCardExtensions
 {
+    /// <summary>
+    /// Gets the shared client used when no <see cref="HttpClient"/> is supplied. It lives for the life of the app and
+    /// is never disposed.
+    /// </summary>
+    internal static HttpClient DefaultHttpClient { get; } = new(CreateDefaultHttpMessageHandler());
+
     /// <summary>
     /// Retrieves an instance of <see cref="A2AAgent"/> for an existing A2A agent.
     /// </summary>
@@ -62,14 +74,18 @@ public static class AgentCardExtensions
     /// supported, and an entry that is not valid causes an <see cref="ArgumentException"/>.
     /// </para>
     /// <para>
-    /// Only the addresses listed in the agent card are checked. If the <see cref="HttpClient"/> follows redirects,
-    /// requests may be redirected to a host that is not in this list. To make sure every request stays on an allowed
-    /// host, supply an <see cref="HttpClient"/> with automatic redirects turned off, for example one created with
-    /// <c>new HttpClientHandler { AllowAutoRedirect = false }</c>. The default client used when none is supplied
-    /// follows redirects.
+    /// Only the addresses listed in the agent card are checked. The default client used when none is supplied does not
+    /// follow redirects. If you supply an <see cref="HttpClient"/> that follows redirects, requests may be redirected
+    /// to a host that is not in this list, so turning off automatic redirects on it is recommended.
     /// </para>
     /// </param>
-    /// <param name="httpClient">The <see cref="HttpClient"/> to use for HTTP requests.</param>
+    /// <param name="httpClient">
+    /// The <see cref="HttpClient"/> to use for requests to the agent. When <see langword="null"/>, a shared client is
+    /// used that does not follow redirects, does not store cookies, and checks whether server certificates have been
+    /// revoked. If you supply your own client, creating it with the same settings is recommended, for example with
+    /// <c>new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false, CheckCertificateRevocationList = true }</c>.
+    /// The caller keeps ownership of a supplied client.
+    /// </param>
     /// <param name="options">
     /// Optional <see cref="A2AClientOptions"/> controlling protocol binding preference.
     /// When not provided, defaults to preferring HTTP+JSON first, with JSON-RPC as fallback.
@@ -94,7 +110,7 @@ public static class AgentCardExtensions
     /// Configuration options that control the agent's identity and whether <c>http</c> card addresses may be used.
     /// When provided, non-null values override the corresponding values from the agent card.
     /// </param>
-    /// <param name="httpClient">The <see cref="HttpClient"/> to use for HTTP requests.</param>
+    /// <param name="httpClient"><inheritdoc cref="AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='httpClient']/node()"/></param>
     /// <param name="clientOptions">
     /// Optional <see cref="A2AClientOptions"/> controlling protocol binding preference.
     /// When not provided, defaults to preferring HTTP+JSON first, with JSON-RPC as fallback.
@@ -106,7 +122,7 @@ public static class AgentCardExtensions
         _ = Throw.IfNull(card);
         _ = Throw.IfNull(agentOptions);
 
-        var a2aClient = A2AClientFactory.Create(WithAllowedInterfacesOnly(card, allowedHosts, agentOptions), httpClient, clientOptions);
+        var a2aClient = A2AClientFactory.Create(WithAllowedInterfacesOnly(card, allowedHosts, agentOptions), httpClient ?? DefaultHttpClient, clientOptions);
 
         var mergedOptions = agentOptions.Clone();
         mergedOptions.Name ??= card.Name;
@@ -114,6 +130,19 @@ public static class AgentCardExtensions
 
         return a2aClient.AsAIAgent(mergedOptions, loggerFactory);
     }
+
+    /// <summary>
+    /// Creates the handler used by the shared default client: no automatic redirects, no cookies, and online
+    /// certificate revocation checks. Pooled connections are recycled so DNS changes are picked up.
+    /// </summary>
+    internal static SocketsHttpHandler CreateDefaultHttpMessageHandler() =>
+        new()
+        {
+            AllowAutoRedirect = false,
+            UseCookies = false,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            SslOptions = { CertificateRevocationCheckMode = X509RevocationMode.Online },
+        };
 
     /// <summary>
     /// Returns a card that lists only the interfaces whose address passes the host list and the checks configured in

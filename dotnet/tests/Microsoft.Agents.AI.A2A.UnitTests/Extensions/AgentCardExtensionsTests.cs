@@ -266,6 +266,18 @@ public sealed class AgentCardExtensionsTests
     }
 
     [Fact]
+    public void CreateDefaultHttpMessageHandler_DisablesRedirectsAndCookiesAndChecksRevocation()
+    {
+        // Act
+        using var handler = AgentCardExtensions.CreateDefaultHttpMessageHandler();
+
+        // Assert
+        Assert.False(handler.AllowAutoRedirect);
+        Assert.False(handler.UseCookies);
+        Assert.Equal(System.Security.Cryptography.X509Certificates.X509RevocationMode.Online, handler.SslOptions.CertificateRevocationCheckMode);
+    }
+
+    [Fact]
     public void AsAIAgent_WithEmptyAllowedHosts_ThrowsInvalidOperationException()
     {
         // Act & Assert

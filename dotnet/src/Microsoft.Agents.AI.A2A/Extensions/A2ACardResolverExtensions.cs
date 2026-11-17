@@ -34,8 +34,9 @@ namespace A2A;
 /// only <c>https</c> addresses are used unless <see cref="A2AAgentOptions.AllowAgentCardHostsInsecureHttp"/> is set. The card may
 /// point to a different host than the one it was fetched from, so pass an <c>allowedHosts</c> list when the supplied
 /// <see cref="HttpClient"/> carries credentials or the card source is untrusted. Passing a list is recommended for any
-/// card fetched from an address you do not fully control. Only the card's addresses are checked;
-/// turn off automatic redirects on the <see cref="HttpClient"/> if every request must stay on an allowed host.
+/// card fetched from an address you do not fully control. Only the card's addresses are checked. The default
+/// <see cref="HttpClient"/> does not follow redirects; see <see cref="AgentCardExtensions"/> for the settings
+/// recommended when you supply your own.
 /// </para>
 /// </remarks>
 public static class A2ACardResolverExtensions
@@ -50,7 +51,10 @@ public static class A2ACardResolverExtensions
     /// </remarks>
     /// <param name="resolver">The <see cref="A2ACardResolver" /> to use for the agent creation.</param>
     /// <param name="allowedHosts"><inheritdoc cref="AgentCardExtensions.AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='allowedHosts']/node()"/></param>
-    /// <param name="httpClient">The <see cref="HttpClient"/> to use for HTTP requests.</param>
+    /// <param name="httpClient">
+    /// <inheritdoc cref="AgentCardExtensions.AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='httpClient']/node()"/>
+    /// This is not used for fetching the agent card; the resolver uses its own configured client for that.
+    /// </param>
     /// <param name="options">
     /// Optional <see cref="A2AClientOptions"/> controlling protocol binding preference.
     /// When not provided, defaults to preferring HTTP+JSON first, with JSON-RPC as fallback.
@@ -82,7 +86,7 @@ public static class A2ACardResolverExtensions
     /// When provided, non-null values override the corresponding values from the resolved agent card.
     /// </param>
     /// <param name="httpClient">
-    /// The <see cref="HttpClient"/> to use for HTTP requests made by the created A2A client.
+    /// <inheritdoc cref="AgentCardExtensions.AsAIAgent(AgentCard, IEnumerable{string}, HttpClient, A2AClientOptions, ILoggerFactory)" path="/param[@name='httpClient']/node()"/>
     /// This is not used for fetching the agent card; the resolver uses its own configured client for that.
     /// </param>
     /// <param name="clientOptions">
